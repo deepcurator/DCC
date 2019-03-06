@@ -2,7 +2,7 @@ This folder contains code for image2graph - our end-to-end framework that automa
 
 The following tasks can be performed by our current implementation of the image2graph module:
 
-- Task 1: Do binary classification. Folder: “diagram2graph\FigClassify\BinaryClassify”
+- Task 1: Do binary classification. Relevant code cab be found in the folder: “diagram2graph\FigClassify\BinaryClassify”
 	- Step 1: Extract features Requirement: The dataset "DATASET_Binary_V1.0" Code to run: “compute_features.py” Command to Run: python compute_features.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 2: Train classifiers Requirement: The dataset "DATASET_Binary_V1.0", extracted features saved in “BinaryFeatures” folder Code to run: “train_binary_classifier.py” Command to Run: python train_binary_classifier.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 3: Test Classifiers Requirement: The dataset "DATASET_Binary_V1.0", extracted features in “BinaryFeatures” and models in “BinaryModels” folders under same directory Code to run: “test_binary_classifier.py” Command to Run: python test_binary_classifier.py --model model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
@@ -18,4 +18,3 @@ The following tasks can be performed by our current implementation of the image2
 
 - Task 4: Recognize text in deep learning flow diagram. Folder: “diagram2graph\FigAnalysis\TextExtraction”
 	- Requirement: The dataset "DATASET_MultiClass_V1.0” Code to run: “extract_text.py” Command to Run: python3 extract_text.py --inputdir --outputdir
-
