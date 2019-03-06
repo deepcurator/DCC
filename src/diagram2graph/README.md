@@ -2,12 +2,13 @@ This folder contains code for image2graph - our end-to-end framework that automa
 
 The following tasks can be performed by our current implementation of the image2graph module:
 
-- Task 1: Do binary classification. Relevant code cab be found in the folder: “diagram2graph\FigClassify\BinaryClassify”
+- Task 1: Perform binary classification. The aim is to classify the extracted figures into two classes, namely, diagrams dipicting DL architecture, and all others diagrams (for example, diagrams showing plots, tables, photos, etc.). The relevant code cab be found in the folder: “diagram2graph\FigClassify\BinaryClassify”
 	- Step 1: Extract features Requirement: The dataset "DATASET_Binary_V1.0" Code to run: “compute_features.py” Command to Run: python compute_features.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 2: Train classifiers Requirement: The dataset "DATASET_Binary_V1.0", extracted features saved in “BinaryFeatures” folder Code to run: “train_binary_classifier.py” Command to Run: python train_binary_classifier.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 3: Test Classifiers Requirement: The dataset "DATASET_Binary_V1.0", extracted features in “BinaryFeatures” and models in “BinaryModels” folders under same directory Code to run: “test_binary_classifier.py” Command to Run: python test_binary_classifier.py --model model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 
-- Task 2: Do Multiclass classification. Folder: “diagram2graph\FigClassify\MultiClassClassify”
+- Task 2: Perform Multiclass classification. The aim here is to employ a six-class neural network classifier to identify the category of the input DL architecture figure. We follow similar steps as described for binary classifier to extract features from the three pretrained models. 
+The relevant code cab be found in the folder: “diagram2graph\FigClassify\MultiClassClassify”
 	- Step 1: Extract features Requirement: The dataset "DATASET_MultiClass_V1.0" Code to run: “compute_features_multiclass.py” Command to Run: python compute_features_multiclass.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 2: Train classifiers Requirement: The dataset "DATASET_Binary_V1.0", extracted features saved in “MultiClassFeatures” folder Code to run: “train_ multiclass_classifier.py” Command to Run: python train_multiclass_classifier.py --model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
 	- Step 3: Test Classifiers Requirement: The dataset "DATASET_ MultiClass  _V1.0", extracted features in “MultiClassFeatures” and models in “MultiClassModels” folders under same directory Code to run: “test_  multiclass  _classifier.py” Command to Run: python test_  multiclass_classifier.py --model model <model name (vgg16, vgg19, resnet)> --datasetdir --outputdir
