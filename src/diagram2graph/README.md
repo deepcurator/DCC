@@ -17,5 +17,5 @@ The relevant code cab be found in the folder: “diagram2graph\FigClassify\Multi
 
 	- Requirement: The dataset "DATASET_MultiClass_V1.0” Code to run: “detect_shapes.py” Command to Run: python3 detect_shapes.py --inputdir --outputdir
 
-- Task 4: Recognize text in deep learning flow diagram. Folder: “diagram2graph\FigAnalysis\TextExtraction”
+- Task 4: Recognize text in deep learning flow diagram. The text in each node/layer is obtained through Optical Character Recognition (OCR) using Tesseract7. Based on our manual observation, we assume that a layer description is present near the detected node (either inside or in nearby region). The relevant code cab be found in the folder: “diagram2graph\FigAnalysis\TextExtraction”
 	- Requirement: The dataset "DATASET_MultiClass_V1.0” Code to run: “extract_text.py” Command to Run: python3 extract_text.py --inputdir --outputdir
