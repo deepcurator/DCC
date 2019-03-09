@@ -1,4 +1,6 @@
-This folder contains code for image2graph, our end-to-end framework that automatically locates all figures in a research paper, classifies them, extracts the content of the DL architecture figures and represents them in a form of a graph. We use PDFFigures 2.04 as the tool to autoamtically extract a set of figures from a research paper. We have downloaded 1000 papers from arXiv.org using "deep learning" as the input query. A total of 8310 figures were extracted from those papers and used as training datasets for the learning algorithms. These datasets can be found at our Open Science Framework repository  [DCC](https://osf.io/jdhw8/?view_only=f6ed10613af94c6d8050796a30f1568b)
+# Image2Graph
+
+This folder contains code for image2graph, our end-to-end framework that automatically locates all figures in a research paper, classifies them, extracts the content of the DL architecture figures and represents them in a form of a graph. We use [PDFFigures2](https://github.com/allenai/pdffigures2) as the tool to autoamtically extract a set of figures from a research paper. We have downloaded 1000 papers from arXiv.org using "deep learning" as the input query. A total of 8310 figures were extracted from those papers and used as training datasets for the learning algorithms. These datasets can be found at our Open Science Framework repository  [DCC](https://osf.io/jdhw8/?view_only=f6ed10613af94c6d8050796a30f1568b)
 
 The following tasks can be performed by our current implementation of the image2graph module:
 
