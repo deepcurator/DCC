@@ -12,7 +12,7 @@ The following tasks can be performed by the current implementation of the image2
 ```
 python test_binary_classifier.py --model vgg19 --datasetdir C;/Home/src/DCCDatasets/ --outputdir C:/Home/src/DCCDatasets/OutputData 
 ```
-python test_binary_classifier.py --model vgg19 --datasetdir C;/Home/src/DCCDatasets/ --outputdir C:/Home/src/DCCDatasets/OutputData (note that the vgg19 model is used; if you want to use other models, simply replace vgg19 with the desired model (e.g., vgg16 or resnet))
+&nbsp; &nbsp; (note that the vgg19 model is used; if you want to use other models, simply replace vgg19 with the desired model (e.g., vgg16 or resnet))
 
 
 - **Task 2:** Perform Multiclass classification. The aim here is to employ a six-class neural network classifier to identify the category of the input DL architecture figure. We follow similar steps as described for binary classifier to extract features from the three pretrained models. The relevant code cab be found in the folder: “diagram2graph\FigClassify\MultiClassClassify”
