@@ -184,7 +184,15 @@ class TFTokenExplorer:
         self.graphs = []                
         self.code_repo_path = code_repo_path
         
-        self.call_graph_visitor = CallGraphVisitor(glob("%s/**/*.py" % str(code_repo_path), recursive=True))
+        import logging
+        logger = logging.getLogger('my-logger')
+        logger.setLevel(logging.DEBUG)
+        handler = logging.FileHandler('foo.log')
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        self.call_graph_visitor = CallGraphVisitor(glob("%s/**/*.py" % str(code_repo_path), recursive=True), logger=logger)
 
         self.call_graph = Graph() # complete_graph
         self.RDF_dict = {} # hashmap from RDF node name to pyan node.
@@ -232,6 +240,7 @@ class TFTokenExplorer:
 
                     if src_name != dst_name:
                         self.call_graph.add((BNode(src_name), BNode("call"), BNode(dst_name)))
+                        print('build_calls: %s ---- calls ----> %s' % (src_name, dst_name))
 
                         self.RDF_dict[BNode(src_name)]=define
                         self.RDF_dict[BNode(dst_name)]=call
@@ -281,6 +290,7 @@ class TFTokenExplorer:
             for o in graph[node:BNode("call")]:
                 if not o in visited:
                     g.add((node, BNode("call"), o))
+                    print('bfs_gen_call_path: %s --- calls ---> %s' % (node, o))
                     fringe.append(o)
 
         return g
