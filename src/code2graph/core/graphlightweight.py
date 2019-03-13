@@ -222,6 +222,8 @@ class TFTokenExplorer:
             logger_msg = self.logger_messages.get()
             if 'Call' in logger_msg:
                 print(logger_msg)
+            if 'pass 2' in logger_msg:
+                break
 
     def explore_code_repository(self):
         
