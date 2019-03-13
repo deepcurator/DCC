@@ -177,6 +177,20 @@ class CustomVisitor:
 
         return visitor.triples, other_fucntions_to_try
 
+
+
+import logging
+import queue
+class QueueingHandler(logging.Handler):
+    def __init__(self, *args, message_queue, **kwargs):
+        """Initialize by copying the queue and sending everything else to superclass."""
+        logging.Handler.__init__(self, *args, **kwargs)
+        self.message_queue = message_queue
+
+    def emit(self, record):
+        """Add the formatted log message (sans newlines) to the queue."""
+        self.message_queue.put(self.format(record).rstrip('\n'))
+
 class TFTokenExplorer:
     
     def __init__(self, code_repo_path):
@@ -184,18 +198,30 @@ class TFTokenExplorer:
         self.graphs = []                
         self.code_repo_path = code_repo_path
         
-        import logging
+        # Provide a logger to pyviz to detect the call sequence
+        LOG_FORMAT = '%(name)s - %(levelname)s - %(message)s'
+        logging.basicConfig(filename='foo.log', filemode='w', format=LOG_FORMAT, level=logging.DEBUG)
         logger = logging.getLogger('my-logger')
-        logger.setLevel(logging.DEBUG)
-        handler = logging.FileHandler('foo.log')
-        handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
+        message_queue = queue.Queue()
+        handler = QueueingHandler(message_queue=message_queue, level=logging.DEBUG)
         logger.addHandler(handler)
+
         self.call_graph_visitor = CallGraphVisitor(glob("%s/**/*.py" % str(code_repo_path), recursive=True), logger=logger)
+
+        #print(message_queue.qsize())
+        #while(not message_queue.empty()):
+        #    print(message_queue.get())
+        self.logger_messages = message_queue
 
         self.call_graph = Graph() # complete_graph
         self.RDF_dict = {} # hashmap from RDF node name to pyan node.
+
+
+    def build_sequence(self):
+        while(not self.logger_messages.empty()):
+            logger_msg = self.logger_messages.get()
+            if 'Call' in logger_msg:
+                print(logger_msg)
 
     def explore_code_repository(self):
         
@@ -203,6 +229,7 @@ class TFTokenExplorer:
         self.build_calls()
         self.build_tf_types()
         self.separate_call_path()
+        self.build_sequence()
         
 
     def build_defines(self):
