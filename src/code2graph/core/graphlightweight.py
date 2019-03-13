@@ -366,7 +366,7 @@ class TFTokenExplorer:
         
         G.show_buttons(filter_=['physics'])
         G.show("%s.html"%name)
-    
+
     def visualize(self):
 
         for idx, graph in enumerate(self.graphs): # draw each model graph
@@ -375,11 +375,20 @@ class TFTokenExplorer:
             # only show the function calls
             draw_graph = Graph()
             draw_graph += rdf_graph.triples((None, BNode("call"), None))
-            self.pyvis_draw(draw_graph, str((Path(".")/"test"/"fashion_mnist"/("light_weight_model%d"%(idx))).absolute()))
-
+            self.pyvis_draw(draw_graph, str((Path(".")/"test"/"fashion_mnist"/("light_weight_model%d"%(idx)))))
+            print('Found sequence')
             pprint.pprint(sequence)
 
-        self.pyvis_draw(self.call_graph, str((Path(".")/"test"/"fashion_mnist"/"light_weight_complete").absolute())) # the complete graph 
+        self.pyvis_draw(self.call_graph, str((Path(".")/"test"/"fashion_mnist"/"light_weight_complete"))) # the complete graph 
+        # Merge sequence information into the graph through an edge of type "followedBy" to make the sequence explicit
+        for i in range(len(sequence)):
+            j = i+1
+            if j != len(sequence):
+                self.call_graph.add((BNode(sequence[i]), BNode("followedBy"), BNode(sequence[j])))
+            else:
+                break
+        self.pyvis_draw(self.call_graph, str((Path(".")/"test"/"fashion_mnist"/"light_weight_sequence"))) # the complete graph 
+
 
 if __name__ == "__main__":
     
