@@ -218,12 +218,16 @@ class TFTokenExplorer:
 
 
     def build_sequence(self):
+        sequence = []
         while(not self.logger_messages.empty()):
             logger_msg = self.logger_messages.get()
-            if 'Call' in logger_msg:
-                print(logger_msg)
+            if logger_msg.startswith('Call'):
+                func = logger_msg.split()
+                sequence.append(func[1])
             if 'pass 2' in logger_msg:
                 break
+        print(sequence)
+        return sequence
 
     def explore_code_repository(self):
         
