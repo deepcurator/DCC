@@ -227,7 +227,7 @@ class TFTokenExplorer:
             if 'pass 2' in logger_msg:
                 break
         print(sequence)
-        return sequence
+        self.sequence = sequence
 
     def explore_code_repository(self):
         
@@ -424,10 +424,10 @@ class TFTokenExplorer:
 
         self.pyvis_draw(self.call_graph, str((Path(".")/"test"/"fashion_mnist"/"light_weight_complete"))) # the complete graph 
         # Merge sequence information into the graph through an edge of type "followedBy" to make the sequence explicit
-        for i in range(len(sequence)):
+        for i in range(len(self.sequence)):
             j = i+1
-            if j != len(sequence):
-                self.call_graph.add((BNode(sequence[i]), BNode("followedBy"), BNode(sequence[j])))
+            if j != len(self.sequence):
+                self.call_graph.add((BNode(self.sequence[i]), BNode("followedBy"), BNode(self.sequence[j])))
             else:
                 break
         self.pyvis_draw(self.call_graph, str((Path(".")/"test"/"fashion_mnist"/"light_weight_sequence"))) # the complete graph 
