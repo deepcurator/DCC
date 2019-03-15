@@ -3,6 +3,7 @@ from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
 
 class OntologyManager:
 
+	call = BNode("call")
 	is_type = BNode("is_type")
 
 	def __init__(self):
