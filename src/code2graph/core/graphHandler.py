@@ -8,7 +8,7 @@ from google.protobuf import json_format #For the json conversion
 import json2graph as j2g
 
 import shutil
-from dataset_utils import *
+from automation.dataset_utils import *
 import pdb
 
 class graphHandler(graphMETA):
