@@ -50,15 +50,44 @@ class CallVisitor(ast.NodeVisitor):
     def visit_Call(self, node):
 
         call_name = astor.to_source(node.func).strip()
+        base_name = call_name.split('.')[-1]
 
+        print("finding call full name: %s, base name: %s" % (call_name, base_name))
+
+        proj_function_found = False
         matched = False
 
-        if '.' in call_name and 'self' not in call_name:
+        if base_name in self.call_graph_visitor.nodes:
+            for func_cand in self.call_graph_visitor.nodes[base_name]:
+                # print('\t', func_cand, type(func_cand.ast_node))
+
+                if isinstance(func_cand.ast_node, ast.FunctionDef):
+                    # print(func_cand.namespace, func_cand.name)
+                    new_node = {"name":call_name.split('.')[-1], "children":[], "type": func_cand.flavor}
+                    self.root["children"].append(new_node)
+
+                    self.function_to_be_visited.append((func_cand, new_node))
+                    proj_function_found = True
+                
+                elif isinstance(func_cand.ast_node, ast.ClassDef):
+                    # print(astor.dump_tree(func_cand.ast_node))
+
+                    for init_cand in self.call_graph_visitor.nodes["__init__"]:
+                        # print(init_cand.namespace, init_cand.name)
+                        if init_cand.namespace.split('.')[-1] == call_name:
+                            new_node = {"name":call_name.split('.')[-1]+".__init__", "children":[], "type": init_cand.flavor}
+                            self.root["children"].append(new_node)
+
+                            self.function_to_be_visited.append((init_cand, new_node))
+                            proj_function_found = True
+
+        if not proj_function_found and '.' in call_name:
             
             result = self.type_manager.fuzzy_search(call_name)
-            
+        
             if result:
                 matching = self.type_manager.type_hash[result[0]]
+                # print(call_name, matching)
                 new_node = {"name":matching['name'].split('.')[-1], "url":matching['url'], "children":[], "type":"tf_keyword"}
                 
                 self.root['children'].append(new_node)
@@ -91,26 +120,19 @@ class CallVisitor(ast.NodeVisitor):
                 matched = True
 
         if not matched:
-            
-            name = call_name.split('.')[-1]
-
-            if name in self.call_graph_visitor.nodes:
-                for func_cand in self.call_graph_visitor.nodes[name]:
-                    if isinstance(func_cand.ast_node, ast.FunctionDef):
-                        new_node = {"name":call_name.split('.')[-1], "children":[], "type": func_cand.flavor}
-                        self.root["children"].append(new_node)
-
-                        self.function_to_be_visited.append(func_cand)
-            
             if len(node.args):
                 for arg in node.args:
                     another_visitor = CallVisitor(self.call_graph_visitor, self.root)
                     another_visitor.visit(arg)
 
+                    self.function_to_be_visited += another_visitor.function_to_be_visited
+
             if len(node.keywords):
                 for keyword in node.keywords:
                     another_visitor = CallVisitor(self.call_graph_visitor, self.root)
                     another_visitor.visit(keyword)
+
+                    self.function_to_be_visited += another_visitor.function_to_be_visited
         
 
 class ProgramLineVisitor:
@@ -120,24 +142,28 @@ class ProgramLineVisitor:
 
         self.root = {"name": get_name(node), "children":[], "type": node.flavor}
 
-    def visit(self, node):
+    def visit(self, node, parent):
 
         if node is None:
             return 
-        # iterate through each body instructions.
+        
         for child in ast.iter_child_nodes(node):
             # print("instruction", type(child), ":", astor.to_source(child).strip())
+
             if isinstance(child, (ast.Expr, ast.UnaryOp, ast.withitem, ast.Assign, ast.Compare, \
                                   ast.AugAssign, ast.Return, ast.Call, ast.Assert)):
                 # The case of unit scannable instruction
-                call_visitor = CallVisitor(self.call_graph_visitor, self.root)
+                # print("instruction", type(child), ":", astor.to_source(child).strip())
+
+                call_visitor = CallVisitor(self.call_graph_visitor, parent)
                 call_visitor.visit(child) # search function calls by line
 
-                for function in call_visitor.function_to_be_visited:
-                    self.visit(function.ast_node)
+                for function, function_node in call_visitor.function_to_be_visited:
+                    print("revisit function: ", function_node)
+                    self.visit(function.ast_node, function_node)
 
             elif isinstance(child, (ast.If, ast.Try, ast.ExceptHandler, ast.For, ast.With)):
-                self.visit(child)
+                self.visit(child, parent)
 
             elif isinstance(child, (ast.FunctionDef, ast.arguments)):
                 pass
@@ -149,7 +175,7 @@ class TFTokenExplorer:
         self.code_repo_path = code_repo_path
 
         self.call_graph_visitor = CallGraphVisitor(glob("%s/**/*.py" % str(code_repo_path), recursive=True))
-
+        # pprint.pprint(self.call_graph_visitor.nodes)
         # generated in build the one complete call graph
         self.call_graph = Graph() # complete_graph
         self.pyan_node_dict = {} # hashmap from RDF node name to pyan node.
@@ -221,7 +247,7 @@ class TFTokenExplorer:
         
         print("Processing node: %s" % str(start))
         line_visitor = ProgramLineVisitor(self.call_graph_visitor, self.pyan_node_dict[start])
-        line_visitor.visit(self.pyan_node_dict[start].ast_node)
+        line_visitor.visit(self.pyan_node_dict[start].ast_node, line_visitor.root)
         
         return line_visitor.root
     
@@ -249,8 +275,8 @@ class TFTokenExplorer:
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add((BNode(node['rdf_name']), OntologyManager.call, BNode(child["rdf_name"])))
-                if idx > 0:
-                    graph.add((BNode(node["children"][idx-1]['rdf_name']), BNode("followed_by"), BNode(child["rdf_name"])))
+                # if idx > 0:
+                    # graph.add((BNode(node["children"][idx-1]['rdf_name']), BNode("followed_by"), BNode(child["rdf_name"])))
                 self.build_rdf_graph(child, graph)
         
         if "args" in node: 
@@ -360,8 +386,7 @@ def lightweight(path):
 if __name__ == "__main__":
 
     # path = Path("..")/"data"/"data_paperswithcode"/"24"/"FewShot_GAN-Unet3D-master"
-    # path = Path("..")/"data"/"data_paperswithcode"/"30"/"adaptive-f-divergence-master"/"bnn"
-    path = Path(".")/"test"/"fashion_mnist"
+    path = Path(".")/"test"/"adaptive-f-divergence-master"/"bnn"
+    # path = Path(".")/"test"/"fashion_mnist"
     path = path.resolve()
-    print(path)
     lightweight(path)

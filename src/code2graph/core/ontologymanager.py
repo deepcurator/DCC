@@ -46,34 +46,45 @@ class OntologyManager:
 
 	# fuzzy search 
 	def fuzzy_search(self, key):
-		keys = key.split('.')
+		keys = key.split('.')[::-1]
 
 		scores = {}
-
+		
 		for hashmap in self.type_hash.keys():
 			score = 0
-			hashmaps = hashmap.split('.')
+			hashmaps = hashmap.split('.')[::-1]
 			
 			for idx_x, x in enumerate(keys):
-				for idx_y, y in enumerate(hashmaps):
-					if x == y:
-						score+= (6.0*(1+idx_x) / (len(keys)*len(hashmaps)))
-					elif x == y.lower():
-						score+= (3.0*(1+idx_x) / (len(keys)*len(hashmaps)))
-					elif x.lower() == y.lower():
-						score+= (3.0*(1+idx_x) / (len(keys)*len(hashmaps)))
-					elif x in y:
-						score+= (1.0*(1+idx_x) / (len(keys)*len(hashmaps)))
-					elif x in y.lower():
-						score+= (1.0*(1+idx_x) / (len(keys)*len(hashmaps)))
-					elif x.lower() in y.lower():
-						score+= (1.0*(1+idx_x) / (len(keys)*len(hashmaps)))
+				if idx_x == 0:
+					if x == hashmaps[0]:
+						score+= 6.0*(1/len(hashmaps))
+					elif x == hashmaps[0].lower():
+						score+= 3.0*(1/len(hashmaps))
+					elif x.lower() == hashmaps[0].lower():
+						score+= 3.0*(1/len(hashmaps))
+					
+					if score == 0:
+						break
+				else:
+					for idx_y, y in enumerate(hashmaps):
+						if idx_y == 0:
+							continue
+						if x == y:
+							score+= 6.0*(1/(idx_y+1))*(1/len(hashmaps))
+						elif x == y.lower():
+							score+= 3.0*(1/(idx_y+1))*(1/len(hashmaps))
+						elif x.lower() == y.lower():
+							score+= 3.0*(1/(idx_y+1))*(1/len(hashmaps))
+						else:
+							score-= 6.0*(1/(idx_y+1))*(1/len(hashmaps))
+				
 
-			if score > 1.5:
+			if score >= 1.51:
 				scores[hashmap] = score
 
 		sorted_by_value = sorted(scores.items(), key=lambda kv: -kv[1])
 		sorted_scores = dict(sorted_by_value)
+		print(sorted_scores)
 		return_list = list(sorted_scores.keys())
 
 		return return_list
@@ -88,6 +99,7 @@ if __name__ == "__main__":
 	print(ontology_manager.exact_search("relu"))
 	print(ontology_manager.exact_search("crelu"))
 	print(ontology_manager.exact_search("exp"))
+	print(ontology_manager.exact_search("tf.exp"))
 
 	print("Fuzzy Search:")
 	print(ontology_manager.fuzzy_search("Dense"))
@@ -95,5 +107,9 @@ if __name__ == "__main__":
 	print(ontology_manager.fuzzy_search("relu"))
 	print(ontology_manager.fuzzy_search("crelu"))
 	print(ontology_manager.fuzzy_search("exp"))
+	print(ontology_manager.fuzzy_search("tf.exp"))
+	print(ontology_manager.fuzzy_search("log.warning"))
+	print(ontology_manager.fuzzy_search("np.mean"))
+	print(ontology_manager.fuzzy_search("np.squeeze"))
 
 
