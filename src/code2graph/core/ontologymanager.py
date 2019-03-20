@@ -53,7 +53,7 @@ class OntologyManager:
 		for hashmap in self.type_hash.keys():
 			score = 0
 			hashmaps = hashmap.split('.')[::-1]
-			
+
 			for idx_x, x in enumerate(keys):
 				if idx_x == 0:
 					if x == hashmaps[0]:
@@ -79,12 +79,12 @@ class OntologyManager:
 							score-= 6.0*(1/(idx_y+1))*(1/len(hashmaps))
 				
 
-			if score >= 1.51:
+			if score > 0:
 				scores[hashmap] = score
 
 		sorted_by_value = sorted(scores.items(), key=lambda kv: -kv[1])
 		sorted_scores = dict(sorted_by_value)
-		# print(sorted_scores)
+		# print(list(sorted_scores.items())[0:10])
 		return_list = list(sorted_scores.keys())
 
 		return return_list
@@ -93,23 +93,24 @@ if __name__ == "__main__":
 	
 	ontology_manager = OntologyManager()
 
-	print("Exact Search:")
-	print(ontology_manager.exact_search("Dense"))
-	print(ontology_manager.exact_search("dense"))
-	print(ontology_manager.exact_search("relu"))
-	print(ontology_manager.exact_search("crelu"))
-	print(ontology_manager.exact_search("exp"))
-	print(ontology_manager.exact_search("tf.exp"))
+	# print("Exact Search:")
+	# print(ontology_manager.exact_search("Dense"))
+	# print(ontology_manager.exact_search("dense"))
+	# print(ontology_manager.exact_search("relu"))
+	# print(ontology_manager.exact_search("crelu"))
+	# print(ontology_manager.exact_search("exp"))
+	# print(ontology_manager.exact_search("tf.exp"))
 
 	print("Fuzzy Search:")
-	print(ontology_manager.fuzzy_search("Dense"))
-	print(ontology_manager.fuzzy_search("dense"))
-	print(ontology_manager.fuzzy_search("relu"))
-	print(ontology_manager.fuzzy_search("crelu"))
-	print(ontology_manager.fuzzy_search("exp"))
-	print(ontology_manager.fuzzy_search("tf.exp"))
-	print(ontology_manager.fuzzy_search("log.warning"))
-	print(ontology_manager.fuzzy_search("np.mean"))
-	print(ontology_manager.fuzzy_search("np.squeeze"))
+	ontology_manager.fuzzy_search("Dense")
+	ontology_manager.fuzzy_search("dense")
+	ontology_manager.fuzzy_search("relu")
+	ontology_manager.fuzzy_search("crelu")
+	ontology_manager.fuzzy_search("exp")
+	ontology_manager.fuzzy_search("tf.exp")
+	ontology_manager.fuzzy_search("log.warning")
+	ontology_manager.fuzzy_search("np.mean")
+	ontology_manager.fuzzy_search("np.squeeze")
+	ontology_manager.fuzzy_search("keras.Sequential")
 
 
