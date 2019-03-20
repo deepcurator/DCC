@@ -2,7 +2,7 @@
 ##
 ## Utility function to extract architecturally related information from the
 ## given codes of a deep learning architecture.
-## Static code analysis methods have been used, pyan library, AST library 
+## Static code analysis methods have been used, pyan library, AST library
 ## Pyan Library by: Edmund Horner
 ## repository link: https://github.com/davidfraser/pyan
 ## library web-site: https://ejrh.wordpress.com/2012/01/31/call-graphs-in-python-part-2/
@@ -40,9 +40,9 @@ def get_name(node):
 class CallVisitor(ast.NodeVisitor):
 
     def __init__(self, call_graph_visitor, parent):
-        
+
         self.call_graph_visitor = call_graph_visitor
-        self.type_manager = OntologyManager()  
+        self.type_manager = OntologyManager()
         self.root = parent
 
         self.function_to_be_visited=[]
@@ -52,17 +52,17 @@ class CallVisitor(ast.NodeVisitor):
         call_name = astor.to_source(node.func).strip()
         base_name = call_name.split('.')[-1]
 
-        print("finding call full name: %s, base name: %s" % (call_name, base_name))
+        # print("finding call full name: %s, base name: %s" % (call_name, base_name))
         # print(self.root)
         proj_function_found = False
         matched = False
-        
+
         if "pyan" in self.root:
             for cand in self.call_graph_visitor.uses_edges[self.root["pyan"]]:
                 if isinstance(cand.ast_node, ast.FunctionDef):
                     if cand.name == base_name:
                         # print (cand)
-                        
+
                         new_node = {"name":base_name, "children":[], "type": cand.flavor, "pyan":cand}
                         self.root["children"].append(new_node)
 
@@ -71,7 +71,7 @@ class CallVisitor(ast.NodeVisitor):
                         proj_function_found = True
 
                     elif cand.name == "__init__" and base_name == cand.namespace.split('.')[-1]:
-                        
+
                         new_node = {"name":base_name+".__init__", "children":[], "type": cand.flavor, "pyan":cand}
                         self.root["children"].append(new_node)
 
@@ -80,21 +80,21 @@ class CallVisitor(ast.NodeVisitor):
                         proj_function_found = True
 
         if not proj_function_found and '.' in call_name:
-            
+
             result = self.type_manager.fuzzy_search(call_name)
-        
+
             if result:
                 matching = self.type_manager.type_hash[result[0]]
                 # print(call_name, matching)
                 new_node = {"name":matching['name'].split('.')[-1], "url":matching['url'], "children":[], "type":"tf_keyword"}
-                
+
                 self.root['children'].append(new_node)
 
                 if len(node.args):
                     for idx, arg in enumerate(node.args):
                         another_visitor = CallVisitor(self.call_graph_visitor, new_node)
                         another_visitor.visit(arg)
-                        
+
                         new_node["args"] = []
                         if isinstance(arg, ast.Str):
                             new_node["args"].append(arg.s)
@@ -105,7 +105,7 @@ class CallVisitor(ast.NodeVisitor):
                     for keyword in node.keywords:
                         another_visitor = CallVisitor(self.call_graph_visitor, new_node)
                         another_visitor.visit(keyword)
-        
+
                         new_node["keywords"] = {}
                         if isinstance(keyword.value, ast.Str):
                             new_node["keywords"][str(keyword.arg)] = keyword.value.s
@@ -131,7 +131,7 @@ class CallVisitor(ast.NodeVisitor):
                     another_visitor.visit(keyword)
 
                     self.function_to_be_visited += another_visitor.function_to_be_visited
-        
+
 
 class ProgramLineVisitor:
 
@@ -143,8 +143,8 @@ class ProgramLineVisitor:
     def visit(self, node, parent):
 
         if node is None:
-            return 
-        
+            return
+
         for child in ast.iter_child_nodes(node):
             # print("instruction", type(child), ":", astor.to_source(child).strip())
 
@@ -157,7 +157,7 @@ class ProgramLineVisitor:
                 call_visitor.visit(child) # search function calls by line
 
                 for function, function_node in call_visitor.function_to_be_visited:
-                    print("revisit function: ", function_node)
+                    # print("revisit function: ", function_node)
                     # if "pyan" in parent:
                     #     print(parent["pyan"])
                     #     print(self.call_graph_visitor.uses_edges[parent["pyan"]])
@@ -193,22 +193,22 @@ class TFTokenExplorer:
         self.tfseqeuences = {}
 
     def explore_code_repository(self):
-        
+
         self.build_call_graph()
         self.build_call_trees()
         self.build_rdf_graphs()
         self.build_tfsequences()
 
         self.dump_information()
-        
 
-    def build_call_graph(self):        
+
+    def build_call_graph(self):
         for caller in self.call_graph_visitor.uses_edges:
             if caller.flavor is not Flavor.UNSPECIFIED and caller.flavor is not Flavor.UNKNOWN:
-                
+
                 self.call_graph.add((BNode(get_name(caller)), OntologyManager.is_type, BNode(caller.flavor)))
                 self.pyan_node_dict[get_name(caller)]=caller
-                    
+
                 for callee in self.call_graph_visitor.uses_edges[caller]:
                     if callee.flavor is not Flavor.UNSPECIFIED and callee.flavor is not Flavor.UNKNOWN:
                         self.call_graph.add((BNode(get_name(callee)), OntologyManager.is_type, BNode(callee.flavor)))
@@ -228,7 +228,7 @@ class TFTokenExplorer:
 
             self.call_trees[root] = call_tree
 
-    
+
     def find_roots(self, graph):
 
         G = nx.DiGraph()
@@ -244,15 +244,15 @@ class TFTokenExplorer:
                 starts.append(v[0])
 
         return starts
-        
+
     def grow_function_calls(self, start):
-        
+
         print("Processing node: %s" % str(start))
         line_visitor = ProgramLineVisitor(self.call_graph_visitor, self.pyan_node_dict[start])
         line_visitor.visit(self.pyan_node_dict[start].ast_node, line_visitor.root)
-        
+
         return line_visitor.root
-    
+
     def populate_call_tree(self, node):
 
         if "children" in node:
@@ -268,7 +268,7 @@ class TFTokenExplorer:
 
     def build_rdf_graph(self, node, graph): # need to use DFS (might encounter max recursion limit problem)
 
-        if "type" in node: 
+        if "type" in node:
             if node["type"] == "tf_keyword":
                 graph.add((BNode(node['rdf_name']), OntologyManager.is_type, BNode(node["url"])))
             else:
@@ -280,30 +280,30 @@ class TFTokenExplorer:
                 # if idx > 0:
                     # graph.add((BNode(node["children"][idx-1]['rdf_name']), BNode("followed_by"), BNode(child["rdf_name"])))
                 self.build_rdf_graph(child, graph)
-        
-        if "args" in node: 
+
+        if "args" in node:
             for idx, arg in enumerate(node['args']):
                 graph.add((BNode(node['rdf_name']), BNode("has_arg%d"%idx), BNode((arg))))
 
-        if "keywords" in node: 
+        if "keywords" in node:
             for keyword in node['keywords']:
                 graph.add((BNode(node['rdf_name']), BNode("has_%s"%str(keyword)), BNode(node['keywords'][keyword])))
 
     def build_tfsequences(self):
         for root in self.call_trees:
-            sequence = [] 
+            sequence = []
             self.build_tfsequence(self.call_trees[root], sequence)
             self.tfseqeuences[root] = sequence
-            
+
     def build_tfsequence(self, node, sequence):
 
-        if "type" in node: 
+        if "type" in node:
             if node["type"] == "tf_keyword":
                 sequence.append(node["name"])
-        if "args" in node: 
+        if "args" in node:
             for idx, arg in enumerate(node['args']):
                 sequence.append(arg)
-        if "keywords" in node: 
+        if "keywords" in node:
             for keyword in node['keywords']:
                 sequence.append(node['keywords'][keyword])
         if "children" in node:
@@ -316,8 +316,8 @@ class TFTokenExplorer:
         # self.dump_call_trees()
         self.dump_rdf_graphs()
         self.dump_tfseuqences()
-        
-    def dump_call_graph(self):        
+
+    def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
         pprint.pprint(self.pyan_node_dict)
 
@@ -334,20 +334,20 @@ class TFTokenExplorer:
     def dump_tfseuqences(self):
         pprint.pprint(self.tfseqeuences)
 
-    def pyvis_draw(self, graph, name):       
-        
+    def pyvis_draw(self, graph, name):
+
         cnames = ['blue', 'green', 'red', 'cyan', 'orange', 'black', 'purple', 'purple', 'purple']
 
         G= Network(height="800px", width="70%", directed=True)
-        
+
         for src, edge, dst in graph:
 
             if edge == OntologyManager.is_type:
                 continue
-            
+
             src_type = [x for x in graph[src:OntologyManager.is_type]]
             dst_type = [x for x in graph[dst:OntologyManager.is_type]]
-            
+
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):
                     G.add_node(src, title=src, physics=True, color=cnames[0])
@@ -387,8 +387,6 @@ def lightweight(path):
 
 if __name__ == "__main__":
 
-    # path = Path("..")/"data"/"data_paperswithcode"/"24"/"FewShot_GAN-Unet3D-master"
-    path = Path(".")/"test"/"adaptive-f-divergence-master"
-    # path = Path(".")/"test"/"fashion_mnist"
+    path = Path(".")/"test"/"fashion_mnist"
     path = path.resolve()
     lightweight(path)
