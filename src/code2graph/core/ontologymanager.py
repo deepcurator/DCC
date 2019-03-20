@@ -84,7 +84,7 @@ class OntologyManager:
 
 		sorted_by_value = sorted(scores.items(), key=lambda kv: -kv[1])
 		sorted_scores = dict(sorted_by_value)
-		print(sorted_scores)
+		# print(sorted_scores)
 		return_list = list(sorted_scores.keys())
 
 		return return_list

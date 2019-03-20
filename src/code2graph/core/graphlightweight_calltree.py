@@ -53,33 +53,31 @@ class CallVisitor(ast.NodeVisitor):
         base_name = call_name.split('.')[-1]
 
         print("finding call full name: %s, base name: %s" % (call_name, base_name))
-
+        # print(self.root)
         proj_function_found = False
         matched = False
+        
+        if "pyan" in self.root:
+            for cand in self.call_graph_visitor.uses_edges[self.root["pyan"]]:
+                if isinstance(cand.ast_node, ast.FunctionDef):
+                    if cand.name == base_name:
+                        # print (cand)
+                        
+                        new_node = {"name":base_name, "children":[], "type": cand.flavor, "pyan":cand}
+                        self.root["children"].append(new_node)
 
-        if base_name in self.call_graph_visitor.nodes:
-            for func_cand in self.call_graph_visitor.nodes[base_name]:
-                # print('\t', func_cand, type(func_cand.ast_node))
+                        self.function_to_be_visited.append((cand, new_node))
 
-                if isinstance(func_cand.ast_node, ast.FunctionDef):
-                    # print(func_cand.namespace, func_cand.name)
-                    new_node = {"name":call_name.split('.')[-1], "children":[], "type": func_cand.flavor}
-                    self.root["children"].append(new_node)
+                        proj_function_found = True
 
-                    self.function_to_be_visited.append((func_cand, new_node))
-                    proj_function_found = True
-                
-                elif isinstance(func_cand.ast_node, ast.ClassDef):
-                    # print(astor.dump_tree(func_cand.ast_node))
+                    elif cand.name == "__init__" and base_name == cand.namespace.split('.')[-1]:
+                        
+                        new_node = {"name":base_name+".__init__", "children":[], "type": cand.flavor, "pyan":cand}
+                        self.root["children"].append(new_node)
 
-                    for init_cand in self.call_graph_visitor.nodes["__init__"]:
-                        # print(init_cand.namespace, init_cand.name)
-                        if init_cand.namespace.split('.')[-1] == call_name:
-                            new_node = {"name":call_name.split('.')[-1]+".__init__", "children":[], "type": init_cand.flavor}
-                            self.root["children"].append(new_node)
+                        self.function_to_be_visited.append((cand, new_node))
 
-                            self.function_to_be_visited.append((init_cand, new_node))
-                            proj_function_found = True
+                        proj_function_found = True
 
         if not proj_function_found and '.' in call_name:
             
@@ -140,7 +138,7 @@ class ProgramLineVisitor:
     def __init__(self, call_graph_visitor, node):
         self.call_graph_visitor = call_graph_visitor
 
-        self.root = {"name": get_name(node), "children":[], "type": node.flavor}
+        self.root = {"name": get_name(node), "children":[], "type": node.flavor, "pyan":node}
 
     def visit(self, node, parent):
 
@@ -160,7 +158,11 @@ class ProgramLineVisitor:
 
                 for function, function_node in call_visitor.function_to_be_visited:
                     print("revisit function: ", function_node)
-                    self.visit(function.ast_node, function_node)
+                    # if "pyan" in parent:
+                    #     print(parent["pyan"])
+                    #     print(self.call_graph_visitor.uses_edges[parent["pyan"]])
+                    if function_node['name'] != parent['name']:
+                        self.visit(function.ast_node, function_node)
 
             elif isinstance(child, (ast.If, ast.Try, ast.ExceptHandler, ast.For, ast.With)):
                 self.visit(child, parent)
@@ -310,8 +312,8 @@ class TFTokenExplorer:
 
     def dump_information(self):
 
-        self.dump_call_graph()
-        self.dump_call_trees()
+        # self.dump_call_graph()
+        # self.dump_call_trees()
         self.dump_rdf_graphs()
         self.dump_tfseuqences()
         
@@ -386,7 +388,7 @@ def lightweight(path):
 if __name__ == "__main__":
 
     # path = Path("..")/"data"/"data_paperswithcode"/"24"/"FewShot_GAN-Unet3D-master"
-    path = Path(".")/"test"/"adaptive-f-divergence-master"/"bnn"
+    path = Path(".")/"test"/"adaptive-f-divergence-master"
     # path = Path(".")/"test"/"fashion_mnist"
     path = path.resolve()
     lightweight(path)
