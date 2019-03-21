@@ -9,6 +9,7 @@ from __future__ import unicode_literals, print_function
 from brat2spacy import *
 import time
 
+
 import plac
 import random
 from pathlib import Path
@@ -19,22 +20,23 @@ from spacy.scorer import Scorer
 
 from ner_model_eval import *
 
+
+
 # new entity label
-ENTITIES = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
+new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 #data_directory = 'DATA/abstract-sentences-test/'
-data_directory = 'Output/BreakBrat/Abstracts-annotated30/'
+input_dir = 'Output/BreakBrat/Abstracts-annotated30/'
 output_dir = 'Models/'
 
-
-TRAIN_DATA = create_training_data(data_directory)
 
 
 # passing command line arguments using plac
 @plac.annotations(
     model=("Model name. Defaults to blank 'en' model.", "option", "m", str),
     new_model_name=("New model name for model meta.", "option", "nm", str),
+    input_dir=("Input directory containing the Brat data files", "option", "i", str),
     output_dir=("Optional output directory", "option", "o", Path),
     n_iter=("Number of training iterations", "option", "n", int))
 
@@ -44,30 +46,36 @@ TRAIN_DATA = create_training_data(data_directory)
 # The main function that sets up the SpaCy pipeline and entity recognizer. The new entities are defined as a list of strings.
 # Input -
 #   model: the name of an existing trained model
-#   new_model_name: the name of the new entity model 
+#   new_model_name: the name of the new entity model
 #   output_dir: the path of the directory where the new trained model will be saved.
-#   n_iter: number of training iterations (epochs) 
+#   n_iter: number of training iterations (epochs)
 # Output -
 #   The trained entity model stored in the output_dir
-def main(model=None, new_model_name='DCC_ent', output_dir=output_dir, n_iter=50):
-    """Set up the pipeline and entity recognizer, and train the new entity."""
+def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=output_dir, n_iter=10):
+    # create the training from annotated data produced by using Brat
+    training_data = create_training_data(input_dir)
+
+    # check if the user provides an existing language model
     if model is not None:
         nlp = spacy.load(model)  # load existing spaCy model
-        print("Loaded model '%s'" % model)
+        print("Loaded existing model '%s'" % model)
     else:
         nlp = spacy.blank('en')  # create blank Language class
-        print("Created blank 'en' model")
+        print("No model provided, created blank 'en' model")
+
     # Add entity recognizer to model if it's not in the pipeline
     # nlp.create_pipe works for built-ins that are registered with spaCy
     if 'ner' not in nlp.pipe_names:
         ner = nlp.create_pipe('ner')
         nlp.add_pipe(ner)
-    # otherwise, get it, so we can add labels to it
     else:
+        # otherwise, get it, so we can add labels to it
         ner = nlp.get_pipe('ner')
 
-    for i in range(len(ENTITIES)):
-      ner.add_label(ENTITIES[i])   # add new entity label to entity recognizer
+    # add all new entities to the recognizer
+    for i in range(len(new_entities_list)):
+      ner.add_label(new_entities_list[i])
+
     if model is None:
         optimizer = nlp.begin_training()
     else:
@@ -75,24 +83,23 @@ def main(model=None, new_model_name='DCC_ent', output_dir=output_dir, n_iter=50)
         # existing entity types.
         optimizer = nlp.entity.create_optimizer()
 
+    # start the training of the recognizer (and the time)
     training_start_time = time.time()
-    # get names of other pipes to disable them during training
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != 'ner']
-    with nlp.disable_pipes(*other_pipes):  # only train NER
-        for itn in range(n_iter):
-            random.shuffle(TRAIN_DATA)
-            losses = {}
-            # batch up the examples using spaCy's minibatch
-            batches = minibatch(TRAIN_DATA, size=compounding(4., 32., 1.001))
-            for batch in batches:
-                texts, annotations = zip(*batch)
-                nlp.update(texts, annotations, sgd=optimizer, drop=0.35,
-                           losses=losses)
-            print('iter:', itn)
-            print('Losses', losses)
+    for itn in range(n_iter):
+        random.shuffle(training_data)
+        losses = {}
+        # batch up the examples using spaCy's minibatch
+        batches = minibatch(training_data, size=compounding(4., 32., 1.001))
+        for batch in batches:
+            texts, annotations = zip(*batch)
+            nlp.update(texts, annotations, sgd=optimizer, drop=0.35,
+                       losses=losses)
+        print('iter:', itn)
+        print('Losses', losses)
 
     training_end_time = time.time()
     print("training time: ", training_end_time-training_start_time)
+
 
     ############################
     # test the trained model
@@ -112,6 +119,7 @@ def main(model=None, new_model_name='DCC_ent', output_dir=output_dir, n_iter=50)
                 'restoration, including image denoising and single image super-resolution, where we outperform strong ' \
                 'convolutional neural network (cnn) baselines and recent non-local models that rely on knn selection ' \
                 'in hand-chosen features spaces.  1'
+
     doc = nlp(test_text)
 
     print("\nEntities in: '%s'" % test_text)
