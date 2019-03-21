@@ -41,6 +41,7 @@ output_dir = 'Models/'
 TRAIN_DATA = create_training_data(data_directory)
 
 
+# passing command line arguments using plac
 @plac.annotations(
     model=("Model name. Defaults to blank 'en' model.", "option", "m", str),
     new_model_name=("New model name for model meta.", "option", "nm", str),
