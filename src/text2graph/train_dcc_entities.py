@@ -3,6 +3,7 @@
 #!/usr/bin/env python
 # coding: utf8
 
+
 from __future__ import unicode_literals, print_function
 
 from brat2spacy import *
@@ -35,7 +36,10 @@ def evaluate(ner_model, examples):
 #data_directory = 'DATA/abstract-sentences-test/'
 data_directory = 'Output/BreakBrat/Abstracts-annotated30/'
 output_dir = 'Models/'
+
+
 TRAIN_DATA = create_training_data(data_directory)
+
 
 @plac.annotations(
     model=("Model name. Defaults to blank 'en' model.", "option", "m", str),
@@ -44,7 +48,17 @@ TRAIN_DATA = create_training_data(data_directory)
     n_iter=("Number of training iterations", "option", "n", int))
 
 
-def main(model=None, new_model_name='DCC', output_dir=output_dir, n_iter=50):
+
+
+# The main function that sets up the SpaCy pipeline and entity recognizer. The new entities are defined as a list of strings.
+# Input -
+#   model: the name of an existing trained model
+#   new_model_name: the name of the new entity model 
+#   output_dir: the path of the directory where the new trained model will be saved.
+#   n_iter: number of training iterations (epochs) 
+# Output -
+#   The trained entity model stored in the output_dir
+def main(model=None, new_model_name='DCC_ent', output_dir=output_dir, n_iter=50):
     """Set up the pipeline and entity recognizer, and train the new entity."""
     if model is not None:
         nlp = spacy.load(model)  # load existing spaCy model
