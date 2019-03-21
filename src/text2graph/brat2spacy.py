@@ -34,7 +34,7 @@ def collect_txt_ann_files(directory):
 def create_training_data(directory):
     ann_file_list, txt_file_list = collect_txt_ann_files(directory)
     for fi in range(len(ann_file_list)):
-        print("processing file: ", fi)
+        #print("processing file: ", fi)
         with open(txt_file_list[fi], encoding="utf8") as txtf, open(ann_file_list[fi], encoding="utf8") as annf:
             tup = ()
             for txt_line in txtf:
