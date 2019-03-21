@@ -23,16 +23,6 @@ from ner_model_eval import *
 ENTITIES = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
-def evaluate(ner_model, examples):
-    scorer = Scorer()
-    for input_, annot in examples:
-        doc_gold_text = ner_model.make_doc(input_)
-        gold = GoldParse(doc_gold_text, entities=annot)
-        pred_value = ner_model(input_)
-        scorer.score(pred_value, gold)
-    return scorer.scores
-
-
 #data_directory = 'DATA/abstract-sentences-test/'
 data_directory = 'Output/BreakBrat/Abstracts-annotated30/'
 output_dir = 'Models/'
