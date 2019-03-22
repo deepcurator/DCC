@@ -1,15 +1,20 @@
 
-
-#!/usr/bin/env python
-# coding: utf8
+# A new NER model is trained that contains new entities. The new entities are
+# defined in the list: ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
+# The new model takes as input annotated sentences extracted from pdf files,
+# describing methods, architectures, and applications of Deep Learning. The
+# sentences have been annotated using Brat (http://brat.nlplab.org/).
+# The training is done by using the statistical models provided by spaCy
+# (https://spacy.io/). The trained model can be saved in a user defined folder
+# for future use.
+#
+# This material is based upon work supported by Defense Advanced Research
+# Projects Agency (DARPA) under Agreement No. HR00111990010
 
 
 from __future__ import unicode_literals, print_function
 
-from brat2spacy import *
 import time
-
-
 import plac
 import random
 from pathlib import Path
@@ -18,7 +23,9 @@ from spacy.util import minibatch, compounding
 from spacy.gold import GoldParse
 from spacy.scorer import Scorer
 
+from brat2spacy import *
 from ner_model_eval import *
+from test_dcc_entities import *
 
 
 
@@ -27,9 +34,9 @@ new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 #data_directory = 'DATA/abstract-sentences-test/'
-input_dir = 'Output/BreakBrat/Abstracts-annotated30/'
+input_dir = 'Data/Abstracts-annotated30/'
 output_dir = 'Models/'
-
+test_dir = 'Data/TestData'
 
 
 # passing command line arguments using plac
@@ -38,6 +45,7 @@ output_dir = 'Models/'
     new_model_name=("New model name for model meta.", "option", "nm", str),
     input_dir=("Input directory containing the Brat data files", "option", "i", str),
     output_dir=("Optional output directory", "option", "o", Path),
+    test_dir=("optional directory containing test data", "option", "t", Path),
     n_iter=("Number of training iterations", "option", "n", int))
 
 
@@ -51,7 +59,7 @@ output_dir = 'Models/'
 #   n_iter: number of training iterations (epochs)
 # Output -
 #   The trained entity model stored in the output_dir
-def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=output_dir, n_iter=10):
+def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=output_dir, test_dir=test_dir, n_iter=50):
     # create the training from annotated data produced by using Brat
     training_data = create_training_data(input_dir)
 
@@ -102,42 +110,15 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=o
 
 
     ############################
-    # test the trained model
-    #
-    # define a sentence (or group of sentences) with no annotations.
-    # the model will find the entities in it.
-    test_text = 'non-local methods exploiting the self-similarity of natural signals have been well studied, ' \
-                'for example in image analysis and restoration. existing approaches, however, rely on k-nearest ' \
-                'neighbors (knn) matching in a ﬁxed feature space. the main hurdle in optimizing this feature space ' \
-                'w. r. t. application performance is the non-differentiability of the knn selection rule. to overcome ' \
-                'this, we propose a continuous deterministic relaxation of knn selection that maintains ' \
-                'differentiability w. r. t. pairwise distances, but retains the original knn as the limit of a ' \
-                'temperature parameter approaching zero. to exploit our relaxation, we propose the neural nearest ' \
-                'neighbors block (n3 block), a novel non-local processing layer that leverages the principle of ' \
-                'self-similarity and can be used as building block in modern neural network architectures.1 we show ' \
-                'its effectiveness for the set reasoning task of correspondence classiﬁcation as well as for image ' \
-                'restoration, including image denoising and single image super-resolution, where we outperform strong ' \
-                'convolutional neural network (cnn) baselines and recent non-local models that rely on knn selection ' \
-                'in hand-chosen features spaces.  1'
-
-    doc = nlp(test_text)
-
-    print("\nEntities in: '%s'" % test_text)
-    for ent in doc.ents:
-        print(ent.label_, ent.text, ent.start_char, ent.end_char)
-
-    # write the results in a txt file
-    ent_file = open("Output/entities.txt", "w+")
-    for ent in doc.ents:
-        ent_file.write("%s %s %d %d\n" % (ent.label_.encode("utf-8"), ent.text.encode("utf-8"), ent.start_char, ent.end_char))
-    ent_file.close()
+    # test the ner model on a set of text data taken from papers
+    if test_dir is not None:
+        test_ner_model(nlp, test_dir)
 
 
     ##########################
     # model evaluation
-
-
-
+    #
+    # define a set of examples that will be used as ground truth
     examples = [
         ('Deep learning is applied in many every day application with great success in object recognition.',
          [(0, 13, 'Method'), (77, 95, 'Task')]),
