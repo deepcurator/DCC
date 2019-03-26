@@ -34,10 +34,10 @@ new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 #data_directory = 'DATA/abstract-sentences-test/'
-input_dir = './Data/Abstracts-annotated30/'
+input_dir = './Data/Abstracts-annotated/'
 model_dir = './Models/'
-test_dir = './Data/TestData'
-output_dir = './Output'
+test_dir = './Data/TestData/'
+output_dir = './Output/'
 n_iter = 20
 
 # passing command line arguments using plac
@@ -113,6 +113,7 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
 
     ############################
     # test the ner model on a set of text data taken from papers
+    # (if the user does not provide text data, no testing will be performed)
     if test_dir is not None:
         # test_ner_model(nlp, test_dir)
         test_ner_model(nlp, test_dir, output_dir)
@@ -137,6 +138,7 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
 
     ############################################
     # save trained model
+    # (if the user does not provide a directory, the trained model will not be saved)
     if saved_model_dir is not None:
         saved_model_dir = Path(saved_model_dir)
         if not saved_model_dir.exists():
