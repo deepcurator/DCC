@@ -314,7 +314,7 @@ class TFTokenExplorer:
 
         # self.dump_call_graph()
         # self.dump_call_trees()
-        self.dump_rdf_graphs()
+        # self.dump_rdf_graphs()
         self.dump_tfseuqences()
 
     def dump_call_graph(self):
@@ -387,6 +387,18 @@ def lightweight(path):
 
 if __name__ == "__main__":
 
+
+    # path = Path(".")/"test"/"FewShot_GAN-Unet3D-master"
+    # path = Path(".")/"test"/"adaptive-f-divergence-master"/'bnn'
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/09/NPRF-master") # python 2
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/23/KGD-master") # lambda problem
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/24/FewShot_GAN-Unet3D-master")
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/31/RecurJac-Jacobian-Bounds-master") # remove parse_landscape.py
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/34/enas-master") # python 2 
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/37/Micro-Net-master") # ok
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/42/AdverseBiNet-master") # ok
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/43/T-GANs-master") # python 2
+    # path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/49/ambient-gan-master") # python 2
     path = Path(".")/"test"/"fashion_mnist"
     path = path.resolve()
     lightweight(path)

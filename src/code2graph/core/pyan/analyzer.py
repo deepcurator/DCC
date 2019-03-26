@@ -87,6 +87,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.postprocess()
 
     def process_one(self, filename):
+        print(filename)
         """Analyze the specified Python source file."""
         if filename not in self.filenames:
             raise ValueError("Filename '%s' has not been preprocessed (was not given to __init__, which got %s)" % (filename, self.filenames))
