@@ -6,36 +6,36 @@ from scipy import ndimage
 from skimage.feature import peak_local_max
 from skimage.morphology import watershed
 import os
-from rectangle import Rectangle
-from rectangle_merger import RectangleMerger as Merger
+from Rectangle import Rectangle
+from RectangleMerger import RectangleMerger as Merger
 
-
+# Detects components from diagram image
 
 class ShapeDetect:
     
     def __init__(self):
-        self.min_component_area = 700
-        self.max_component_area = 25000
-        self.overlapTh = 0.50
+        self.min_component_area = 700 # Components with lower size will not be considered for processing
+        self.max_component_area = 25000 # Components with higher size will not be considered for processing
+        self.overlapTh = 0.50 # For non-maxima supression
         
 
-    def convert_contour2box(self, cnt):
+    def convertContour2Box(self, cnt):
         box = []
         for c in cnt:
             x,y,w,h = cv2.boundingRect(c)
             box.append([x, y, x+w, y+h])
         return np.array(box)
     
-    def convert_contour2rect(self, cnt):
+    def convertContour2Rect(self, cnt):
         rect = []
         for c in cnt:
             x,y,w,h = cv2.boundingRect(c)
             rect.append(Rectangle.from_2_pos(x, y, x+w, y+h))
         return np.array(rect)
         
-    def get_merge_index(self, component, c):
+    def getMergeIndex(self, component, c):
         merger = Merger()
-        rects = self.convert_contour2rect(component)
+        rects = self.convertContour2Rect(component)
         x, y, w, h = cv2.boundingRect(c)
         index = []
         for i in range(0, len(rects)):
@@ -54,12 +54,11 @@ class ShapeDetect:
         merger = Merger()  
         mergable_index = []
         if merge == 1:
-            mergable_index = self.get_merge_index(component, c)
+            mergable_index = self.getMergeIndex(component, c)
         if solidity > 0.4:
             if len(mergable_index) != 0:
                 
-                for ind in mergable_index:
-                    #print("ind = %d, Current Detected component is a %s\n"%(ind, shape))
+                for ind in mergable_index:                    
                     mergable_conponent = component[ind]
                     x1, y1, w1, h1 = cv2.boundingRect(c)
                     x2, y2, w2, h2 = cv2.boundingRect(mergable_conponent)
@@ -70,57 +69,41 @@ class ShapeDetect:
                     prev_conf = conf.pop(ind)
                     component.insert(ind, merge_contour)
                     conf.insert(ind, max(prev_conf, solidity))
-                    
-                    #print("Prev conf = %f, current conf = %f, final conf = %f\n"%(prev_conf, solidity, max(prev_conf, solidity)))
+                                        
             else:  
-                if shape =='line' : 
-                    #print("Detected a %s\n"%(shape))
+                if shape =='line' :                     
                     cv2.drawContours(imcpy, [c], 0, (255, 255, 0), 2)
                     component.append(c)
-                    conf.append(solidity)
-                    #print("area = %d, hullarea = %d, solidity = %f" %(area, hullarea, solidity))      
+                    conf.append(solidity)                        
                         
-                elif shape =='rectangle' or shape =='square': 
-                    #print("Detected a %s\n"%(shape))
+                elif shape =='rectangle' or shape =='square':                     
                     cv2.drawContours(imcpy, [c], 0, (0, 255, 255), 2)
                     component.append(c)
-                    conf.append(solidity)
-                    #print("area = %d, hullarea = %d, solidity = %f" %(area, hullarea, solidity))      
+                    conf.append(solidity)                        
                         
-                elif shape =='pentagon' or shape =='hexagon': 
-                    #print("................Detected a %s................\n"%(shape))
+                elif shape =='pentagon' or shape =='hexagon':                     
                     cv2.drawContours(imcpy, [c], 0, (0, 0, 255), 2)
                     component.append(c)
-                    conf.append(solidity)
-                    #print("area = %d, hullarea = %d, solidity = %f" %(area, hullarea, solidity))      
+                    conf.append(solidity)                         
                         
-                elif shape =='circle':# or shape =='ellipse': 
-                    #print("Detected a %s\n"%(shape))
+                elif shape =='circle':# or shape =='ellipse':                     
                     cv2.drawContours(imcpy, [c], 0, (0, 255, 0), 2)
                     component.append(c)
                     conf.append(solidity)
-                    #print("area = %d, hullarea = %d, solidity = %f" %(area, hullarea, solidity))      
-                        
-                elif shape =='triangle' : 
-                    #print("Detected a %s\n"%(shape))
+                                              
+                elif shape =='triangle' :                     
                     cv2.drawContours(imcpy, [c], 0, (255, 0, 255), 2)
                     component.append(c)
                     conf.append(solidity)
-                    #print("area = %d, hullarea = %d, solidity = %f" %(area, hullarea, solidity))      
-                        
-                      
-        #                hull = cv2.convexHull(c, returnPoints = False)
-        #                defects = cv2.convexityDefects(c, hull)
-        #                print(defects)
-        #    cv2.imshow("shape_detect", imcpy)
-        #    cv2.waitKey(0)
+                     
+                     
         return (component, conf)
         
-    def local_non_max_supp(self, contour, overlapThresh, conf):
+    def localNonMaxSupp(self, contour, overlapThresh, conf):
         if len(contour) == 0:
             return []
             
-        boxes = self.convert_contour2box(contour)
+        boxes = self.convertContour2Box(contour)
         
         
         if boxes.dtype.kind == "i":
@@ -132,7 +115,7 @@ class ShapeDetect:
         y2 = boxes[:, 3]
               
         areas = (x2-x1)*(y2-y1)
-        indexes = np.argsort(conf) # np.argsort(y2)
+        indexes = np.argsort(conf) 
         boxes_keep_index = []
                 
         while len(indexes) > 0:
@@ -160,13 +143,10 @@ class ShapeDetect:
         
     def whichShape(self,c,img):
         shape = 'unknown'
-        # calculate perimeter using
+        
         peri = cv2.arcLength(c, True)
-        # apply contour approximation and store the result in vertices
+        # apply contour approximation 
         vertices = cv2.approxPolyDP(c, 0.02* peri, True) # 0.015
-#        cv2.drawContours(img, [vertices], 0, (255, 0, 255), 4)
-#        cv2.imshow("contour", img)
-#        cv2.waitKey(0) 
         
         if len(vertices) == 2: 
             shape = 'line'
@@ -174,20 +154,17 @@ class ShapeDetect:
         elif len(vertices) == 3:
             shape = 'triangle'
     
-        # if the shape has 4 vertices, it is either a square or
-        # a rectangle
+        # if the shape has 4 vertices, it is either a square or a rectangle
         elif len(vertices) == 4:
             x, y, width, height = cv2.boundingRect(vertices)
             aspectRatio = float(width) / height
     
-            # a square will have an aspect ratio that is approximately
-            # equal to one, otherwise, the shape is a rectangle
+            # a square will have an aspect ratio that is approximately ~1, otherwise, itis a rectangle
             if aspectRatio >= 0.95 and aspectRatio <= 1.05:
                 shape = "square"
             else:
                 shape = "rectangle"
     
-        # if the shape is a pentagon, it will have 5 vertices
         elif len(vertices) == 5:
             shape = "pentagon"
         
@@ -208,44 +185,31 @@ class ShapeDetect:
         thresh_imcpy = thresh_im.copy()
         gray_imcvcpy = gray_imcv.copy()
         
-#        #run a 5x5 gaussian blur then a 3x3 gaussian blr
-#        blur5 = cv2.GaussianBlur(imcpy,(3,3),0)
-#        blur3 = cv2.GaussianBlur(imcpy,(1,1),0)
-#        DoGim = blur5 - blur3
-#    
-#        cv2.imshow("DoGim", DoGim)
-#        cv2.waitKey(0)
-        
-        (cnts, _) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        ################################################ Find components from line drawing ##########################################
+        (cnts, _) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
         final_component = []
         final_conf = []
         line_component = []
         line_conf = []
         watershed_component = []
         watershed_conf = []
-        # loop over the contours, call whichShape() for each contour and write the name of shape in the center 
+        # loop over the contours, call whichShape() for each contour to find the shape
         for c in cnts:    	
             area = cv2.contourArea(c)        
-            if self.min_component_area<area<self.max_component_area :                 
-#                M = cv2.moments(c)
-#                # Compute the centroid 
-#                cX = int(M['m10'] / M['m00'])
-#                cY = int(M['m01'] / M['m00'])                  
+            if self.min_component_area<area<self.max_component_area :               
+                              
                 shape = self.whichShape(c, im)
                 (line_component, line_conf) = self.mergeOrAppend(c, shape, line_component, line_conf, imcpy, 0)  
                              
-        #######################################################################################################
+        ########################################### Find components from colored boxes #############################################
         #compute the exact Euclidean distance from every binary pixel to the nearest zero pixel, then find peaks in this distance map
         kernel = np.ones((5,5),np.uint8)
         thresh_imcpy = cv2.erode(thresh_imcpy,kernel,iterations = 1)
         D = ndimage.distance_transform_edt(thresh_imcpy)
-#        cv2.imshow("D", D)
-#        cv2.waitKey(0)
         localMax = peak_local_max(D, indices=False, min_distance=20, labels=thresh_imcpy)
         # perform a connected component analysis on the local peaks, using 8-connectivity, then appy the Watershed algorithm
         markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
         labels = watershed(-D, markers, mask=thresh_imcpy)
-        #print("[INFO] {} unique segments found".format(len(np.unique(labels)) - 1))
         # loop over the unique labels returned by the Watershed algorithm
         for label in np.unique(labels):
             # if the label is zero, we are examining the 'background' so simply ignore it
@@ -261,21 +225,22 @@ class ShapeDetect:
             area = cv2.contourArea(c)            
             if self.min_component_area<area<self.max_component_area :
                  shape = self.whichShape(c, im)
+                 ################# add new components to the list only if it is not overlapping with existing ones ###################
                  (watershed_component, watershed_conf) = self.mergeOrAppend(c, shape, watershed_component, watershed_conf, imcpy, 1)                        
-               
+        
+
+        ################################# Final components will be from line components and colored boxes #############################       
         final_component = line_component +  watershed_component
         final_conf = line_conf +  watershed_conf
-        nmcomponent = self.local_non_max_supp(final_component, self.overlapTh, final_conf)
+
+        ############################### Apply non-max supression to get rid of redundant components ###################################
+        nmcomponent = self.localNonMaxSupp(final_component, self.overlapTh, final_conf)
 #        im_nmcomponent = im.copy()
 #        for c in nmcomponent:
 #            cv2.drawContours(im_nmcomponent, [c], 0, (0, 0, 100), 4)
 #        cv2.imshow("im_nmcomponent", im_nmcomponent)
 #        cv2.waitKey(0) 
-            
-        op_file_name = os.path.join(op_dir, "op" + os.path.basename(filename))
-        cv2.imwrite(op_file_name, imcpy)
-        
-        
+                    
 #        cv2.imshow("shape_detect", imcpy)
 #        cv2.waitKey(0) 
         return nmcomponent
