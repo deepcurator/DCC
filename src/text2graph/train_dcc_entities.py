@@ -34,7 +34,7 @@ new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 #data_directory = 'DATA/abstract-sentences-test/'
-input_dir = './Data/Abstracts-annotated30/'
+input_dir = './Data/Abstracts-annotated/'
 model_dir = './Models/'
 test_dir = './Data/TestData/'
 output_dir = './Output/'
