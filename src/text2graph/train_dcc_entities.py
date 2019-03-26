@@ -34,16 +34,18 @@ new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 #data_directory = 'DATA/abstract-sentences-test/'
-input_dir = 'Data/Abstracts-annotated30/'
-output_dir = 'Models/'
-test_dir = 'Data/TestData'
-
+input_dir = './Data/Abstracts-annotated30/'
+model_dir = './Models/'
+test_dir = './Data/TestData'
+output_dir = './Output'
+n_iter = 20
 
 # passing command line arguments using plac
 @plac.annotations(
     model=("Model name. Defaults to blank 'en' model.", "option", "m", str),
     new_model_name=("New model name for model meta.", "option", "nm", str),
     input_dir=("Input directory containing the Brat data files", "option", "i", str),
+    saved_model_dir=("Directory where the trained model is saved", "option", "sm", str),
     output_dir=("Optional output directory", "option", "o", Path),
     test_dir=("optional directory containing test data", "option", "t", Path),
     n_iter=("Number of training iterations", "option", "n", int))
@@ -59,7 +61,7 @@ test_dir = 'Data/TestData'
 #   n_iter: number of training iterations (epochs)
 # Output -
 #   The trained entity model stored in the output_dir
-def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=output_dir, test_dir=test_dir, n_iter=50):
+def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_dir=model_dir, output_dir=output_dir, test_dir=test_dir, n_iter=n_iter):
     # create the training from annotated data produced by using Brat
     training_data = create_training_data(input_dir)
 
@@ -112,8 +114,8 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=o
     ############################
     # test the ner model on a set of text data taken from papers
     if test_dir is not None:
-        test_ner_model(nlp, test_dir)
-
+        # test_ner_model(nlp, test_dir)
+        test_ner_model(nlp, test_dir, output_dir)
 
     ##########################
     # model evaluation
@@ -135,13 +137,13 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, output_dir=o
 
     ############################################
     # save trained model
-    if output_dir is not None:
-        output_dir = Path(output_dir)
-        if not output_dir.exists():
-            output_dir.mkdir()
+    if saved_model_dir is not None:
+        saved_model_dir = Path(saved_model_dir)
+        if not saved_model_dir.exists():
+            saved_model_dir.mkdir()
         nlp.meta['name'] = new_model_name  # rename model
-        nlp.to_disk(output_dir)
-        print("The model was saved to the directory: ", output_dir)
+        nlp.to_disk(saved_model_dir)
+        print("The model was saved to the directory: ", saved_model_dir)
 
         # test the saved model
         #print("Loading from", output_dir)
