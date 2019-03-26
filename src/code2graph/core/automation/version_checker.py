@@ -26,8 +26,9 @@ def check_python_3(path):
 
 	return py3_result
 
-def test():
-	path = "/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/09/NPRF-master"
-	print(check_python_2(path))
-	print(check_python_3(path))
-	
+def check(path):
+	print("Py2?:", check_python_2(path))
+	print("Py3?:", check_python_3(path))
+
+if __name__ == "__main__":
+	check("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/09/NPRF-master")
