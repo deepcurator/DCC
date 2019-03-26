@@ -39,26 +39,23 @@ class TFcodeInjector:
 
     def inject_code(self, class_visitor, node):
         
-        location = []
-        found = False
+        location_to_be_inserted = []
 
         for idx, obj in enumerate(node.body):
             visitor = class_visitor()
             visitor.visit(obj)
-
             if visitor.found:
                 if isinstance(obj, (ast.Expr, ast.Call)):
-                    location.append(idx)
+                    location_to_be_inserted.append(idx)
                 elif isinstance(obj, (ast.If, ast.For)):
                     self.inject_code(class_visitor, obj)
-                else:
+                else: # should not print
                     print(astor.dump_tree(obj))
 
-        if len(location):
-            for idx in location[::-1]:
+        if len(location_to_be_inserted):
+            for idx in location_to_be_inserted[::-1]:
                 node.body.insert(idx+1, self.inject_code_ast_tree)
 
-        
     def inject(self):
         self.inject_code(CompileVisitor, self.code_ast_tree)
         self.inject_code(RunVisitor, self.code_ast_tree)
