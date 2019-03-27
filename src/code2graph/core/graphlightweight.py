@@ -450,5 +450,7 @@ if __name__ == "__main__":
 
     path = Path(".") / "test" / "fashion_mnist"
     # path = Path(".")/"test"/"VGG16"
+    # path = Path(".")/"test"/"Alexnet"
+    # path = Path(".")/"test"/"Xception"
     path = path.resolve()
     lightweight(path)
