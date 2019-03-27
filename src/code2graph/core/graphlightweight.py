@@ -372,11 +372,10 @@ class TFTokenExplorer:
                 self.build_tfsequence(child, sequence)
 
     def dump_information(self):
-
-        # self.dump_call_graph()
-        # self.dump_call_trees()
+        self.dump_call_graph()
+        self.dump_call_trees()
         self.dump_rdf_graphs()
-        # self.dump_tfsequences()
+        self.dump_tfseuqences()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
