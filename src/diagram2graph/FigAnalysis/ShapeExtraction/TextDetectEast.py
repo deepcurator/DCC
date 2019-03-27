@@ -13,6 +13,10 @@ import difflib
 import os
 from scipy import ndimage
 
+from SpellCorrect import SpellCorrect as sc
+
+
+
 class TextDetectEast:
     
     def __init__(self):
@@ -67,6 +71,7 @@ class TextDetectEast:
 
     def getText(self, fileName, image):
         
+        spellcorr = sc()
         imcpy = image.copy()
         (height, width) = image.shape[:2]
         (new_height, new_width) = (self.size, self.size) 
@@ -136,7 +141,9 @@ class TextDetectEast:
                 op = "".join([c if ord(c) < 128 else "" for c in op]).strip()
                 op = re.sub('\W+','', op)
                 if op != "":
-                    text = text+op+" "
+                    op_cor = spellcorr.correctWord(op)
+                    #print("EAST op = %s, op_cor: %s"%(op, op_cor))
+                    text = text+op_cor+" "
                     prob = (prob+prob_list[index])
                     tot_text = tot_text+1
                     

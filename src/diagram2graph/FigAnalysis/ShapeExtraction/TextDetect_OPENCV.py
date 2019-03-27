@@ -130,7 +130,7 @@ class TextDetectAll:
         
         
         text_fullIm = self.getTextFullImage(fileName, image)
-        text_ROI = []#text_ROI = self.getTextEast(fileName, image)
+        text_ROI = text_ROI = self.getTextEast(fileName, image)
         text_componentIm = self.getTextComponent(fileName, components, image)
         
         for ((startX1, startY1, endX1, endY1), op1, prob1) in text_componentIm:

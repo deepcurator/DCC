@@ -4,6 +4,9 @@ from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 import re
 import os
+from SpellCorrect import SpellCorrect as sc
+
+
 
 class TextDetectFullIm:
     
@@ -35,6 +38,7 @@ class TextDetectFullIm:
 
     def read_text(self, fileName, imgCV, grayIm, cfig):
         
+        spellcorr = sc()
         output_dict = pytesseract.image_to_data(grayIm, lang='eng', config=cfig, output_type='dict')
         
         text_list = output_dict.get('text')
@@ -50,10 +54,12 @@ class TextDetectFullIm:
             op = re.sub(r'^[^()+*-<>#={}[\]/\0-9a-zA-Z]*', '', re.sub(r'[^()+*-<>#={}[\]/\0-9a-zA-Z]*$', '', text_list[index]))
             op = re.sub('\W+','', op)
             size = box_pos_width[index] * box_pos_height[index]
-            if not op:
-                print("")
-            elif size < (np.size(imgCV, 0)*np.size(imgCV, 1)*self.size_th) and prob_list[index] > self.min_conf_thresh:
+#            if not op:
+#                print("")
+            if op and (size < (np.size(imgCV, 0)*np.size(imgCV, 1)*self.size_th) and prob_list[index] > self.min_conf_thresh):
                 
+                op_cor = spellcorr.correctWord(op)
+                #print("Full IM: op = %s, op_cor %s"%(op, op_cor))
                 if box_pos_left_corner[index] > 0 and box_pos_left_corner[index] < width:
                     posx = box_pos_left_corner[index]
                 elif box_pos_left_corner[index] <= 0:
@@ -72,9 +78,9 @@ class TextDetectFullIm:
                 endX = int((box_pos_left_corner[index]+box_pos_width[index])/self.rx)
                 endY = int((box_pos_top_corner[index]+box_pos_height[index])/self.ry)
                 prob = prob_list[index]
-                final_results.append(((startX, startY, endX, endY), op, prob))
+                final_results.append(((startX, startY, endX, endY), op_cor, prob))
                
-                cv2.putText(imgCV, op, (posx,posy), cv2.FONT_HERSHEY_SIMPLEX,0.6, (0, 0, 255), 2)
+                cv2.putText(imgCV, op_cor, (posx,posy), cv2.FONT_HERSHEY_SIMPLEX,0.6, (0, 0, 255), 2)
                 cv2.rectangle(imgCV,(box_pos_left_corner[index],box_pos_top_corner[index]),
         		    (box_pos_left_corner[index]+box_pos_width[index],box_pos_top_corner[index]+box_pos_height[index]),(0, 0, 255),1)
               
