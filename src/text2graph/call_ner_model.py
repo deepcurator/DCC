@@ -63,6 +63,9 @@ def main(saved_model_dir=model_dir, test_dir=test_dir, output_dir=output_dir):
                ef.write("%s %s %d %d\n" % (ent.label_.encode("utf-8"), ent.text.encode("utf-8"), ent.start_char, ent.end_char))
 
            file_counter = + 1
+        
+    print("The predicted entities we stored in ", output_dir)
+
 
 
 if __name__ == '__main__':
