@@ -18,7 +18,7 @@ The impact of the Deep Code Curator is that it will dramatically decrease the ti
 ## Architecture
 
 The overall architecture of our system is shown in the following figure. 
-![generalarchitecture](docs/Picture1.png)
+![generalarchitecture](https://github.com/deepcurator/DCC/blob/master/docs/Picture1.png)
 
 The system consists of two main parts:
 
