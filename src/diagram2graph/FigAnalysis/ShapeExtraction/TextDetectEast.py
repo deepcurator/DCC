@@ -4,7 +4,7 @@ import cv2
 import pytesseract
 from imutils.object_detection import non_max_suppression    
 from PIL import Image, ImageEnhance, ImageFilter
-from TextDetect import TextDetect as td
+#from TextDetect import TextDetect as td
 import re
 from Rectangle import Rectangle
 from RectangleMerger import RectangleMerger as Merger
