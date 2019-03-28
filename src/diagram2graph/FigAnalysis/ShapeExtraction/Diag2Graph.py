@@ -138,7 +138,7 @@ class Diag2Graph:
         op_file.close()       
         print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
                     
-        cv2.imshow("final_graph_im", final_graph_im)
-        cv2.waitKey(0)   
+        #cv2.imshow("final_graph_im", final_graph_im)
+        #cv2.waitKey(0)   
             
         
