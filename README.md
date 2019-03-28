@@ -29,6 +29,21 @@ The first part (top part of the figure) shows the details for the proposed curat
 
 In the second component (at the bottom of the overall architecture) we show how the curated knowledge graphs can be used to automatically infer code for papers that are not accompanied by implementation details (source code). First an aligned knowledge graph, without the components associated with the source code is extracted from those papers. Next the corresponding code graph is inferred by using previous related papers that are accompanied with code. More details can be found in the "Reports" folder.
 
+## Demo
+
+### Code to Graph
+
+[code2graph](src/code2graph/)
+
+### Image to Graph
+
+[image2graph](src/diagram2graph/)
+
+### Text to Graph
+
+[text2graph](src/text2graph/)
+
+
 ## Acknowledgement
 
 This material is based upon work supported by the Defense Advanced Research Projects Agency (DARPA) under Agreement No. HR00111990010”
