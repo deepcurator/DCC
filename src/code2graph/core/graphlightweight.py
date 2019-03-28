@@ -267,7 +267,6 @@ class TFTokenExplorer:
                         self.pyan_node_dict[get_name(callee)]=callee
 
                         self.call_graph.add((BNode(get_name(caller)), OntologyManager.call, BNode(get_name(callee))))
-        # self.dump_call_graph()
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
@@ -375,7 +374,7 @@ class TFTokenExplorer:
         self.dump_call_graph()
         self.dump_call_trees()
         self.dump_rdf_graphs()
-        self.dump_tfseuqences()
+        self.dump_tfsequences()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
