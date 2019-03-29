@@ -1,25 +1,40 @@
 # Code2Graph
 
 ## How to run?
+The code to graph has been written and tested using Python3.6. Hence, for optimal usage, we suggest performing the following tests in Python3.6.
 
-The required packages are listed in [requirements.txt](requirements.txt). The following command could be used to install these packages in the target Python environment:
-```
-pip install -r requirements.txt
-```
+### Running in Windows and OSX
+You can launch the jupyter notebook describing the usage of the code2graph using following ways:
 
-Below are more detailed sample commands to create a new environment named 'c2g' using conda command line, to install the requirements, and to run the notebook using this new environment as its kernel:
-
+Install the conda environment. 
 ```
-conda create --name c2g
+pip install conda
+```
+After the conda environment is installed, you can launch the jupyter notebook using following scripts.
+```
+conda create --name c2g python=3.6
 activate c2g
 cd 'path-to-code2graph-folder'
 pip install -r requirements.txt
 python -m ipykernel install --user --name=c2g
 jupyter notebook
 ```
+### Running in Linux
+First install the virtualenv module in python.
+```
+pip install virtualenv
+```
+Then run the following scripts to launch the jupyter.
+```
+virtualenv -p python3.6 c2g
+source c2g/bin/activate
+cd 'path-to-code2graph-folder'
+pip install -r requirements.txt
+python -m ipykernel install --user --name=c2g
+jupyter notebook
+```
 
-Select the kernel 'c2g' in the notebook, and then your notebook is ready to run. If you encounter any issues, please feel free to contact the authors.
-
+In any OS, select the kernel 'c2g' in the notebook, and then your notebook is ready to run. If you encounter any issues, please feel free to contact the authors.
 
 ## Notebooks
 
