@@ -33,11 +33,11 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 We provide Jupyter notebooks to test main functionalities of the three sub-modules. More information could be found in the following pages:
 
-- [code2graph](src/code2graph/)
+- [Code2Graph](src/code2graph/)
 
-- [image2graph](src/diagram2graph/)
+- [Image2Graph](src/diagram2graph/)
 
-- [text2graph](src/text2graph/)
+- [Text2Graph](src/text2graph/)
 
 
 ## Demo
