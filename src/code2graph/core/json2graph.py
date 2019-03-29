@@ -217,11 +217,10 @@ def draw(func):
 		integer_encoded = np.array(label_encoder.fit_transform(data), dtype='float')
 		i=0
 		for src,e,dst in g[1]:
-			# pdb.set_trace()
 
-			G.add_nodes([src, dst], title=[src,dst], color=[cnames[(str(src).count('/'))], cnames[(str(dst).count('/'))]], size=[sizes[(str(src).count('/'))], sizes[(str(dst).count('/'))]])
-			# G.add_node(dst, title=dst, physics=True,color=cnames[(str(dst).count('/'))], size=sizes[(str(dst).count('/'))], shape="circle")
-			G.add_edge(src,dst,width=0.5, title=data[i],physics=True )
+			G.add_node(src, title=src, physics=True,color=cnames[(str(src).count('/'))], size=sizes[(str(src).count('/'))], shape="dot")
+			G.add_node(dst, title=dst, physics=True,color=cnames[(str(dst).count('/'))], size=sizes[(str(dst).count('/'))], shape="dot")
+			G.add_edge(src,dst,width=0.5, title=data[i],physics=True)
 			i+=1
 
 		G.hrepulsion(node_distance=120,
