@@ -45,7 +45,7 @@ We provide a [notebook](FigAnalysis/ShapeExtraction/DemoScript.ipynb) implementi
 Samples of input images and corresponding outputs are provided below:
 
 <p align="center">
- <img align="center" src="FigAnalysis/ShapeExtraction/Input/opfig1502.05689-Figure2-1.png" alt="sampleinput1">
- <img align="center" src="FigAnalysis/ShapeExtraction/Output/opfig1502.05689-Figure2-1.png" alt="sampleioutput1">
+ <img align="center" src="FigAnalysis/ShapeExtraction/Input/fig1502.05689-Figure2-1.png" alt="sampleinput1">
+ <img align="center" src="FigAnalysis/ShapeExtraction/Output/OpImage/opfig1502.05689-Figure2-1.png" alt="sampleioutput1">
 </p>
 
