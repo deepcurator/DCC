@@ -1,4 +1,4 @@
-import glob, sys, time
+import glob, sys, time, os
 import json
 from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
 import rules
@@ -6,6 +6,7 @@ from matplotlib import colors as mcolors
 from pyvis.network import Network
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
+from pathlib import Path
 
 cnames = ['blue', 'green', 'red', 'cyan', 'orange', 'black', 'purple', 'purple', 'purple']
 sizes = [i*2 for i in [10,7,6,5,4,3,2,1,1]]
@@ -205,8 +206,8 @@ class Json2RDFParser:
 
 def draw(func):
 
-	def wrapper(jsonGraph):
-		g = func(jsonGraph)
+	def wrapper(jsonGraph, path):
+		g = func(jsonGraph,path)
 		colors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
 		G= Network(height="800px", width="70%", directed=True)
 		data=[]
@@ -229,7 +230,7 @@ def draw(func):
         			 spring_strength=0.01,
         			 damping=0.09)
 		G.show_buttons(filter_=['physics'])
-		G.show("test.html")
+		G.show(path+r"\test.html")
 
 		# for s,p,o in g[1]:
 		# 	print((s,p,o))
@@ -262,14 +263,14 @@ def jsons2RDFs(path):
 		with open(file_path) as f:
 			jsonGraph = json.load(f)
 
-			RDF_graph, s_RDF_graph = json2RDF(jsonGraph)
+			RDF_graph, s_RDF_graph = json2RDF(jsonGraph, os.path.dirname(file_path))
 
 			RDF_graph.serialize(destination='%s/../rdf/%d.rdf' % (path, file_idx), format='turtle')
 			s_RDF_graph.serialize(destination='%s/../rdf/s_%d.rdf' % (path, file_idx), format='turtle')
 
 # @dump_triples
 @draw
-def json2RDF(jsonGraph):
+def json2RDF(jsonGraph, path):
 
 	parser = Json2RDFParser()
 	parser.parse(jsonGraph)
@@ -279,8 +280,9 @@ def json2RDF(jsonGraph):
 if __name__=="__main__"	:
 
 	if len(sys.argv) == 2:
-		path = sys.argv[1]
+		path = Path(sys.argv[1])
 	else:
-		path = "../tmp/graphs/json"
+		path = Path("..")/"tmp"/"graphs"/"json"
+	path = path.resolve()
 
 	jsons2RDFs(path)

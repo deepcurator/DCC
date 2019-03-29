@@ -76,7 +76,7 @@ class graphHandler(graphMETA):
 		if jsonGraph!=None:
 			self._jsonGraph=jsonGraph
 
-		self._RDF, self._sRDF = j2g.json2RDF(self._jsonGraph)
+		self._RDF, self._sRDF = j2g.json2RDF(self._jsonGraph, self._logdir)
 		return
 
 	def displayRDF(self, RDF=None):
