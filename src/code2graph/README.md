@@ -10,7 +10,7 @@ pip install -r requirements.txt
 Below are more detailed sample commands to create a new environment named 'c2g' using conda command line, to install the requirements, and to run the notebook using this new environment as its kernel:
 
 ```
-conda create --name c2g
+conda create --name c2g python=3.6
 activate c2g
 cd 'path-to-code2graph-folder'
 pip install -r requirements.txt
