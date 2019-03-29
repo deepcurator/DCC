@@ -30,7 +30,7 @@ We provide two notebooks implementing the two code graph generation approaches, 
 This approach could be tested using the [corresponding notebook](testScript/computational_graph_based.ipynb). Its output is displayed in a new tab as an HTML file. Screenshot of a sample output is provided below:
 
 <p align="center">
- <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_1.png" alt="sampleoutput1">
+ <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_0.png" alt="sampleoutput">
 </p>
 
 ### Light-Weight Approach
@@ -39,6 +39,6 @@ This approach could be tested using the [corresponding notebook](testScript/comp
 This approach could be tested using the [corresponding notebook](testScript/light_weight.ipynb). Its output is displayed in a new tab as a html file. Screenshot of a sample output is provided below:
 
 <p align="center">
- <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_2.png" alt="sampleoutput2">
+ <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_1.png" alt="sampleoutput">
 </p>
 
