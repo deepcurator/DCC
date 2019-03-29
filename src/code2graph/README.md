@@ -27,7 +27,7 @@ We provide two notebooks implementing the two code graph generation approaches, 
 
 ### Computational Graph Based Approach
 
-This approach could be tested using the [corresponding notebook](testScript/computational_graph_based.ipynb). Its output is displayed in a new tab as a html file. Screenshot of a sample output is provided below:
+This approach could be tested using the [corresponding notebook](testScript/computational_graph_based.ipynb). Its output is displayed in a new tab as an HTML file. Screenshot of a sample output is provided below:
 
 <p align="center">
  <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_1.png" alt="sampleoutput1">
