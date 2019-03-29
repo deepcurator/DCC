@@ -31,15 +31,15 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 ## How to use?
 
-### Code to Graph
+### Code2Graph
 
 [code2graph](src/code2graph/)
 
-### Image to Graph
+### Image2Graph
 
 [image2graph](src/diagram2graph/)
 
-### Text to Graph
+### Text2Graph
 
 [text2graph](src/text2graph/)
 
