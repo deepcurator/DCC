@@ -37,7 +37,7 @@ We provide a demo that allows analyzing the outputs of the three sub-modules tog
 
 ## How to run? 
 
-We provide Jupyter notebooks to test main functionalities of the three sub-modules. More information could be found in the following pages:
+We provide Jupyter notebooks to test main functionalities of the following sub-modules.
 
 - [Code2Graph](src/code2graph/)
 
