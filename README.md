@@ -31,19 +31,13 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 ## How to run? 
 
-We provide Jupyter notebooks to test main functionalities of the sub-modules. 
+We provide Jupyter notebooks to test main functionalities of the three sub-modules. More information could be found in the following pages:
 
-### Code2Graph
+- [code2graph](src/code2graph/)
 
-We provide two notebooks running the two code2graph approaches. Please see [code2graph](src/code2graph/) for more information.
+- [image2graph](src/diagram2graph/)
 
-### Image2Graph
-
-We provide a notebook to test the image analysis task. More information on [image2graph](src/diagram2graph/).
-
-### Text2Graph
-
-[text2graph](src/text2graph/)
+- [text2graph](src/text2graph/)
 
 
 ## Demo
