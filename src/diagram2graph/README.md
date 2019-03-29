@@ -47,11 +47,14 @@ We provide a [notebook](FigAnalysis/ShapeExtraction/DemoScript.ipynb) implementi
 - An output image annotating the detected shapes, text and arrows.
 - 
 
-To run the notebook on new images, it is sufficient to replace the contents of the [input folder](FigAnalysis/ShapeExtraction/Input/) with the new images to test. Samples of input images and corresponding outputs are provided below:
+To run the notebook on new images, it is sufficient to replace the contents of the [input folder](FigAnalysis/ShapeExtraction/Input/) with the new images to test. A sample input image and corresponding outputs are provided below:
 
 <p align="center">
- <img align="center" width="400px" src="FigAnalysis/ShapeExtraction/Input/fig1502.05689-Figure2-1.png" alt="sampleinput1">
- <img align="center" width="400px" src="FigAnalysis/ShapeExtraction/Output/OpImage/opfig1502.05689-Figure2-1.png" alt="sampleoutput1">
+ <img align="center" width="500px" src="FigAnalysis/ShapeExtraction/Input/fig1502.05689-Figure2-1.png" alt="sampleinput1">
+</p>
+
+<p align="center">
+ <img align="center" width="500px" src="FigAnalysis/ShapeExtraction/Output/OpImage/opfig1502.05689-Figure2-1.png" alt="sampleoutput1">
 </p>
 
 ```
