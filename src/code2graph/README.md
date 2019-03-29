@@ -4,7 +4,7 @@
 
 The required packages are listed in [requirements.txt](requirements.txt). The following command could be used to install these packages in the target Python environment:
 ```
-git install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 Below are more detailed sample commands to create a new environment named 'c2g' using conda command line, to install the requirements, and to run the notebook using this new environment as its kernel:
@@ -13,7 +13,7 @@ Below are more detailed sample commands to create a new environment named 'c2g' 
 conda create --name c2g
 activate c2g
 cd 'path-to-code2graph-folder'
-git install -r requirements.txt
+pip install -r requirements.txt
 python -m ipykernel install --user --name=c2g
 jupyter notebook
 ```
