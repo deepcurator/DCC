@@ -29,6 +29,11 @@ We provide two notebooks implementing the two code graph generation approaches, 
 
 [notebook](testScript/computational_graph_based.ipynb)
 
+
+<p align="center">
+ <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Sample_Output_1.png" alt="sampleoutput">
+</p>
+
 ### Light-Weight Approach
 
 [notebook](testScript/light_weight.ipynb)
