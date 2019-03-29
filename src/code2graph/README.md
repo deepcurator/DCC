@@ -18,7 +18,7 @@ python -m ipykernel install --user --name=c2g
 jupyter notebook
 ```
 
-Select the kernel 'c2g' in the notebook, and then your notebook is ready to run. If you encounter any issues, please feel free to contact the authors.
+Select the kernel 'c2g' in the notebook, and then your notebook is ready to run. If you encounter any issues, please feel free to contact us.
 
 
 ## Notebooks
