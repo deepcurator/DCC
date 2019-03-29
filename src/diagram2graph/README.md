@@ -49,13 +49,13 @@ We provide a [notebook](FigAnalysis/ShapeExtraction/DemoScript.ipynb) implementi
 
 To run the notebook on new images, it is sufficient to replace the contents of the [input folder](FigAnalysis/ShapeExtraction/Input/) with the new images to test. A sample input image and corresponding outputs are provided below:
 
+Input Image:
 <p align="center">
- Input Image:
  <img align="center" width="700px" src="FigAnalysis/ShapeExtraction/Input/fig1502.05689-Figure2-1.png" alt="sampleinput1">
 </p>
 
+Output Image:
 <p align="center">
- Output Image:
  <img align="center" width="700px" src="FigAnalysis/ShapeExtraction/Output/OpImage/opfig1502.05689-Figure2-1.png" alt="sampleoutput1">
 </p>
 
