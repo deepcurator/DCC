@@ -2,7 +2,7 @@
 
 ## How to run?
 
-The required packages are listed in requirements.txt. The following command could be used to install these packages in the target Python environment.
+The required packages are listed in [requirements.txt](requirements.txt). The following command could be used to install these packages in the target Python environment:
 ```
 git install -r requirements.txt
 ```
