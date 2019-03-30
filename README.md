@@ -43,7 +43,7 @@ We provide Jupyter notebooks to test main functionalities of the following sub-m
 
 - [Image2Graph](src/diagram2graph/)
 
-- [Text2Graph](src/text2graph/)
+- [Text2Graph](src/text2graph/text2graph.ipynb)
 
 
 
