@@ -44,10 +44,6 @@ We provide Jupyter notebooks to test main functionalities of the following sub-m
 
 ## Acknowledgement
 
-This material is based upon work supported by the Defense Advanced Research Projects Agency (DARPA) under Agreement No. HR00111990010”
-<p align="center">
-<img src="/images/DARPA-logo.png" width="200" height="200">
-</p>
-
+This material is based upon work supported by the Defense Advanced Research Projects Agency (DARPA) under Agreement No. HR00111990010
  
 
