@@ -62,46 +62,66 @@ Output Image:
 Output Graph:
 
 ```
-Component number 6 has text: 1444  
-Component number 6 has text: Conv 2  
-Component number 6 has text: ReLU  
-Component number 6 has text: 5x5 conv  
-Component number 6 has text: 2x22x maxpooling  
-Component number 7 has text: 5d 
-Component number 7 has text: 4 Conv  
-Component number 7 has text: ReLU  
-Component number 7 has text: 7x7 conv  
-Component number 7 has text: 2x2maxpooling 
-Component number 5 has text: 367 
-Component number 5 has text: Conv 3  
-Component number 5 has text: 2x2 conv ReLU  
-Component number 8 has text: Input  
-Component number 4 has text: l1 
-Component number 4 has text: Input  
-Component number 3 has text: 407 
-Component number 3 has text: Conv  
-Component number 3 has text: ReLU  
-Component number 3 has text: 7x7 conv  
-Component number 3 has text: 2x22x maxpooling  
-Component number 2 has text: 1444 
-Component number 2 has text: Conv  
-Component number 2 has text: ReLU  
-Component number 2 has text: 5x5 conv  
-Component number 2 has text: 2x2 maxpooling  
-Component number 1 has text: 2887 
-Component number 1 has text: Conv  
-Component number 1 has text: ReLU  
-Component number 1 has text: 2x2in conv  
-Component number 0 has text: 367 
-Component number 0 has text: Conv 4  
-Component number 0 has text: 1x1 conv  
+Component number 6 "has description": 1444 
+Component number 6 "has type": conv 
+Component number 6 "has description":  2  
+Component number 6 "has description": relu 
+Component number 6 "has type": conv 
+Component number 6 "has description": 5x5  
+Component number 6 "has type": maxpool 
+Component number 6 "has description": 2x22x ing 
+Component number 7 "has description": 3d 
+Component number 7 "has type": conv 
+Component number 7 "has description": 4   
+Component number 7 "has description": relu 
+Component number 7 "has type": conv 
+Component number 7 "has description": 7x7  
+Component number 7 "has type": maxpool 
+Component number 7 "has description": 2x2ing 
+Component number 5 "has description": 367 
+Component number 5 "has type": conv 
+Component number 5 "has description":  3  
+Component number 5 "has type": conv 
+Component number 5 "has description": 2x2  relu 
+Component number 8 "has type": input 
+Component number 8 "has description":   
+Component number 4 "has description": l1 
+Component number 4 "has type": input 
+Component number 4 "has description":   
+Component number 3 "has description": 407 
+Component number 3 "has type": conv 
+Component number 3 "has description":   
+Component number 3 "has description": relu 
+Component number 3 "has type": conv 
+Component number 3 "has description": 7x7  
+Component number 3 "has type": maxpool 
+Component number 3 "has description": 2x22x ing 
+Component number 2 "has description": 1444 
+Component number 2 "has type": conv 
+Component number 2 "has description":   
+Component number 2 "has description": relu 
+Component number 2 "has type": conv 
+Component number 2 "has description": x5 5x5 
+Component number 2 "has type": maxpool 
+Component number 2 "has description": 2x2 ing 
+Component number 1 "has description": 2887 
+Component number 1 "has type": conv 
+Component number 1 "has description":   
+Component number 1 "has description": relu 
+Component number 1 "has type": conv 
+Component number 1 "has description": 2x2in  
+Component number 0 "has description": 367 
+Component number 0 "has type": conv 
+Component number 0 "has description":  4  
+Component number 0 "has type": conv 
+Component number 0 "has description": 1x1  
 Text Component: hognet  
 Text Component: convnet  
-Component number 8 is connected to Component number 7 
-Component number 3 is connected to Component number 4 
-Component number 7 is connected to Component number 6 
-Component number 3 is connected to Component number 2 
-Component number 6 is connected to Component number 5 
-Component number 2 is connected to Component number 1 
-Component number 1 is connected to Component number 0
+Component number 8 "connected to" Component number 7 
+Component number 3 "connected to" Component number 4 
+Component number 7 "connected to" Component number 6 
+Component number 3 "connected to" Component number 2 
+Component number 6 "connected to" Component number 5 
+Component number 2 "connected to" Component number 1 
+Component number 1 "connected to" Component number 0 
 ```
