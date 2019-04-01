@@ -13,7 +13,7 @@ pip install -r requirements.txt
 Below are more detailed sample commands to create a new environment named 'i2g' using conda command line, to install the requirements, and to run the notebook using this new environment as its kernel:
 
 ```
-conda create --name i2g
+conda create --name i2g python=3.6
 activate i2g
 cd 'path-to-image2graph-folder'
 pip install -r requirements.txt
