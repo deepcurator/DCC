@@ -32,7 +32,7 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 ## How to run? 
 
-We provide Jupyter notebooks to test main functionalities of the following sub-modules.
+We provide Jupyter notebooks to test main functionalities of the following sub-modules:
 
 - [Code2Graph](src/code2graph/)
 
