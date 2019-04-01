@@ -8,8 +8,9 @@ from google.protobuf import json_format #For the json conversion
 import json2graph as j2g
 
 import shutil
-from dataset_utils import *
+from automation.dataset_utils import *
 import pdb
+from pathlib import Path
 
 class graphHandler(graphMETA):
 	def __init__(self,
@@ -75,7 +76,7 @@ class graphHandler(graphMETA):
 		if jsonGraph!=None:
 			self._jsonGraph=jsonGraph
 
-		self._RDF, self._sRDF = j2g.json2RDF(self._jsonGraph)
+		self._RDF, self._sRDF = j2g.json2RDF(self._jsonGraph, self._logdir)
 		return
 
 	def displayRDF(self, RDF=None):
@@ -191,9 +192,13 @@ class graphHandler(graphMETA):
 
 
 def main():
+	default_path = Path("./")/"test"/"fashion_mnist"
+	default_path = default_path.resolve()
+
 	parser = ArgumentParser(description='sess.graph/tf.graph handler')
+	
 	parser.add_argument('-ld','--logdir',
-						default = '../tmp/log/',
+						default = default_path,
 						type    = str,
 						help    = 'directory for saved graph')
 	args = parser.parse_args()
@@ -204,7 +209,7 @@ def main():
 
 	gHandle.convertGraphDef2Json()
 
-	gHandle.writeJson(logdir='../tmp/graphs/json/')
+	gHandle.writeJson(logdir=str(default_path))
 
 	gHandle.convertJson2RDF()
 
