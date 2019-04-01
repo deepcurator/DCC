@@ -2,12 +2,14 @@ import cv2
 import os
 import numpy as np
 from ArrowDetect import ArrowDetect as ad
+import re
 
 class Diag2Graph:
     
     def __init__(self):
         self.min_dist_init = 1000000
         self.min_dist_thresh = 75 # 0.1
+        self.layer_type = ["input", "dense", "conv", "conv2D", "conv 2D", "flatten", "dropout", "max pool", "avg pool", "maxpool", "avgpool", "max pooling", "avg pooling", "maxpooling", "avgpooling", "concat", "embed", "rnn", "LSTM", "output"]
         
     def find_closest_component_rect(self, rectx, recty, cnt):
         
@@ -51,7 +53,16 @@ class Diag2Graph:
                 compWOText.append(index)
           
         return (compWithText, TextWOComp, compWOText)
-  
+    
+    def find_layerName(self, txt) :
+        txt = txt.lower()
+        
+        for layer in self.layer_type:
+           
+            if (re.search(layer, txt, flags = 0) is not None )or (re.search(txt, layer, flags = 0) is not None):
+                return (True, layer, re.sub(layer, "", txt))
+        return (False, "", txt)
+
     
     def createDiag2Graph(self, op_dir, filename, img, thresh_im, comp, text_list, line_list):
         
@@ -79,8 +90,16 @@ class Diag2Graph:
             print("=======+++++++++++++++++++++=======")
             text_pos = 0
             for txt in compWithText[k]:
-                print("Component number %d has text: %s \n"% (k, txt))    
-                op_file.write("Component number %d has text: %s \n"% (k, txt))
+                found, layer_name, remaining_txt = self.find_layerName(txt)
+                if found:
+                    print("Component number %d \"has type\": %s \n"% (k, layer_name))
+                    op_file.write("Component number %d \"has type\": %s \n"% (k, layer_name))
+                    print("Component number %d \"has description\": %s \n"% (k, remaining_txt))    
+                    op_file.write("Component number %d \"has description\": %s \n"% (k, remaining_txt))
+                
+                else:
+                    print("Component number %d \"has description\": %s \n"% (k, txt))    
+                    op_file.write("Component number %d \"has description\": %s \n"% (k, txt))
                 
                 cv2.putText(final_graph_im, txt, (cX, cY + text_pos), cv2.FONT_HERSHEY_SIMPLEX,0.5, (255, 0, 255), 2)
                 # cv2.imshow("final_graph_im", final_graph_im)
@@ -118,18 +137,18 @@ class Diag2Graph:
          
         for ((startx, starty, endx, endy), start_comp_found, end_comp_found, start_text_found, end_text_found) in line_connect:
             if (start_comp_found != -1 and end_comp_found != -1):
-                print("Component number %d is connected to Component number %d \n"% (start_comp_found, end_comp_found)) 
-                op_file.write("Component number %d is connected to Component number %d \n"% (start_comp_found, end_comp_found)) 
+                print("Component number %d \"connected to\" Component number %d \n"% (start_comp_found, end_comp_found)) 
+                op_file.write("Component number %d \"connected to\" Component number %d \n"% (start_comp_found, end_comp_found)) 
             elif(start_text_found != -1 and end_text_found != -1):
-                print("Text Box %s is connected to TextBox %s \n"% (TextWOComp[start_text_found][1], TextWOComp[end_text_found][1])) 
-                op_file.write("Text %s is connected to Text %s \n"% (TextWOComp[start_text_found][1], TextWOComp[end_text_found][1])) 
+                print("Text Box %s \"connected to\" TextBox %s \n"% (TextWOComp[start_text_found][1], TextWOComp[end_text_found][1])) 
+                op_file.write("Text %s \"connected to\" Text %s \n"% (TextWOComp[start_text_found][1], TextWOComp[end_text_found][1])) 
             elif(start_comp_found != -1 and end_text_found != -1):
-                print("Component Number %d is connected to TextBox %s \n"% (start_comp_found, TextWOComp[end_text_found][1])) 
-                op_file.write("Component Number %d is connected to Text %s \n"% (start_comp_found, TextWOComp[end_text_found][1])) 
+                print("Component Number %d \"connected to\" TextBox %s \n"% (start_comp_found, TextWOComp[end_text_found][1])) 
+                op_file.write("Component Number %d \"connected to\" Text %s \n"% (start_comp_found, TextWOComp[end_text_found][1])) 
             elif(end_comp_found != -1 and start_text_found != -1):
-                print("Component Number %d is connected to TextBox %s \n"% (end_comp_found, TextWOComp[start_text_found][1])) 
-                op_file.write("Component Number %d is connected to Text %s \n"% (end_comp_found, TextWOComp[start_text_found][1])) 
-            
+                print("Component Number %d \"connected to\" TextBox %s \n"% (end_comp_found, TextWOComp[start_text_found][1])) 
+                op_file.write("Component Number %d \"connected to\" Text %s \n"% (end_comp_found, TextWOComp[start_text_found][1])) 
+
             cv2.line(final_graph_im, (startx, starty), (endx,endy), (0,200,255), 2) 
             # cv2.imshow("final_graph_im", final_graph_im)
             # cv2.waitKey(0)
