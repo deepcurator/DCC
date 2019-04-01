@@ -96,11 +96,15 @@ class TextDetectAll:
 
                 if merge._is_rectangles_overlapped_horizontally(Rectangle.from_2_pos(startX1, startY1, endX1, endY1), Rectangle.from_2_pos(startX2, startY2, endX2, endY2)):
                     rec = merge._merge_2_rectangles(Rectangle.from_2_pos(startX1, startY1, endX1, endY1), Rectangle.from_2_pos(startX2, startY2, endX2, endY2))
-                    if re.search(op1, op2, flags = 0) is not None:
+                    op1 = op1.lower()
+                    op2 = op2.lower()
+                    op1 = op1.strip()
+                    op2 = op2.strip()
+                    if (re.search(op1, op2, flags = 0) is not None) or (op1 in op2) :
                         op = op2
                         prob = prob2
                         
-                    elif re.search(op2, op1, flags = 0) is not None:
+                    elif (re.search(op2, op1, flags = 0) is not None) or (op2 in op1):
                         op = op1
                         prob = prob1
                         
