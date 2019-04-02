@@ -15,7 +15,15 @@ def getKey(item):
 
 
 def fetch_abstract(url):
-    contents = urllib.request.urlopen(url).read()
+    if not url:
+        return None
+
+    try:
+        contents = urllib.request.urlopen(url).read()
+    except:
+        print('Exception in fetch_abstract(); could not fetch %s' % (url))
+        return None
+
     soup = BeautifulSoup(contents, features='html.parser')
 
     if 'arxiv.org' in url:
