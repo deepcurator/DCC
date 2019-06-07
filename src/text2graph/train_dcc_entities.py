@@ -23,16 +23,14 @@ import spacy
 from spacy.util import minibatch, compounding
 
 from brat2spacy import create_training_data
-from ner_model_eval import ner_eval
-from test_dcc_entities import test_ner_model
-
+from ner_utils import ner_eval, test_ner_model
 
 # new entity label
 new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
 config = yaml.safe_load(open('../../conf/conf.yaml'))
-input_dir = config['ANNOTATED_TEXT_PATH']
+input_dir = config['SENTENCE_ANNOTATED_TEXT_PATH']
 model_dir = config['MODEL_PATH']
 test_dir = config['TEST_DATA_PATH']
 output_dir = config['TEXT_OUTPUT_PATH']
@@ -48,7 +46,6 @@ n_iter = 20
     output_dir=("Optional output directory", "option", "o", Path),
     test_dir=("optional directory containing test data", "option", "t", Path),
     n_iter=("Number of training iterations", "option", "n", int))
-
 
 # The main function that sets up the SpaCy pipeline and entity recognizer. The new entities are defined as a list of strings.
 # Input -
@@ -113,7 +110,7 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
     # (if the user does not provide text data, no testing will be performed)
     if test_dir is not None:
         # test_ner_model(nlp, test_dir)
-        test_ner_model(nlp, test_dir, output_dir)
+        test_ner_model(nlp, test_dir, output_dir,out_tag='_ents_from_existing_model')
 
     ##########################
     # model evaluation

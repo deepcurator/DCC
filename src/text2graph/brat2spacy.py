@@ -1,10 +1,6 @@
 import os
 import yaml
 
-
-key = 'entities'
-train_data = []
-
 # structure to be created:
 # TRAIN_DATA = [
 #   ('sentence 1',
@@ -32,54 +28,55 @@ def collect_txt_ann_files(directory):
     return ann_file_list, txt_file_list
 
 
-def create_training_data(directory):
+def brat2spacy(txtf,annf):
+    key = 'entities'
+    tup = ()
+    for txt_line in txtf:
+        txt_line = txt_line.strip()
+        tup += (txt_line,)
+
+    ent_list = []
+    for line in annf:
+        # Split each line of the ann file
+        line = line.strip().split()
+        tag = line[0]
+        if 'T' in tag:
+            ent_type = line[1]
+            if 'B' in ent_type:
+                print(ent_type)
+            start = line[2]
+            end = line[3]
+            entity_text = line[4]
+
+            # create the tuple
+            tup2 = ()
+            tup2 += (int(start),)
+            tup2 += (int(end),)
+            tup2 += (ent_type,)
+
+            # create a list
+            ent_list.append(tup2)    
+    # Create dict:
+    d = {}
+    d[key] = ent_list
+    # add the dictionary to tuple
+    tup += (d,)
+    return(ent_list)
+
+def create_training_data(directory):        
+    train_data = []
     ann_file_list, txt_file_list = collect_txt_ann_files(directory)
     for fi in range(len(ann_file_list)):
         #print("processing file: ", fi)
         with open(txt_file_list[fi], encoding="utf8") as txtf, open(ann_file_list[fi], encoding="utf8") as annf:
-            tup = ()
-            for txt_line in txtf:
-                txt_line = txt_line.strip()
-                tup += (txt_line,)
-
-            ent_list = []
-            for line in annf:
-                # Split each line of the ann file
-                line = line.strip().split()
-                tag = line[0]
-                if 'T' in tag:
-                    ent_type = line[1]
-                    if 'B' in ent_type:
-                        print(ent_type)
-                    start = line[2]
-                    end = line[3]
-                    entity_text = line[4]
-
-                    # create the tuple
-                    tup2 = ()
-                    tup2 += (int(start),)
-                    tup2 += (int(end),)
-                    tup2 += (ent_type,)
-
-                    # create a list
-                    ent_list.append(tup2)
-
-        # Create dict for each row.
-        d = {}
-        d[key] = ent_list
-
-        # add the dictionary to tuple
-        tup += (d,)
-
-        # add the tuple to train_data
-        train_data.append(tup)
-
+            tup=brat2spacy(txtf,annf)
+            # add the tuple to train_data
+            train_data.append(tup)        
     #print(train_data)
-
     return train_data
 
 if __name__ == '__main__':
     #directory = 'C:/Home/src/Python/ASKE/abstract-sentences-test/'
     config = yaml.safe_load(open('../../conf/conf.yaml'))
-    directory = config['ANNOTATED_TEXT_PATH']
-    create_training_data(directory)
+    directory = config['SENTENCE_ANNOTATED_TEXT_PATH']
+    z=create_training_data(directory)

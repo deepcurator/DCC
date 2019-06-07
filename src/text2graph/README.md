@@ -11,8 +11,8 @@ Here we focus on curation of text from scientific publications. The process cons
 - For some analysis, annotations have to be separated into sentence level. This is accomplished by script break_brat.py (results can be stored in {SENTENCE_ANNOTATED_TEXT_PATH}. 
 - Now, Named Entiry Recognition (NER) and Relation Extraction (RE) models can be trained and applied:
 -- Script train_dcc_entities.py put together all pieces of NER:
---- BRAT annotations can be converted to SPACY format with {brat2spacy.py}
---- Scripts ner_model_eval.py, test_dcc_entities.py and cll_ner_model.py contain helpful functions
+--- BRAT annotations can be converted to SPACY format with brat2spacy.py
+--- File ner_utils.py contain helpful functions such as ner_eval and test_ner_model
 -- Script models.py does RE model learning. 
 
 ## Examples:
@@ -20,8 +20,7 @@ Here we focus on curation of text from scientific publications. The process cons
 We provide Jupyter notebooks to showcase the main functionalities:
 
 - [Text2Graph](text2graph.ipynb) - overall text2graph workflow
-- [Train NER](train_dcc_entities.ipynb)
-- [Apply NER](call_ner_model.ipynb) - uses models.py
+- [Train NER](train_dcc_entities.ipynb) - NER model training and validation pipeline
 
 ## Acknowledgement
 
