@@ -1,10 +1,7 @@
-
+import yaml
 import glob
 import os
 import pandas as pd
-import requests
-#url = 'http://localhost:2222/rest/annotate'
-
 
 from io import StringIO
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
@@ -45,13 +42,19 @@ def convert(fname, pages=None):
 start_page = 0
 end_page = None
 
-root_dir = 'C:\\home\\projects\\DARPA ASKE\\darpa_aske_dcc\\src\\paperswithcode\\data\\'
-#os.chdir(root_dir)
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+root_dir = config['RAW_DATA_FOLDER']
+out_dir = config['EXTRACT_TEXT_PATH']
+
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+
 for (i,filename) in enumerate(glob.iglob(root_dir+'/*/*.pdf', recursive=True)):
     ppr2txt = convert(filename) # pages=[start_page, end_page])
     head, tail = os.path.split(filename)
-    print(str(i) +' '+ tail)
-    out = os.path.join(head,tail.replace('.pdf','.txt'))
+    print(str(i) +' '+ filename)
+    #out = os.path.join(head,tail.replace('.pdf','.txt'))
+    out=os.path.join(out_dir,tail.replace('.pdf','.txt'))
     file = open(out,'w', encoding = 'utf8') 
     file.write(ppr2txt) 
     file.close() 

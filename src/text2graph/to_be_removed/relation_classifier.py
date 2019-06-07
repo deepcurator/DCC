@@ -5,6 +5,10 @@ Created on Mon Mar 11 12:07:15 2019
 
 @author: Amar Viswanathan
 """
+import yaml
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+input_dir = config['ANNOTATED_TEXT_PATH']
+train_file="/home/amar/git/DCC/src/text2graph/Data/Abstracts-annotated/semeval/semeval_train_new.txt"
 
 def prepare_dataset(raw):
     sentences, relations = [], []
@@ -24,7 +28,7 @@ def prepare_dataset(raw):
     print("Found {} sentences".format(len(sentences)))
     return sentences, relations
 
-with open("/home/amar/git/DCC/src/text2graph/Data/Abstracts-annotated/semeval/semeval_train_new.txt") as f:
+with open(train_file) as f:
     train_file = f.readlines()
     
 sentences,relations = prepare_dataset(train_file)
@@ -59,7 +63,6 @@ print(sentences[3])
 print(relations[3])
 
 from models import KerasTextClassifier
-import numpy as np
 from sklearn.model_selection import train_test_split
 
 clf = KerasTextClassifier(input_length = 50,n_classes=n_relations,max_words=15000)
@@ -68,20 +71,20 @@ clf.fit(X=tr_sent, y=tr_rel, X_val=te_sent, y_val=te_rel,
          batch_size=10, lr=0.001, epochs=20)
 
 ## Save model to file
-clf.save("/home/amar/git/DCC/src/text2graph/model")
+clf.save("model")
+
+## Load a new model
+newclf = KerasTextClassifier()
+newclf.load("model")
+
 
 ## Print the metrics
-
 from sklearn.metrics import f1_score, classification_report, accuracy_score
 y_test_pred = newclf.predict(te_sent)
 label_dict = {}
 for i,c in enumerate(list(clf.encoder.classes_)):
     print(str(i) + ": " + c)
     label_dict[i] = c
-
-## Load a new model
-newclf = KerasTextClassifier()
-newclf.load("/home/amar/git/DCC/src/text2graph/model")
 
 ## Show predictions side by side
 for i,sentence in enumerate(te_sent):

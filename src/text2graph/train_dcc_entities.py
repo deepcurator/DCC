@@ -3,7 +3,7 @@
 # defined in the list: ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 # The new model takes as input annotated sentences extracted from pdf files,
 # describing methods, architectures, and applications of Deep Learning. The
-# sentences have been annotated using Brat (http://brat.nlplab.org/).
+# sentences have been annotated using BRAT (http://brat.nlplab.org/).
 # The training is done by using the statistical models provided by spaCy
 # (https://spacy.io/). The trained model can be saved in a user defined folder
 # for future use.
@@ -14,30 +14,29 @@
 
 from __future__ import unicode_literals, print_function
 
+import yaml
 import time
 import plac
 import random
 from pathlib import Path
 import spacy
 from spacy.util import minibatch, compounding
-from spacy.gold import GoldParse
-from spacy.scorer import Scorer
 
-from brat2spacy import *
-from ner_model_eval import *
-from test_dcc_entities import *
-
+from brat2spacy import create_training_data
+from ner_model_eval import ner_eval
+from test_dcc_entities import test_ner_model
 
 
 # new entity label
 new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 
 
-#data_directory = 'DATA/abstract-sentences-test/'
-input_dir = './Data/Abstracts-annotated/'
-model_dir = './Models/'
-test_dir = './Data/TestData/'
-output_dir = './Output/'
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+input_dir = config['ANNOTATED_TEXT_PATH']
+model_dir = config['MODEL_PATH']
+test_dir = config['TEST_DATA_PATH']
+output_dir = config['TEXT_OUTPUT_PATH']
+
 n_iter = 20
 
 # passing command line arguments using plac
@@ -49,8 +48,6 @@ n_iter = 20
     output_dir=("Optional output directory", "option", "o", Path),
     test_dir=("optional directory containing test data", "option", "t", Path),
     n_iter=("Number of training iterations", "option", "n", int))
-
-
 
 
 # The main function that sets up the SpaCy pipeline and entity recognizer. The new entities are defined as a list of strings.

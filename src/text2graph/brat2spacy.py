@@ -1,4 +1,5 @@
 import os
+import yaml
 
 
 key = 'entities'
@@ -21,10 +22,10 @@ def collect_txt_ann_files(directory):
     ann_file_list = []
     for root, dirs, files in os.walk(directory):
         for fname in files:
-            if "txt" in fname:
+            if fname.endswith(".txt"):
                 txt_path = directory + fname
                 txt_file_list.append(txt_path)
-            else:
+            elif fname.endswith(".ann"):
                 ann_path = directory + fname
                 ann_file_list.append(ann_path)
 
@@ -78,5 +79,7 @@ def create_training_data(directory):
     return train_data
 
 if __name__ == '__main__':
-    directory = 'C:/Home/src/Python/ASKE/abstract-sentences-test/'
+    #directory = 'C:/Home/src/Python/ASKE/abstract-sentences-test/'
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    directory = config['ANNOTATED_TEXT_PATH']
     create_training_data(directory)

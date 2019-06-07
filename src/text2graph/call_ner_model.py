@@ -15,10 +15,12 @@ import os
 import plac
 from pathlib import Path
 import spacy
+import yaml
 
-model_dir = './Models/'
-test_dir = './Data/TestData/'
-output_dir = './Output/'
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+model_dir = config['MODEL_PATH']
+test_dir = config['TEST_DATA_PATH']
+output_dir = config['TEXT_OUTPUT_PATH']
 
 # passing command line arguments using plac
 @plac.annotations(
