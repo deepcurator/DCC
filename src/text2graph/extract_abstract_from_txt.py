@@ -26,10 +26,10 @@ for file in textIterator:
        lines = f.readlines()
        papertxt = ''.join(str(line) for line in lines)
        papertxt = papertxt.lower()
-       result = papertxt.split(start)[1].split(end)[0]
-       out = os.path.join(out_dir,file)
-       file = open(out,'w', encoding = 'utf8') 
-       file.write(result) 
-       file.close() 
-       
+       if papertxt.find(start)>0 and papertxt.find(end)>0 :
+           result = papertxt.split(start)[1].split(end)[0]
+           out = os.path.join(out_dir,os.path.split(file)[-1])
+           file = open(out,'w', encoding = 'utf8') 
+           file.write(result) 
+           file.close() 
        

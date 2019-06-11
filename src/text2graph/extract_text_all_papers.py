@@ -29,7 +29,7 @@ def convert(fname, pages=None):
   infile.close()
   converter.close()
   text = output.getvalue()
-  output.close
+  output.close()
   return text
 
 #def get_page_count(fname):
@@ -58,5 +58,4 @@ for (i,filename) in enumerate(glob.iglob(root_dir+'/*/*.pdf', recursive=True)):
     file = open(out,'w', encoding = 'utf8') 
     file.write(ppr2txt) 
     file.close() 
-
 
