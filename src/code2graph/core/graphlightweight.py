@@ -289,7 +289,7 @@ class TFTokenExplorer:
         # generated in build tfseqeuences
         self.tfsequences = {}
 
-        self.types = config.output_types
+        self.options = config.output_types
         self.show_arg = config.show_arg
         self.show_url = config.show_url
 
@@ -375,41 +375,43 @@ class TFTokenExplorer:
 
     # need to use DFS (might encounter max recursion limit problem)
     def build_rdf_graph(self, node, graph):
-
-        if "type" in node:
+        node_name = "rdf_name"
+        if 5 in self.options:
+            node_name = "name"
+        if "type" in node and 5 not in self.options:
             if node["type"] == "tf_keyword":
                 graph.add(
-                    (BNode(node['rdf_name']), OntologyManager.is_type, BNode(node["url"])))
+                    (BNode(node[node_name]), OntologyManager.is_type, BNode(node["url"])))
             else:
                 graph.add(
-                    (BNode(node['rdf_name']), OntologyManager.is_type, BNode(node["type"])))
+                    (BNode(node[node_name]), OntologyManager.is_type, BNode(node["type"])))
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
-                    (BNode(node['rdf_name']), OntologyManager.call, BNode(child["rdf_name"])))
+                    (BNode(node[node_name]), OntologyManager.call, BNode(child[node_name])))
                 if idx > 0:
-                    graph.add((BNode(node["children"][idx-1]['rdf_name']),
-                               BNode("followed_by"), BNode(child["rdf_name"])))
+                    graph.add((BNode(node["children"][idx-1][node_name]),
+                               BNode("followed_by"), BNode(child[node_name])))
                 self.build_rdf_graph(child, graph)
 
         if "args" in node and self.show_arg:
             # print("\n Node:---->",node, node['args'])
             if len(node['args']) == 3:
                 k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
-                graph.add((BNode(node['rdf_name']), BNode(
+                graph.add((BNode(node[node_name]), BNode(
                     "has_output_feature_size"), BNode((node['args'][0]))))
-                graph.add((BNode(node['rdf_name']), BNode(
+                graph.add((BNode(node[node_name]), BNode(
                     "has_kernel_size"), BNode(k_size)))
             else:
                 for idx, arg in enumerate(node['args']):
                     # print(arg)
-                    graph.add((BNode(node['rdf_name']), BNode(
+                    graph.add((BNode(node[node_name]), BNode(
                         "has_arg%d" % idx), BNode((arg))))
 
         if "keywords" in node and self.show_arg:
             for keyword in node['keywords']:
-                graph.add((BNode(node['rdf_name']), BNode(
+                graph.add((BNode(node[node_name]), BNode(
                     "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
 
     def build_tfsequences(self):
@@ -434,15 +436,15 @@ class TFTokenExplorer:
                 self.build_tfsequence(child, sequence)
 
     def dump_information(self):
-        if 1 in self.types:
+        if 1 in self.options:
             self.dump_call_graph()
-        if 2 in self.types:
+        if 2 in self.options:
             self.dump_call_trees()
-        if 3 in self.types:
+        if 3 in self.options:
             self.dump_rdf_graphs()
-        if 4 in self.types:
+        if 4 in self.options:
             self.dump_tfsequences()
-        if 5 in self.types:
+        if 5 in self.options:
             self.dump_rdf_triples()
 
     def dump_call_graph(self):
@@ -471,20 +473,20 @@ class TFTokenExplorer:
 
                 with open(stored_path, 'w') as triplets_file:
                     for sub, pred, obj in self.rdf_graphs[root].triples((None, None, None)):
-                        subject = (str(sub).split('.')[-1])
-                        index = subject.rindex("_") if "_" in subject else None
-                        subject = subject[0:index]
+                        # subject = (str(sub).split('.')[-1])
+                        # index = subject.rindex("_") if "_" in subject else None
+                        # subject = subject[0:index]
                         
-                        predicate = (str(pred).split('.')[-1])
-                        index = predicate.rindex("_") if "_" in predicate else None
-                        predicate = predicate[0:index]
+                        # predicate = (str(pred).split('.')[-1])
+                        # index = predicate.rindex("_") if "_" in predicate else None
+                        # predicate = predicate[0:index]
                         
-                        object_ = (str(obj).split('.')[-1])
-                        index = object_.rindex("_") if "_" in object_ else None
-                        object_ = object_[0:index]
+                        # object_ = (str(obj).split('.')[-1])
+                        # index = object_.rindex("_") if "_" in object_ else None
+                        # object_ = object_[0:index]
 
-                        triplets_file.write(subject+'\t'+predicate+'\t'+object_+'\n')
-                        combined_file.write(subject+'\t'+predicate+'\t'+object_+'\n')
+                        triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
+                        combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                     
     def pyvis_draw(self, graph, name):
 
