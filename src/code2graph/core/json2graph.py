@@ -1,12 +1,13 @@
 import glob, sys, time, os
 import json
 from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-import rules
 from matplotlib import colors as mcolors
 from pyvis.network import Network
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 from pathlib import Path
+
+import core.rules as rules
 
 cnames = ['blue', 'green', 'red', 'cyan', 'orange', 'black', 'purple', 'purple', 'purple']
 sizes = [i*2 for i in [10,7,6,5,4,3,2,1,1]]

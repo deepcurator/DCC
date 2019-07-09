@@ -1,5 +1,6 @@
-from scraper_tf_voc import TFVocScraper
 from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
+
+from .scraper_tf_voc import TFVocScraper
 
 class OntologyManager:
 
