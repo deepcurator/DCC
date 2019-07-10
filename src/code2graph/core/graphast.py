@@ -141,7 +141,7 @@ class ASTExplorer:
         print(ast.dump(node))
 
     def dump_leaf_nodes(self):
-        print(self.leaf_nodes)
+        print(self.leaves)
 
     def visualize_ast(self):
         pass # TODO
