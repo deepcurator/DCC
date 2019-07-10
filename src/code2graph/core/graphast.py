@@ -23,6 +23,7 @@ class ASTExplorer:
         self.all_py_files = glob("%s/**/*.py" % str(code_path), recursive=True)
         self.leaves={}
         self.paths=[]
+        self.function_defs={}
 
     def process_all_files(self):
 
@@ -33,7 +34,10 @@ class ASTExplorer:
                 module_node = ast.parse(content, py_file)
 
                 self.leaves[py_file] = self.generate_leaves(module_node)
-                print(len(self.leaves[py_file]))
+                self.function_defs[py_file] = self.generate_function_defs(module_node)
+                pdb.set_trace()
+
+                print(py_file, len(self.leaves[py_file]))
 
                 # generate paths
                 self.paths += self.generate_paths(self.leaves[py_file])
@@ -74,6 +78,8 @@ class ASTExplorer:
                         if isinstance(item, ast.AST):
                             # print(node, "has_%s"%f[0], item)
                             trunk.append((item, curr_path))
+                        if isinstance(item, ast.FunctionDef):
+                            print(self.dump_node(item))
                         else:
                             # print(node, "has_%s"%f[0], item)
                             leaf_nodes.append((item, curr_path))
@@ -94,6 +100,20 @@ class ASTExplorer:
             fringe = trunk
             
         return leaf_nodes
+
+
+    # Given a module name, return list of function definitions
+    def generate_function_defs(self, root):
+        function_defs = []
+        for f in ast.iter_fields(root):
+            if isinstance(f[1], list):
+                for item in f[1]:
+                    if isinstance(item, ast.FunctionDef):
+                        function_defs.append(item.name)
+                        print('Function definition %s found at %s' % (item.name, item.lineno))
+        return function_defs
+
+
 
     def generate_paths(self, leaves):
         paths = []
@@ -130,7 +150,8 @@ if __name__ == "__main__":
     # explorer = ASTExplorer('../test/fashion_mnist')
     # explorer = ASTExplorer('../test/Alexnet')
     # explorer = ASTExplorer('../test/AGAN')
-    explorer = ASTExplorer('../test/NPRF-master')
+    #explorer = ASTExplorer('../test/NPRF-master')
+    explorer = ASTExplorer('../test/fashion-mnist')
 
     explorer.process_all_files()
     import pdb; pdb.set_trace()
