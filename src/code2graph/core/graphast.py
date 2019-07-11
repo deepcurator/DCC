@@ -20,7 +20,6 @@ import itertools
 class ASTExplorer:
     
     def __init__(self, code_path):
-        
         # path to code repository
         self.code_path = code_path
         # path of all python files
@@ -30,6 +29,7 @@ class ASTExplorer:
         # paths between leaves of ast tree for each module
         self.paths={}
         self.ast_nodes={}
+        self.function_defs={}
         self.path_length_upper_bound = 10
         self.path_length_lower_bound = 3
 
@@ -46,7 +46,10 @@ class ASTExplorer:
                 self.paths[py_file]  = self.generate_paths(self.leaves[py_file])
 
                 self.ast_nodes[py_file] = module_node
-
+    
+                self.function_defs[py_file] = self.generate_function_defs(module_node)
+                
+                print(py_file, len(self.leaves[py_file]))
         # self.dump_leaf_nodes()
         # self.dump_paths()
                 
@@ -56,10 +59,12 @@ class ASTExplorer:
         leaf_nodes = []
         
         while fringe:
-            node, path = fringe.pop(0)          
+          
+            node, path = fringe.pop(0)
+            trunk = []
+
             curr_path = path + [node]
 
-            trunk = []
             for f in ast.iter_fields(node): 
 
                 if isinstance(f[1], list):
@@ -67,6 +72,10 @@ class ASTExplorer:
                         if isinstance(item, ast.AST):
                             # print(node, "has_%s"%f[0], item)
                             trunk.append((item, curr_path))
+
+                            if isinstance(item, ast.FunctionDef):
+                                print(self.dump_node(item))
+
                         else:
                             # print(node, "has_%s"%f[0], item)
                             leaf_nodes.append((item, curr_path))
@@ -87,6 +96,17 @@ class ASTExplorer:
             # fringe = trunk
             
         return leaf_nodes
+
+    # Given a module name, return list of function definitions
+    def generate_function_defs(self, root):
+        function_defs = []
+        for f in ast.iter_fields(root):
+            if isinstance(f[1], list):
+                for item in f[1]:
+                    if isinstance(item, ast.FunctionDef):
+                        function_defs.append(item.name)
+                        print('Function definition %s found at %s' % (item.name, item.lineno))
+        return function_defs
 
     def generate_paths(self, leaves):
         paths = []
