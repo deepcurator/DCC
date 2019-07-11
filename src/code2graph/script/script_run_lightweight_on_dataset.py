@@ -13,7 +13,7 @@ from config.config import LightWeightMethodConfig
 
 original_100_dataset = False
 
-def process(data_path, stats_path):
+def process(data_path, stats_path, options):
     if not Path(stats_path).exists():
         with open(stats_path, 'w') as f:
             #TODO: date bug
@@ -101,7 +101,7 @@ def process(data_path, stats_path):
                     code_path = Path(dirpath)/ext_dir_name/ext_dir_name
                     code_path = code_path.resolve()
                     # print(glob.glob("%s/**/*.py" % str(code_path), recursive=True))
-                    args = Namespace(code_path=code_path, output_types=[5], show_arg=True, show_url=True)
+                    args = Namespace(code_path=code_path, output_types=options, show_arg=True, show_url=True)
                     config = LightWeightMethodConfig(args)
                     try:
                         explorer = TFTokenExplorer(config)
@@ -119,11 +119,11 @@ def process(data_path, stats_path):
                 f.write(stats+"\n")
                 
 
-def move_triples(data_path, dest_path):
+def move_triples(data_path, dest_path, filetype):
     name_index = 7
     if original_100_dataset:
         name_index = 9
-    for path in Path(data_path).rglob("combined_triples.triples"):
+    for path in Path(data_path).rglob(filetype):
         repo_name = str(path).split('/')[name_index]
         repo_path = Path(dest_path) / repo_name
         if not repo_path.is_dir():
@@ -135,6 +135,6 @@ if __name__ == "__main__":
     data_path = Path("../data_tf/")
     dest_path = Path("../rdf/").resolve()
     stat_file_path = dest_path/"stats.csv"
-    process(data_path, stat_file_path)
+    process(data_path, stat_file_path, options=[3])
     Path(dest_path).mkdir(exist_ok=True)
-    move_triples(data_path, dest_path)
+    move_triples(data_path, dest_path, "combined_triples.triples")
