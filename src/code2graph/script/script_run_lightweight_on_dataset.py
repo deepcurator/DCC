@@ -37,6 +37,7 @@ def process(data_path, stats_path):
                     title = f.read()
                     if ',' in title:
                         title = '"'+title+'"'
+                        title = title.replace('\n', ' ')
 
             if filename == "date.txt":
                 date_path = Path(dirpath)/filename
@@ -119,12 +120,11 @@ def process(data_path, stats_path):
                 
 
 def move_triples(data_path, dest_path):
-    name_index = 6
+    name_index = 5
     if original_100_dataset:
         name_index = 9
     for path in Path(data_path).rglob("*.triples"):
         repo_name = str(path).split('/')[name_index]
-        # print(path)
         repo_path = Path(dest_path) / repo_name
         if not repo_path.is_dir():
             repo_path.mkdir(exist_ok=True)
@@ -132,9 +132,9 @@ def move_triples(data_path, dest_path):
 
     
 if __name__ == "__main__":
-    data_path = Path("./data/").resolve()
-    dest_path = Path("../triples").resolve()
-    stat_file_path = data_path/"stats.csv"
+    data_path = Path("../data_tf/")
+    dest_path = Path("../rdf_triples/").resolve()
+    stat_file_path = dest_path/"stats.csv"
     process(data_path, stat_file_path)
     Path(dest_path).mkdir(exist_ok=True)
     move_triples(data_path, dest_path)
