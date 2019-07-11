@@ -484,7 +484,8 @@ class TFTokenExplorer:
                         # object_ = (str(obj).split('.')[-1])
                         # index = object_.rindex("_") if "_" in object_ else None
                         # object_ = object_[0:index]
-
+                        sub = sub.replace('\n',' ').replace('\t', ' ')
+                        obj = obj.replace('\n',' ').replace('\t', ' ')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                     
@@ -534,4 +535,5 @@ class TFTokenExplorer:
 
         G.show_buttons(filter_=['physics'])
 
-        G.show("%s.html" % name)
+        # G.show("%s.html" % name)
+        G.save_graph("%s.html" % name)
