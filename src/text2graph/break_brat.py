@@ -8,16 +8,19 @@ import os
 import pandas as pd
 from nltk import tokenize
 import re
+import yaml
 
 # import nltk
 # nltk.download('punkt')
 
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+input_dir = config['ANNOTATED_TEXT_PATH']
+out_dir = config['SENTENCE_ANNOTATED_TEXT_PATH']
 # inpout directory: has to have .txt and .ann files
-#p='C:\\Users\\dfradkin\\Desktop\\abstracts'
-p='C:\\Home\src\\Python\\ASKE\\devASKE\\Data\\abstracts-annotated'
+#input_dir='C:\\aske-local\\abstracts-conll-test\\'
 # output directory: will have files i-j.txt and i-j.ann where 'i' is index of abstract
 # and 'j' is index of sentence
-out_dir='C:\\Home\src\\Python\\ASKE\\devASKE\\Output\\BreakBrat\\abstracts-annotated'
+#out_dir='C:\\aske-local\\SemEval\\Abstracts-Sentences-30\\'
 
 text_pattern= re.compile('(2[0-3]|[01][0-9]):([0-5][0-9]):([0-5][0-9])')
 
@@ -55,8 +58,15 @@ def split_annotations(text, ann, out_dir, i):
                     small_ann.append(new_entry)
             else:   # relation:
                 rel=ann.values[row_num,1].split(' ')
+                if (rel[1].startswith("Arg1:") or rel[1].startswith("Arg2:")):
+                    rel[1] = rel[1][5:]
+                    print(rel[1])
+                if (rel[2].startswith("Arg1:") or rel[2].startswith("Arg2:")):
+                    rel[2] = rel[2][5:]
+                    print(rel[2])
                 if rel[1] in entities and rel[2] in entities:
                     record=[ann.values[row_num,0],ann.values[row_num,1],ann.values[row_num,2]]
+                    print(record)
                     if pd.isna(record[2]):
                         record[2]=''
                     small_ann.append(record)
@@ -65,6 +75,7 @@ def split_annotations(text, ann, out_dir, i):
         ann_file=os.path.join(out_dir,str(i)+'-'+str(j)+".ann") 
         with open(ann_file, 'w',encoding='utf8',errors='ignore') as f:
             for record in small_ann:
+                # print(record)
                 f.writelines('\t'.join(record)+'\n')
 
 
@@ -72,14 +83,15 @@ def split_annotations(text, ann, out_dir, i):
 for i in range(96):
     # load text:
     print("processing file: ", i)
-    txt_file=os.path.join(p,str(i)+".txt")
+    txt_file=os.path.join(input_dir,str(i)+".txt")
     if not os.path.exists(txt_file):
+        print("File not found")
         continue
     fh = open(txt_file, "r",encoding='utf8',errors='ignore')
     text = fh.read()
     fh.close()    
     # load ann file
-    ann_file=os.path.join(p,str(i)+".ann")  
+    ann_file=os.path.join(input_dir,str(i)+".ann")  
     if os.stat(ann_file).st_size==0:
         ann=[]
     else:
