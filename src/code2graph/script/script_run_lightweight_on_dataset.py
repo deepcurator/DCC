@@ -120,10 +120,10 @@ def process(data_path, stats_path):
                 
 
 def move_triples(data_path, dest_path):
-    name_index = 5
+    name_index = 7
     if original_100_dataset:
         name_index = 9
-    for path in Path(data_path).rglob("*.triples"):
+    for path in Path(data_path).rglob("combined_triples.triples"):
         repo_name = str(path).split('/')[name_index]
         repo_path = Path(dest_path) / repo_name
         if not repo_path.is_dir():
@@ -133,7 +133,7 @@ def move_triples(data_path, dest_path):
     
 if __name__ == "__main__":
     data_path = Path("../data_tf/")
-    dest_path = Path("../rdf_triples/").resolve()
+    dest_path = Path("../rdf/").resolve()
     stat_file_path = dest_path/"stats.csv"
     process(data_path, stat_file_path)
     Path(dest_path).mkdir(exist_ok=True)
