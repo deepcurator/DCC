@@ -8,7 +8,7 @@ def save_to_file(data, name, path):
     file_path = file_path.resolve()
     with open(file_path, "w") as f:
         for line in data:
-            f.write(line + '\n')
+            f.write(line)
 
 if __name__ == "__main__":
     dataset = []
