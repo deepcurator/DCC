@@ -124,6 +124,7 @@ def move_triples(data_path, dest_path, filetype):
     if original_100_dataset:
         name_index = 9
     for path in Path(data_path).rglob(filetype):
+        path = Path(path).resolve()
         repo_name = str(path).split('/')[name_index]
         repo_path = Path(dest_path) / repo_name
         if not repo_path.is_dir():
