@@ -4,26 +4,32 @@ Created on Tue Jan 15 15:12:38 2019
 
 @author: Amar Viswanathan
 """
-
-import re
+import os
+import yaml
 import glob
 
-root_dir = 'C:\\Users\\z003z47y\\Documents\\git\\darpa_aske_dcc\\src\\paperswithcode\\txt\\papers'
-textIterator = glob.glob(root_dir + '**/*.txt', recursive=True)
-
-abstracts = []
 
 start  = 'abstract'
 end = 'introduction'
 
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+root_dir = config['EXTRACT_TEXT_PATH']
+out_dir = config['EXTRACT_ABSTRACT_PATH']
+textIterator = glob.glob(root_dir + '*.txt', recursive=True)
 
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+    
 for file in textIterator:
    print(file)
-   with open(file,encoding='utf8') as f:
+   with open(os.path.join(root_dir,file),encoding='utf8') as f:
        lines = f.readlines()
        papertxt = ''.join(str(line) for line in lines)
        papertxt = papertxt.lower()
-       result = papertxt.split(start)[1].split(end)[0]
-       abstracts.append(result)
-       
+       if papertxt.find(start)>0 and papertxt.find(end)>0 :
+           result = papertxt.split(start)[1].split(end)[0]
+           out = os.path.join(out_dir,os.path.split(file)[-1])
+           file = open(out,'w', encoding = 'utf8') 
+           file.write(result) 
+           file.close() 
        

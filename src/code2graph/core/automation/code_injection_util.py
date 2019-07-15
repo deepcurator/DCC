@@ -79,18 +79,18 @@ class RunVisitor(ast.NodeVisitor):
         if isinstance(node.func, ast.Attribute) and node.func.attr == "run":
             self.found = True
 
-def tf_code_injection(path):
+# def tf_code_injection(path):
 
-    for pyfile_path in glob("%s/**/*.py" % str(path), recursive=True):
-        injector = TFcodeInjector(path, os.path.basename(pyfile_path))
-        injector.inject()
+#     for pyfile_path in glob("%s/**/*.py" % str(path), recursive=True):
+#         injector = TFcodeInjector(path, os.path.basename(pyfile_path))
+#         injector.inject()
 
 
-if __name__ == "__main__":    
+# if __name__ == "__main__":    
  
-    path = Path("..")/"test"/"fashion_mnist"
-    path.resolve()
+#     path = Path("..")/"test"/"fashion_mnist"
+#     path.resolve()
  
-    tf_code_injection(path)
+#     tf_code_injection(path)
     
     
