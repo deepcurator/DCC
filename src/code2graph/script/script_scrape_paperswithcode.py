@@ -4,13 +4,14 @@ import threading
 import time
 sys.path.append('../')
 
-from core.paperswithcode import fetch_metadata
+from core.paperswithcode import PWCScraper
 from config.config import PaperswithcodeArgParser
 
 def scrape_paperswithcode(args):
+    scraper = PWCScraper(args.chromedriver)
     while True:
         print("Spawning new thread.")
-        hourly_thread = threading.Thread(target=fetch_metadata, args=(args.chromedriver, args.url, args.limit))
+        hourly_thread = threading.Thread(target=scraper.fetch_metadata, args=(args.url, args.limit))
         hourly_thread.start()
         time.sleep(3600)
 
