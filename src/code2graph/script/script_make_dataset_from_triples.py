@@ -8,16 +8,21 @@ def save_to_file(data, name, path):
     file_path = file_path.resolve()
     with open(file_path, "w") as f:
         for line in data:
-            f.write(line + '\n')
+            f.write(line)
 
 if __name__ == "__main__":
     dataset = []
-    path = Path("../triples")
+    path = Path("../rdf_triples")
     path = Path(path.resolve())
     for file in path.rglob("combined_triples.triples"):
         with open(file, "r") as f:
             for line in f:
-                dataset.append(line.strip())
+                split = line.split('\t')
+                if len(split) == 3:
+                    dataset.append(line)
+                else:
+                    print(file)
+                    print(line)
                 
     shuffle(dataset)
     ten_percent = math.ceil(len(dataset) / 10)

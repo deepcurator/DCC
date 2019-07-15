@@ -13,7 +13,7 @@ from config.config import LightWeightMethodConfig
 
 original_100_dataset = False
 
-def process(data_path, stats_path):
+def process(data_path, stats_path, options):
     if not Path(stats_path).exists():
         with open(stats_path, 'w') as f:
             #TODO: date bug
@@ -37,6 +37,7 @@ def process(data_path, stats_path):
                     title = f.read()
                     if ',' in title:
                         title = '"'+title+'"'
+                        title = title.replace('\n', ' ')
 
             if filename == "date.txt":
                 date_path = Path(dirpath)/filename
@@ -100,7 +101,7 @@ def process(data_path, stats_path):
                     code_path = Path(dirpath)/ext_dir_name/ext_dir_name
                     code_path = code_path.resolve()
                     # print(glob.glob("%s/**/*.py" % str(code_path), recursive=True))
-                    args = Namespace(code_path=code_path, output_types=[5], show_arg=True, show_url=True)
+                    args = Namespace(code_path=code_path, output_types=options, show_arg=True, show_url=True)
                     config = LightWeightMethodConfig(args)
                     try:
                         explorer = TFTokenExplorer(config)
@@ -118,13 +119,13 @@ def process(data_path, stats_path):
                 f.write(stats+"\n")
                 
 
-def move_triples(data_path, dest_path):
-    name_index = 6
+def move_triples(data_path, dest_path, filetype):
+    name_index = 7
     if original_100_dataset:
         name_index = 9
-    for path in Path(data_path).rglob("*.triples"):
+    for path in Path(data_path).rglob(filetype):
+        path = Path(path).resolve()
         repo_name = str(path).split('/')[name_index]
-        # print(path)
         repo_path = Path(dest_path) / repo_name
         if not repo_path.is_dir():
             repo_path.mkdir(exist_ok=True)
@@ -132,9 +133,9 @@ def move_triples(data_path, dest_path):
 
     
 if __name__ == "__main__":
-    data_path = Path("./data/").resolve()
-    dest_path = Path("../triples").resolve()
-    stat_file_path = data_path/"stats.csv"
-    process(data_path, stat_file_path)
+    data_path = Path("../data_tf/")
+    dest_path = Path("../rdf/").resolve()
+    stat_file_path = dest_path/"stats.csv"
+    process(data_path, stat_file_path, options=[3])
     Path(dest_path).mkdir(exist_ok=True)
-    move_triples(data_path, dest_path)
+    move_triples(data_path, dest_path, "combined_triples.triples")

@@ -73,9 +73,10 @@ class CallVisitor(ast.NodeVisitor):
                 if isinstance(cand.ast_node, ast.FunctionDef):
                     if cand.name == base_name:
                         # print (cand)
-
+                        
                         new_node = {"name": base_name, "children": [],
                                     "type": cand.flavor, "pyan": cand}
+
                         self.root["children"].append(new_node)
 
                         self.function_to_be_visited.append((cand, new_node))
@@ -108,7 +109,6 @@ class CallVisitor(ast.NodeVisitor):
                 # print(call_name, matching)
                 new_node = {"name": matching['name'].split(
                     '.')[-1], "url": matching['url'], "children": [], "type": "tf_keyword"}
-
                 new_node["args"] = []
                 # self.root['children'].append(new_node)
 
@@ -166,7 +166,6 @@ class CallVisitor(ast.NodeVisitor):
                                 matching = self.type_manager.type_hash[result[0]]
                                 new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
                                             "children": [], "args": [], "type": "tf_keyword"}
-
                                 self.root['children'].append(new_node)
 
                         elif isinstance(value, list):
@@ -484,7 +483,8 @@ class TFTokenExplorer:
                         # object_ = (str(obj).split('.')[-1])
                         # index = object_.rindex("_") if "_" in object_ else None
                         # object_ = object_[0:index]
-
+                        sub = sub.replace('\n','').replace('\t', '').replace('    ','')
+                        obj = obj.replace('\n','').replace('\t', '').replace('    ','')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                     
@@ -534,4 +534,5 @@ class TFTokenExplorer:
 
         G.show_buttons(filter_=['physics'])
 
-        G.show("%s.html" % name)
+        # G.show("%s.html" % name)
+        G.save_graph("%s.html" % name)
