@@ -27,18 +27,22 @@ class PWCConfigArgParser:
 
 
 class PWCConfig:
+    ''' Config for Paperswithcode service '''
+
     def __init__(self, args):
         self.chrome_driver_path = Path(args.chromedriver)
         self.chrome_driver_path = str(self.chrome_driver_path.resolve())
 
         self.storage_path = Path(args.savedpath)
 
+        self.tot_paper_to_scrape_per_shot = -1
+
 
 class PWCReporter:
-    
+    ''' Mail utilities for Paperswithcode service '''
     def __init__(self):
 
-        # Write a script to read those from .cfg file. Do NOT reveal your personal info at any time! 
+        # TODO: Write a script to read those from .cfg file. Do NOT reveal your personal info at any time! 
         self.email_address = "paperswithcode.bot@gmail.com"
         self.password = "N8f4$o36" 
         self.recipients = ["amthu@uci.edu", "shihyuay@uci.edu"]
@@ -64,15 +68,18 @@ class PWCReporter:
             server.login(self.email_address, self.password)
             server.sendmail(self.email_address, recipient, message)
             server.close()
+
             print("\tSent notification email.")
         
         except Exception as e:
-            print("\tFailed to send email.")
             print(e)
+
+            print("\tFailed to send email.")
+            
 
 
 class PWCScraper:
-
+    ''' Main class for paperswithcode service '''
     def __init__(self, config):
         self.config = config 
 
@@ -112,30 +119,28 @@ class PWCScraper:
 
     
 
-    def fetch_metadata(self, limit: int = -1, condition: dict = {}) -> bool:
+    def scrape(self, condition: dict = {}):
 
-        browser = webdriver.Chrome(self.path_to_chromedriver, 
-                                   options=self.chrome_options)
+        browser = webdriver.Chrome(self.path_to_chromedriver, options=self.chrome_options)
         browser.get(self.paperswithcode_url)
         delay = 2
+        
         try:
-            myElem = WebDriverWait(browser, delay).until(
-                EC.presence_of_element_located((By.ID, 'div')))
-            pass
-        except TimeoutException:
-            pass
-        html_source = browser.page_source
-        soup = BeautifulSoup(html_source, "lxml")
+            WebDriverWait(browser, delay).until(EC.presence_of_element_located((By.ID, 'div')))
+        except TimeoutException as e:
+            print(e)
+
+        soup = BeautifulSoup(browser.page_source, "lxml")
         paper_list = soup.find_all('div', {'class': 'col-lg-9 item-col'})
 
-        limit = len(paper_list) if (limit == -1) else limit
+        tot_paper_to_get = self.config.tot_paper_to_scrape_per_shot
+        limit = len(paper_list) if (tot_paper_to_get == -1) else tot_paper_to_get
 
         print("Retrieving %d out of %d papers..." % (limit, len(paper_list)))
 
-        for paper_num, paper in enumerate(paper_list):
-
-            if paper_num == limit:
-                break
+        for paper_num, paper in enumerate(paper_list[:limit]):
+            print("============")
+            print("Processing the %d out of %d papers..." % (paper_num, limit))
             try:
                 stop = self.fetch_one(paper_num, paper, browser,
                                       delay, self.config.storage_path, condition)
@@ -143,10 +148,10 @@ class PWCScraper:
                     return stop
             except Exception as e:
                 print(e)
-                continue
+
+            print("============")
 
         browser.close()
-        return False
 
     def fetch_one(self, paper_num, paper, browser, delay, save_directory, condition) -> bool:
         stop = False
@@ -280,10 +285,11 @@ class PWCScraper:
                        "Title: %s\r\n"
                        "Paper Link: %s\r\n"
                        "Code Link: %s\r\n" % (title.text, paper_link_text, code_link_text))
+            
             title = "Paperswithcode: New TensorFlow paper!"
             
-            # if "tf" in myframework:
-            #     self.reporter.send_email(subject=title, body=message)
+            if "tf" in myframework:
+                self.reporter.send_email(subject=title, body=message)
 
         else:
             self.write_metadata_(paper_directory, "framework", 'None')
@@ -296,7 +302,7 @@ def service_scrape_papers(args):
     config = PWCConfig(PWCConfigArgParser().get_args(args))
     scraper = PWCScraper(config)
     
-    scraper.fetch_metadata()
+    scraper.scrape()
 
 
 if __name__ == "__main__":
