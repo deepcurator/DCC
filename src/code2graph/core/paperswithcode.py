@@ -5,23 +5,92 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 from pathlib import Path
-import os
-import time
+import os, sys
 import wget
 import smtplib
+from argparse import ArgumentParser
+
+class PWCConfigArgParser:
+
+    '''
+        Argument Parser for Paperswithcode service.
+    '''
+
+    def __init__(self):
+        self.parser = ArgumentParser(description="The parameters for PWC service.")
+        
+        self.parser.add_argument('-cp', dest="chromedriver", default="./chromedriver",  type=str, help='path of chromedriver.')
+        self.parser.add_argument('-sp', dest="savedpath", default="./data", type=str, help="path of storing data.")
+
+    def get_args(self, args):
+        return self.parser.parse_args(args)
+
+
+class PWCConfig:
+    ''' Config for Paperswithcode service '''
+
+    def __init__(self, args):
+        self.chrome_driver_path = Path(args.chromedriver)
+        self.chrome_driver_path = str(self.chrome_driver_path.resolve())
+
+        self.storage_path = Path(args.savedpath)
+
+        self.tot_paper_to_scrape_per_shot = -1
+
+
+class PWCReporter:
+    ''' Mail utilities for Paperswithcode service '''
+    def __init__(self):
+
+        # TODO: Write a script to read those from .cfg file. Do NOT reveal your personal info at any time! 
+        self.email_address = "paperswithcode.bot@gmail.com"
+        self.password = "N8f4$o36" 
+        self.recipients = ["amthu@uci.edu", "shihyuay@uci.edu"]
+
+    def send_email(self, subject="No Title", body="No Content"):
+
+        recipient = self.recipients
+
+        headers = [
+            "From: " + self.email_address,
+            "Subject: " + subject,
+            "To: " + ", ".join(recipient),
+            "MIME-Version: 1.0",
+            "Content-Type: text/plain"]
+        headers = "\r\n".join(headers)
+
+        message = headers + "\r\n\r\n" + body
+        
+        try:
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.ehlo()
+            server.starttls()
+            server.login(self.email_address, self.password)
+            server.sendmail(self.email_address, recipient, message)
+            server.close()
+
+            print("\tSent notification email.")
+        
+        except Exception as e:
+            print(e)
+
+            print("\tFailed to send email.")
+            
 
 
 class PWCScraper:
+    ''' Main class for paperswithcode service '''
+    def __init__(self, config):
+        self.config = config 
 
-    def __init__(self, path_to_chromedriver: str):
-        self.path_to_chromedriver = str(path_to_chromedriver)
+        self.paperswithcode_url = "https://paperswithcode.com"
+                
+        self.path_to_chromedriver = self.config.chrome_driver_path
         self.chrome_options = webdriver.ChromeOptions()
         self.chrome_options.add_argument('--headless')
         self.chrome_options.add_argument('--no-sandbox')
 
-        self.email_address = "paperswithcode.bot@gmail.com"
-        self.password = "N8f4$o36"
-        self.recipients = ["amthu@uci.edu", "shihyuay@uci.edu"]
+        self.reporter = PWCReporter()
 
     def write_metadata_(self, path, meta_file, data):
         filename = meta_file+".txt"
@@ -48,68 +117,41 @@ class PWCScraper:
         else:
             print("Don't know how to fetch %s" % code_link)
 
-    def send_email(self, recipient: list, subject: str, body: str):
+    
 
-        headers = [
-            "From: " + self.email_address,
-            "Subject: " + subject,
-            "To: " + ", ".join(recipient),
-            "MIME-Version: 1.0",
-            "Content-Type: text/plain"]
-        headers = "\r\n".join(headers)
+    def scrape(self, condition: dict = {}):
 
-        message = headers + "\r\n\r\n" + body
+        browser = webdriver.Chrome(self.path_to_chromedriver, options=self.chrome_options)
+        browser.get(self.paperswithcode_url)
+        delay = 2
+        
         try:
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.ehlo()
-            server.starttls()
-            server.login(self.email_address, self.password)
-            server.sendmail(self.email_address, recipient, message)
-            server.close()
-            print("\tSent notification email.")
-        except Exception as e:
-            print("\tFailed to send email.")
+            WebDriverWait(browser, delay).until(EC.presence_of_element_located((By.ID, 'div')))
+        except TimeoutException as e:
             print(e)
 
-    def fetch_metadata(self,
-                       url,
-                       limit: int = -1,
-                       save_directory=Path("./data").resolve(),
-                       condition: dict = {}) -> bool:
-
-        browser = webdriver.Chrome(
-            self.path_to_chromedriver, options=self.chrome_options)
-        browser.get(url)
-        delay = 2
-        try:
-            myElem = WebDriverWait(browser, delay).until(
-                EC.presence_of_element_located((By.ID, 'div')))
-            pass
-        except TimeoutException:
-            pass
-        html_source = browser.page_source
-        soup = BeautifulSoup(html_source, "lxml")
+        soup = BeautifulSoup(browser.page_source, "lxml")
         paper_list = soup.find_all('div', {'class': 'col-lg-9 item-col'})
 
-        limit = len(paper_list) if (limit == -1) else limit
+        tot_paper_to_get = self.config.tot_paper_to_scrape_per_shot
+        limit = len(paper_list) if (tot_paper_to_get == -1) else tot_paper_to_get
 
         print("Retrieving %d out of %d papers..." % (limit, len(paper_list)))
 
-        for paper_num, paper in enumerate(paper_list):
-
-            if paper_num == limit:
-                break
+        for paper_num, paper in enumerate(paper_list[:limit]):
+            print("============")
+            print("Processing the %d out of %d papers..." % (paper_num, limit))
             try:
                 stop = self.fetch_one(paper_num, paper, browser,
-                                      delay, save_directory, condition)
+                                      delay, self.config.storage_path, condition)
                 if stop:
                     return stop
             except Exception as e:
                 print(e)
-                continue
+
+            print("============")
 
         browser.close()
-        return False
 
     def fetch_one(self, paper_num, paper, browser, delay, save_directory, condition) -> bool:
         stop = False
@@ -238,14 +280,17 @@ class PWCScraper:
 
         if myframework:
             self.write_metadata_(paper_directory, "framework", myframework)
+            
             message = ("New TensorFlow paper scraped from Paperswithcode.com.\r\n"
                        "Title: %s\r\n"
                        "Paper Link: %s\r\n"
                        "Code Link: %s\r\n" % (title.text, paper_link_text, code_link_text))
+            
+            title = "Paperswithcode: New TensorFlow paper!"
+            
             if "tf" in myframework:
-                self.send_email(self.recipients,
-                                "Paperswithcode: New TensorFlow paper!",
-                                message)
+                self.reporter.send_email(subject=title, body=message)
+
         else:
             self.write_metadata_(paper_directory, "framework", 'None')
 
@@ -253,6 +298,12 @@ class PWCScraper:
         return stop
 
 
+def service_scrape_papers(args):
+    config = PWCConfig(PWCConfigArgParser().get_args(args))
+    scraper = PWCScraper(config)
+    
+    scraper.scrape()
+
+
 if __name__ == "__main__":
-    scraper = PWCScraper('./chromedriver')
-    scraper.fetch_metadata("https://paperswithcode.com")
+    service_scrape_papers(sys.argv[1:])
