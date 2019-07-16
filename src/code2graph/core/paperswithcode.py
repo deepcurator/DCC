@@ -83,7 +83,7 @@ class PWCScraper:
     def __init__(self, config):
         self.config = config 
 
-        self.paperswithcode_url = "https://paperswithcode.com"
+        self.paperswithcode_url = "https://paperswithcode.com/latest"
                 
         self.path_to_chromedriver = self.config.chrome_driver_path
         self.chrome_options = webdriver.ChromeOptions()
