@@ -1,6 +1,10 @@
-from pathlib import Path
 from argparse import ArgumentParser
 import os
+
+try:
+    from pathlib import Path
+except ImportError:
+    from pathlib2 import Path
 
 class LightWeightMethodArgParser:
     '''
@@ -11,11 +15,12 @@ class LightWeightMethodArgParser:
         self.parser = ArgumentParser(
             description='The parameters for the Lightweight Approach.')
 
-        # default code_path is pointed to fashion mnist example. 
+        # default code_path is pointed to fashion mnist example.
         self.parser.add_argument('-ipt', dest='code_path',
                                  default='../test/fashion_mnist', type=str,
                                  help='Path to the source code. Default: ../test/fashion_mnist')
-
+        # python interpreter version, default: python 3
+        self.parser.add_argument('-pyver', default=3, type=int, choices={2, 3}, help='Python interpreter version.')
         self.parser.add_argument('-opt', dest='output_types',
                                  metavar='N', type=int,
                                  nargs='+', choices={1, 2, 3, 4, 5},
@@ -40,8 +45,8 @@ class LightWeightMethodConfig:
     '''
 
     def __init__(self, arg):
-        self.code_path = Path(arg.code_path)
-        self.code_path = self.code_path.resolve()
+        self.code_path = Path(arg.code_path).resolve()
+        self.pyversion = arg.pyver
         self.output_types = arg.output_types
         self.show_arg = arg.show_arg
         self.show_url = arg.show_url
