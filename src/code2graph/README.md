@@ -50,7 +50,7 @@ pip install -r requirements.txt
 ```
 ## Download RDF Dataset
 
-You can download the RDF graphs and triples generated on TensorFlow papers scraped from Paperswithcode website here: [dataset](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
+You can download the RDF graphs and triples generated on TensorFlow papers scraped from Paperswithcode website [here](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
 
 ## Usage Examples
 ### Running Computation-Based Approach
