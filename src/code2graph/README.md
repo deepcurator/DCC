@@ -9,7 +9,7 @@ Currently, two methodogies are included in code2graph.
 
 Computation-based Approach (MNist) |  The Lightweight Approach (VGG)
 :-------------------------:|:-------------------------:
-![](https://github.uci.edu/AICPS/code2graph/blob/master/figs/Sample_Output_0.png?raw=true) | ![](https://github.uci.edu/AICPS/code2graph/blob/master/figs/Sample_Output_1_.png?raw=true)
+![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true) | ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true)
 
 The following figure illustrates the current pipeline architecture of code2graph:
 ![](https://github.uci.edu/AICPS/code2graph/blob/master/figs/architecture.jpg?raw=true)
@@ -48,6 +48,10 @@ Step 3: Install the required packages to your virtual environment.
 ```shell
 pip install -r requirements.txt
 ```
+## Download RDF Dataset
+
+You can download the RDF graphs and triples generated on TensorFlow papers scraped from Paperswithcode website here: `https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b`.
+
 ## Usage Examples
 ### Running Computation-Based Approach
 Under Construction, or you can also refer to the [notebook](testScript/computational_graph_based.ipynb).
