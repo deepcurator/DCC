@@ -48,9 +48,6 @@ Step 3: Install the required packages to your virtual environment.
 ```shell
 pip install -r requirements.txt
 ```
-## Download RDF Dataset
-
-You can download the RDF graphs and triples generated on TensorFlow papers scraped from Paperswithcode website [here](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
 
 ## Usage Examples
 ### Running Computation-Based Approach
@@ -69,6 +66,10 @@ python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --a
 --arg: Show arguments on graph (Hidden by default).
 
 --url: Show url/is_type relations on graph (Hidden by default).
+
+#### Download RDF Dataset
+
+We ran the lightweight method on several TensorFlow papers we scraped from Paperswithcode website. You can download the RDF graphs and triples we generated [here](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
 
 ### Running Webscraper for Paperswithcode website
 
