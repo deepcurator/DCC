@@ -19,6 +19,17 @@ class LightWeightMethodArgParser:
         self.parser.add_argument('-ipt', dest='code_path',
                                  default='../test/fashion_mnist', type=str,
                                  help='Path to the source code. Default: ../test/fashion_mnist')
+        self.parser.add_argument('--ds', dest='is_dataset', 
+                                 action='store_true',
+                                 help='The provided path is the path to a collection of repositories.')
+        self.parser.set_defaults(is_dataset=False)
+        self.parser.add_argument('-dp', '--dest_path',
+                                 default='../rdf', type=str,
+                                 help='Path to store generated triples/graphs.')
+        self.parser.add_argument('--ct', dest='combined_triples_only',
+                                 action='store_true',
+                                 help='Only save the combined_triples in destination path.')
+        self.parser.set_defaults(combined_triples_only=False)
         self.parser.add_argument('-opt', dest='output_types',
                                  metavar='N', type=int,
                                  nargs='+', choices={1, 2, 3, 4, 5},
@@ -26,11 +37,11 @@ class LightWeightMethodArgParser:
                                  help='Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = Extract triples.')
         self.parser.add_argument('--arg', dest='show_arg',
                                  action='store_true',
-                                 help='Show arguments on graph')
+                                 help='Show arguments on graph.')
         self.parser.set_defaults(Pshow_arg=False)
         self.parser.add_argument('--url', dest='show_url',
                                  action='store_true',
-                                 help='Show url on graph')
+                                 help='Show url on graph.')
         self.parser.set_defaults(show_url=False)
 
     def get_args(self, args):
@@ -44,6 +55,9 @@ class LightWeightMethodConfig:
 
     def __init__(self, arg):
         self.code_path = Path(arg.code_path).resolve()
+        self.is_dataset = arg.is_dataset
+        self.dest_path = Path(arg.dest_path).resolve()
+        self.combined_triples_only = arg.combined_triples_only
         self.output_types = arg.output_types
         self.show_arg = arg.show_arg
         self.show_url = arg.show_url

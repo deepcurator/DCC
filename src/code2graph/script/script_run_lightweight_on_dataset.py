@@ -11,9 +11,7 @@ sys.path.append('../')
 
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodConfig
-import csv 
 
-original_100_dataset = False
 cols = ['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
@@ -82,10 +80,7 @@ def process(data_path: Path, stats_path: Path, options: list):
             writer = csv.writer(file)
             writer.writerow([title, framework, success, error_msg, date, tags, stars, code_link, paper_link])
                 
-def move_triples(data_path, dest_path, filetype):
-    name_index = 5
-    if original_100_dataset:
-        name_index = 9
+def move_triples(data_path, dest_path, filetype, name_index=7):
     for path in Path(data_path).rglob(filetype):
         path = Path(path)
         repo_name = str(path).split('/')[name_index]
@@ -102,6 +97,5 @@ if __name__ == "__main__":
     rdf_path = Path("../rdf/").resolve()
     stat_file_path = dest_path/"stats.csv"
     process(data_path, stat_file_path, options=[5])
-    Path(dest_path).mkdir(exist_ok=True)
     move_triples(data_path, dest_path, "*.triples")
-    move_triples(data_path, rdf_path, "*.combined_triples")
+    move_triples(data_path, rdf_path, "combined_triples.triples")
