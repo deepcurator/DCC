@@ -10,14 +10,33 @@ sys.path.append('../')
 
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodConfig
+import csv 
 
 original_100_dataset = False
+cols = ['title', 'framework', 'lightweight', 'Error Msg', 'date', 'tags', 'stars', 'code Link', 'paper Link']
+metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
 def process(data_path, stats_path, options):
     if not Path(stats_path).exists():
         with open(stats_path, 'w') as f:
             #TODO: date bug
-            f.write("Title,Framework,Lightweight,Error Msg,Date,Tags,Stars,Code Link,Paper Link\n")
+            f.write(cols+'\n')
+
+    subdirs = [x for x in data_path.iterdir() if x.is_dir()]
+    # import pdb; pdb.set_trace()
+
+    dataset = [] 
+
+    for subdir in subdirs:
+        
+        repo = {}
+        for meta_prefix in metas:
+            with open(str(subdir / (meta_prefix + '.txt')), 'r') as f:
+                repo[meta_prefix] = f.read().strip()
+        
+        dataset.append(repo)
+
+        import pdb; pdb.set_trace()
 
     for (dirpath, dirnames, filenames) in os.walk(data_path):
         title = None
@@ -133,9 +152,9 @@ def move_triples(data_path, dest_path, filetype):
 
     
 if __name__ == "__main__":
-    data_path = Path("../../../../data_tf/")
+    data_path = Path("../raw_data_tf/").resolve()
     dest_path = Path("../rdf_triples/").resolve()
     stat_file_path = dest_path/"stats.csv"
-    # process(data_path, stat_file_path, options=[5])
+    process(data_path, stat_file_path, options=[5])
     Path(dest_path).mkdir(exist_ok=True)
     move_triples(data_path, dest_path, "*.triples")

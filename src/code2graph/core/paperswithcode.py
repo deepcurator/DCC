@@ -11,6 +11,7 @@ from pprint import pprint, pformat
 
 class PWCReporter:
     ''' Mail utilities for Paperswithcode service '''
+    
     def __init__(self):
 
         # TODO: Write a script to read those from .cfg file. Do NOT reveal your personal info at any time! 
