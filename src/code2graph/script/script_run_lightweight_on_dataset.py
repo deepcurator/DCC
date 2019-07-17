@@ -4,6 +4,7 @@ from zipfile import ZipFile
 from argparse import Namespace
 import shutil
 import glob
+import csv
 
 import sys
 sys.path.append('../')
@@ -15,9 +16,9 @@ original_100_dataset = False
 
 def process(data_path, stats_path, options):
     if not Path(stats_path).exists():
-        with open(stats_path, 'w') as f:
-            #TODO: date bug
-            f.write("Title,Framework,Lightweight,Error Msg,Date,Tags,Stars,Code Link,Paper Link\n")
+        with open(stats_path, 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link'])
 
     for (dirpath, dirnames, filenames) in os.walk(data_path):
         title = None
@@ -34,10 +35,8 @@ def process(data_path, stats_path, options):
                 title_path = Path(dirpath)/filename
                 title_path = title_path.resolve()
                 with open(title_path, 'r') as f:
-                    title = f.read()
-                    if ',' in title:
-                        title = '"'+title+'"'
-                        title = title.replace('\n', '')
+                    lines = f.readlines()
+                    title = ' '.join([line.strip() for line in lines])
 
             if filename == "date.txt":
                 date_path = Path(dirpath)/filename
@@ -110,15 +109,14 @@ def process(data_path, stats_path, options):
                     except Exception as e:
                         print("\t",e)
                         success = "Error"
-                        error_msg = str(e).replace(",",";")
+                        error_msg = str(e).strip()
                         pass
 
         if title:
-            with open(stats_path, 'a') as f:
-                stats = ','.join([title, framework, success, error_msg, date, tags, stars, code_link, paper_link])
-                f.write(stats+"\n")
+            with open(stats_path, 'a') as file:
+                writer = csv.writer(file)
+                writer.writerows([title, framework, success, error_msg, date, tags, stars, code_link, paper_link])
                 
-
 def move_triples(data_path, dest_path, filetype):
     name_index = 5
     if original_100_dataset:
