@@ -46,13 +46,15 @@ def process(data_path: Path, stats_path: Path, options: list):
             extract_name = (repo['zip_path'].name).split('.')[0]
             extract_path = repo['zip_path'].parent / extract_name
             # remove directory if it already exists
-            if extract_path.exists:
+            if extract_path.exists():
                 shutil.rmtree(extract_path)
             # unzip file
             with ZipFile(repo['zip_path'], "r") as zip_ref:
                 zip_ref.extractall(extract_path)
             
-            args = Namespace(code_path=extract_path, output_types=options, show_arg=True, show_url=True)
+            args = Namespace(code_path=extract_path, is_dataset=False, dest_path=".",
+                             combined_triples_only=False,
+                             output_types=options, show_arg=True, show_url=True)
             config = LightWeightMethodConfig(args)
             try:
                 explorer = TFTokenExplorer(config)
