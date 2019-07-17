@@ -69,8 +69,8 @@ def process(data_path: Path, stats_path: Path, options: list):
         with open(stats_path, 'a') as file:
             writer = csv.writer(file)
             writer.writerow([repo['title'], repo['framework'], success, error_msg, 
-                             repo['date'], repo['tags'], repo['stars'], repo['code_link'], 
-                             repo['paper_link']])
+                             repo['date'], repo['tags'], repo['stars'], repo['code'], 
+                             repo['paper']])
                 
 def move_files(data_path, dest_path, filetype, name_index=7):
     for path in Path(data_path).rglob(filetype):
