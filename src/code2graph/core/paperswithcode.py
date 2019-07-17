@@ -57,7 +57,7 @@ class PWCScraper:
 
         self.paperswithcode_base_url = "https://paperswithcode.com"
         self.paperswithcode_url = "https://paperswithcode.com/latest"
-                
+
         self.path_to_chromedriver = self.config.chrome_driver_path
         self.chrome_options = webdriver.ChromeOptions()
         self.chrome_options.add_argument('--headless')
@@ -70,7 +70,9 @@ class PWCScraper:
         self.delay = 2
     
     def scrape_papers_from_index(self, condition: dict = {}):
-
+        '''
+            scrape the papers from the index page and related metadata.  
+        '''
         self.browser.get(self.paperswithcode_url)        
         try:
             WebDriverWait(self.browser, self.delay).until(EC.presence_of_element_located((By.ID, 'div')))
@@ -89,37 +91,35 @@ class PWCScraper:
             print("Processing the %dth paper (in total %d papers) ..." % (paper_num, limit))
             try:
                 paper_dict = {} 
-                paper_dict['title'] = paper.find('h1').text.strip()
+                paper_dict['title']    = paper.find('h1').text.strip()
                 paper_dict["abstract"] = paper.find('p', {'class': 'item-strip-abstract'}).text.strip()
-                paper_dict["stars"] = paper.find('div', {'class': 'entity-stars'}).text.strip()
-                paper_dict["date"] = paper.find('div', {'class': 'stars-accumulated text-center'}).text.strip()
+                paper_dict["stars"]    = paper.find('div', {'class': 'entity-stars'}).text.strip()
+                paper_dict["date"]     = paper.find('div', {'class': 'stars-accumulated text-center'}).text.strip()
                 
-                paper_dict["tags"] = []
-                paper_dict["url"] = paper.find('a')['href'] # url where paper and code links are located
+                
+                paper_dict["url"]      = paper.find('a')['href'] # url where paper and code links are located
 
                 paper_dict["stored_dir_name"] = paper_dict["url"].split('/')[-1] # store using the hash tag of this paper.
                 paper_dict["stored_dir_path"] = self.config.storage_path / paper_dict["stored_dir_name"]
 
-                tags_list = paper.findAll('span', {'class': 'badge badge-primary'})
+                paper_dict["tags"]     = []
+                tags_list              = paper.findAll('span', {'class': 'badge badge-primary'})
 
                 for tag in tags_list:
                     paper_dict["tags"].append(tag.text.strip())
 
-                
                 pprint(paper_dict)
-                self.papers.append(paper_dict)              
+                self.papers.append(paper_dict)
 
-                # stop = self.fetch_one(paper_num, paper, browser,
-                #                       delay, self.config.storage_path, condition)
-                # if stop:
-                #     return stop
             except Exception as e:
                 print(e)
 
             print("============")
 
     def scrape_papers_from_profile(self):
-        
+        '''
+            scrape the code link and framework and paper link from paper profile page.  
+        '''
         for paper_idx, paper in enumerate(self.papers):
             
             if not paper['url'].startswith('http'):
@@ -148,8 +148,7 @@ class PWCScraper:
         
         self.browser = webdriver.Chrome(self.path_to_chromedriver, options=self.chrome_options)
 
-
-        self.scrape_papers_from_index()     
+        self.scrape_papers_from_index()
         self.scrape_papers_from_profile()
 
         self.browser.close()
@@ -157,12 +156,13 @@ class PWCScraper:
         self.store_result()
 
     def store_result(self):
+        
         self.config.storage_path.mkdir(exist_ok=True)
 
         for paper_index, paper in enumerate(self.papers):
             paper_directory = paper['stored_dir_path'].resolve()
             if paper_directory.resolve().exists():
-                print("\tAlready downloaded.")
+                print("Already downloaded.")
                 continue
             paper_directory.mkdir(exist_ok=True) # create directory
             
