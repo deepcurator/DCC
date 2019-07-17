@@ -8,6 +8,7 @@ from config.config import PWCConfigArgParser, PWCConfig
 
 def service_scrape_papers(args):
     config = PWCConfig(PWCConfigArgParser().get_args(args))
+    config.tot_paper_to_scrape_per_shot = -1
     scraper = PWCScraper(config)
     
     while True:
