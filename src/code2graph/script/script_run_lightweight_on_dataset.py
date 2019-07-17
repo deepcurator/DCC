@@ -96,7 +96,7 @@ def move_triples(data_path, dest_path, filetype):
 
     
 if __name__ == "__main__":
-    data_path = Path("../../../../data_tf/").resolve()
+    data_path = Path("../raw_data_tf/").resolve()
     dest_path = Path("../rdf_triples/").resolve()
     dest_path.mkdir(exist_ok=True)
     rdf_path = Path("../rdf/").resolve()
