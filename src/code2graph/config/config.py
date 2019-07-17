@@ -87,29 +87,29 @@ class GraphHandlerArgParser:
     def get_args(self):
         return self.parser.parse_args()
 
+class PWCConfigArgParser:
 
-class PaperswithcodeArgParser:
     '''
-        Argument Parser for Paperswithcode script
+        Argument Parser for Paperswithcode service.
     '''
 
     def __init__(self):
-        self.parser = ArgumentParser(
-            description="The parameters for Paperswithcode script.")
-        default_path = Path("../")/"core"/"chromedriver"
-        default_path = default_path.resolve()
-        self.parser.add_argument('-cd', '--chromedriver',
-                                 default=default_path,
-                                 type=str,
-                                 help="Path to chromedirver.")
-        self.parser.add_argument('-url',
-                                 default="https://paperswithcode.com/latest",
-                                 type=str,
-                                 help="URL to Paperswithcode website")
-        self.parser.add_argument('-limit',
-                                 default=-1,
-                                 type=int,
-                                 help="Number of paper/code to download.")
+        self.parser = ArgumentParser(description="The parameters for PWC service.")
+        
+        self.parser.add_argument('-cp', dest="chromedriver", default="./chromedriver",  type=str, help='path of chromedriver.')
+        self.parser.add_argument('-sp', dest="savedpath", default="./data", type=str, help="path of storing data.")
 
-    def get_args(self):
-        return self.parser.parse_args()
+    def get_args(self, args):
+        return self.parser.parse_args(args)
+
+
+class PWCConfig:
+    ''' Config for Paperswithcode service '''
+
+    def __init__(self, args):
+        self.chrome_driver_path = Path(args.chromedriver)
+        self.chrome_driver_path = str(self.chrome_driver_path.resolve())
+
+        self.storage_path = Path(args.savedpath)
+
+        self.tot_paper_to_scrape_per_shot = 1

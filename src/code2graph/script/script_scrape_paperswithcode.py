@@ -1,20 +1,21 @@
-import sys
-from selenium import webdriver
-import threading
-import time
+import sys, threading, time
 sys.path.append('../')
 
-from core.paperswithcode import PWCScraper
-from config.config import PaperswithcodeArgParser
 
-def scrape_paperswithcode(args):
-    scraper = PWCScraper(args.chromedriver)
+from core.paperswithcode import PWCScraper
+from config.config import PWCConfigArgParser, PWCConfig
+
+
+def service_scrape_papers(args):
+    config = PWCConfig(PWCConfigArgParser().get_args(args))
+    scraper = PWCScraper(config)
+    
     while True:
         print("Spawning new thread.")
-        hourly_thread = threading.Thread(target=scraper.fetch_metadata, args=(args.url, args.limit))
+        hourly_thread = threading.Thread(target=scraper.scrape, args=())
         hourly_thread.start()
         time.sleep(3600)
 
+
 if __name__ == "__main__":
-    args = PaperswithcodeArgParser().get_args()
-    scrape_paperswithcode(args)
+    service_scrape_papers(sys.argv[1:])
