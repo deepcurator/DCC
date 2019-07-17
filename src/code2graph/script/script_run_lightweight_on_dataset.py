@@ -103,5 +103,5 @@ if __name__ == "__main__":
     stat_file_path = dest_path/"stats.csv"
     process(data_path, stat_file_path, options=[5])
     Path(dest_path).mkdir(exist_ok=True)
-    # move_triples(data_path, dest_path, "*.triples")
-    # move_triples(data_path, rdf_path, "*.combined_triples")
+    move_triples(data_path, dest_path, "*.triples")
+    move_triples(data_path, rdf_path, "*.combined_triples")
