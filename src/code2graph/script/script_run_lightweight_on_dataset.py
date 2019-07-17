@@ -32,8 +32,11 @@ def process(data_path, stats_path, options):
         
         repo = {}
         for meta_prefix in metas:
-            with open(str(subdir / (meta_prefix + '.txt')), 'r') as f:
-                repo[meta_prefix] = f.read().strip()
+            try:
+                with open(str(subdir / (meta_prefix + '.txt')), 'r') as f:
+                    repo[meta_prefix] = f.read().strip()
+            except:
+                repo[meta_prefix] = ""
         
         dataset.append(repo)
 
