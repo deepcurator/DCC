@@ -5,6 +5,7 @@ from argparse import Namespace
 import shutil
 import glob
 import csv
+import subprocess
 
 import sys
 sys.path.append('../')
@@ -24,10 +25,10 @@ def process(data_path: Path, stats_path: Path, options: list):
     subdirs = [x for x in data_path.iterdir() if x.is_dir()]
     # import pdb; pdb.set_trace()
 
-    dataset = [] 
+    dataset = []
 
     for subdir in subdirs:
-        
+
         repo = {}
         for meta_prefix in metas:
             try:
@@ -53,7 +54,7 @@ def process(data_path: Path, stats_path: Path, options: list):
         code_link = repo['code']
         success = "N/A"
         error_msg = "N/A"
-    
+
         if 'tf' in framework:
             extract_name = (repo['zip_path'].name).split('.')[0]
             extract_path = repo['zip_path'].parent / extract_name
@@ -63,7 +64,12 @@ def process(data_path: Path, stats_path: Path, options: list):
             # unzip file
             with ZipFile(repo['zip_path'], "r") as zip_ref:
                 zip_ref.extractall(extract_path)
-            
+
+            # convert python2 code to python3
+            subprocess.run("2to3 -w -n %s" % extract_path, shell=True)
+            # fix indent errors
+            subprocess.run("autopep8 --in-place -r %s" % extract_path, shell=True)
+
             args = Namespace(code_path=extract_path, output_types=options, show_arg=True, show_url=True)
             config = LightWeightMethodConfig(args)
             try:
@@ -79,7 +85,7 @@ def process(data_path: Path, stats_path: Path, options: list):
         with open(stats_path, 'a') as file:
             writer = csv.writer(file)
             writer.writerow([title, framework, success, error_msg, date, tags, stars, code_link, paper_link])
-                
+
 def move_triples(data_path, dest_path, filetype, name_index=7):
     for path in Path(data_path).rglob(filetype):
         path = Path(path)
@@ -89,7 +95,7 @@ def move_triples(data_path, dest_path, filetype, name_index=7):
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)
 
-    
+
 if __name__ == "__main__":
     data_path = Path("../raw_data_tf/").resolve()
     dest_path = Path("../rdf_triples/").resolve()

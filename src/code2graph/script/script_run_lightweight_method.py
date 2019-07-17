@@ -4,6 +4,7 @@ from argparse import Namespace
 import shutil
 import glob
 import csv
+import subprocess
 
 import sys
 sys.path.append('../')
@@ -52,6 +53,11 @@ def process(data_path: Path, stats_path: Path, options: list):
             with ZipFile(repo['zip_path'], "r") as zip_ref:
                 zip_ref.extractall(extract_path)
             
+            # convert python2 code to python3
+            subprocess.run("2to3 -w -n %s" % extract_path, shell=True)
+            # fix indent errors
+            subprocess.run("autopep8 --in-place -r %s" % extract_path, shell=True)
+
             args = Namespace(code_path=extract_path, is_dataset=False, dest_path=".",
                              combined_triples_only=False,
                              output_types=options, show_arg=True, show_url=True)
