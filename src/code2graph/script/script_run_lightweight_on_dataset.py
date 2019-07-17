@@ -56,27 +56,27 @@ def process(data_path: Path, stats_path: Path, options: list):
         success = "N/A"
         error_msg = "N/A"
     
-        # if 'tf' in framework:
-        #     extract_name = (repo['zip_path'].name).split('.')[0]
-        #     extract_path = repo['zip_path'].parent / extract_name
-        #     # remove directory if it already exists
-        #     if extract_path.exists:
-        #         shutil.rmtree(extract_path)
-        #     # unzip file
-        #     with ZipFile(repo['zip_path'], "r") as zip_ref:
-        #         zip_ref.extractall(extract_path)
+        if 'tf' in framework:
+            extract_name = (repo['zip_path'].name).split('.')[0]
+            extract_path = repo['zip_path'].parent / extract_name
+            # remove directory if it already exists
+            if extract_path.exists:
+                shutil.rmtree(extract_path)
+            # unzip file
+            with ZipFile(repo['zip_path'], "r") as zip_ref:
+                zip_ref.extractall(extract_path)
             
-        #     args = Namespace(code_path=extract_path, output_types=options, show_arg=True, show_url=True)
-        #     config = LightWeightMethodConfig(args)
-        #     try:
-        #         explorer = TFTokenExplorer(config)
-        #         explorer.explore_code_repository()
-        #         success = "Success"
-        #     except Exception as e:
-        #         print("\t",e)
-        #         success = "Error"
-        #         error_msg = str(e).strip()
-        #         pass
+            args = Namespace(code_path=extract_path, output_types=options, show_arg=True, show_url=True)
+            config = LightWeightMethodConfig(args)
+            try:
+                explorer = TFTokenExplorer(config)
+                explorer.explore_code_repository()
+                success = "Success"
+            except Exception as e:
+                print("\t",e)
+                success = "Error"
+                error_msg = str(e).strip()
+                pass
 
         with open(stats_path, 'a') as file:
             writer = csv.writer(file)
