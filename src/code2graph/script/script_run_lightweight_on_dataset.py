@@ -152,7 +152,7 @@ def move_triples(data_path, dest_path, filetype):
 if __name__ == "__main__":
     data_path = Path("../raw_data_tf/").resolve()
     dest_path = Path("../rdf_triples/").resolve()
-    rdf_path = Path("../rdf/").resovle()
+    rdf_path = Path("../rdf/").resolve()
     stat_file_path = dest_path/"stats.csv"
     process(data_path, stat_file_path, options=[5])
     Path(dest_path).mkdir(exist_ok=True)
