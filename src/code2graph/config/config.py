@@ -96,7 +96,7 @@ class PWCConfigArgParser:
     def __init__(self):
         self.parser = ArgumentParser(description="The parameters for PWC service.")
         
-        self.parser.add_argument('-cp', dest="chromedriver", default="./chromedriver",  type=str, help='path of chromedriver.')
+        self.parser.add_argument('-cp', dest="chromedriver", default="../core/chromedriver",  type=str, help='path of chromedriver.')
         self.parser.add_argument('-sp', dest="savedpath", default="./data", type=str, help="path of storing data.")
 
     def get_args(self, args):
