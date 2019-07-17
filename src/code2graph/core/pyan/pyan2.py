@@ -821,10 +821,10 @@ def main():
         print v.to_tgf(draw_defines=options.draw_defines,
                        draw_uses=options.draw_uses)
 
-from pathlib import Path
+
 if __name__ == '__main__':
     # main()
-
+    from pathlib2 import Path
     path = Path("/Users/louisccc/Dropbox/louis_research/development/darpa/DARPA-DCC/data/data_paperswithcode/49/ambient-gan-master")
     filenames = glob("%s/**/*.py" % str(path))
 
