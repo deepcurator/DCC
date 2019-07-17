@@ -82,7 +82,7 @@ def move_files(data_path, dest_path, filetype, name_index=7):
 def run_lightweight_method(args):
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
     
-    if args.is_dataset:
+    if config.is_dataset:
         config.dest_path.mkdir(exist_ok=True)
         stat_file_path = config.dest_path / "stats.csv"
         if 5 in config.output_types:
