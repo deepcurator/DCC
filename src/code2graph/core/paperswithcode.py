@@ -167,7 +167,7 @@ class PWCScraper:
         for paper_index, paper in enumerate(self.papers):
             paper_directory = paper['stored_dir_path'].resolve()
             if paper_directory.resolve().exists():
-                print(paper['title']+": Already downloaded.")
+                print(paper['title']+": Already downloaded.\n")
                 continue
             paper_directory.mkdir(exist_ok=True) # create directory
             
