@@ -69,7 +69,8 @@ def process(data_path: Path, stats_path: Path, options: list):
             except Exception as e:
                 print("\t",e)
                 success = "Error"
-                error_msg = str(e).strip()
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                error_msg = ';'.join([str(exc_type), str(exc_value), str(exc_traceback)])
                 pass
 
         with open(stats_path, 'a') as file:
