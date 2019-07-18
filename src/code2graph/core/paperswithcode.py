@@ -6,6 +6,7 @@ from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 import wget
 import smtplib
+from queue import Queue
 from pprint import pprint, pformat
 
 
@@ -69,6 +70,9 @@ class PWCScraper:
         self.papers = []
         
         self.delay = 2
+
+        # queue of tf papers
+        self.tf_papers = Queue()
     
     def scrape_papers_from_index(self, condition: dict = {}):
         '''
@@ -163,14 +167,14 @@ class PWCScraper:
         for paper_index, paper in enumerate(self.papers):
             paper_directory = paper['stored_dir_path'].resolve()
             if paper_directory.resolve().exists():
-                print("Already downloaded.")
+                print(paper['title']+": Already downloaded.")
                 continue
             paper_directory.mkdir(exist_ok=True) # create directory
             
             self.write_to_file(paper['title'], paper_directory / "title.txt")
             self.write_to_file(paper['abstract'], paper_directory / "abstract.txt")
             self.write_to_file(paper['stars'], paper_directory / "stars.txt")
-
+            self.write_to_file(paper['date'], paper_directory / "date.txt")
             # if date:
             #     date_text = date.string.strip()
             #     # print(date_text)
@@ -198,6 +202,8 @@ class PWCScraper:
                 title = "Paperswithcode: New TensorFlow paper:%s!"%paper['title']
 
                 self.reporter.send_email(subject=title, body=message)
+
+                self.tf_papers.put(paper)
     
     def write_to_file(self, data, path):
         with open(str(path), 'w') as myfile:
