@@ -5,6 +5,7 @@ import shutil
 import glob
 import csv
 import subprocess
+import traceback
 
 import sys
 sys.path.append('../')
@@ -66,11 +67,12 @@ def process(data_path: Path, stats_path: Path, options: list):
                 explorer = TFTokenExplorer(config)
                 explorer.explore_code_repository()
                 success = "Success"
-            except Exception as e:
-                print("\t",e)
+            except:
                 success = "Error"
                 exc_type, exc_value, exc_traceback = sys.exc_info()
-                error_msg = ';'.join([str(exc_type), str(exc_value), str(exc_traceback)])
+                error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                error_msg = ''.join(error_msg)
+                print(''.join(error_msg))
                 pass
 
         with open(stats_path, 'a') as file:
@@ -104,8 +106,15 @@ def run_lightweight_method(args):
             process(config.code_path, stat_file_path, options=[3])
             move_files(config.code_path, config.dest_path, "*.html")
     else:
-        explorer = TFTokenExplorer(config)
-        explorer.explore_code_repository()
+        try:
+            explorer = TFTokenExplorer(config)
+            explorer.explore_code_repository()
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            error_msg = traceback.format_exception(exc_type, exc_value,
+                                          exc_traceback)
+            print(''.join(error_msg))
+            pass
 
 
 if __name__ == "__main__":
