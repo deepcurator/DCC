@@ -32,7 +32,6 @@ class graphHandler(graphMETA):
         self._graph = graph
         self._tradGraph = tradGraph
         self._logdir = logdir
-        pass
 
     def readGraphDef(self, logdir=None):
         '''function to read graph from drive'''
@@ -98,6 +97,12 @@ class graphHandler(graphMETA):
                   (str(s), str(p.split('/')[-1]), str(o)))
 
         return
+
+    def saveRDFTriples(self):
+        save_path = Path(self._logdir) / "comp_triples.triples"
+        with open(str(save_path), 'w') as f:
+            for s, p, o in self._sRDF:
+                f.write(str(s) + '\t' + str(p.split('/')[-1]) + '\t' + str(o) + '\n')
 
     def convertGraphDef2Json(self, graphDef=None):
         if(graphDef == None):
