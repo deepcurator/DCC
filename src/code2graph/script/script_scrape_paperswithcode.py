@@ -81,7 +81,7 @@ def service_scrape_papers(args):
     
     while True:
         print("Spawning new thread.")
-        hourly_thread = threading.Thread(target=service, args=(scraper))
+        hourly_thread = threading.Thread(target=service, args=(scraper,))
         hourly_thread.start()
         time.sleep(3600)
 
