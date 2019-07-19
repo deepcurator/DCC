@@ -32,7 +32,7 @@ class LightWeightMethodArgParser:
         self.parser.set_defaults(combined_triples_only=False)
         self.parser.add_argument('-opt', dest='output_types',
                                  metavar='N', type=int,
-                                 nargs='+', choices={1, 2, 3, 4, 5},
+                                 nargs='+', choices={1, 2, 3, 4, 5, 6},
                                  default={5},
                                  help='Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = Extract triples.')
         self.parser.add_argument('--arg', dest='show_arg',

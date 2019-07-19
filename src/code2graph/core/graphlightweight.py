@@ -366,6 +366,12 @@ class TFTokenExplorer:
                     "." + child["name"] + "_" + str(idx)
                 self.populate_call_tree(child)
 
+    def export_rdf_graph(self):
+        combined_graph = Graph()
+        for graph in self.rdf_graphs.values():
+            combined_graph += graph
+        combined_graph.serialize(output=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
@@ -445,6 +451,8 @@ class TFTokenExplorer:
             self.dump_tfsequences()
         if 5 in self.options:
             self.dump_rdf_triples()
+        if 6 in self.options:
+            self.export_rdf_graph()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))

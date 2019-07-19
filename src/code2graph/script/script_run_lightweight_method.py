@@ -96,15 +96,22 @@ def run_lightweight_method(args):
     if config.is_dataset:
         config.dest_path.mkdir(exist_ok=True)
         stat_file_path = config.dest_path / "stats.csv"
+
         if 5 in config.output_types:
             process(config.code_path, stat_file_path, options=[5])
             if config.combined_triples_only:
                 move_files(config.code_path, config.dest_path, "combined_triples.triples")
             else:
                 move_files(config.code_path, config.dest_path, "*.triples")
+                
         if 3 in config.output_types:
             process(config.code_path, stat_file_path, options=[3])
             move_files(config.code_path, config.dest_path, "*.html")
+        
+        if 6 in config.output_types:
+            process(config.code_path, stat_file_path, options=[6])
+            move_files(config.code_path, config.dest_path, "*.rdf")
+
     else:
         try:
             explorer = TFTokenExplorer(config)
