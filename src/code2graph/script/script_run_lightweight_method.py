@@ -102,7 +102,7 @@ def run_lightweight_method(args):
     if config.is_dataset:
         config.dest_path.mkdir(exist_ok=True)
         stat_file_path = config.dest_path / "stats.csv"
-        process(config.code_path, stat_file_path, options=args.output_types)
+        process(config.code_path, stat_file_path, options=config.output_types)
 
         if 5 in config.output_types:
             if config.combined_triples_only:
