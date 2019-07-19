@@ -53,11 +53,6 @@ def process(data_path: Path, stats_path: Path, options: list):
             # unzip file
             with ZipFile(repo['zip_path'], "r") as zip_ref:
                 zip_ref.extractall(extract_path)
-            
-            # convert python2 code to python3
-            subprocess.run("2to3 -w -n %s" % extract_path, shell=True)
-            # fix indent errors
-            subprocess.run("autopep8 --in-place -r %s" % extract_path, shell=True)
 
             args = Namespace(code_path=extract_path, is_dataset=False, dest_path=".",
                              combined_triples_only=False,
@@ -68,11 +63,22 @@ def process(data_path: Path, stats_path: Path, options: list):
                 explorer.explore_code_repository()
                 success = "Success"
             except:
-                success = "Error"
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                error_msg = ''.join(error_msg)
-                print(''.join(error_msg))
+                # convert python2 code to python3
+                subprocess.run("2to3 -w -n %s" % extract_path, shell=True)
+                # fix indent errors
+                subprocess.run("autopep8 --in-place -r %s" % extract_path, shell=True)
+
+                try:
+                    explorer = TFTokenExplorer(config)
+                    explorer.explore_code_repository()
+                    success = "Success (python2)"
+                except:
+                    success = "Error"
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                    error_msg = ''.join(error_msg)
+                    print(''.join(error_msg))
+                    pass
                 pass
 
         with open(stats_path, 'a') as file:
