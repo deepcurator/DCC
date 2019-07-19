@@ -375,9 +375,9 @@ class TFTokenExplorer:
     # need to use DFS (might encounter max recursion limit problem)
     def build_rdf_graph(self, node, graph):
         node_name = "rdf_name"
-        if 5 in self.options:
-            node_name = "name"
-        if "type" in node and 5 not in self.options:
+        # if 5 in self.options:
+        #     node_name = "name"
+        if "type" in node:
             if node["type"] == "tf_keyword":
                 graph.add(
                     (BNode(node[node_name]), OntologyManager.is_type, BNode(node["url"])))
