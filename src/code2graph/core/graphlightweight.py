@@ -370,7 +370,8 @@ class TFTokenExplorer:
         combined_graph = Graph()
         for graph in self.rdf_graphs.values():
             combined_graph += graph
-        combined_graph.serialize(output=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+        combined_graph.serialize(destination=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+        
 
     def build_rdf_graphs(self):
         for root in self.call_trees:
