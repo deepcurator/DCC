@@ -13,7 +13,7 @@ model_dir=config['MODEL_PATH']
 
 ### load cso:
 f = open(os.path.join(model_dir,'cso_dict.pcl'), 'rb')
-[cso_entity_map,cso_relation_map,equivalence_sets]=pickle.load(f)
+[cso_entity_map,cso_relation_map]=pickle.load(f)
 f.close()
 
 ### load brat annotations:

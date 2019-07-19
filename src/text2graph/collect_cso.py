@@ -122,7 +122,7 @@ for rel in g:
 ### save entity and relation maps:
 outdir=config['MODEL_PATH']
 f = open(os.path.join(outdir,'cso_dict.pcl'), 'wb')
-pickle.dump([entity_map,relation_map, equivalence_sets],f)
+pickle.dump([entity_map,relation_map],f)
 f.close()
 
 ### Output all terms from CSO        
