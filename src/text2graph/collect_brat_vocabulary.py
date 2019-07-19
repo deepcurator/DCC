@@ -52,3 +52,15 @@ outdir=config['MODEL_PATH']
 f = open(os.path.join(outdir,'dictionaries.pcl'), 'wb')
 pickle.dump([vocab,rel_vocab],f)
 f.close()
+
+f = os.path.join(outdir,'brat_vocab.txt')
+with open(f, 'w',encoding='utf8') as writeFile:
+    for term,ent in vocab.items():
+        writeFile.writelines(term+'\t'+ent+'\n')
+writeFile.close()
+
+f = os.path.join(outdir,'brat_relations.txt')
+with open(f, 'w',encoding='utf8') as writeFile:
+    for term,ent in rel_vocab.items():
+        writeFile.writelines(term[0]+'--'+term[1]+'\t'+ent+'\n')
+writeFile.close()
