@@ -45,7 +45,7 @@ def process(paper: dict):
 
     args = Namespace(code_path=extract_path, is_dataset=False, dest_path=".",
                         combined_triples_only=False,
-                        output_types=[5], show_arg=True, show_url=True)
+                        output_types=[3,5,6], show_arg=True, show_url=True)
     config = LightWeightMethodConfig(args)
     try:
         explorer = TFTokenExplorer(config)
