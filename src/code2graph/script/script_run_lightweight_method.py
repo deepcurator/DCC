@@ -37,7 +37,10 @@ def process(data_path: Path, stats_path: Path, options: list):
                         repo[meta_prefix] = f.read().strip()
             except:
                 repo[meta_prefix] = ""
-        repo['zip_path'] = list(subdir.glob('*.zip'))[0]
+        try:
+            repo['zip_path'] = list(subdir.glob('*.zip'))[0]
+        except:
+            repo['zip_path'] = None
         dataset.append(repo)
 
     for repo in dataset:
