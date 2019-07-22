@@ -11,7 +11,7 @@ Currently, two methodogies are included in code2graph.
 
 Computation-based Approach (MNist) |  The Lightweight Approach (MNist)
 :-------------------------:|:-------------------------:
-![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true) | ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true)
+<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true">|<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true" width="700">
 
 To understand the pipeline of code2graph better, you can refer to 
 - [Deep Code Curator - Technical Report on Code2Graph](http://cecs.uci.edu/files/2019/05/TR-19-01.pdf)
@@ -25,11 +25,10 @@ To understand the pipeline of code2graph better, you can refer to
 
 ## Installation Guide
 
-Step 1: Clone the git respository by running one of the commands shown in the following snippets.
+Step 1: Clone the git respository by running the command below.
 
 ```shell
-git clone https://github.uci.edu/AICPS/code2graph.git
-git clone git@github.uci.edu:AICPS/code2graph.git
+git clone https://github.com/deepcurator/DCC.git
 ```
 
 Step 2: Create  a python virtual environment using your favorite package management system (conda, virtualenv, etc).
@@ -48,6 +47,28 @@ Step 3: Install the required packages to your virtual environment.
 pip install -r requirements.txt
 ```
 
+## Package Dependencies
+ 
+* jupyter==1.0.0
+* jupyter-console==5.0.0
+* ipython==5.3.0
+* pyvis==0.1.6.0
+* astor==0.7.1
+* beautifulsoup4==4.7.1
+* Keras==2.2.4
+* matplotlib==3.0.2
+* networkx==2.2
+* rdflib==4.2.2
+* requests==2.21.0
+* scikit-learn==0.20.2
+* selenium==3.141.0
+* tensorflow==1.13.1
+* urllib3==1.24.1
+* wget==3.2
+* lxml==4.3.4
+* showast==0.2.4
+* autopep8==1.4.4
+ 
 ## Usage Examples
 ### Running Computation-Based Approach
 Under Construction, or you can also refer to the [notebook](testScript/computational_graph_based.ipynb).
