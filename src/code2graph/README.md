@@ -1,8 +1,10 @@
 # Code2graph
 
-The code2graph is a Python module that aims to transform the source code related to Deep Learning Architectures and methodologies into RDF graphs. In code2graph, the building blocks of the pipeline are implemented with a flexible architecture. 
-The code2graph is a module in project [Deep Code Curator](https://github.com/deepcurator/DCC) (DCC) which aims to extract the information from scientific publications and the corresponding source code related to Deep Learning architectures and methodologies.
+The code2graph is a Python module that aims to transform the source code related to DL publications into RDF graphs. In code2graph, the building blocks of the pipeline are implemented with a flexible architecture as shown in the following figure. 
 
+![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/architecture.jpg?raw=true)
+
+The code2graph is a module in project [Deep Code Curator](https://github.com/deepcurator/DCC) (DCC) which aims to extract the information from scientific publications and the corresponding source code related to Deep Learning architectures and methodologies.
 Currently, two methodogies are included in code2graph. 
 1. Computation-based Approach, see [graphHandler.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphHandler.py).
 2. The Lightweight Approach, see [graphlightweight.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphlightweight.py).
