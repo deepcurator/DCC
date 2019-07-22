@@ -12,9 +12,9 @@ def save_to_file(data, name, path):
 
 if __name__ == "__main__":
     dataset = []
-    path = Path("../rdf_triples")
+    path = Path("../event_files")
     path = Path(path.resolve())
-    for file in path.rglob("combined_triples.triples"):
+    for file in path.rglob("comp_triples.triples"):
         with open(file, "r") as f:
             for line in f:
                 split = line.split('\t')
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     test = dataset[:ten_percent]
     valid = dataset[ten_percent:2*ten_percent]
 
-    save_path = Path("../dataset")
+    save_path = Path("../comp_rdf")
     save_path = save_path.resolve()
     Path(save_path).mkdir(exist_ok=True)
 
