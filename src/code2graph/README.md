@@ -9,7 +9,7 @@ Currently, two methodogies are included in code2graph.
 1. Computation-based Approach, see [graphHandler.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphHandler.py).
 2. The Lightweight Approach, see [graphlightweight.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphlightweight.py).
 
-Computation-based Approach (MNist) |  The Lightweight Approach (VGG)
+Computation-based Approach (MNist) |  The Lightweight Approach (MNist)
 :-------------------------:|:-------------------------:
 ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true) | ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true)
 

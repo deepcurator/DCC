@@ -8,17 +8,18 @@ import wget
 import smtplib
 from queue import Queue
 from pprint import pprint, pformat
+from configparser import ConfigParser
 
 
 class PWCReporter:
     ''' Mail utilities for Paperswithcode service '''
     
-    def __init__(self):
-
-        # TODO: Write a script to read those from .cfg file. Do NOT reveal your personal info at any time! 
-        self.email_address = "paperswithcode.bot@gmail.com"
-        self.password = "N8f4$o36" 
-        self.recipients = ["shihyuay@uci.edu"]
+    def __init__(self, cred_path: str):
+        config = ConfigParser()
+        config.read(str(cred_path))
+        self.email_address = config.get("PWCScraper_email", "email_address")
+        self.password = config.get("PWCScraper_email", "password")
+        self.recipients = ["aungthu17593@gmail.com"]
 
     def send_email(self, subject="No Title", body="No Content"):
 
@@ -65,7 +66,7 @@ class PWCScraper:
         self.chrome_options.add_argument('--headless')
         self.chrome_options.add_argument('--no-sandbox')
 
-        self.reporter = PWCReporter()
+        self.reporter = PWCReporter(config.cred_path)
 
         self.papers = []
         
@@ -193,11 +194,15 @@ class PWCScraper:
             wget.download(paper['paper_link'], out=str(paper['stored_dir_path']/(paper['stored_dir_name']+'.pdf')))
 
             self.write_to_file(paper['code_link'], paper_directory / "code.txt")
-            self.fetch_code(paper['code_link'], paper_directory)
+            
+            try: 
+                self.fetch_code(paper['code_link'], paper_directory)
+            except:
+                continue
 
             self.write_to_file(paper['framework'], paper_directory / "framework.txt")
 
-            if 'tf' in paper['framework']: 
+            if paper['framework'] is not None and 'tf' in paper['framework']: 
                 message = ("New TensorFlow paper scraped from Paperswithcode.com.\r\n" + pformat(paper))
                 title = "Paperswithcode: New TensorFlow paper:%s!"%paper['title']
 
@@ -207,7 +212,10 @@ class PWCScraper:
     
     def write_to_file(self, data, path):
         with open(str(path), 'w') as myfile:
-            myfile.write(data)
+            if data is not None:
+                myfile.write(data)
+            else:
+                myfile.write("None")
 
     def fetch_code(self, code_link, path):
         decomposed = code_link.split('/')
