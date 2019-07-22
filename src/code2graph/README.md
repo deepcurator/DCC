@@ -1,6 +1,6 @@
 # Code2graph
 
-The code2graph is a Python module that aims to transform the source code related to DL publications into RDF graphs. In code2graph, the building blocks of the pipeline are implemented with a flexible architecture as shown in the following figure. 
+The code2graph aims to convert the code repositories related to DL publications into RDF graphs. A pipeline of approaches is implemented with a flexible architecture and the following figure illustrates the current pipeline architecture.
 
 ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/architecture.jpg?raw=true)
 
@@ -12,9 +12,6 @@ Currently, two methodogies are included in code2graph.
 Computation-based Approach (MNist) |  The Lightweight Approach (VGG)
 :-------------------------:|:-------------------------:
 ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true) | ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true)
-
-The following figure illustrates the current pipeline architecture of code2graph:
-![](https://github.uci.edu/AICPS/code2graph/blob/master/figs/architecture.jpg?raw=true)
 
 To understand the pipeline of code2graph better, you can refer to 
 - [Deep Code Curator - Technical Report on Code2Graph](http://cecs.uci.edu/files/2019/05/TR-19-01.pdf)
