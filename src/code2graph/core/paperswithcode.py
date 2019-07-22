@@ -19,7 +19,8 @@ class PWCReporter:
         config.read(str(cred_path))
         self.email_address = config.get("PWCScraper_email", "email_address")
         self.password = config.get("PWCScraper_email", "password")
-        self.recipients = ["shihyuay@uci.edu"]
+        self.recipients = config.get("PWCScraper_email", "recipeints")
+        self.recipients = self.recipients.split(',')
 
     def send_email(self, subject="No Title", body="No Content"):
 
