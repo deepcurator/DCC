@@ -8,7 +8,7 @@ class OntologyManager:
 	is_type = BNode("is_type")
 
 	def __init__(self):
-		self.scraper = TFVocScraper("r1.13")	
+		self.scraper = TFVocScraper("r1.14")	
 		
 		self.tf_types = self.scraper.root
 
