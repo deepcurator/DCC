@@ -109,6 +109,7 @@ class PWCConfigArgParser:
         
         self.parser.add_argument('-cp', dest="chromedriver", default="../core/chromedriver",  type=str, help='path of chromedriver.')
         self.parser.add_argument('-sp', dest="savedpath", default="./data", type=str, help="path of storing data.")
+        self.parser.add_argument('-cred', dest="cred_path", default="../config/credentials.cfg", type=str, help='Path to .cfg file with email credentials.' )
 
     def get_args(self, args):
         return self.parser.parse_args(args)
@@ -120,7 +121,6 @@ class PWCConfig:
     def __init__(self, args):
         self.chrome_driver_path = Path(args.chromedriver)
         self.chrome_driver_path = str(self.chrome_driver_path.resolve())
-
+        self.cred_path = str(Path(args.cred_path).resolve())
         self.storage_path = Path(args.savedpath)
-
         self.tot_paper_to_scrape_per_shot = 1
