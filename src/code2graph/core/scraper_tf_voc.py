@@ -15,6 +15,7 @@ class TFVocScraper:
         self.version = version
         self.tf_types_root_url = "https://www.tensorflow.org/versions/%s/api_docs/python/tf" % self.version
 
+        # print(self.tf_types_root_url)
         self.root = {}
 
         self.cached_json_path = Path(
@@ -56,6 +57,7 @@ class TFVocScraper:
                         break
 
             else:
+                print(name)
                 assert (name == 'tf' or name == 'tfdbg')
 
                 self.root['children'].append(
@@ -128,6 +130,6 @@ class TFVocScraper:
 
 if __name__ == "__main__":
 
-    scraper = TFVocScraper("r1.13")
+    scraper = TFVocScraper("r1.14")
     scraper.dump_tree()
     scraper.gen_graphml()
