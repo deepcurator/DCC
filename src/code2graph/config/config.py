@@ -34,7 +34,7 @@ class LightWeightMethodArgParser:
                                  metavar='N', type=int,
                                  nargs='+', choices={1, 2, 3, 4, 5, 6},
                                  default={5},
-                                 help='Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = Extract triples.')
+                                 help='Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = Extract triples, 6 = Export RDF (turtle format).')
         self.parser.add_argument('--arg', dest='show_arg',
                                  action='store_true',
                                  help='Show arguments on graph.')

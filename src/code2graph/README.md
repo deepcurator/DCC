@@ -61,7 +61,13 @@ python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --a
 ```
 -ipt: Path to directory that contains the source code of your machine learining model.
 
--opt: Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = RDF triples.
+--ds: Specifies that the path (-ipt) contains a collection of repositories.
+
+-dp: (Used along with --ds) Path to store generated outputs. 
+
+-opt: Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = RDF triples, 6 = Export RDF (turtle format).
+
+--ct: (Used along with --ds and opt=5) Only generates combined_triples.triples.
 
 --arg: Show arguments on graph (Hidden by default).
 
