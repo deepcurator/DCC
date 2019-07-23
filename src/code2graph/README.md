@@ -75,9 +75,9 @@ Under Construction, or you can also refer to the [notebook](testScript/computati
 Run the follwing command, or you can also refer to the [notebook](testScript/light_weight.ipynb).
 
 ```shell
-python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --arg
+python script_lightweight.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --arg
 ```
--ipt: Path to directory that contains the source code of your machine learining model.
+-ip: Path to directory that contains the source code of your machine learining model.
 
 -r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
 

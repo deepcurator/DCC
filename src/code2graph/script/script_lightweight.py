@@ -154,7 +154,7 @@ def copy_files(data_path, dest_path, filetype, name_index=-3):
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)
 
-def main(args):
+def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
     
@@ -178,4 +178,4 @@ if __name__ == "__main__":
     # ex5: python script_run_lightweight_method.py -ipt ../test/NeuralStyle
     # ex6: python script_run_lightweight_method.py -ipt=../raw_data_tf --ds -dp=../rdf -opt=5
     # ex6: python script_run_lightweight_method.py -ipt=../raw_data_tf --ds -dp=../rdf -opt=3 --arg --url
-    main(sys.argv[1:])
+    pipeline_the_lightweight_approach(sys.argv[1:])
