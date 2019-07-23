@@ -16,8 +16,10 @@ from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
 cols = ['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
-def preprocess(data_path: Path, stats_path: Path) -> list:
-    """ Preprocess the data for recursive method. 
+def preprocessing_1(data_path: Path, stats_path: Path) -> list:
+    """ Preprocessing of getting raw data ready for lightweight graph construction. 
+        the raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format. 
+
     Creates a dictionary with metadata for each paper and extracts the zip file.
     Creates a stats.csv file and write the column headers.
     
@@ -68,6 +70,15 @@ def preprocess(data_path: Path, stats_path: Path) -> list:
 
     return dataset
 
+def preprocessing_2(code_path):
+    # preprocessing 2 includes 
+    # 1) fixing the code that is a mixed with python2 and python3. 
+    # 2) fixing the indentation issue. 
+
+    subprocess.run("2to3 -w -n %s" % code_path, shell=True)
+    subprocess.run("autopep8 --in-place -r %s" % code_path, shell=True)
+
+
 def recursive(data_path: Path, stats_path: Path, options: list):
     """Process all papers in data_path.
     Extract metadata and zip file by calling preprocess.
@@ -79,7 +90,7 @@ def recursive(data_path: Path, stats_path: Path, options: list):
         stats_path {Path} -- Path to stats.csv file.
         options {list} -- Output options for Lightweight method.
     """
-    dataset = preprocess(data_path, stats_path)    
+    dataset = preprocessing_1(data_path, stats_path)    
 
     for repo in dataset:
         success = 'N/A'
@@ -104,6 +115,11 @@ def recursive(data_path: Path, stats_path: Path, options: list):
                              repo['date'], repo['tags'], repo['stars'], repo['code'], 
                              repo['paper']])
 
+def lightweight_method(code_path, config: LightWeightMethodConfig):
+    """ running the lightweight graph construction """
+    explorer = TFTokenExplorer(code_path, config)
+    explorer.explore_code_repository()
+
 def run_lightweight_method(code_path, config: LightWeightMethodConfig) -> tuple:
     """Runs lightweight method.
     If exception occurs, try to fix the error by running 2to3 and autopep8.
@@ -119,18 +135,16 @@ def run_lightweight_method(code_path, config: LightWeightMethodConfig) -> tuple:
     success = "N/A"
     error_msg = "N/A"
     try:
-        explorer = TFTokenExplorer(code_path, config)
-        explorer.explore_code_repository()
+        lightweight_method(code_path, config)
         success = "Success"
+    
     except:
-        # convert python2 code to python3
-        subprocess.run("2to3 -w -n %s" % config.input_path, shell=True)
-        # fix indent errors
-        subprocess.run("autopep8 --in-place -r %s" % config.input_path, shell=True)
 
+        # only do 2to3 and indentation preprocessing when it is needed.
+        preprocessing_2(config.input_path) 
+        
         try:
-            explorer = TFTokenExplorer(code_path, config)
-            explorer.explore_code_repository()
+            lightweight_method(code_path, config)
             success = "Success (python2)"
         except:
             success = "Error"
