@@ -80,7 +80,6 @@ def recursive(data_path: Path, stats_path: Path, options: list):
         options {list} -- Output options for Lightweight method.
     """
     dataset = preprocess(data_path, stats_path)    
-    print (dataset)
 
     for repo in dataset:
         success = 'N/A'
