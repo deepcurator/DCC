@@ -1,6 +1,7 @@
 from pathlib import Path
 from zipfile import ZipFile
 from argparse import Namespace
+from compileall import compile_dir
 import shutil
 import glob
 import csv
@@ -16,9 +17,9 @@ from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
 cols = ['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
-def preprocessing_1(data_path: Path, stats_path: Path) -> list:
-    """ Preprocessing of getting raw data ready for lightweight graph construction. 
-        the raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format. 
+def extract_data(data_path: Path, stats_path: Path) -> list:
+    """ Preprocessing of raw data to make it ready for lightweight graph construction. 
+        The raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format. 
 
     Creates a dictionary with metadata for each paper and extracts the zip file.
     Creates a stats.csv file and write the column headers.
@@ -30,9 +31,6 @@ def preprocessing_1(data_path: Path, stats_path: Path) -> list:
     Returns:
         list -- A list of dictonaries with paper metadata.
     """
-    with open(stats_path, 'w') as file:
-        writer = csv.writer(file)
-        writer.writerow(cols)
 
     subdirs = [x for x in data_path.iterdir() if x.is_dir()]
 
@@ -70,18 +68,24 @@ def preprocessing_1(data_path: Path, stats_path: Path) -> list:
 
     return dataset
 
-def preprocessing_2(code_path):
-    # preprocessing 2 includes 
-    # 1) fixing the code that is a mixed with python2 and python3. 
-    # 2) fixing the indentation issue. 
+def preprocess(code_path: str):
+    """Preprocess a code repository by checking if the code is python3 compatible.
+    If the code is not python3 compatible, run 2to3 and autopep8 to fix it.
+    
+    Arguments:
+        code_path {str} -- [Path to code repository]
+    """
+    code_path = str(code_path)
+    # check if the code is python3 compatible by compiling it
+    result = compile_dir(code_path, force=True)
+    
+    if result == False:
+        subprocess.run("2to3 -w -n %s" % code_path, shell=True)
+        subprocess.run("autopep8 --in-place -r %s" % code_path, shell=True)
 
-    subprocess.run("2to3 -w -n %s" % code_path, shell=True)
-    subprocess.run("autopep8 --in-place -r %s" % code_path, shell=True)
-
-
-def recursive(data_path: Path, stats_path: Path, options: list):
+def recursive(data_path: Path, stats_path: Path, config: LightWeightMethodConfig) -> list:
     """Process all papers in data_path.
-    Extract metadata and zip file by calling preprocess.
+    Extract metadata and zip file by calling extract_data.
     Run lightweight method on all tensorflow papers.
     Saves metadata to stats.csv file.
     
@@ -89,8 +93,12 @@ def recursive(data_path: Path, stats_path: Path, options: list):
         data_path {Path} -- Path to directory with a collection of repositories with metadata files.
         stats_path {Path} -- Path to stats.csv file.
         options {list} -- Output options for Lightweight method.
+    
+    Returns:
+        list -- A list of metadata with result of running lightweight method.
     """
-    dataset = preprocessing_1(data_path, stats_path)    
+    metadata = [[cols]]
+    dataset = extract_data(data_path, stats_path)    
 
     for repo in dataset:
         success = 'N/A'
@@ -98,22 +106,18 @@ def recursive(data_path: Path, stats_path: Path, options: list):
         if 'tf' in repo['framework']:
             
             if repo['code_path'] is not None:
-                args = Namespace(input_path=repo['code_path'], recursive=False, dest_path=".",
-                                combined_triples_only=False,
-                                output_types=options, show_arg=True, show_url=True)
-                config = LightWeightMethodConfig(args)
-
+                preprocess(repo['code_path'])
                 success, error_msg = run_lightweight_method(repo['code_path'], config)    
             
             else:
                 success = "Error"
                 error_msg = "There is no zip file."
 
-        with open(stats_path, 'a') as file:
-            writer = csv.writer(file)
-            writer.writerow([repo['title'], repo['framework'], success, error_msg, 
+        metadata.append([repo['title'], repo['framework'], success, error_msg, 
                              repo['date'], repo['tags'], repo['stars'], repo['code'], 
                              repo['paper']])
+
+    return metadata
 
 def lightweight_method(code_path, config: LightWeightMethodConfig):
     """ running the lightweight graph construction """
@@ -139,21 +143,12 @@ def run_lightweight_method(code_path, config: LightWeightMethodConfig) -> tuple:
         success = "Success"
     
     except:
-
-        # only do 2to3 and indentation preprocessing when it is needed.
-        preprocessing_2(config.input_path) 
+        success = "Error"
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        error_msg = ''.join(error_msg)
+        print(''.join(error_msg))
         
-        try:
-            lightweight_method(code_path, config)
-            success = "Success (python2)"
-        except:
-            success = "Error"
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            error_msg = ''.join(error_msg)
-            print(''.join(error_msg))
-            pass
-        pass
     return (success, error_msg)
 
 def move_output_files(config: LightWeightMethodConfig):
@@ -179,6 +174,11 @@ def copy_files(data_path, dest_path, filetype, name_index=-3):
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)
 
+def save_metadata(metadata: list, stat_file_path: str):
+    with open(str(stat_file_path), 'w') as file:
+        writer = csv.writer(file)
+        writer.writerows(metadata)
+
 def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
@@ -186,10 +186,12 @@ def pipeline_the_lightweight_approach(args):
     if config.recursive:
         config.dest_path.mkdir(exist_ok=True)
         stat_file_path = config.dest_path / "stats.csv"
-        recursive(config.input_path, stat_file_path, options=config.output_types)
+        metadata = recursive(config.input_path, stat_file_path, config)
+        save_metadata(metadata, str(stat_file_path))
         move_output_files(config)
 
     else:
+        preprocess(config.input_path)
         run_lightweight_method(config.input_path, config)
 
 
