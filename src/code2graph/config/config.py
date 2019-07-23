@@ -19,10 +19,10 @@ class LightWeightMethodArgParser:
         self.parser.add_argument('-ipt', dest='code_path',
                                  default='../test/fashion_mnist', type=str,
                                  help='Path to the source code. Default: ../test/fashion_mnist')
-        self.parser.add_argument('--ds', dest='is_dataset', 
+        self.parser.add_argument('--r', dest='recursive', 
                                  action='store_true',
-                                 help='The provided path is the path to a collection of repositories.')
-        self.parser.set_defaults(is_dataset=False)
+                                 help='Recursively apply Lightweight method on all the papers in the code path.')
+        self.parser.set_defaults(recursive=False)
         self.parser.add_argument('-dp', '--dest_path',
                                  default='../rdf', type=str,
                                  help='Path to store generated triples/graphs.')
@@ -55,7 +55,7 @@ class LightWeightMethodConfig:
 
     def __init__(self, arg):
         self.code_path = Path(arg.code_path).resolve()
-        self.is_dataset = arg.is_dataset
+        self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
         self.combined_triples_only = arg.combined_triples_only
         self.output_types = arg.output_types

@@ -11,7 +11,7 @@ Currently, two methodogies are included in code2graph.
 
 Computation-based Approach (MNist) |  The Lightweight Approach (MNist)
 :-------------------------:|:-------------------------:
-<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true">|<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true" width="700">
+<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true">|<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true" width="850">
 
 To understand the pipeline of code2graph better, you can refer to 
 - [Deep Code Curator - Technical Report on Code2Graph](http://cecs.uci.edu/files/2019/05/TR-19-01.pdf)
@@ -81,7 +81,7 @@ python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --a
 ```
 -ipt: Path to directory that contains the source code of your machine learining model.
 
---ds: Specifies that the path (-ipt) contains a collection of repositories.
+--r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
 
 -dp: (Used along with --ds) Path to store generated outputs. 
 
