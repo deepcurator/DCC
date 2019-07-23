@@ -1,115 +1,135 @@
-import requests, json
+import requests
+import json
 import networkx as nx
 from bs4 import BeautifulSoup
-from pathlib import Path
+
+try:
+    from pathlib import Path
+except ImportError:
+    from pathlib2 import Path
+
 
 class TFVocScraper:
 
-	def __init__(self, version):
-		self.version = version
-		self.tf_types_root_url = "https://www.tensorflow.org/versions/%s/api_docs/python/tf" % self.version
-		
-		self.root = {}
+    def __init__(self, version):
+        self.version = version
+        self.tf_types_root_url = "https://www.tensorflow.org/versions/%s/api_docs/python/tf" % self.version
 
-		self.cached_json_path  = Path('..')/"tmp"/("tf_types_%s.json"%self.version)
-		self.cached_graph_path = Path('..')/"tmp"/("tf_types_%s.graphml"%self.version) #'../tmp/graphs/test.graphml'
+        # print(self.tf_types_root_url)
+        self.root = {}
 
-		if self.cached_json_path.exists():
-			with open(str(self.cached_json_path), 'r') as f:
-				self.root = json.load(f)
-		else:
-			self.scrape_tf_website()
+        self.cached_json_path = Path(
+            '..')/"tmp"/("tf_types_%s.json" % self.version)
+        # '../tmp/graphs/test.graphml'
+        self.cached_graph_path = Path(
+            '..')/"tmp"/("tf_types_%s.graphml" % self.version)
 
-	def scrape_tf_website(self):
-		
-		print("scraping from the website")
+        if self.cached_json_path.exists():
+            with open(str(self.cached_json_path), 'r') as f:
+                self.root = json.load(f)
+        else:
+            self.scrape_tf_website()
 
-		self.root = { "name": "root", "children": [], \
-					       "url": self.tf_types_root_url }
+    def scrape_tf_website(self):
 
-		tf_type_html = BeautifulSoup(requests.get(self.tf_types_root_url, timeout=5).content, 'html.parser')
-		
-		table_data = tf_type_html.find("ul", "devsite-nav-list", menu="_book")
+        print("scraping from the website")
 
-		list_data = table_data.find_all("li",{"class":"devsite-nav-item devsite-nav-expandable"}, recursive=False)
-		
-		for data in list_data:
+        self.root = {"name": "root", "children": [],
+                     "url": self.tf_types_root_url}
 
-			name = data.find("span").text.strip()
+        tf_type_html = BeautifulSoup(requests.get(
+            self.tf_types_root_url, timeout=5).content, 'html.parser')
 
-			if '.' in name:
-				for child in self.root['children']:
-					if child['name'] == 'tf':
-						child['children'].append(self.recur_scrape_tf_itemlist(data, name))
-						break
+        table_data = tf_type_html.find("ul", "devsite-nav-list", menu="_book")
 
-			else:
-				assert (name == 'tf' or name =='tfdbg')
+        list_data = table_data.find_all(
+            "li", {"class": "devsite-nav-item devsite-nav-expandable"}, recursive=False)
 
-				self.root['children'].append(self.recur_scrape_tf_itemlist(data, name))
+        for data in list_data:
 
-		print("saving to the cached file: %s" % str(self.cached_json_path.absolute()))
+            name = data.find("span").text.strip()
 
-		with open(str(self.cached_json_path), 'w') as f:
-			json.dump(self.root, f)
+            if '.' in name:
+                for child in self.root['children']:
+                    if child['name'] == 'tf':
+                        child['children'].append(
+                            self.recur_scrape_tf_itemlist(data, name))
+                        break
 
-	def recur_scrape_tf_itemlist(self, cur_data, base_name):
+            else:
+                print(name)
+                assert (name == 'tf' or name == 'tfdbg')
 
-		table = cur_data.find("ul", "devsite-nav-section")
-		
-		list_data  = table.find_all("li",{"class":"devsite-nav-item"}, recursive=False)
+                self.root['children'].append(
+                    self.recur_scrape_tf_itemlist(data, name))
 
-		node = {"name": base_name}
-		
-		children = []
+        print("saving to the cached file: %s" %
+              str(self.cached_json_path.absolute()))
 
-		for item_data in list_data:
-			classes = item_data['class']
-			
-			item_name = item_data.find("span", {"class":"devsite-nav-text"}).text.strip()
-			full_name = base_name + '.' + item_name
+        with open(str(self.cached_json_path), 'w') as f:
+            json.dump(self.root, f)
 
-			if "devsite-nav-expandable" in classes:
-				children.append(self.recur_scrape_tf_itemlist(item_data, full_name))
+    def recur_scrape_tf_itemlist(self, cur_data, base_name):
 
-			else: # devsite-nav-item only case
+        table = cur_data.find("ul", "devsite-nav-section")
 
-				url = item_data.find("a").get('href')
+        list_data = table.find_all(
+            "li", {"class": "devsite-nav-item"}, recursive=False)
 
-				if item_name == "Overview": # pseudo leaf
-					node["url"] = url
+        node = {"name": base_name}
 
-				else:
-					leaf_node = {"name": full_name, "url": url}
-					children.append(leaf_node)
+        children = []
 
-		if len(children) > 0:
-			node["children"] = children
+        for item_data in list_data:
+            classes = item_data['class']
 
-		return node
-	
-	def dump_tree(self):
-		self.recur_dump_tree(self.root, 0)
-	
-	def recur_dump_tree(self, node, num_of_tabs):
-		print("--"*num_of_tabs + node['name'])
-		if 'children' in node:	
-			[self.recur_dump_tree(c, num_of_tabs+1) for c in node['children']]
+            item_name = item_data.find(
+                "span", {"class": "devsite-nav-text"}).text.strip()
+            full_name = base_name + '.' + item_name
 
-	def gen_graphml(self): # use gephi to open the graphml
-		self.G=nx.Graph()
-		self.recur_gen_graphml(self.root)
-		
-		nx.write_graphml(self.G, str(self.cached_graph_path))
+            if "devsite-nav-expandable" in classes:
+                children.append(
+                    self.recur_scrape_tf_itemlist(item_data, full_name))
 
-	def recur_gen_graphml(self, node):
-		if 'children' in node:
-			for child in node['children']:
-				self.G.add_edge(node['name'], child['name'])
-				self.recur_gen_graphml(child)
-			
+            else:  # devsite-nav-item only case
+
+                url = item_data.find("a").get('href')
+
+                if item_name == "Overview":  # pseudo leaf
+                    node["url"] = url
+
+                else:
+                    leaf_node = {"name": full_name, "url": url}
+                    children.append(leaf_node)
+
+        if len(children) > 0:
+            node["children"] = children
+
+        return node
+
+    def dump_tree(self):
+        self.recur_dump_tree(self.root, 0)
+
+    def recur_dump_tree(self, node, num_of_tabs):
+        print("--"*num_of_tabs + node['name'])
+        if 'children' in node:
+            [self.recur_dump_tree(c, num_of_tabs+1) for c in node['children']]
+
+    def gen_graphml(self):  # use gephi to open the graphml
+        self.G = nx.Graph()
+        self.recur_gen_graphml(self.root)
+
+        nx.write_graphml(self.G, str(self.cached_graph_path))
+
+    def recur_gen_graphml(self, node):
+        if 'children' in node:
+            for child in node['children']:
+                self.G.add_edge(node['name'], child['name'])
+                self.recur_gen_graphml(child)
+
+
 if __name__ == "__main__":
 
-	scraper = TFVocScraper("r1.13")
-	scraper.dump_tree()
-	scraper.gen_graphml()
+    scraper = TFVocScraper("r1.14")
+    scraper.dump_tree()
+    scraper.gen_graphml()

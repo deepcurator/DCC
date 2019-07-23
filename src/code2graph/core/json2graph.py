@@ -1,12 +1,13 @@
 import glob, sys, time, os
 import json
 from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-import rules
 from matplotlib import colors as mcolors
 from pyvis.network import Network
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 from pathlib import Path
+
+import core.rules as rules
 
 cnames = ['blue', 'green', 'red', 'cyan', 'orange', 'black', 'purple', 'purple', 'purple']
 sizes = [i*2 for i in [10,7,6,5,4,3,2,1,1]]
@@ -218,9 +219,13 @@ def draw(func):
 		integer_encoded = np.array(label_encoder.fit_transform(data), dtype='float')
 		i=0
 		for src,e,dst in g[1]:
+			src_cname_idx = str(src).count('/') if str(src).count('/') < len(cnames) else (len(cnames) - 1)
+			src_size_idx = str(src).count('/') if str(src).count('/') < len(sizes) else (len(sizes) - 1)
+			dst_cname_idx = str(dst).count('/') if str(dst).count('/') < len(cnames) else (len(cnames) - 1)
+			dst_size_idx = str(dst).count('/') if str(dst).count('/') < len(sizes) else (len(sizes) - 1)
 
-			G.add_node(src, title=src, physics=True,color=cnames[(str(src).count('/'))], size=sizes[(str(src).count('/'))], shape="dot")
-			G.add_node(dst, title=dst, physics=True,color=cnames[(str(dst).count('/'))], size=sizes[(str(dst).count('/'))], shape="dot")
+			G.add_node(src, title=src, physics=True,color=cnames[src_cname_idx], size=sizes[src_size_idx], shape="dot")
+			G.add_node(dst, title=dst, physics=True,color=cnames[dst_cname_idx], size=sizes[dst_size_idx], shape="dot")
 			G.add_edge(src,dst,width=0.5, title=data[i],physics=True)
 			i+=1
 
@@ -230,7 +235,7 @@ def draw(func):
         			 spring_strength=0.01,
         			 damping=0.09)
 		G.show_buttons(filter_=['physics'])
-		G.show(path+r"\test.html")
+		G.show("test.html")
 
 		# for s,p,o in g[1]:
 		# 	print((s,p,o))
