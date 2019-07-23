@@ -47,20 +47,23 @@ def preprocess(data_path: Path, stats_path: Path) -> list:
                         repo[meta_prefix] = f.read().strip()
             except:
                 repo[meta_prefix] = ""
-        try:
-            zip_path = list(subdir.glob('*.zip'))[0]
-            extract_name = zip_path.name.split('.')[0]
-            extract_path = zip_path.parent / extract_name
-            # remove directory if it already exists
-            if extract_path.exists():
-                shutil.rmtree(extract_path)
-            # unzip file
-            with ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(extract_path)
-            repo['code_path'] = extract_path
-        except:
-            repo['code_path'] = None
-            
+        
+        repo['code_path'] = None
+        if 'tf' in repo['framework']:
+            try:
+                zip_path = list(subdir.glob('*.zip'))[0]
+                extract_name = zip_path.name.split('.')[0]
+                extract_path = zip_path.parent / extract_name
+                # remove directory if it already exists
+                if extract_path.exists():
+                    shutil.rmtree(extract_path)
+                # unzip file
+                with ZipFile(zip_path, "r") as zip_ref:
+                    zip_ref.extractall(extract_path)
+                repo['code_path'] = extract_path
+            except:
+                pass
+
         dataset.append(repo)
 
     return dataset
