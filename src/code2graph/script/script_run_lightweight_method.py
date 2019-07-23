@@ -55,11 +55,12 @@ def preprocess(data_path: Path, stats_path: Path) -> list:
             if extract_path.exists():
                 shutil.rmtree(extract_path)
             # unzip file
-            with ZipFile(repo['zip_path'], "r") as zip_ref:
+            with ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(extract_path)
             repo['code_path'] = extract_path
         except:
             repo['code_path'] = None
+            
         dataset.append(repo)
 
     return dataset
@@ -76,16 +77,24 @@ def recursive(data_path: Path, stats_path: Path, options: list):
         options {list} -- Output options for Lightweight method.
     """
     dataset = preprocess(data_path, stats_path)    
+    print (dataset)
 
     for repo in dataset:
+        success = 'N/A'
+        error_msg = 'N/A'
         if 'tf' in repo['framework']:
             
-            args = Namespace(input_path=repo['code_path'], recursive=False, dest_path=".",
-                             combined_triples_only=False,
-                             output_types=options, show_arg=True, show_url=True)
-            config = LightWeightMethodConfig(args)
+            if repo['code_path'] is not None:
+                args = Namespace(input_path=repo['code_path'], recursive=False, dest_path=".",
+                                combined_triples_only=False,
+                                output_types=options, show_arg=True, show_url=True)
+                config = LightWeightMethodConfig(args)
 
-            success, error_msg = run_lightweight_method(config)    
+                success, error_msg = run_lightweight_method(config)    
+            
+            else:
+                success = "Error"
+                error_msg = "There is no zip file."
 
         with open(stats_path, 'a') as file:
             writer = csv.writer(file)
