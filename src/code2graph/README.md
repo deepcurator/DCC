@@ -1,20 +1,18 @@
 # Code2graph
 
-The code2graph aims to convert the code repositories related to DL publications into RDF graphs. A pipeline of approaches is implemented with a flexible architecture and the following figure illustrates the current pipeline architecture.
+The code2graph is a sub-module in DCC ([Deep Code Curator](https://github.com/deepcurator/DCC)) which aims to extract sementic information from text, images, code and equation accompanied with scientific DL papers. The purpose of code2graph is to build a pipeline of methodologies to extract Resource Description Framework (RDF) graphs, particularly from the code repositories related to DL publications. The figure below illustrates the current architecture.
 
 ![](https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/architecture.jpg?raw=true)
 
-The code2graph is a module in project [Deep Code Curator](https://github.com/deepcurator/DCC) (DCC) which aims to extract the information from scientific publications and the corresponding source code related to Deep Learning architectures and methodologies.
-Currently, two methodogies are included in code2graph. 
-1. Computation-based Approach, see [graphHandler.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphHandler.py).
-2. The Lightweight Approach, see [graphlightweight.py](https://github.uci.edu/AICPS/code2graph/blob/master/core/graphlightweight.py).
+Two methodogies are studied in code2graph. 
+1. The Computational Graph-Based Approach ([graphHandler.py](https://github.com/deepcurator/DCC/blob/master/src/code2graph/core/graphHandler.py))
+2. The Lightweight Approach ([graphlightweight.py](https://github.com/deepcurator/DCC/blob/master/src/code2graph/core/graphlightweight.py))
 
-Computation-based Approach (MNist) |  The Lightweight Approach (MNist)
+You can find details from [Technical Report on Code2Graph](http://cecs.uci.edu/files/2019/05/TR-19-01.pdf). A sample visualization of the graphs generated from both methods is shown below: (using [fashion MNIST program example](https://github.com/deepcurator/DCC/blob/master/src/code2graph/test/fashion_mnist/testGraph_extensive.py))
+
+Computational Graph-based Approach (MNist) |  The Lightweight Approach (MNist)
 :-------------------------:|:-------------------------:
-<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true">|<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true" width="700">
-
-To understand the pipeline of code2graph better, you can refer to 
-- [Deep Code Curator - Technical Report on Code2Graph](http://cecs.uci.edu/files/2019/05/TR-19-01.pdf)
+<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_0.png?raw=true">|<img src="https://github.com/louisccc/DCC/blob/master/src/code2graph/figs/Sample_Output_1_.png?raw=true" width="850">
 
 ## Software Dependencies
 
@@ -81,7 +79,7 @@ python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --a
 ```
 -ipt: Path to directory that contains the source code of your machine learining model.
 
---ds: Specifies that the path (-ipt) contains a collection of repositories.
+-r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
 
 -dp: (Used along with --ds) Path to store generated outputs. 
 

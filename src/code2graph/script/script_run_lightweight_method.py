@@ -57,7 +57,7 @@ def process(data_path: Path, stats_path: Path, options: list):
             with ZipFile(repo['zip_path'], "r") as zip_ref:
                 zip_ref.extractall(extract_path)
 
-            args = Namespace(code_path=extract_path, is_dataset=False, dest_path=".",
+            args = Namespace(code_path=extract_path, recursive=False, dest_path=".",
                              combined_triples_only=False,
                              output_types=options, show_arg=True, show_url=True)
             config = LightWeightMethodConfig(args)
@@ -102,7 +102,7 @@ def move_files(data_path, dest_path, filetype, name_index=7):
 def run_lightweight_method(args):
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
     
-    if config.is_dataset:
+    if config.recursive:
         config.dest_path.mkdir(exist_ok=True)
         stat_file_path = config.dest_path / "stats.csv"
         process(config.code_path, stat_file_path, options=config.output_types)
