@@ -92,7 +92,7 @@ def recursive(data_path: Path, stats_path: Path, options: list):
                                 output_types=options, show_arg=True, show_url=True)
                 config = LightWeightMethodConfig(args)
 
-                success, error_msg = run_lightweight_method(config)    
+                success, error_msg = run_lightweight_method(repo['code_path'], config)    
             
             else:
                 success = "Error"
@@ -104,7 +104,7 @@ def recursive(data_path: Path, stats_path: Path, options: list):
                              repo['date'], repo['tags'], repo['stars'], repo['code'], 
                              repo['paper']])
 
-def run_lightweight_method(config: LightWeightMethodConfig) -> tuple:
+def run_lightweight_method(code_path, config: LightWeightMethodConfig) -> tuple:
     """Runs lightweight method.
     If exception occurs, try to fix the error by running 2to3 and autopep8.
     2to3 converts python2 code to python3 compatible code.
@@ -119,7 +119,7 @@ def run_lightweight_method(config: LightWeightMethodConfig) -> tuple:
     success = "N/A"
     error_msg = "N/A"
     try:
-        explorer = TFTokenExplorer(config)
+        explorer = TFTokenExplorer(code_path, config)
         explorer.explore_code_repository()
         success = "Success"
     except:
@@ -129,7 +129,7 @@ def run_lightweight_method(config: LightWeightMethodConfig) -> tuple:
         subprocess.run("autopep8 --in-place -r %s" % config.input_path, shell=True)
 
         try:
-            explorer = TFTokenExplorer(config)
+            explorer = TFTokenExplorer(code_path, config)
             explorer.explore_code_repository()
             success = "Success (python2)"
         except:
@@ -176,7 +176,7 @@ def pipeline_the_lightweight_approach(args):
         move_output_files(config)
 
     else:
-        run_lightweight_method(config)
+        run_lightweight_method(config.input_path, config)
 
 
 if __name__ == "__main__":
