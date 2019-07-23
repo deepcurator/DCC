@@ -97,7 +97,8 @@ def recursive(data_path: Path, stats_path: Path, config: LightWeightMethodConfig
     Returns:
         list -- A list of metadata with result of running lightweight method.
     """
-    metadata = [[cols]]
+    metadata = []
+    metadata.append(cols)
     dataset = extract_data(data_path, stats_path)    
 
     for repo in dataset:
