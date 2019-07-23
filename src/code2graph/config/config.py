@@ -19,7 +19,7 @@ class LightWeightMethodArgParser:
         self.parser.add_argument('-ipt', dest='code_path',
                                  default='../test/fashion_mnist', type=str,
                                  help='Path to the source code. Default: ../test/fashion_mnist')
-        self.parser.add_argument('--r', dest='recursive', 
+        self.parser.add_argument('-r', dest='recursive', 
                                  action='store_true',
                                  help='Recursively apply Lightweight method on all the papers in the code path.')
         self.parser.set_defaults(recursive=False)

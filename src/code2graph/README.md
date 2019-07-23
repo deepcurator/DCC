@@ -81,7 +81,7 @@ python script_run_lightweight_method.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --a
 ```
 -ipt: Path to directory that contains the source code of your machine learining model.
 
---r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
+-r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
 
 -dp: (Used along with --ds) Path to store generated outputs. 
 
