@@ -14,7 +14,7 @@ sys.path.append('../')
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
 
-cols = ['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
+cols = ['Folder Name','Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
 def extract_data(data_path: Path) -> list:
@@ -46,6 +46,7 @@ def extract_data(data_path: Path) -> list:
             except:
                 repo[meta_prefix] = ""
         
+        repo['folder_name'] = subdir.name
         repo['code_path'] = None
         if 'tf' in repo['framework']:
             try:
@@ -112,7 +113,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
                 success = "Error"
                 error_msg = "There is no zip file."
 
-        metadata.append([repo['title'], repo['framework'], success, error_msg, 
+        metadata.append([repo['folder_name'], repo['title'], repo['framework'], success, error_msg, 
                              repo['date'], repo['tags'], repo['stars'], repo['code'], 
                              repo['paper']])
 

@@ -46,62 +46,43 @@ pip install -r requirements.txt
 ```
 
 ## Package Dependencies
- 
-* jupyter==1.0.0
-* jupyter-console==5.0.0
-* ipython==5.3.0
-* pyvis==0.1.6.0
-* astor==0.7.1
-* beautifulsoup4==4.7.1
-* Keras==2.2.4
-* matplotlib==3.0.2
+
+* jupyter==1.0.0 => Jupyter notebook.
+* jupyter-console==5.0.0 => Jupyter notebook.
+* ipython==5.3.0 => Jupyter notebook.
+* pyvis==0.1.6.0 => RDF graph visualization.
+* astor==0.7.1  => AST manipulation and printing.
+* beautifulsoup4==4.7.1 => Webscraping.
+* Keras==2.2.4 => Compile Keras projects.
+* tensorflow==1.13.1 => Compile tensorflow projects.
+* matplotlib==3.0.2 
 * networkx==2.2
-* rdflib==4.2.2
-* requests==2.21.0
+* rdflib==4.2.2 => RDF graph construction.
+* requests==2.21.0 => Webscraping.
 * scikit-learn==0.20.2
-* selenium==3.141.0
-* tensorflow==1.13.1
-* urllib3==1.24.1
-* wget==3.2
-* lxml==4.3.4
-* showast==0.2.4
-* autopep8==1.4.4
+* selenium==3.141.0 => Webscraping.
+* urllib3==1.24.1 => Webscraping.
+* wget==3.2 => Webscraping.
+* lxml==4.3.4 => Webscraping.
+* showast==0.2.4 => Visualizing AST.
+* autopep8==1.4.4 => Preprocess data.
  
 ## Usage Examples
 ### Running Computation-Based Approach
-Under Construction, or you can also refer to the [notebook](testScript/computational_graph_based.ipynb).
+Refer to the [notebook](testScript/computational_graph_based.ipynb).
 
 ### Running Lightweight Approach
-Run the follwing command, or you can also refer to the [notebook](testScript/light_weight.ipynb).
+Refer to the [notebook](testScript/light_weight.ipynb).
 
-```shell
-python script_lightweight.py -ipt [PATH_TO_CODE] -opt [N [N ...]] --arg
-```
--ip: Path to directory that contains the source code of your machine learining model.
+## Dataset
 
--r: Recursively apply Lightweight method to all the papers in the input path (-ipt).
-
--dp: (Used along with --ds) Path to store generated outputs. 
-
--opt: Types of output: 1 = call graph, 2 = call tress, 3 = RDF graphs, 4 = TensorFlow sequences, 5 = RDF triples, 6 = Export RDF (turtle format).
-
---ct: (Used along with --ds and opt=5) Only generates combined_triples.triples.
-
---arg: Show arguments on graph (Hidden by default).
-
---url: Show url/is_type relations on graph (Hidden by default).
-
-#### Download RDF Dataset
-
-We ran the lightweight method on several TensorFlow papers we scraped from Paperswithcode website. You can download the RDF graphs and triples we generated [here](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
+Using our script we scraped around 600 papers from paperswithcode.com website. Out of 600 papers, 120 of them have tensorflow implementation. We ran the lightweight method on those TensorFlow papers we scraped from Paperswithcode website. The lightweight method was successful on half of the tensorflow repositories. You can download the RDF graphs and triples we generated [here](https://osf.io/zrusg/?view_only=f6ed10613af94c6d8050796a30f1568b).
 
 ### Running Webscraper for Paperswithcode website
 
 ```shell
-python script_scrape_paperswithcode.py -cd [PATH_TO_CHROMEDRIVER]
+python script_service_pwc_scraper.py -cd [PATH_TO_CHROMEDRIVER] -sp [SAVE_PATH]
 ```
 
--cd: Path to ChromeDriver. To get the ChromeDriver compatible with your browser go to the following website - http://chromedriver.chromium.org/downloads and download the ChromeDriver for the version of Chrome you are using. 
-
-### Running The Summary File Extractor
-### Running Computation-Based Approach
+-cd: Path to ChromeDriver. To get the ChromeDriver compatible with your browser go to the following website - [ChromeDriver](http://chromedriver.chromium.org/downloads) and download the ChromeDriver for the version of Chrome you are using.
+-sp: The script will save the scraped data in this path.
