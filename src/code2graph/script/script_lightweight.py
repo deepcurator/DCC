@@ -187,7 +187,7 @@ def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
     tasks = []
-
+    metadata = []
     if config.recursive:
         tasks, metadata = recursive(config.input_path, config)
         
@@ -204,12 +204,12 @@ def pipeline_the_lightweight_approach(args):
 if __name__ == "__main__":
 
     # append argument -h to see more options
-    # ex1: python script_lightweight.py -ipt ../test/fashion_mnist
-    # ex2: python script_lightweight.py -ipt ../test/VGG16 -opt 3 (get RDF graphs)
-    # ex3: python script_lightweight.py -ipt ../test/Alexnet -opt 2 (get call trees)
-    # ex4: python script_lightweight.py -ipt ../test/Xception
-    # ex5: python script_lightweight.py -ipt ../test/NeuralStyle
-    # ex6: python script_lightweight.py -ipt=../raw_data_tf --ds -dp=../rdf -opt=5
-    # ex7: python script_lightweight.py -ipt=../raw_data_tf --ds -dp=../rdf -opt=3 --arg --url
+    # ex1: python script_lightweight.py -ip ../test/fashion_mnist
+    # ex2: python script_lightweight.py -ip ../test/VGG16 -opt 3 (get RDF graphs)
+    # ex3: python script_lightweight.py -ip ../test/Alexnet -opt 2 (get call trees)
+    # ex4: python script_lightweight.py -ip ../test/Xception
+    # ex5: python script_lightweight.py -ip ../test/NeuralStyle
+    # ex6: python script_lightweight.py -ip=../raw_data_tf -r -dp=../rdf -opt=5
+    # ex7: python script_lightweight.py -ip=../raw_data_tf -r -dp=../rdf -opt=3 --arg --url
     
     pipeline_the_lightweight_approach(sys.argv[1:])
