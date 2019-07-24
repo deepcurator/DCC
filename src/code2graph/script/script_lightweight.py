@@ -17,16 +17,14 @@ from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
 cols = ['Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
-def extract_data(data_path: Path, stats_path: Path) -> list:
+def extract_data(data_path: Path) -> list:
     """ Preprocessing of raw data to make it ready for lightweight graph construction. 
         The raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format. 
 
     Creates a dictionary with metadata for each paper and extracts the zip file.
-    Creates a stats.csv file and write the column headers.
     
     Arguments:
         data_path {Path} -- Path to directory with a collection of repositories with metadata files.
-        stats_path {Path} -- Path to stats.csv file.
     
     Returns:
         list -- A list of dictonaries with paper metadata.
@@ -83,33 +81,33 @@ def preprocess(code_path: str):
         subprocess.run("2to3 -w -n %s" % code_path, shell=True)
         subprocess.run("autopep8 --in-place -r %s" % code_path, shell=True)
 
-def recursive(data_path: Path, stats_path: Path, config: LightWeightMethodConfig) -> list:
+def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
     """Process all papers in data_path.
     Extract metadata and zip file by calling extract_data.
     Run lightweight method on all tensorflow papers.
-    Saves metadata to stats.csv file.
+    Return a tasks list with code_paths to process and metadata list with results.
     
     Arguments:
         data_path {Path} -- Path to directory with a collection of repositories with metadata files.
         stats_path {Path} -- Path to stats.csv file.
-        options {list} -- Output options for Lightweight method.
+        config {LightWeightMethodConfig} -- Config for running Lightweight method.
     
     Returns:
-        list -- A list of metadata with result of running lightweight method.
+        tuple -- A tuple of tasks and metadata
     """
     metadata = []
+    tasks = []
     metadata.append(cols)
-    dataset = extract_data(data_path, stats_path)    
+    dataset = extract_data(data_path)    
 
-    for repo in dataset:
+    for idx, repo in enumerate(dataset):
         success = 'N/A'
         error_msg = 'N/A'
         if 'tf' in repo['framework']:
             
             if repo['code_path'] is not None:
-                preprocess(repo['code_path'])
-                success, error_msg = run_lightweight_method(repo['code_path'], config)    
-            
+                task = {'code_path': repo['code_path'], 'id': idx+1}    
+                tasks.append(task)
             else:
                 success = "Error"
                 error_msg = "There is no zip file."
@@ -118,30 +116,25 @@ def recursive(data_path: Path, stats_path: Path, config: LightWeightMethodConfig
                              repo['date'], repo['tags'], repo['stars'], repo['code'], 
                              repo['paper']])
 
-    return metadata
+    return tasks, metadata
 
-def lightweight_method(code_path, config: LightWeightMethodConfig):
-    """ running the lightweight graph construction """
-    explorer = TFTokenExplorer(code_path, config)
-    explorer.explore_code_repository()
-
-def run_lightweight_method(code_path, config: LightWeightMethodConfig) -> tuple:
+def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> tuple:
     """Runs lightweight method.
-    If exception occurs, try to fix the error by running 2to3 and autopep8.
-    2to3 converts python2 code to python3 compatible code.
-    autopep8 fixes inconsistent use of tabs and spaces error.
+    Capture exception and return the error message.
     
     Arguments:
+        code_path {Path} -- Path to code repository.
         config {LightWeightMethodConfig} -- Config for Lightweight method.
     
     Returns:
         tuple -- success: Ouput status, error_msg: Exception raised by Lightweight method.
     """
-    success = "N/A"
-    error_msg = "N/A"
+    
     try:
-        lightweight_method(code_path, config)
+        explorer = TFTokenExplorer(code_path, config)
+        explorer.explore_code_repository()
         success = "Success"
+        error_msg = "N/A"
     
     except:
         success = "Error"
@@ -167,6 +160,7 @@ def move_output_files(config: LightWeightMethodConfig):
         copy_files(config.input_path, config.dest_path, "*.rdf")
 
 def copy_files(data_path, dest_path, filetype, name_index=-3):
+    """ Copy files in data_path that matches filetype to dest_path """
     for path in Path(data_path).rglob(filetype):
         path = Path(path)
         repo_name = str(path).split('/')[name_index]
@@ -180,21 +174,32 @@ def save_metadata(metadata: list, stat_file_path: str):
         writer = csv.writer(file)
         writer.writerows(metadata)
 
+def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
+    if config.recursive:
+        for task in tasks:
+            metadata[task['id']][2] = task['success']
+            metadata[task['id']][3] = task['err_msg']
+        config.dest_path.mkdir(exist_ok=True)
+        save_metadata(metadata, str(config.dest_path / "stats.csv"))
+        move_output_files(config)
+    
 def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
-    
+    tasks = []
+
     if config.recursive:
-        config.dest_path.mkdir(exist_ok=True)
-        stat_file_path = config.dest_path / "stats.csv"
-        metadata = recursive(config.input_path, stat_file_path, config)
-        save_metadata(metadata, str(stat_file_path))
-        move_output_files(config)
-
+        tasks, metadata = recursive(config.input_path, config)
+        
     else:
-        preprocess(config.input_path)
-        run_lightweight_method(config.input_path, config)
+        task = {'code_path':config.input_path}
+        tasks.append(task)
 
+    for task in tasks:
+        preprocess(task['code_path'])
+        task['success'], task['err_msg'] = run_lightweight_method(task['code_path'], config)
+
+    export_data(metadata, tasks, config)
 
 if __name__ == "__main__":
 
