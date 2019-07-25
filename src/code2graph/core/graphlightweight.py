@@ -265,13 +265,13 @@ class ProgramLineVisitor:
 
 class TFTokenExplorer:
 
-    def __init__(self, config):
+    def __init__(self, code_path, config):
         """Initializing the class"""
-        self.code_repo_path = Path(config.code_path)
+        self.code_repo_path = Path(code_path)
 
         # mapping utilities
         self.call_graph_visitor = CallGraphVisitor(
-            glob("%s/**/*.py" % str(config.code_path), recursive=True))
+            glob("%s/**/*.py" % str(code_path), recursive=True))
         # for n in self.call_graph_visitor.uses_edges:
         #     print(n)
         self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
