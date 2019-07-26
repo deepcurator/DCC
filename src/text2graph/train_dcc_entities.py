@@ -1,4 +1,5 @@
 
+
 # A new NER model is trained that contains new entities. The new entities are
 # defined in the list: ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
 # The new model takes as input annotated sentences extracted from pdf files,
@@ -21,6 +22,7 @@ import random
 from pathlib import Path
 import spacy
 from spacy.util import minibatch, compounding
+from spacy.util import decaying
 
 from brat2spacy import create_training_data
 from ner_utils import ner_eval, test_ner_model
@@ -35,7 +37,7 @@ model_dir = config['MODEL_PATH']
 test_dir = config['TEST_DATA_PATH']
 output_dir = config['TEXT_OUTPUT_PATH']
 
-n_iter = 20
+n_iter = 50
 
 # passing command line arguments using plac
 @plac.annotations(
@@ -90,6 +92,7 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
     # start the training of the recognizer (and the time)
     training_start_time = time.time()
     for itn in range(n_iter):
+        dropout = decaying(0.4, 0.2, 1.0e-2)
         random.shuffle(training_data)
         losses = {}
         # batch up the examples using spaCy's minibatch
