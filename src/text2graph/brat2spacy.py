@@ -55,13 +55,14 @@ def brat2spacy(txtf,annf):
             tup2 += (ent_type,)
 
             # create a list
-            ent_list.append(tup2)    
+            ent_list.append(tup2)
     # Create dict:
     d = {}
     d[key] = ent_list
     # add the dictionary to tuple
     tup += (d,)
-    return(ent_list)
+    #return(ent_list)
+    return tup
 
 def create_training_data(directory):        
     train_data = []
