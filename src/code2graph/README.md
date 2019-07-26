@@ -85,4 +85,5 @@ python script_service_pwc_scraper.py -cd [PATH_TO_CHROMEDRIVER] -sp [SAVE_PATH]
 ```
 
 -cd: Path to ChromeDriver. To get the ChromeDriver compatible with your browser go to the following website - [ChromeDriver](http://chromedriver.chromium.org/downloads) and download the ChromeDriver for the version of Chrome you are using.
+
 -sp: The script will save the scraped data in this path.
