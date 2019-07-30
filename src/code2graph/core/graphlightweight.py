@@ -361,13 +361,8 @@ class TFTokenExplorer:
                     "." + child["name"] + "_" + str(idx)
                 self.populate_call_tree(child)
 
-    def export_rdf_graph(self):
-        combined_graph = Graph()
-        for graph in self.rdf_graphs.values():
-            combined_graph += graph
-        combined_graph.serialize(destination=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+    
         
-
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
@@ -448,7 +443,7 @@ class TFTokenExplorer:
         if 5 in self.options:
             self.dump_rdf_triples()
         if 6 in self.options:
-            self.export_rdf_graph()
+            self.dump_rdf()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
@@ -466,10 +461,12 @@ class TFTokenExplorer:
                 self.code_repo_path/root.replace('.', '')))
 
     def dump_tfsequences(self):
+
         pprint.pprint(self.tfsequences)
 
     def dump_rdf_triples(self):
         combined_triplets_path = str(self.code_repo_path/'combined_triples.triples')
+        
         with open(combined_triplets_path, 'w') as combined_file:
             for root in self.rdf_graphs:
                 stored_path = str(self.code_repo_path/(root.replace('.', '') + '.triples'))
@@ -491,7 +488,13 @@ class TFTokenExplorer:
                         obj = obj.replace('\n','').replace('\t', '').replace('    ','')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
-                    
+
+    def dump_rdf(self):
+        combined_graph = Graph()
+        for graph in self.rdf_graphs.values():
+            combined_graph += graph
+        combined_graph.serialize(destination=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+
     def pyvis_draw(self, graph, name):
 
         cnames = ['blue', 'green', 'red', 'cyan', 'orange',
