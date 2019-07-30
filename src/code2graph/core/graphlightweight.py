@@ -276,8 +276,7 @@ class TFTokenExplorer:
 
         self.code_repo_path = Path(code_path).resolve()
         self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
-      
-        
+              
         self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
@@ -314,11 +313,14 @@ class TFTokenExplorer:
                                      <Node ???:*.relu>,
                                      <Node ???:*.softmax>},
         '''
-        self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
+        self.pyan_node_dict = {}  
 
-        '''
+        ''' 
+            pyan_node_dict stores the hashmap from RDF node name to pyan node.
             name -> pyan node.
+            Ex. .testGraph_extensive -> <Node module:testGraph_extensive>
         '''
+
     def explore_code_repository(self):
         self.build_pyan_call_graph()
         self.build_call_graph()
@@ -337,7 +339,7 @@ class TFTokenExplorer:
             if caller.flavor is Flavor.UNKNOWN:
                 continue 
 
-            caller_name   = get_name(caller)
+            caller_name = get_name(caller)
             caller_type = caller.flavor
 
             self.call_graph.add((BNode(caller_name), OntologyManager.is_type, BNode(caller_type)))
@@ -349,7 +351,7 @@ class TFTokenExplorer:
                 if callee.flavor is Flavor.UNSPECIFIED:
                     continue
                 if callee.flavor is Flavor.UNKNOWN:
-                    continue 
+                    continue
 
                 callee_name = get_name(callee)
                 callee_type = callee.flavor
@@ -362,9 +364,10 @@ class TFTokenExplorer:
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
-        # print("roots:",roots)
+
         for root in roots:
-            # print("roots:", root)
+            print("Start from root:", self.pyan_node_dict[root])
+            
             call_tree = self.grow_function_calls(root)
 
             call_tree["rdf_name"] = call_tree["name"]
@@ -390,8 +393,7 @@ class TFTokenExplorer:
         return starts
 
     def grow_function_calls(self, start):
-
-        # print("Processing node: %s" % str(start))
+        #TODO self.call_graph_visitor should be removed as only node dict is needed.
         line_visitor = ProgramLineVisitor(
             self.call_graph_visitor, self.pyan_node_dict[start])
         line_visitor.visit(
