@@ -275,16 +275,45 @@ class TFTokenExplorer:
         self.config = config
 
         self.code_repo_path = Path(code_path).resolve()
+        self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
       
         self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
         self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
-        self.tfsequences = {}     # generated in build tfseqeuences
+        self.tfsequences= {}      # generated in build tfseqeuences
 
     def build_pyan_call_graph(self):
-        all_py_files = glob("%s/**/*.py" % str(self.code_repo_path))
-        self.call_graph_visitor = CallGraphVisitor(all_py_files)
+        self.call_graph_visitor = CallGraphVisitor(self.all_py_files)
+        
+        self.pyan_edges = self.call_graph_visitor.uses_edges
+        ''' pyan edges are all relations extracted from pyan, each of element is stored as Node instance. 
+            if the node is recognized as an internal function, its flavor will then be 'function'. 
+            if the node is recognized as a module, its flavor will then be 'module'.
+            
+            Example: 
+            {<Node module:testGraph_extensive>: {<Node ---:*.fit>,
+                                     <Node ---:*.np>,
+                                     <Node ---:*.compile>,
+                                     <Node ---:*.plt>,
+                                     <Node ---:*.Sequential>,
+                                     <Node ---:*.TensorBoard>,
+                                     <Node function:testGraph_extensive.clearLogFolder>,
+                                     <Node ???:*.fashion_mnist>,
+                                     <Node ???:*.load_data>,
+                                     <Node ???:*.AdamOptimizer>,
+                                     <Node ???:*.print>,
+                                     <Node ???:*.Flatten>,
+                                     <Node ???:*.Dense>,
+                                     <Node ---:*.os>,
+                                     <Node ---:*.time>,
+                                     <Node ---:*.tensorflow>,
+                                     <Node ---:*.tf>,
+                                     <Node ---:*.evaluate>,
+                                     <Node ---:*.tensorflow.keras.callbacks>,
+                                     <Node ???:*.relu>,
+                                     <Node ???:*.softmax>},
+        '''
 
     def explore_code_repository(self):
         self.build_pyan_call_graph()
@@ -294,9 +323,10 @@ class TFTokenExplorer:
         self.build_tfsequences()
 
         self.dump_information()
-
+        
     def build_call_graph(self):
-        for caller in self.call_graph_visitor.uses_edges:
+        
+        for caller in self.pyan_edges:
 
             if caller.flavor is not Flavor.UNSPECIFIED and caller.flavor is not Flavor.UNKNOWN:
 
@@ -304,7 +334,7 @@ class TFTokenExplorer:
                     (BNode(get_name(caller)), OntologyManager.is_type, BNode(caller.flavor)))
                 self.pyan_node_dict[get_name(caller)] = caller
 
-                for callee in self.call_graph_visitor.uses_edges[caller]:
+                for callee in self.pyan_edges[caller]:
                     # print(caller, callee)
                     if callee.flavor is not Flavor.UNSPECIFIED and callee.flavor is not Flavor.UNKNOWN:
                         self.call_graph.add(
