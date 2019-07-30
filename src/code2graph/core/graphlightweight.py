@@ -346,14 +346,14 @@ class TFTokenExplorer:
 
             for callee in callees:
 
-                if caller.flavor is Flavor.UNSPECIFIED:
+                if callee.flavor is Flavor.UNSPECIFIED:
                     continue
-                if caller.flavor is Flavor.UNKNOWN:
+                if callee.flavor is Flavor.UNKNOWN:
                     continue 
 
                 callee_name = get_name(callee)
                 callee_type = callee.flavor
-                
+
                 self.call_graph.add((BNode(callee_name), OntologyManager.is_type, BNode(callee_type)))
                 self.call_graph.add((BNode(caller_name), OntologyManager.call,    BNode(callee_name)))                
                 
