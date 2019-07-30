@@ -262,32 +262,32 @@ class TFTokenExplorer:
 
     def __init__(self, code_path, config):
         """Initializing the class"""
-        self.code_repo_path = Path(code_path)
+        
+        self.dump_functions = {
+            1: self.dump_call_graph,
+            2: self.dump_call_trees,
+            3: self.dump_rdf_graphs,
+            4: self.dump_tfsequences,
+            5: self.dump_rdf_triples,
+            6: self.dump_rdf
+        }
 
-        # mapping utilities
-        self.call_graph_visitor = CallGraphVisitor(
-            glob("%s/**/*.py" % str(code_path), recursive=True))
-        # for n in self.call_graph_visitor.uses_edges:
-        #     print(n)
+        self.config = config
+
+        self.code_repo_path = Path(code_path).resolve()
+      
         self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
+        self.call_graph = Graph() # generated in build the one complete call graph
+        self.call_trees = {}      # generated in build call trees
+        self.rdf_graphs = {}      # generated in build rdf graphs
+        self.tfsequences = {}     # generated in build tfseqeuences
 
-        # generated in build the one complete call graph
-        self.call_graph = Graph()
-
-        # generated in build call trees
-        self.call_trees = {}
-
-        # generated in build rdf graphs
-        self.rdf_graphs = {}
-
-        # generated in build tfseqeuences
-        self.tfsequences = {}
-
-        self.options = config.output_types
-        self.show_arg = config.show_arg
-        self.show_url = config.show_url
+    def build_pyan_call_graph(self):
+        all_py_files = glob("%s/**/*.py" % str(self.code_repo_path))
+        self.call_graph_visitor = CallGraphVisitor(all_py_files)
 
     def explore_code_repository(self):
+        self.build_pyan_call_graph()
         self.build_call_graph()
         self.build_call_trees()
         self.build_rdf_graphs()
@@ -361,8 +361,6 @@ class TFTokenExplorer:
                     "." + child["name"] + "_" + str(idx)
                 self.populate_call_tree(child)
 
-    
-        
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
@@ -391,7 +389,7 @@ class TFTokenExplorer:
                                BNode("followed_by"), BNode(child[node_name])))
                 self.build_rdf_graph(child, graph)
 
-        if "args" in node and self.show_arg:
+        if "args" in node and self.config.show_arg:
             # print("\n Node:---->",node, node['args'])
             if len(node['args']) == 3:
                 k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
@@ -405,7 +403,7 @@ class TFTokenExplorer:
                     graph.add((BNode(node[node_name]), BNode(
                         "has_arg%d" % idx), BNode((arg))))
 
-        if "keywords" in node and self.show_arg:
+        if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 graph.add((BNode(node[node_name]), BNode(
                     "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
@@ -432,18 +430,9 @@ class TFTokenExplorer:
                 self.build_tfsequence(child, sequence)
 
     def dump_information(self):
-        if 1 in self.options:
-            self.dump_call_graph()
-        if 2 in self.options:
-            self.dump_call_trees()
-        if 3 in self.options:
-            self.dump_rdf_graphs()
-        if 4 in self.options:
-            self.dump_tfsequences()
-        if 5 in self.options:
-            self.dump_rdf_triples()
-        if 6 in self.options:
-            self.dump_rdf()
+        for option in self.config.output_types:
+            print ('dump info with option %d: %s' % (option, self.dump_functions[option].__name__))
+            self.dump_functions[option]()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
@@ -505,7 +494,7 @@ class TFTokenExplorer:
         for src, edge, dst in graph:
             # print(src, edge, dst)
 
-            if edge == OntologyManager.is_type and not self.show_url:
+            if edge == OntologyManager.is_type and not self.config.show_url:
                 continue
 
             src_type = [x for x in graph[src:OntologyManager.is_type]]
