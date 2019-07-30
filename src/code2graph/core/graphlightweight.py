@@ -20,20 +20,15 @@
 # Defense Advanced Research Projects Agency (DARPA)
 # under Agreement No. HR00111990010
 
-import sys
 import ast
 import astor
-import os
-import pdb
 import pprint
-import numpy as np
 import networkx as nx
 
 from glob import glob
 from pathlib import Path
 from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
 from pyvis.network import Network
-from sklearn.preprocessing import LabelEncoder
 
 from .ontologymanager import OntologyManager
 from .pyan.analyzer import CallGraphVisitor
