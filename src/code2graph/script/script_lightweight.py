@@ -13,6 +13,7 @@ sys.path.append('../')
 
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
+from core.database import Database
 
 cols = ['Folder Name','Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
@@ -141,8 +142,8 @@ def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> 
         success = "Error"
         exc_type, exc_value, exc_traceback = sys.exc_info()
         error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        error_msg = ''.join(error_msg)
-        print(''.join(error_msg))
+        error_msg = ''.join(error_msg[-2:])
+        print(error_msg)
         
     return (success, error_msg)
 
@@ -182,6 +183,8 @@ def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
             metadata[task['id']][3] = task['err_msg']
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
+        database = Database()
+        database.upsert_query(metadata)
         move_output_files(config)
     
 def pipeline_the_lightweight_approach(args):
