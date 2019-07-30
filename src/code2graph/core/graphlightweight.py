@@ -277,7 +277,7 @@ class TFTokenExplorer:
         self.code_repo_path = Path(code_path).resolve()
         self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
       
-        self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
+        
         self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
@@ -314,7 +314,11 @@ class TFTokenExplorer:
                                      <Node ???:*.relu>,
                                      <Node ???:*.softmax>},
         '''
+        self.pyan_node_dict = {}  # hashmap from RDF node name to pyan node.
 
+        '''
+            name -> pyan node.
+        '''
     def explore_code_repository(self):
         self.build_pyan_call_graph()
         self.build_call_graph()
@@ -326,23 +330,35 @@ class TFTokenExplorer:
         
     def build_call_graph(self):
         
-        for caller in self.pyan_edges:
+        for caller, callees in self.pyan_edges.items():
 
-            if caller.flavor is not Flavor.UNSPECIFIED and caller.flavor is not Flavor.UNKNOWN:
+            if caller.flavor is Flavor.UNSPECIFIED:
+                continue
+            if caller.flavor is Flavor.UNKNOWN:
+                continue 
 
-                self.call_graph.add(
-                    (BNode(get_name(caller)), OntologyManager.is_type, BNode(caller.flavor)))
-                self.pyan_node_dict[get_name(caller)] = caller
+            caller_name   = get_name(caller)
+            caller_type = caller.flavor
 
-                for callee in self.pyan_edges[caller]:
-                    # print(caller, callee)
-                    if callee.flavor is not Flavor.UNSPECIFIED and callee.flavor is not Flavor.UNKNOWN:
-                        self.call_graph.add(
-                            (BNode(get_name(callee)), OntologyManager.is_type, BNode(callee.flavor)))
-                        self.pyan_node_dict[get_name(callee)] = callee
+            self.call_graph.add((BNode(caller_name), OntologyManager.is_type, BNode(caller_type)))
 
-                        self.call_graph.add(
-                            (BNode(get_name(caller)), OntologyManager.call, BNode(get_name(callee))))
+            self.pyan_node_dict[caller_name] = caller
+
+            for callee in callees:
+
+                if caller.flavor is Flavor.UNSPECIFIED:
+                    continue
+                if caller.flavor is Flavor.UNKNOWN:
+                    continue 
+
+                callee_name = get_name(callee)
+                callee_type = callee.flavor
+                
+                self.call_graph.add((BNode(callee_name), OntologyManager.is_type, BNode(callee_type)))
+                self.call_graph.add((BNode(caller_name), OntologyManager.call,    BNode(callee_name)))                
+                
+                self.pyan_node_dict[callee_name] = callee
+
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
