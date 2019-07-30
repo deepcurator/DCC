@@ -154,7 +154,7 @@ def move_output_files(config: LightWeightMethodConfig):
         else:
             copy_files(config.input_path, config.dest_path, "*.triples")
             
-    if 3 in config.output_types:
+    if 3 in config.output_types or 1 in config.output_types:
         copy_files(config.input_path, config.dest_path, "*.html")
     
     if 6 in config.output_types:
