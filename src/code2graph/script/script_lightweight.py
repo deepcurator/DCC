@@ -184,7 +184,7 @@ def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
         database = Database()
-        database.upsert_query(metadata)
+        # database.upsert_query(metadata)
         move_output_files(config)
     
 def pipeline_the_lightweight_approach(args):
