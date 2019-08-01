@@ -1,22 +1,7 @@
-# import sys
-import ast
-# import astor
-# import os
-# import pdb
-import pprint
-# import numpy as np
-# import networkx as nx
-
+import ast, pprint, itertools
 from glob import glob
 from pathlib import Path
-# from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-# from pyvis.network import Network
-# from sklearn.preprocessing import LabelEncoder
-# from showast.rendering.graphviz import render
-# from showast import Settings
 
-import itertools
-# from collections import defaultdict
 
 class ASTExplorer:
     
