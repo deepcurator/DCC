@@ -144,7 +144,7 @@ def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> 
         success = "Error"
         exc_type, exc_value, exc_traceback = sys.exc_info()
         error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        error_msg = ''.join(error_msg)
+        error_msg = ''.join(error_msg[-4:])
         print(error_msg)
         
     return (success, error_msg)
