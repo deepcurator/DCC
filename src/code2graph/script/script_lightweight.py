@@ -45,7 +45,9 @@ def extract_data(data_path: Path) -> list:
                     else:
                         repo[meta_prefix] = f.read().strip()
             except:
-                repo[meta_prefix] = ""
+                repo[meta_prefix] = "NULL"
+            if repo[meta_prefix] == "":
+                repo[meta_prefix] = "NULL"
         
         repo['folder_name'] = subdir.name
         repo['code_path'] = None
@@ -142,7 +144,7 @@ def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> 
         success = "Error"
         exc_type, exc_value, exc_traceback = sys.exc_info()
         error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        error_msg = ''.join(error_msg[-2:])
+        error_msg = ''.join(error_msg)
         print(error_msg)
         
     return (success, error_msg)
@@ -181,14 +183,14 @@ def save_metadata(metadata: list, stat_file_path: str):
 def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
     if config.recursive:
         for task in tasks:
-            metadata[task['id']][2] = task['success']
-            metadata[task['id']][3] = task['err_msg']
+            metadata[task['id']][3] = task['success']
+            metadata[task['id']][4] = task['err_msg']
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
+        move_output_files(config)    
         database = Database()
-        # database.upsert_query(metadata)
-        move_output_files(config)
-    
+        database.upsert_query(metadata[1:])
+        
 def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))

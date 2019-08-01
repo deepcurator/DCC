@@ -24,7 +24,7 @@ class Database:
         # values should be a list of tuple/list containing values for a row
         try:
             values = ",".join(
-                ("(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)") % tup for tup in values_list)
+                ("(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)") % tuple(tup) for tup in values_list)
         except:
             raise ValueError(
                 "The values_list do not have proper number of values!")
