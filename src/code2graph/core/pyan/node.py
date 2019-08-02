@@ -127,7 +127,8 @@ class Node:
 
     def get_name(self):
         """Return the full name of this node."""
-
+        if self.name is None:
+            self.name = "?"
         if self.namespace == '':
             return self.name
         elif self.namespace is None:
