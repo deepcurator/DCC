@@ -41,10 +41,12 @@ def get_name(node):
 
 class CallVisitor(ast.NodeVisitor):
 
+    type_manager = OntologyManager()
+
     def __init__(self, call_graph_visitor, parent):
 
         self.call_graph_visitor = call_graph_visitor
-        self.type_manager = OntologyManager()
+       
         self.root = parent
 
         self.function_to_be_visited = []
@@ -325,10 +327,14 @@ class TFTokenExplorer:
         self.build_pyan_call_graph()
         self.build_call_graph()
         self.build_call_trees()
+        self.recognize_tf_calls()
         self.build_rdf_graphs()
         self.build_tfsequences()
 
         self.dump_information()
+    
+    def recognize_tf_calls(self):
+        pass
         
     def build_call_graph(self):
         
