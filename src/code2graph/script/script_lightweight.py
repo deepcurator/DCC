@@ -44,10 +44,11 @@ def extract_data(data_path: Path) -> list:
                         repo[meta_prefix] = ' '.join([line.strip() for line in f.readlines()])
                     else:
                         repo[meta_prefix] = f.read().strip()
+                    if repo[meta_prefix] == "":
+                        repo[meta_prefix] = None
             except:
-                repo[meta_prefix] = "NULL"
-            if repo[meta_prefix] == "":
-                repo[meta_prefix] = "NULL"
+                repo[meta_prefix] = None
+            
         
         repo['folder_name'] = subdir.name
         repo['code_path'] = None
