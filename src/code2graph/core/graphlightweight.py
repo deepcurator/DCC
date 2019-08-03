@@ -51,6 +51,12 @@ class CallVisitor(ast.NodeVisitor):
 
         self.function_to_be_visited = []
 
+    def check_internal_function(self, node):
+        pass
+
+    def check_tensorflow_function(self, node):
+        pass
+
     def visit_Call(self, node):
         # print("Entered visit Call!")
         call_name = astor.to_source(node.func).strip()
