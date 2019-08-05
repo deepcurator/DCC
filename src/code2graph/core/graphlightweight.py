@@ -43,35 +43,18 @@ class CallVisitor(ast.NodeVisitor):
 
     type_manager = OntologyManager()
 
-    def __init__(self, call_graph_visitor, parent):
+    def __init__(self, pyan_edges, parent):
 
-        self.call_graph_visitor = call_graph_visitor
+        self.pyan_edges = pyan_edges
        
         self.root = parent
 
         self.function_to_be_visited = []
 
-    def check_internal_function(self, node):
-        pass
-
-    def check_tensorflow_function(self, node):
-        pass
-
-    def visit_Call(self, node):
-        # print("Entered visit Call!")
-        call_name = astor.to_source(node.func).strip()
-        base_name = call_name.split('.')[-1]
-        # print("\n Node:", node)
-        # print("finding call full name: %s, base name: %s" %(call_name, base_name))
-        # pprint.pprint(astor.dump_tree(node))
-        # print(self.root)
-        proj_function_found = False
-        matched = False
-        flag_check = False
-
+    def check_internal_function(self, base_name):
         if "pyan" in self.root:
             # print("Inside Pyan!!")
-            for cand in self.call_graph_visitor.uses_edges[self.root["pyan"]]:
+            for cand in self.pyan_edges[self.root["pyan"]]:
                 # print("Inside Pyan:", cand)
                 if isinstance(cand.ast_node, ast.FunctionDef):
                     if cand.name == base_name:
@@ -84,7 +67,7 @@ class CallVisitor(ast.NodeVisitor):
 
                         self.function_to_be_visited.append((cand, new_node))
 
-                        proj_function_found = True
+                        return True
 
                     elif cand.name == "__init__" and base_name == cand.namespace.split('.')[-1]:
 
@@ -94,37 +77,32 @@ class CallVisitor(ast.NodeVisitor):
 
                         self.function_to_be_visited.append((cand, new_node))
 
-                        proj_function_found = True
+                        return True
                 elif isinstance(cand.ast_node, ast.FunctionDef):
                     pass
-            flag_check = True
+        return False
 
-        # TODO: removed '.' in call_name condition, functions like print are on graph
-        # TODO: find better ways to blacklist functions
-        if not proj_function_found and 'print' not in call_name:
-            # print("inside Call name .!!")
-            result = self.type_manager.fuzzy_search(call_name)
-            # print("\ncall_name:", call_name)
-            # print("match list:", result)
+    def check_tensorflow_function(self, call_name, node):
+        # print("inside Call name .!!")
+        result = self.type_manager.fuzzy_search(call_name)
+        # print("\ncall_name:", call_name)
+        # print("match list:", result)
 
-            if result:
-                matching = self.type_manager.type_hash[result[0]]
-                # print(call_name, matching)
-                new_node = {"name": matching['name'].split(
-                    '.')[-1], "url": matching['url'], "children": [], "type": "tf_keyword"}
-                new_node["args"] = []
-                # self.root['children'].append(new_node)
+        if result:
+            matching = self.type_manager.type_hash[result[0]]
+            # print(call_name, matching)
+            new_node = {"name": matching['name'].split(
+                '.')[-1], "url": matching['url'], "children": [], "type": "tf_keyword"}
+            new_node["args"] = []
+            # self.root['children'].append(new_node)
 
-                self.check_args(node, new_node)
+            self.check_args(node, new_node)
 
-                self.check_keywords(node, new_node)
+            self.check_keywords(node, new_node)
 
-                self.root['children'].append(new_node)
-                matched = True
-            flag_check = True
-
-        if not matched:
-            # print("Inside Not matched!")
+            self.root['children'].append(new_node)
+            return True
+        else:
             if isinstance(node.func, ast.Call):
                 result = self.type_manager.fuzzy_search(
                     call_name.split('(')[0])
@@ -141,14 +119,38 @@ class CallVisitor(ast.NodeVisitor):
                     self.root['children'].append(new_node)
 
                     func_visitor = CallVisitor(
-                        self.call_graph_visitor, new_node)
+                        self.pyan_edges, new_node)
                     func_visitor.visit(node.func)
+                    return True
+        return False
 
+    def visit_Call(self, node):
+        # print("Entered visit Call!")
+        call_name = astor.to_source(node.func).strip()
+        base_name = call_name.split('.')[-1]
+        # print("\n Node:", node)
+        # print("finding call full name: %s, base name: %s" %(call_name, base_name))
+        # pprint.pprint(astor.dump_tree(node))
+        # print(self.root)
+        
+        if base_name == "__init__":
+            base_name = call_name.split('.')[-2] + "." + base_name
+
+        proj_function_found = self.check_internal_function(base_name)
+
+        # TODO: removed '.' in call_name condition, functions like print are on graph
+        # TODO: find better ways to blacklist functions
+        matched = False
+        if not proj_function_found and 'print' not in call_name:
+            matched = self.check_tensorflow_function(call_name, node)
+
+        if not matched:
+            # print("Inside Not matched!")
             if len(node.args):
                 for _, arg in enumerate(node.args):
                     # print("\targs:", arg)
                     another_visitor = CallVisitor(
-                        self.call_graph_visitor, self.root)
+                        self.pyan_edges, self.root)
                     another_visitor.visit(arg)
                     self.function_to_be_visited += another_visitor.function_to_be_visited
 
@@ -160,9 +162,10 @@ class CallVisitor(ast.NodeVisitor):
                         # print("fieldd:",field, "value:",value)
                         if isinstance(value, ast.Call):
                             another_visitor_k = CallVisitor(
-                                self.call_graph_visitor, self.root)
+                                self.pyan_edges, self.root)
                             another_visitor_k.visit(keyword)
                             self.function_to_be_visited += another_visitor_k.function_to_be_visited
+                        
                         elif isinstance(value, ast.Str):
                             result = self.type_manager.fuzzy_search(value.s)
                             if result:
@@ -181,18 +184,14 @@ class CallVisitor(ast.NodeVisitor):
                                         new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
                                                     "children": [], "args": [], "type": "tf_keyword"}
                                         self.root['children'].append(new_node)
-            flag_check = True
-
-        # if not flag_check:
-        #     print("Didn't go through anything!!!!")
-        # print("Existing visit call \n")
+          
 
     def check_args(self, node, new_node):
         if len(node.args):
             for _, arg in enumerate(node.args):
 
                 another_visitor = CallVisitor(
-                    self.call_graph_visitor, new_node)
+                    self.pyan_edges, new_node)
                 another_visitor.visit(arg)
 
                 if isinstance(arg, ast.Str):
@@ -211,7 +210,7 @@ class CallVisitor(ast.NodeVisitor):
         if len(node.keywords):
             for keyword in node.keywords:
                 another_visitor = CallVisitor(
-                    self.call_graph_visitor, new_node)
+                    self.pyan_edges, new_node)
                 another_visitor.visit(keyword)
 
                 new_node["keywords"] = {}
@@ -233,8 +232,8 @@ class CallVisitor(ast.NodeVisitor):
 
 class ProgramLineVisitor:
 
-    def __init__(self, call_graph_visitor, node):
-        self.call_graph_visitor = call_graph_visitor
+    def __init__(self, pyan_edges, node):
+        self.pyan_edges = pyan_edges
 
         self.root = {"name": get_name(
             node), "children": [], "type": node.flavor, "pyan": node}
@@ -249,7 +248,7 @@ class ProgramLineVisitor:
             if isinstance(child, (ast.Expr, ast.UnaryOp, ast.withitem, ast.Assign, ast.Compare,
                                   ast.AugAssign, ast.Return, ast.Call, ast.Assert)):
 
-                call_visitor = CallVisitor(self.call_graph_visitor, parent)
+                call_visitor = CallVisitor(self.pyan_edges, parent)
                 call_visitor.visit(child)  # search function calls by line
 
                 for function, function_node in call_visitor.function_to_be_visited:
@@ -407,7 +406,7 @@ class TFTokenExplorer:
     def grow_function_calls(self, start):
         #TODO self.call_graph_visitor should be removed as only node dict is needed.
         line_visitor = ProgramLineVisitor(
-            self.call_graph_visitor, self.pyan_node_dict[start])
+            self.pyan_edges, self.pyan_node_dict[start])
         line_visitor.visit(
             self.pyan_node_dict[start].ast_node, line_visitor.root)
 
