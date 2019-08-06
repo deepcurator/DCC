@@ -9,8 +9,9 @@ import smtplib
 from queue import Queue
 from pprint import pprint, pformat
 from configparser import ConfigParser
-from database import Database
 from dateutil import parser
+
+from .database import Database
 
 
 class PWCReporter:
