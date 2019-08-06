@@ -53,11 +53,12 @@ def extract_data(data_path: Path) -> list:
         repo['stars'] = int(repo['stars'].replace(",", ""))
         repo['folder_name'] = subdir.name
         
-        try:
-            # check if date is valid
-            parser.parse(repo['date'])
-        except ValueError:
-            repo['date'] = None
+        if repo['date']:
+            try:
+                # check if date is valid
+                parser.parse(repo['date'])
+            except ValueError:
+                repo['date'] = None
 
         repo['code_path'] = None
         if repo['framework'] and 'tf' in repo['framework']:

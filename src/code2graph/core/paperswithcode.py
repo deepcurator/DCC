@@ -111,11 +111,12 @@ class PWCScraper:
                 paper_dict["date"] = paper.find(
                     'div', {'class': 'stars-accumulated text-center'}).text.strip()
 
-                try:
-                    # check if date is valid
-                    parser.parse(paper_dict["date"])
-                except ValueError:
-                    paper_dict["date"] = None
+                if paper_dict["date"]:
+                    try:
+                        # check if date is valid
+                        parser.parse(paper_dict["date"])
+                    except ValueError:
+                        paper_dict["date"] = None
 
                 # url where paper and code links are located
                 paper_dict["url"] = paper.find('a')['href']
