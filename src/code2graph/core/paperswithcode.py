@@ -194,7 +194,7 @@ class PWCScraper:
         values_list = []
         for paper in self.papers:
             values = (paper['stored_dir_name'], paper['title'], paper['framework'],
-                      'N/A', 'N/A', paper['date'], paper['tags'],
+                      'N/A', 'N/A', paper['date'], ','.join(paper['tags']),
                       int(paper['stars'].replace(",", "")),
                       paper['code_link'], paper['paper_link'])
             values_list.append(values)
