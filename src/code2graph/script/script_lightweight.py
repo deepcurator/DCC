@@ -52,7 +52,7 @@ def extract_data(data_path: Path) -> list:
         
         repo['folder_name'] = subdir.name
         repo['code_path'] = None
-        if 'tf' in repo['framework']:
+        if repo['framework'] and 'tf' in repo['framework']:
             try:
                 zip_path = list(subdir.glob('*.zip'))[0]
                 extract_name = zip_path.name.split('.')[0]
@@ -108,7 +108,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
     for idx, repo in enumerate(dataset):
         success = 'N/A'
         error_msg = 'N/A'
-        if 'tf' in repo['framework']:
+        if repo['framework'] and 'tf' in repo['framework']:
             
             if repo['code_path'] is not None:
                 task = {'code_path': repo['code_path'], 'id': idx+1}    
