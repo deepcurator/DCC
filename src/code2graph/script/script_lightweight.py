@@ -7,6 +7,7 @@ import glob
 import csv
 import subprocess
 import traceback
+from dateutil import parser
 
 import sys
 sys.path.append('../')
@@ -44,13 +45,20 @@ def extract_data(data_path: Path) -> list:
                         repo[meta_prefix] = ' '.join([line.strip() for line in f.readlines()])
                     else:
                         repo[meta_prefix] = f.read().strip()
-                    if repo[meta_prefix] == "":
+                    if repo[meta_prefix] == "" or repo[meta_prefix] == "None":
                         repo[meta_prefix] = None
             except:
                 repo[meta_prefix] = None
+
         repo['stars'] = int(repo['stars'].replace(",", ""))
-        
         repo['folder_name'] = subdir.name
+        
+        try:
+            # check if date is valid
+            parser.parse(repo['date'])
+        except ValueError:
+            repo['date'] = None
+
         repo['code_path'] = None
         if repo['framework'] and 'tf' in repo['framework']:
             try:
@@ -177,11 +185,9 @@ def copy_files(data_path, dest_path, filetype, name_index=-3):
         shutil.copy(path, repo_path)
 
 def save_metadata(metadata: list, stat_file_path: str):
-    print("saving metadata")
     with open(str(stat_file_path), 'w') as file:
         writer = csv.writer(file)
         writer.writerows(metadata)
-    print("metadata done")
 
 def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
     if config.recursive:
@@ -191,8 +197,8 @@ def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
         move_output_files(config)    
-        # database = Database()
-        # database.upsert_query(metadata[1:])
+        database = Database()
+        database.upsert_query(metadata[1:])
         
 def pipeline_the_lightweight_approach(args):
 

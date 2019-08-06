@@ -10,6 +10,7 @@ from queue import Queue
 from pprint import pprint, pformat
 from configparser import ConfigParser
 from database import Database
+from dateutil import parser
 
 
 class PWCReporter:
@@ -69,7 +70,7 @@ class PWCScraper:
 
         self.reporter = PWCReporter(config.cred_path)
         self.database = Database()
-        
+
         self.papers = []
 
         self.delay = 2
@@ -79,7 +80,7 @@ class PWCScraper:
 
     def scrape_papers_from_index(self, condition: dict = {}):
         '''
-            scrape the papers from the index page and related metadata.  
+            scrape the papers from the index page and related metadata.
         '''
         self.browser.get(self.paperswithcode_url)
         try:
@@ -110,6 +111,12 @@ class PWCScraper:
                 paper_dict["date"] = paper.find(
                     'div', {'class': 'stars-accumulated text-center'}).text.strip()
 
+                try:
+                    # check if date is valid
+                    parser.parse(paper_dict["date"])
+                except ValueError:
+                    paper_dict["date"] = None
+
                 # url where paper and code links are located
                 paper_dict["url"] = paper.find('a')['href']
 
@@ -136,7 +143,7 @@ class PWCScraper:
 
     def scrape_papers_from_profile(self):
         '''
-            scrape the code link and framework and paper link from paper profile page.  
+            scrape the code link and framework and paper link from paper profile page.
         '''
         for paper_idx, paper in enumerate(self.papers):
 
@@ -184,8 +191,10 @@ class PWCScraper:
     def update_database(self):
         values_list = []
         for paper in self.papers:
-            values = (paper['stored_dir_name'], paper['title'], paper['framework'], 'N/A', 'N/A',
-                      paper['date'], paper['tags'], paper['stars'], paper['code_link'], paper['paper_link'])
+            values = (paper['stored_dir_name'], paper['title'], paper['framework'],
+                      'N/A', 'N/A', paper['date'], paper['tags'],
+                      int(paper['stars'].replace(",", "")),
+                      paper['code_link'], paper['paper_link'])
             values_list.append(values)
         self.database.upsert_query(values_list)
 
