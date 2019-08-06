@@ -1120,7 +1120,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                     if value_node is not None:
                         break
                 else:
-                    return None, None  # not found
+                    return obj_node, None  # not found
                 return base_node, value_node  # as obj, return the base class in which attr was found
 
         return obj_node, None  # here obj_node is either None or unknown (namespace None)
