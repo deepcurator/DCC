@@ -417,7 +417,7 @@ class TFTokenExplorer:
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 child["rdf_name"] = node["rdf_name"] + \
-                    "." + child["name"] + "_" + str(idx)
+                    "." + child["name"] 
                 self.populate_call_tree(child)
 
     def build_rdf_graphs(self):
