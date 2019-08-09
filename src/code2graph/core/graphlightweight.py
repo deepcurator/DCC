@@ -206,6 +206,7 @@ class CallVisitor(ast.NodeVisitor):
 
     def check_keywords(self, node, new_node):
         if len(node.keywords):
+            import pdb; pdb.set_trace()
             for keyword in node.keywords:
                 another_visitor = CallVisitor(
                     self.pyan_edges, new_node)
@@ -218,6 +219,8 @@ class CallVisitor(ast.NodeVisitor):
                 elif isinstance(keyword.value, ast.Num):
                     new_node["keywords"][str(keyword.arg)] = keyword.value.n
                     # print("--match with .: Keyword", keyword.value.n)
+                elif isinstance(keyword.value, ast.NameConstant):
+                    new_node["keywords"][str(keyword.arg)] = str(keyword.value.value)
                 elif isinstance(keyword.value, ast.Attribute):
                     new_node["keywords"][str(keyword.arg)] = astor.to_source(
                         keyword.value).strip()
