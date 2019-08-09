@@ -104,23 +104,21 @@ class CallVisitor(ast.NodeVisitor):
             return True
         else:
             if isinstance(node.func, ast.Call):
-                result = self.type_manager.fuzzy_search(
-                    call_name.split('(')[0])
-                if result:
-                    matching = self.type_manager.type_hash[result[0]]
+                func_visitor = CallVisitor(
+                        self.pyan_edges, self.root)
+                func_visitor.visit(node.func)
+                # import pdb; pdb.set_trace()
+                if call_name.split('(')[0] == self.root['children'][-1]['name']:
+                    
                     new_node = {
-                        "name": call_name, "url": matching['url'], "children": [], "type": "tf_keyword"}
-                    new_node["args"] = []
+                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [], 
+                        "type": self.root['children'][-1]['type'], "args": []}
 
                     self.check_args(node, new_node)
 
                     self.check_keywords(node, new_node)
 
-                    self.root['children'].append(new_node)
-
-                    func_visitor = CallVisitor(
-                        self.pyan_edges, new_node)
-                    func_visitor.visit(node.func)
+                    self.root['children'][-1]['children'].append(new_node)
                     return True
         return False
 
@@ -132,7 +130,7 @@ class CallVisitor(ast.NodeVisitor):
         # print("finding call full name: %s, base name: %s" %(call_name, base_name))
         # pprint.pprint(astor.dump_tree(node))
         # print(self.root)
-        
+        # import pdb; pdb.set_trace()
         if base_name == "__init__":
             base_name = call_name.split('.')[-2] + "." + base_name
 
