@@ -92,9 +92,9 @@ class CallVisitor(ast.NodeVisitor):
             matching = self.type_manager.type_hash[result[0]]
             # print(call_name, matching)
             new_node = {"name": matching['name'].split(
-                '.')[-1], "url": matching['url'], "children": [], "type": "tf_keyword"}
+                '.')[-1], "url": matching['url'], "children": [], "type": 
+                "tf_keyword", "args": [], "keywords": {}}
             new_node["args"] = []
-            # self.root['children'].append(new_node)
 
             self.check_args(node, new_node)
 
@@ -112,7 +112,7 @@ class CallVisitor(ast.NodeVisitor):
                     
                     new_node = {
                         "name": call_name, "url": self.root['children'][-1]['url'], "children": [], 
-                        "type": self.root['children'][-1]['type'], "args": []}
+                        "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
 
                     self.check_args(node, new_node)
 
@@ -206,13 +206,12 @@ class CallVisitor(ast.NodeVisitor):
 
     def check_keywords(self, node, new_node):
         if len(node.keywords):
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             for keyword in node.keywords:
                 another_visitor = CallVisitor(
                     self.pyan_edges, new_node)
                 another_visitor.visit(keyword)
 
-                new_node["keywords"] = {}
                 if isinstance(keyword.value, ast.Str):
                     new_node["keywords"][str(keyword.arg)] = keyword.value.s
                     # print("--match with .: Keyword", keyword.value.s)
@@ -226,6 +225,7 @@ class CallVisitor(ast.NodeVisitor):
                         keyword.value).strip()
                     # print("--match with .: Keyword", astor.to_source(keyword.value).strip())
                 elif isinstance(keyword.value, ast.Tuple):
+                    # import pdb; pdb.set_trace()
                     new_node["keywords"][str(keyword.arg)] = astor.to_source(
                         keyword.value).strip()
                     # print("--match with .: Keyword", astor.to_source(keyword.value).strip())
