@@ -225,7 +225,6 @@ class CallVisitor(ast.NodeVisitor):
                         keyword.value).strip()
                     # print("--match with .: Keyword", astor.to_source(keyword.value).strip())
                 elif isinstance(keyword.value, ast.Tuple):
-                    # import pdb; pdb.set_trace()
                     new_node["keywords"][str(keyword.arg)] = astor.to_source(
                         keyword.value).strip()
                     # print("--match with .: Keyword", astor.to_source(keyword.value).strip())
@@ -440,8 +439,8 @@ class TFTokenExplorer:
                     (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["url"])))
             else:
                 graph.add(
-                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"])))
-
+                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"].value)))
+                    
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
