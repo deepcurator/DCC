@@ -61,7 +61,7 @@ class CallVisitor(ast.NodeVisitor):
                         # print (cand)
                         
                         new_node = {"name": base_name, "children": [],
-                                    "type": cand.flavor, "pyan": cand}
+                                    "type": "internal_"+cand.flavor.value, "pyan": cand}
 
                         self.root["children"].append(new_node)
 
@@ -72,7 +72,7 @@ class CallVisitor(ast.NodeVisitor):
                     elif cand.name == "__init__" and base_name == cand.namespace.split('.')[-1]:
 
                         new_node = {"name": base_name+".__init__",
-                                    "children": [], "type": cand.flavor, "pyan": cand}
+                                    "children": [], "type": "internal_"+cand.flavor.value, "pyan": cand}
                         self.root["children"].append(new_node)
 
                         self.function_to_be_visited.append((cand, new_node))
@@ -440,7 +440,7 @@ class TFTokenExplorer:
             else:
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"].value)))
-                    
+
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
