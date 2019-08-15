@@ -10,6 +10,10 @@ from queue import Queue
 from pprint import pprint, pformat
 from configparser import ConfigParser
 from dateutil import parser
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import COMMASPACE, formatdate
 
 from .database import Database
 
@@ -25,34 +29,34 @@ class PWCReporter:
         self.recipients = config.get("PWCScraper_email", "recipients")
         self.recipients = self.recipients.split(',')
 
-    def send_email(self, subject="No Title", body="No Content"):
+    def send_email(self, subject="No Title", body="No Content", files=None):
 
-        recipient = self.recipients
+        msg = MIMEMultipart()
+        msg['From'] = self.email_address
+        msg['To'] = COMMASPACE.join(self.recipients)
+        msg['Date'] = formatdate(localtime=True)
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body))
 
-        headers = [
-            "From: " + self.email_address,
-            "Subject: " + subject,
-            "To: " + ", ".join(recipient),
-            "MIME-Version: 1.0",
-            "Content-Type: text/plain"]
-        headers = "\r\n".join(headers)
-
-        message = headers + "\r\n\r\n" + body
+        for f in files or []:
+            part = MIMEApplication(open(f, 'rb').read())
+            part['Content-Disposition'] = 'attachment; filename="%s"' % f.name
+            msg.attach(part)
 
         try:
             server = smtplib.SMTP("smtp.gmail.com", 587)
             server.ehlo()
             server.starttls()
             server.login(self.email_address, self.password)
-            server.sendmail(self.email_address, recipient, message)
+            server.sendmail(self.email_address,
+                            self.recipients, msg.as_string())
             server.close()
 
             print("\tSent notification email.")
 
         except Exception as e:
             print(e)
-
-            print("\tFailed to send email.")
+            print("\tEmail Sent.")
 
 
 class PWCScraper:
@@ -252,6 +256,7 @@ class PWCScraper:
                     "New TensorFlow paper scraped from Paperswithcode.com.\r\n" + pformat(paper))
                 title = "Paperswithcode: New TensorFlow paper:%s!" % paper['title']
 
+                print("Sending TensorFlow Notification Email...")
                 self.reporter.send_email(subject=title, body=message)
 
                 self.tf_papers.put(paper)

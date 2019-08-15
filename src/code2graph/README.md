@@ -66,6 +66,7 @@ pip install -r requirements.txt
 * lxml==4.3.4 => Webscraping.
 * showast==0.2.4 => Visualizing AST.
 * autopep8==1.4.4 => Preprocess data.
+* apscheduler==3.6.1 => Scheduler for web crawler.
  
 ## Usage Examples
 ### Running Computation-Based Approach

@@ -9,13 +9,15 @@ from zipfile import ZipFile
 import subprocess
 import traceback
 from argparse import Namespace
+from apscheduler.schedulers.blocking import BlockingScheduler
+
 
 sys.path.append('../')
 from config.config import LightWeightMethodConfig
 from core.graphlightweight import TFTokenExplorer
 from config.config import PWCConfigArgParser, PWCConfig
 from core.paperswithcode import PWCScraper
-from script.script_lightweight import preprocess, run_lightweight_method, copy_files
+from script.script_lightweight import preprocess, run_lightweight_method, copy_files, save_metadata
 
 
 def extract_code(dir_path):
@@ -50,6 +52,7 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
     return success, error_msg
 
 def service(scraper: PWCScraper):
+    print("Starting Hourly Scraper...")
     output_path = Path("./output").resolve()
     output_types = ['*.triples', '*.html', '*.rdf']
     scraper.scrape()
@@ -61,18 +64,25 @@ def service(scraper: PWCScraper):
         except queue.Empty:
             break
 
-
+def email_metadata(scraper: PWCScraper):
+    print("Sending Daily MetaData Report...")
+    metadata = scraper.database.get_table()
+    file_path = Path("../metadata.csv").resolve()
+    save_metadata(metadata, file_path)
+    scraper.reporter.send_email("Daily Metadata Report", 
+                                "CSV file with metadata is attached along with this mail.",
+                                (file_path,))
+    
 def service_scrape_papers(args):
     config = PWCConfig(PWCConfigArgParser().get_args(args))
     config.tot_paper_to_scrape_per_shot = -1
     scraper = PWCScraper(config)
 
-    while True:
-        print("Spawning new thread.")
-        hourly_thread = threading.Thread(target=service, args=(scraper,))
-        hourly_thread.start()
-        time.sleep(3600)
+    scheduler = BlockingScheduler()
+    scheduler.add_job(service, 'interval', args=(scraper,), hours=1)
+    scheduler.add_job(email_metadata, 'interval', args=(scraper,), days=1)
 
+    scheduler.start()
 
 if __name__ == "__main__":
     service_scrape_papers(sys.argv[1:])

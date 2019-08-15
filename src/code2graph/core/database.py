@@ -44,6 +44,11 @@ class Database:
         self.cursor.execute(query, (status, err_msg, dir_name))
         self.connection.commit()
 
+    def get_table(self) -> list:
+        query = sql.SQL("SELECT * FROM metadata;")
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
     def __del__(self):
         if(self.connection):
             self.cursor.close()
@@ -53,5 +58,5 @@ class Database:
 
 if __name__ == "__main__":
     db = Database()
-    db.update_query("test2", "Success", "N/A")
+    table = db.get_table()
     pass
