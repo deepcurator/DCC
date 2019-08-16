@@ -1,34 +1,32 @@
 import tensorflow as tf
 from pathlib import Path
 from glob import glob
-import code
+import code, os
 import numpy as np
-class Config:
-    def __init__(self, args):
-        self.path = args.function_path 
 
 
 class PathContextReader:
     ''' class for preprocessing the data '''
     def __init__(self, config):
         self.config = config
-        self.path = Path('C:\\Users\\AICPS\\Documents\\GitHub\\louisccc-DCC\\src\\code2graph\\test\\triples_ast_function').resolve()
+        self.path = Path('C:\\Users\\louisccc\\Documents\\GitHub\\DCC\\src\\code2graph\\test\\triples_ast_function').resolve()
 
         self.function_paths = glob("%s/**/*.txt" % str(self.path), recursive=True)
 
         self.bags = []
 
-        self.entities = []
-        self.paths = []
-        
-        self.entities_set = set()
-        self.paths_set = set()
-
     def read_path_contexts(self):
         entities_set = set()
         paths_set    = set()
+        tags_set     = set()
 
+        # 1st iteration to build dictionaries
         for function_path in self.function_paths:
+            
+            filename = os.path.splitext(Path(function_path).name)[0]
+            for tag in filename.split('.'):
+                tags_set.add(tag)
+
             with open(function_path, 'r') as f:
                 for idx, line in enumerate(f.readlines()):
                     elements = line.split('\t')
@@ -39,15 +37,49 @@ class PathContextReader:
                     
         self.entities = np.sort(list(entities_set))
         self.paths    = np.sort(list(paths_set))
+        self.tags     = np.sort(list(tags_set))
 
         self.entity2idx = {v: k for k, v in enumerate(self.entities)}
         self.idx2entity = {v: k for k, v in self.entity2idx.items()}
-        self.path2idx   = {v: k for k, v in enumerate(self.paths_set)}
+        self.path2idx   = {v: k for k, v in enumerate(self.paths)}
         self.idx2path   = {v: k for k, v in self.path2idx.items()}
+        self.tag2idx    = {v: k for k, v in enumerate(self.tags)}
+        self.idx2tag    = {v: k for k, v in self.tag2idx.items()}
+
+        # 2nd iteration to constracut bags of contextpaths in indices. 
+        for function_path in self.function_paths:
+            function_bag = {} 
+            function_bag['tags'] = []
+            function_bag['path_contexts'] = []
+
+            filename = os.path.splitext(Path(function_path).name)[0]
+            print(filename.split('.'))
+            for tag in filename.split('.'):
+                function_bag['tags'].append(self.tag2idx[tag])
+            
+            with open(function_path, 'r') as f:
+                for idx, line in enumerate(f.readlines()):
+                    elements = line.split('\t')
+                    head, path, tail = elements[0].strip(), elements[1].strip(), elements[2].strip()
+                    head_idx, path_idx, tail_idx = self.entity2idx[head], self.path2idx[path], self.entity2idx[tail]
+                    function_bag['path_contexts'].append((head_idx, path_idx, tail_idx))
+
+            self.bags.append(function_bag)
+
+
+class Config:
+    def __init__(self, args):
+        self.path = args.function_path 
+
 
 class Trainer:
     ''' the trainer for code2vec '''
     def __init__(self):
+        self.reader = PathContextReader(None)
+        self.reader.read_path_contexts()
+
+        self.model = code2vec(config)
+
         pass
 
     def build_model(self):
@@ -57,9 +89,6 @@ class Trainer:
     def train_model(self):
         pass
 
-preparer = PathContextReader(None)
-code.interact(local=locals())
-preparer.read_path_contexts()
 
 class code2vec: 
 
@@ -128,3 +157,13 @@ class code2vec:
 
     def evaluation(self):
         pass
+
+
+def main():
+    preparer = PathContextReader(None)
+    preparer.read_path_contexts()
+    code.interact(local=locals())
+    
+
+if __name__ == "__main__":
+    main()
