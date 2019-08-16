@@ -2,7 +2,7 @@ import tensorflow as tf
 from pathlib import Path
 from glob import glob
 import code
-
+import numpy as np
 class Config:
     def __init__(self, args):
         self.path = args.function_path 
@@ -17,22 +17,33 @@ class PathContextReader:
         self.function_paths = glob("%s/**/*.txt" % str(self.path), recursive=True)
 
         self.bags = []
+
+        self.entities = []
+        self.paths = []
+        
         self.entities_set = set()
-        self.path_set = set()
+        self.paths_set = set()
 
     def read_path_contexts(self):
+        entities_set = set()
+        paths_set    = set()
+
         for function_path in self.function_paths:
             with open(function_path, 'r') as f:
                 for idx, line in enumerate(f.readlines()):
-                    elements = line.split()
-                    head, path, tail = elements[0], elements[1], elements[2]
-                    self.entities_set.add(head)
-                    self.entities_set.add(tail)
-                    self.path_set.add(path)
-                    # print(head)
-                    # if len(line.split('\t')) != 3:
-                    #     print(function_path, idx, line)
-                # print(f.readlines())
+                    elements = line.split('\t')
+                    head, path, tail = elements[0].strip(), elements[1].strip(), elements[2].strip()
+                    entities_set.add(head)
+                    entities_set.add(tail)
+                    paths_set.add(path)
+                    
+        self.entities = np.sort(list(entities_set))
+        self.paths    = np.sort(list(paths_set))
+
+        self.entity2idx = {v: k for k, v in enumerate(self.entities)}
+        self.idx2entity = {v: k for k, v in self.entity2idx.items()}
+        self.path2idx   = {v: k for k, v in enumerate(self.paths_set)}
+        self.idx2path   = {v: k for k, v in self.path2idx.items()}
 
 class Trainer:
     ''' the trainer for code2vec '''
@@ -49,6 +60,7 @@ class Trainer:
 preparer = PathContextReader(None)
 code.interact(local=locals())
 preparer.read_path_contexts()
+
 class code2vec: 
 
     def __init__(self, config):
