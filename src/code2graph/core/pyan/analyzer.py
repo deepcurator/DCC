@@ -1120,7 +1120,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                     if value_node is not None:
                         break
                 else:
-                    return None, None  # not found
+                    return obj_node, None  # not found
                 return base_node, value_node  # as obj, return the base class in which attr was found
 
         return obj_node, None  # here obj_node is either None or unknown (namespace None)
@@ -1313,6 +1313,9 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         Used for cleaning up forward-references once resolved.
         This prevents spurious edges due to expand_unknowns()."""
+
+        if name is None:  # relative imports may create nodes with name=None.
+            return
 
         if from_node not in self.uses_edges:  # no uses edges to remove
             return

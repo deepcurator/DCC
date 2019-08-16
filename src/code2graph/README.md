@@ -66,6 +66,7 @@ pip install -r requirements.txt
 * lxml==4.3.4 => Webscraping.
 * showast==0.2.4 => Visualizing AST.
 * autopep8==1.4.4 => Preprocess data.
+* apscheduler==3.6.1 => Scheduler for web crawler.
  
 ## Usage Examples
 ### Running Computation-Based Approach
@@ -85,4 +86,5 @@ python script_service_pwc_scraper.py -cd [PATH_TO_CHROMEDRIVER] -sp [SAVE_PATH]
 ```
 
 -cd: Path to ChromeDriver. To get the ChromeDriver compatible with your browser go to the following website - [ChromeDriver](http://chromedriver.chromium.org/downloads) and download the ChromeDriver for the version of Chrome you are using.
+
 -sp: The script will save the scraped data in this path.

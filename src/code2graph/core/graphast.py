@@ -1,22 +1,7 @@
-# import sys
-import ast
-# import astor
-# import os
-# import pdb
-import pprint
-# import numpy as np
-# import networkx as nx
-
+import ast, pprint, itertools
 from glob import glob
 from pathlib import Path
-# from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-# from pyvis.network import Network
-# from sklearn.preprocessing import LabelEncoder
-# from showast.rendering.graphviz import render
-# from showast import Settings
 
-import itertools
-# from collections import defaultdict
 
 class ASTExplorer:
     
@@ -183,8 +168,18 @@ class ASTExplorer:
 
             with open(str(save_path), 'w') as f:
                 for left_leaf, path, right_leaf in self.paths[node_name]:
+                    
+                    if len(path) >= 2 and (type(path[-1]).__name__ == "Str" and type(path[-2]).__name__ == "Expr"):
+                        ## skip comment in left leaf for easier data pre-processing. 
+                        continue
+
+                    if len(path) >= 2 and (type(path[0]).__name__ == "Str" and type(path[1]).__name__ == "Expr"):
+                        ## skip comment in right leaf for easier data pre-processing. 
+                        continue
+                        
                     if self.path_length_lower_bound <= len(path) <= self.path_length_upper_bound:
                         path_string = "_".join([type(i).__name__ for i in path])
+
                         f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
     
     def dump_node(self, node):
@@ -200,7 +195,8 @@ class ASTExplorer:
 if __name__ == "__main__":
     # explorer = ASTExplorer('../test/fashion_mnist')
     # explorer = ASTExplorer('../test/Alexnet')
-    explorer = ASTExplorer('../test/AGAN', resolution="function")
+    # explorer = ASTExplorer('../test/AGAN', resolution="function")
+    explorer = ASTExplorer('../test', resolution="function")
     explorer.process_all_nodes()
     # explorer.visualize_ast()
     explorer.export()

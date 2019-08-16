@@ -7,12 +7,14 @@ import glob
 import csv
 import subprocess
 import traceback
+from dateutil import parser
 
 import sys
 sys.path.append('../')
 
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
+from core.database import Database
 
 cols = ['Folder Name','Title','Framework','Lightweight','Error Msg','Date','Tags','Stars','Code Link','Paper Link']
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
@@ -43,12 +45,23 @@ def extract_data(data_path: Path) -> list:
                         repo[meta_prefix] = ' '.join([line.strip() for line in f.readlines()])
                     else:
                         repo[meta_prefix] = f.read().strip()
+                    if repo[meta_prefix] == "" or repo[meta_prefix] == "None":
+                        repo[meta_prefix] = None
             except:
-                repo[meta_prefix] = ""
-        
+                repo[meta_prefix] = None
+
+        repo['stars'] = int(repo['stars'].replace(",", ""))
         repo['folder_name'] = subdir.name
+        
+        if repo['date']:
+            try:
+                # check if date is valid
+                parser.parse(repo['date'])
+            except ValueError:
+                repo['date'] = None
+
         repo['code_path'] = None
-        if 'tf' in repo['framework']:
+        if repo['framework'] and 'tf' in repo['framework']:
             try:
                 zip_path = list(subdir.glob('*.zip'))[0]
                 extract_name = zip_path.name.split('.')[0]
@@ -104,7 +117,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
     for idx, repo in enumerate(dataset):
         success = 'N/A'
         error_msg = 'N/A'
-        if 'tf' in repo['framework']:
+        if repo['framework'] and 'tf' in repo['framework']:
             
             if repo['code_path'] is not None:
                 task = {'code_path': repo['code_path'], 'id': idx+1}    
@@ -141,8 +154,8 @@ def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> 
         success = "Error"
         exc_type, exc_value, exc_traceback = sys.exc_info()
         error_msg = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        error_msg = ''.join(error_msg)
-        print(''.join(error_msg))
+        error_msg = ''.join(error_msg[-4:])
+        print(error_msg)
         
     return (success, error_msg)
 
@@ -156,6 +169,8 @@ def move_output_files(config: LightWeightMethodConfig):
             
     if 3 in config.output_types:
         copy_files(config.input_path, config.dest_path, "*.html")
+    elif 1 in config.output_types:
+        copy_files(config.input_path, config.dest_path, "call_graph.html")
     
     if 6 in config.output_types:
         copy_files(config.input_path, config.dest_path, "*.rdf")
@@ -178,12 +193,14 @@ def save_metadata(metadata: list, stat_file_path: str):
 def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
     if config.recursive:
         for task in tasks:
-            metadata[task['id']][2] = task['success']
-            metadata[task['id']][3] = task['err_msg']
+            metadata[task['id']][3] = task['success']
+            metadata[task['id']][4] = task['err_msg']
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
-        move_output_files(config)
-    
+        move_output_files(config)    
+        database = Database()
+        database.upsert_query(metadata[1:])
+        
 def pipeline_the_lightweight_approach(args):
 
     config = LightWeightMethodConfig(LightWeightMethodArgParser().get_args(args))
