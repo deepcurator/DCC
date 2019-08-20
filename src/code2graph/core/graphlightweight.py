@@ -287,6 +287,7 @@ class TFTokenExplorer:
         self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
+        self.rdf_quads  = {}      # generated in build rdf graphs
         self.tfsequences= {}      # generated in build tfseqeuences
 
     def build_pyan_call_graph(self):
@@ -414,20 +415,30 @@ class TFTokenExplorer:
 
     def populate_call_tree(self, node):
 
+        if "idx" not in node:
+            node["idx"] = "1"
+        node["name"] = node["name"].replace('\n','').replace('\t', '').replace('    ','')
+        
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 child["rdf_name"] = node["rdf_name"] + \
                     "." + child["name"] + "_" + str(idx)
+                child["idx"] = node["idx"] + "-" + str(idx)
                 self.populate_call_tree(child)
 
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
-            self.build_rdf_graph(self.call_trees[root], graph)
+            quad = []
+            self.build_rdf_graph(self.call_trees[root], graph, quad, root)
             self.rdf_graphs[root] = graph
+            self.rdf_quads[root] = quad
 
     # need to use DFS (might encounter max recursion limit problem)
-    def build_rdf_graph(self, node, graph):
+    def build_rdf_graph(self, node, graph, quad, root):
+        
+        if node["name"] != root:
+            quad.append(node["name"] + "\t" + "has_root" + "\t" + root + "\t" + node["idx"] + "\n")
 
         if "name" in node:
             graph.add(
@@ -437,18 +448,25 @@ class TFTokenExplorer:
             if node["type"] == "tf_keyword":
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["url"])))
+                quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
             else:
+                if isinstance(node["type"], Flavor):
+                    node["type"] = node["type"].value
                 graph.add(
-                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"].value)))
+                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"])))
+                quad.append(node["name"] + "\t" + "is_type" + "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.call, BNode(child["rdf_name"])))
+                quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
                     graph.add((BNode(node["children"][idx-1]["rdf_name"]),
                                BNode("followed_by"), BNode(child["rdf_name"])))
-                self.build_rdf_graph(child, graph)
+                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" 
+                        + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                self.build_rdf_graph(child, graph, quad, root)
 
         if "args" in node and self.config.show_arg:
             # print("\n Node:---->",node, node['args'])
@@ -458,16 +476,20 @@ class TFTokenExplorer:
                     "has_output_feature_size"), BNode((node['args'][0]))))
                 graph.add((BNode(node["rdf_name"]), BNode(
                     "has_kernel_size"), BNode(k_size)))
+                quad.append(node["name"] + "\t" + "has_output_feature_size" + "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "has_kernel_size" + "\t" + k_size + "\t" + node["idx"] + "\n")
             else:
                 for idx, arg in enumerate(node['args']):
                     # print(arg)
                     graph.add((BNode(node["rdf_name"]), BNode(
                         "has_arg%d" % idx), BNode((arg))))
+                    quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg) + "\t" + node["idx"] + "\n")
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 graph.add((BNode(node["rdf_name"]), BNode(
                     "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
+                quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
 
     def build_tfsequences(self):
         for root in self.call_trees:
@@ -494,6 +516,7 @@ class TFTokenExplorer:
         for option in self.config.output_types:
             print ('dump info with option %d: %s' % (option, self.dump_functions[option].__name__))
             self.dump_functions[option]()
+        self.dump_rdf_quads()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
@@ -527,6 +550,17 @@ class TFTokenExplorer:
                         obj = obj.replace('\n','').replace('\t', '').replace('    ','')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
+    
+    def dump_rdf_quads(self):
+        combined_quads_path = str(self.code_repo_path/'combined_quads.quads')
+        
+        with open(combined_quads_path, 'w') as combined_file:
+            for root in self.rdf_quads:
+                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.quads'))
+                with open(stored_path, 'w') as quads_file:
+                    for quad in self.rdf_quads[root]:
+                        quads_file.write(quad)
+                        combined_file.write(quad)
 
     def dump_rdf(self):
         combined_graph = Graph()

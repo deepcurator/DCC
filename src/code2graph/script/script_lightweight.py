@@ -164,6 +164,7 @@ def move_output_files(config: LightWeightMethodConfig):
     if 5 in config.output_types:
         if config.combined_triples_only:
             copy_files(config.input_path, config.dest_path, "combined_triples.triples")
+            copy_files(config.input_path, config.dest_path, "combined_quads.quads")
         else:
             copy_files(config.input_path, config.dest_path, "*.triples")
             
