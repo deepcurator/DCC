@@ -46,7 +46,7 @@ class CallVisitor(ast.NodeVisitor):
     def __init__(self, pyan_edges, parent):
 
         self.pyan_edges = pyan_edges
-       
+
         self.root = parent
 
         self.function_to_be_visited = []
@@ -59,7 +59,7 @@ class CallVisitor(ast.NodeVisitor):
                 if isinstance(cand.ast_node, ast.FunctionDef):
                     if cand.name == base_name:
                         # print (cand)
-                        
+
                         new_node = {"name": base_name, "children": [],
                                     "type": "internal_"+cand.flavor.value, "pyan": cand}
 
@@ -92,7 +92,7 @@ class CallVisitor(ast.NodeVisitor):
             matching = self.type_manager.type_hash[result[0]]
             # print(call_name, matching)
             new_node = {"name": matching['name'].split(
-                '.')[-1], "url": matching['url'], "children": [], "type": 
+                '.')[-1], "url": matching['url'], "children": [], "type":
                 "tf_keyword", "args": [], "keywords": {}}
             new_node["args"] = []
 
@@ -105,13 +105,13 @@ class CallVisitor(ast.NodeVisitor):
         else:
             if isinstance(node.func, ast.Call):
                 func_visitor = CallVisitor(
-                        self.pyan_edges, self.root)
+                    self.pyan_edges, self.root)
                 func_visitor.visit(node.func)
                 # import pdb; pdb.set_trace()
                 if call_name.split('(')[0] == self.root['children'][-1]['name']:
-                    
+
                     new_node = {
-                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [], 
+                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
                         "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
 
                     self.check_args(node, new_node)
@@ -163,7 +163,7 @@ class CallVisitor(ast.NodeVisitor):
                                 self.pyan_edges, self.root)
                             another_visitor_k.visit(keyword)
                             self.function_to_be_visited += another_visitor_k.function_to_be_visited
-                        
+
                         elif isinstance(value, ast.Str):
                             result = self.type_manager.fuzzy_search(value.s)
                             if result:
@@ -182,7 +182,6 @@ class CallVisitor(ast.NodeVisitor):
                                         new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
                                                     "children": [], "args": [], "type": "tf_keyword"}
                                         self.root['children'].append(new_node)
-          
 
     def check_args(self, node, new_node):
         if len(node.args):
@@ -219,7 +218,8 @@ class CallVisitor(ast.NodeVisitor):
                     new_node["keywords"][str(keyword.arg)] = keyword.value.n
                     # print("--match with .: Keyword", keyword.value.n)
                 elif isinstance(keyword.value, ast.NameConstant):
-                    new_node["keywords"][str(keyword.arg)] = str(keyword.value.value)
+                    new_node["keywords"][str(keyword.arg)] = str(
+                        keyword.value.value)
                 elif isinstance(keyword.value, ast.Attribute):
                     new_node["keywords"][str(keyword.arg)] = astor.to_source(
                         keyword.value).strip()
@@ -269,7 +269,7 @@ class TFTokenExplorer:
 
     def __init__(self, code_path, config):
         """Initializing the class"""
-        
+
         self.dump_functions = {
             1: self.dump_call_graph,
             2: self.dump_call_trees,
@@ -282,17 +282,18 @@ class TFTokenExplorer:
         self.config = config
 
         self.code_repo_path = Path(code_path).resolve()
-        self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
-              
-        self.call_graph = Graph() # generated in build the one complete call graph
+        self.all_py_files = glob("%s/**/*.py" %
+                                 str(self.code_repo_path), recursive=True)
+
+        self.call_graph = Graph()  # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
-        self.rdf_quads  = {}      # generated in build rdf graphs
-        self.tfsequences= {}      # generated in build tfseqeuences
+        self.rdf_quads = {}      # generated in build rdf graphs
+        self.tfsequences = {}      # generated in build tfseqeuences
 
     def build_pyan_call_graph(self):
         self.call_graph_visitor = CallGraphVisitor(self.all_py_files)
-        
+
         self.pyan_edges = self.call_graph_visitor.uses_edges
         ''' pyan edges are all relations extracted from pyan, each of element is stored as Node instance. 
             if the node is recognized as an internal function, its flavor will then be 'function'. 
@@ -321,7 +322,7 @@ class TFTokenExplorer:
                                      <Node ???:*.relu>,
                                      <Node ???:*.softmax>},
         '''
-        self.pyan_node_dict = {}  
+        self.pyan_node_dict = {}
 
         ''' 
             pyan_node_dict stores the hashmap from RDF node name to pyan node.
@@ -338,23 +339,24 @@ class TFTokenExplorer:
         self.build_tfsequences()
 
         self.dump_information()
-    
+
     def recognize_tf_calls(self):
         pass
-        
+
     def build_call_graph(self):
-        
+
         for caller, callees in self.pyan_edges.items():
 
             if caller.flavor is Flavor.UNSPECIFIED:
                 continue
             if caller.flavor is Flavor.UNKNOWN:
-                continue 
+                continue
 
             caller_name = get_name(caller)
             caller_type = caller.flavor
 
-            self.call_graph.add((BNode(caller_name), OntologyManager.is_type, BNode(caller_type)))
+            self.call_graph.add(
+                (BNode(caller_name), OntologyManager.is_type, BNode(caller_type)))
 
             self.pyan_node_dict[caller_name] = caller
 
@@ -368,18 +370,19 @@ class TFTokenExplorer:
                 callee_name = get_name(callee)
                 callee_type = callee.flavor
 
-                self.call_graph.add((BNode(callee_name), OntologyManager.is_type, BNode(callee_type)))
-                self.call_graph.add((BNode(caller_name), OntologyManager.call,    BNode(callee_name)))                
-                
-                self.pyan_node_dict[callee_name] = callee
+                self.call_graph.add(
+                    (BNode(callee_name), OntologyManager.is_type, BNode(callee_type)))
+                self.call_graph.add(
+                    (BNode(caller_name), OntologyManager.call,    BNode(callee_name)))
 
+                self.pyan_node_dict[callee_name] = callee
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
 
         for root in roots:
             print("Start from root:", self.pyan_node_dict[root])
-            
+
             call_tree = self.grow_function_calls(root)
 
             call_tree["rdf_name"] = call_tree["name"]
@@ -405,7 +408,7 @@ class TFTokenExplorer:
         return starts
 
     def grow_function_calls(self, start):
-        #TODO self.call_graph_visitor should be removed as only node dict is needed.
+        # TODO self.call_graph_visitor should be removed as only node dict is needed.
         line_visitor = ProgramLineVisitor(
             self.pyan_edges, self.pyan_node_dict[start])
         line_visitor.visit(
@@ -417,8 +420,9 @@ class TFTokenExplorer:
 
         if "idx" not in node:
             node["idx"] = "1"
-        node["name"] = node["name"].replace('\n','').replace('\t', '').replace('    ','')
-        
+        node["name"] = node["name"].replace(
+            '\n', '').replace('\t', '').replace('    ', '')
+
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 child["rdf_name"] = node["rdf_name"] + \
@@ -436,9 +440,10 @@ class TFTokenExplorer:
 
     # need to use DFS (might encounter max recursion limit problem)
     def build_rdf_graph(self, node, graph, quad, root):
-        
+
         if node["name"] != root:
-            quad.append(node["name"] + "\t" + "has_root" + "\t" + root + "\t" + node["idx"] + "\n")
+            quad.append(node["name"] + "\t" + "has_root" +
+                        "\t" + root + "\t" + node["idx"] + "\n")
 
         if "name" in node:
             graph.add(
@@ -448,24 +453,27 @@ class TFTokenExplorer:
             if node["type"] == "tf_keyword":
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["url"])))
-                quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "is_type" +
+                            "\t" + node["url"] + "\t" + node["idx"] + "\n")
             else:
                 if isinstance(node["type"], Flavor):
                     node["type"] = node["type"].value
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"])))
-                quad.append(node["name"] + "\t" + "is_type" + "\t" + node["type"] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "is_type" +
+                            "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
                     (BNode(node["rdf_name"]), OntologyManager.call, BNode(child["rdf_name"])))
-                quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "call" + "\t" +
+                            child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
                     graph.add((BNode(node["children"][idx-1]["rdf_name"]),
                                BNode("followed_by"), BNode(child["rdf_name"])))
-                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" 
-                        + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by"
+                                + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 self.build_rdf_graph(child, graph, quad, root)
 
         if "args" in node and self.config.show_arg:
@@ -476,20 +484,24 @@ class TFTokenExplorer:
                     "has_output_feature_size"), BNode((node['args'][0]))))
                 graph.add((BNode(node["rdf_name"]), BNode(
                     "has_kernel_size"), BNode(k_size)))
-                quad.append(node["name"] + "\t" + "has_output_feature_size" + "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
-                quad.append(node["name"] + "\t" + "has_kernel_size" + "\t" + k_size + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "has_output_feature_size" +
+                            "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "has_kernel_size" +
+                            "\t" + k_size + "\t" + node["idx"] + "\n")
             else:
                 for idx, arg in enumerate(node['args']):
                     # print(arg)
                     graph.add((BNode(node["rdf_name"]), BNode(
                         "has_arg%d" % idx), BNode((arg))))
-                    quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg) + "\t" + node["idx"] + "\n")
+                    quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
+                        '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 graph.add((BNode(node["rdf_name"]), BNode(
                     "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
-                quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) +
+                            "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
 
     def build_tfsequences(self):
         for root in self.call_trees:
@@ -514,7 +526,8 @@ class TFTokenExplorer:
 
     def dump_information(self):
         for option in self.config.output_types:
-            print ('dump info with option %d: %s' % (option, self.dump_functions[option].__name__))
+            print('dump info with option %d: %s' %
+                  (option, self.dump_functions[option].__name__))
             self.dump_functions[option]()
         self.dump_rdf_quads()
 
@@ -538,25 +551,30 @@ class TFTokenExplorer:
         pprint.pprint(self.tfsequences)
 
     def dump_rdf_triples(self):
-        combined_triplets_path = str(self.code_repo_path/'combined_triples.triples')
-        
+        combined_triplets_path = str(
+            self.code_repo_path/'combined_triples.triples')
+
         with open(combined_triplets_path, 'w') as combined_file:
             for root in self.rdf_graphs:
-                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.triples'))
+                stored_path = str(self.code_repo_path /
+                                  (root.replace('.', '') + '.triples'))
 
                 with open(stored_path, 'w') as triplets_file:
                     for sub, pred, obj in self.rdf_graphs[root].triples((None, None, None)):
-                        sub = sub.replace('\n','').replace('\t', '').replace('    ','')
-                        obj = obj.replace('\n','').replace('\t', '').replace('    ','')
+                        sub = sub.replace('\n', '').replace(
+                            '\t', '').replace('    ', '')
+                        obj = obj.replace('\n', '').replace(
+                            '\t', '').replace('    ', '')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
-    
+
     def dump_rdf_quads(self):
         combined_quads_path = str(self.code_repo_path/'combined_quads.quads')
-        
+
         with open(combined_quads_path, 'w') as combined_file:
             for root in self.rdf_quads:
-                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.quads'))
+                stored_path = str(self.code_repo_path /
+                                  (root.replace('.', '') + '.quads'))
                 with open(stored_path, 'w') as quads_file:
                     for quad in self.rdf_quads[root]:
                         quads_file.write(quad)
@@ -566,7 +584,8 @@ class TFTokenExplorer:
         combined_graph = Graph()
         for graph in self.rdf_graphs.values():
             combined_graph += graph
-        combined_graph.serialize(destination=str(self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+        combined_graph.serialize(destination=str(
+            self.code_repo_path / "rdf_graph.rdf"), format='turtle')
 
     def pyvis_draw(self, graph, name):
 
