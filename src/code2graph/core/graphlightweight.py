@@ -38,10 +38,11 @@ from .pyan.node import Flavor
 def get_name(node):
     return "%s.%s" % (node.namespace, node.name)
 
+type_manager = OntologyManager()
 
 class CallVisitor(ast.NodeVisitor):
 
-    type_manager = OntologyManager()
+    
 
     def __init__(self, pyan_edges, parent):
 
@@ -84,12 +85,12 @@ class CallVisitor(ast.NodeVisitor):
 
     def check_tensorflow_function(self, call_name, node):
         # print("inside Call name .!!")
-        result = self.type_manager.fuzzy_search(call_name)
+        result = type_manager.fuzzy_search(call_name)
         # print("\ncall_name:", call_name)
         # print("match list:", result)
 
         if result:
-            matching = self.type_manager.type_hash[result[0]]
+            matching = type_manager.type_hash[result[0]]
             # print(call_name, matching)
             new_node = {"name": matching['name'].split(
                 '.')[-1], "url": matching['url'], "children": [], "type":
@@ -165,9 +166,9 @@ class CallVisitor(ast.NodeVisitor):
                             self.function_to_be_visited += another_visitor_k.function_to_be_visited
 
                         elif isinstance(value, ast.Str):
-                            result = self.type_manager.fuzzy_search(value.s)
+                            result = type_manager.fuzzy_search(value.s)
                             if result:
-                                matching = self.type_manager.type_hash[result[0]]
+                                matching = type_manager.type_hash[result[0]]
                                 new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
                                             "children": [], "args": [], "type": "tf_keyword"}
                                 self.root['children'].append(new_node)
@@ -175,10 +176,10 @@ class CallVisitor(ast.NodeVisitor):
                         elif isinstance(value, list):
                             for item in value:
                                 if isinstance(item, ast.Str):
-                                    result = self.type_manager.fuzzy_search(
+                                    result = type_manager.fuzzy_search(
                                         item.s)
                                     if result:
-                                        matching = self.type_manager.type_hash[result[0]]
+                                        matching = type_manager.type_hash[result[0]]
                                         new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
                                                     "children": [], "args": [], "type": "tf_keyword"}
                                         self.root['children'].append(new_node)
@@ -356,7 +357,7 @@ class TFTokenExplorer:
             caller_type = caller.flavor
 
             self.call_graph.add(
-                (BNode(caller_name), OntologyManager.is_type, BNode(caller_type)))
+                (BNode(caller_name), type_manager.is_type, BNode(caller_type)))
 
             self.pyan_node_dict[caller_name] = caller
 
@@ -371,9 +372,9 @@ class TFTokenExplorer:
                 callee_type = callee.flavor
 
                 self.call_graph.add(
-                    (BNode(callee_name), OntologyManager.is_type, BNode(callee_type)))
+                    (BNode(callee_name), type_manager.is_type, BNode(callee_type)))
                 self.call_graph.add(
-                    (BNode(caller_name), OntologyManager.call,    BNode(callee_name)))
+                    (BNode(caller_name), type_manager.call,    BNode(callee_name)))
 
                 self.pyan_node_dict[callee_name] = callee
 
@@ -395,7 +396,7 @@ class TFTokenExplorer:
 
         G = nx.DiGraph()
 
-        for s, o in graph[:OntologyManager.call]:
+        for s, o in graph[:type_manager.call]:
             G.add_node(str(s))
             G.add_node(str(o))
             G.add_edge(str(s), str(o))
@@ -452,21 +453,21 @@ class TFTokenExplorer:
         if "type" in node:
             if node["type"] == "tf_keyword":
                 graph.add(
-                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["url"])))
+                    (BNode(node["rdf_name"]), type_manager.is_type, BNode(node["url"])))
                 quad.append(node["name"] + "\t" + "is_type" +
                             "\t" + node["url"] + "\t" + node["idx"] + "\n")
             else:
                 if isinstance(node["type"], Flavor):
                     node["type"] = node["type"].value
                 graph.add(
-                    (BNode(node["rdf_name"]), OntologyManager.is_type, BNode(node["type"])))
+                    (BNode(node["rdf_name"]), type_manager.is_type, BNode(node["type"])))
                 quad.append(node["name"] + "\t" + "is_type" +
                             "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 graph.add(
-                    (BNode(node["rdf_name"]), OntologyManager.call, BNode(child["rdf_name"])))
+                    (BNode(node["rdf_name"]), type_manager.call, BNode(child["rdf_name"])))
                 quad.append(node["name"] + "\t" + "call" + "\t" +
                             child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
@@ -597,11 +598,11 @@ class TFTokenExplorer:
         for src, edge, dst in graph:
             # print(src, edge, dst)
 
-            if edge == OntologyManager.is_type and not self.config.show_url:
+            if edge == type_manager.is_type and not self.config.show_url:
                 continue
 
-            src_type = [x for x in graph[src:OntologyManager.is_type]]
-            dst_type = [x for x in graph[dst:OntologyManager.is_type]]
+            src_type = [x for x in graph[src:type_manager.is_type]]
+            dst_type = [x for x in graph[dst:type_manager.is_type]]
 
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):
