@@ -472,10 +472,10 @@ class TFTokenExplorer:
             # print("\n Node:---->",node, node['args'])
             if len(node['args']) == 3:
                 k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
-                graph.add((node_uri, BNode(
-                    "has_output_feature_size"), BNode((node['args'][0]))))
-                graph.add((node_uri, BNode(
-                    "has_kernel_size"), BNode(k_size)))
+                has_output_feature_size = URIRef(type_manager.dcc_prefix+'/has_output_feature_size')
+                has_kernel_size = URIRef(type_manager.dcc_prefix+'/has_kernel_size')
+                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
+                graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
                 quad.append(node["name"] + "\t" + "has_output_feature_size" +
                             "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
                 quad.append(node["name"] + "\t" + "has_kernel_size" +
