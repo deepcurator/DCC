@@ -108,7 +108,7 @@ class CallVisitor(ast.NodeVisitor):
                     self.pyan_edges, self.root)
                 func_visitor.visit(node.func)
                 # import pdb; pdb.set_trace()
-                if call_name.split('(')[0] == self.root['children'][-1]['name']:
+                if self.root['children'] and call_name.split('(')[0] == self.root['children'][-1]['name']:
 
                     new_node = {
                         "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
@@ -529,7 +529,7 @@ class TFTokenExplorer:
             print('dump info with option %d: %s' %
                   (option, self.dump_functions[option].__name__))
             self.dump_functions[option]()
-        self.dump_rdf_quads()
+        # self.dump_rdf_quads()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
