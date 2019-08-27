@@ -514,7 +514,7 @@ class TFTokenExplorer:
                             "\t" + k_size + "\t" + node["idx"] + "\n")
             else:
                 for idx, arg in enumerate(node['args']):
-                    arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
+                    arg = str(arg).replace('\n', '').replace('\t', '')
                     arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
                     quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
                         '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
@@ -582,8 +582,8 @@ class TFTokenExplorer:
                     for sub, pred, obj in self.rdf_graphs[root].triples((None, None, None)):
                         sub = sub.replace('\n', '').replace('\t', '').replace('    ', '')
                         obj = obj.replace('\n', '').replace('\t', '').replace('    ', '')
-                        triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
-                        combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
+                        triplets_file.write(str(sub)+'\t'+str(pred)+'\t'+str(obj)+'\n')
+                        combined_file.write(str(sub)+'\t'+str(pred)+'\t'+str(obj)+'\n')
 
     def dump_rdf_quads(self):
         combined_quads_path = str(self.code_repo_path/'combined_quads.quads')
