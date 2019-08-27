@@ -596,7 +596,8 @@ class TFTokenExplorer:
                         combined_file.write(quad)
 
     def dump_rdf(self):
-        # combined_graph = Graph()
+        import copy 
+        combined_graph = copy.deepcopy(type_manager.g)
         # for graph in self.rdf_graphs.values():
         #     combined_graph += graph
 
@@ -604,8 +605,8 @@ class TFTokenExplorer:
         for graph in self.rdf_graphs.values():
             for triple in graph.triples((None, None, None)):
                 print(triple)
-                type_manager.g.add(triple)
-        type_manager.g.serialize(destination=str(
+                combined_graph.add(triple)
+        combined_graph.serialize(destination=str(
             self.code_repo_path / "rdf_graph.rdf"), format='turtle')        
         # combined_graph.serialize(destination=str(
         #     self.code_repo_path / "rdf_graph.rdf"), format='turtle')
