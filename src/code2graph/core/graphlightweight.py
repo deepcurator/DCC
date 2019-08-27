@@ -472,6 +472,7 @@ class TFTokenExplorer:
             # print("\n Node:---->",node, node['args'])
             if len(node['args']) == 3:
                 k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
+                k_size.replace('\n','').replace('\t','').replace(' ','')
                 has_output_feature_size = URIRef(type_manager.dcc_prefix+'/has_output_feature_size')
                 has_kernel_size = URIRef(type_manager.dcc_prefix+'/has_kernel_size')
                 graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
@@ -482,7 +483,7 @@ class TFTokenExplorer:
                             "\t" + k_size + "\t" + node["idx"] + "\n")
             else:
                 for idx, arg in enumerate(node['args']):
-                    # print(arg)
+                    arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
                     arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
                     graph.add((arg_uri, type_manager.is_type, OWL.DatatypeProperty))
                     graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
