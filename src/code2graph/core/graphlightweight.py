@@ -27,7 +27,7 @@ import networkx as nx
 
 from glob import glob
 from pathlib import Path
-from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
+from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal, XSD
 from pyvis.network import Network
 
 from .ontologymanager import OntologyManager
@@ -445,64 +445,80 @@ class TFTokenExplorer:
         if node["name"] != root:
             quad.append(node["name"] + "\t" + "has_root" +
                         "\t" + root + "\t" + node["idx"] + "\n")
+        
+        node_uri = URIRef(type_manager.user_defined+'/'+node['rdf_name'])
+
+        if node["type"] == "tf_keyword":
+            graph.add((node_uri, type_manager.is_type, node["url"]))
+            quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
+        else:
+            if isinstance(node["type"], Flavor):
+                node["type"] = node["type"].value
+            
+            graph.add((node_uri, type_manager.is_type, type_manager.user_defined))
+            quad.append(node["name"] + "\t" + "is_type" +
+                        "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "name" in node:
-            graph.add(
-                (BNode(node["rdf_name"]), BNode("has_function"), BNode(node["name"])))
+            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
 
-        if "type" in node:
-            if node["type"] == "tf_keyword":
-                graph.add(
-                    (BNode(node["rdf_name"]), type_manager.is_type, BNode(node["url"])))
-                quad.append(node["name"] + "\t" + "is_type" +
-                            "\t" + node["url"] + "\t" + node["idx"] + "\n")
-            else:
-                if isinstance(node["type"], Flavor):
-                    node["type"] = node["type"].value
-                graph.add(
-                    (BNode(node["rdf_name"]), type_manager.is_type, BNode(node["type"])))
-                quad.append(node["name"] + "\t" + "is_type" +
-                            "\t" + node["type"] + "\t" + node["idx"] + "\n")
+        # if "type" in node:
+        #     if node["type"] == "tf_keyword":
+        #         graph.add(
+        #             (node_uri, type_manager.is_type, node["url"]))
+        #         quad.append(node["name"] + "\t" + "is_type" +
+        #                     "\t" + node["url"] + "\t" + node["idx"] + "\n")
+        #     else:
+        #         if isinstance(node["type"], Flavor):
+        #             node["type"] = node["type"].value
+        #         graph.add(
+        #             (node_uri, type_manager.is_type, BNode(node["type"])))
+        #         quad.append(node["name"] + "\t" + "is_type" +
+        #                     "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
-                graph.add(
-                    (BNode(node["rdf_name"]), type_manager.call, BNode(child["rdf_name"])))
-                quad.append(node["name"] + "\t" + "call" + "\t" +
-                            child["name"] + "\t" + node["idx"] + "\n")
+                child_uri = URIRef(type_manager.user_defined+'/'+child['rdf_name'])
+
+                graph.add((node_uri, type_manager.call, child_uri))
+                quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
-                    graph.add((BNode(node["children"][idx-1]["rdf_name"]),
-                               BNode("followed_by"), BNode(child["rdf_name"])))
-                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by"
-                                + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                    prev_child_uri = URIRef(type_manager.user_defined+'/'+node["children"][idx-1]["rdf_name"])
+                    graph.add((prev_child_uri, type_manager.followedby, child_uri))
+                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 self.build_rdf_graph(child, graph, quad, root)
 
-        if "args" in node and self.config.show_arg:
-            # print("\n Node:---->",node, node['args'])
-            if len(node['args']) == 3:
-                k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
-                graph.add((BNode(node["rdf_name"]), BNode(
-                    "has_output_feature_size"), BNode((node['args'][0]))))
-                graph.add((BNode(node["rdf_name"]), BNode(
-                    "has_kernel_size"), BNode(k_size)))
-                quad.append(node["name"] + "\t" + "has_output_feature_size" +
-                            "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
-                quad.append(node["name"] + "\t" + "has_kernel_size" +
-                            "\t" + k_size + "\t" + node["idx"] + "\n")
-            else:
-                for idx, arg in enumerate(node['args']):
-                    # print(arg)
-                    graph.add((BNode(node["rdf_name"]), BNode(
-                        "has_arg%d" % idx), BNode((arg))))
-                    quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
-                        '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
+        # if "args" in node and self.config.show_arg:
+        #     # print("\n Node:---->",node, node['args'])
+        #     if len(node['args']) == 3:
+        #         k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
+        #         graph.add((node_uri, BNode(
+        #             "has_output_feature_size"), BNode((node['args'][0]))))
+        #         graph.add((node_uri, BNode(
+        #             "has_kernel_size"), BNode(k_size)))
+        #         quad.append(node["name"] + "\t" + "has_output_feature_size" +
+        #                     "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
+        #         quad.append(node["name"] + "\t" + "has_kernel_size" +
+        #                     "\t" + k_size + "\t" + node["idx"] + "\n")
+        #     else:
+        #         for idx, arg in enumerate(node['args']):
+        #             # print(arg)
+        #             graph.add((node_uri, BNode(
+        #                 "has_arg%d" % idx), BNode((arg))))
+        #             quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
+        #                 '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
 
-        if "keywords" in node and self.config.show_arg:
-            for keyword in node['keywords']:
-                graph.add((BNode(node["rdf_name"]), BNode(
-                    "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
-                quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) +
-                            "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
+        # if "keywords" in node and self.config.show_arg:
+        #     for keyword in node['keywords']:
+        #         graph.add((node_uri, BNode(
+        #             "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
+        #         quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) +
+        #                     "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
+        # for keyword in node['keywords']:
+        #     keyword_uri = URIRef(type_manager.dcc_prefix+'/'+str(keyword))
+        #     graph.add((node_uri, BNode("has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
+        #     quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
+
 
     def build_tfsequences(self):
         for root in self.call_trees:
@@ -530,7 +546,6 @@ class TFTokenExplorer:
             print('dump info with option %d: %s' %
                   (option, self.dump_functions[option].__name__))
             self.dump_functions[option]()
-        # self.dump_rdf_quads()
 
     def dump_call_graph(self):
         self.pyvis_draw(self.call_graph, str(self.code_repo_path/"call_graph"))
@@ -582,11 +597,19 @@ class TFTokenExplorer:
                         combined_file.write(quad)
 
     def dump_rdf(self):
-        combined_graph = Graph()
+        # combined_graph = Graph()
+        # for graph in self.rdf_graphs.values():
+        #     combined_graph += graph
+
+        # combined_graph += type_manager.g
         for graph in self.rdf_graphs.values():
-            combined_graph += graph
-        combined_graph.serialize(destination=str(
-            self.code_repo_path / "rdf_graph.rdf"), format='turtle')
+            for triple in graph.triples((None, None, None)):
+                print(triple)
+                type_manager.g.add(triple)
+        type_manager.g.serialize(destination=str(
+            self.code_repo_path / "rdf_graph.rdf"), format='turtle')        
+        # combined_graph.serialize(destination=str(
+        #     self.code_repo_path / "rdf_graph.rdf"), format='turtle')
 
     def pyvis_draw(self, graph, name):
 
