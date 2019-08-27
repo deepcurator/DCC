@@ -112,7 +112,7 @@ class CallVisitor(ast.NodeVisitor):
                 if self.root['children'] and call_name.split('(')[0] == self.root['children'][-1]['name']:
 
                     new_node = {
-                        "name": call_name, "url": self.root['children'][-1]['uri'], "children": [],
+                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
                         "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
 
                     self.check_args(node, new_node)
