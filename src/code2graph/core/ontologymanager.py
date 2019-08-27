@@ -8,8 +8,8 @@ class OntologyManager:
 		self.scraper = TFVocScraper("r1.14")	
 		
 		self.g = Graph()
-		self.g.parse('https://raw.githubusercontent.com/deepcurator/DCC/development/src/ontology/DeepSciKG.owl', format="html")
-
+		self.g.parse('../core/123.owl', format="turtle")
+		# self.g.serialize(destination=str('./temp.rdf'), format='turtle')   
 		self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
 		self.call = self.dcc_prefix['calls']
 		self.is_type = RDF.type
