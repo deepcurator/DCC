@@ -100,18 +100,19 @@ class CallVisitor(ast.NodeVisitor):
                 func_visitor = CallVisitor(self.pyan_edges, self.root)
                 func_visitor.visit(node.func)
                 # import pdb; pdb.set_trace()
-                if self.root['children'] and call_name.split('(')[0] == self.root['children'][-1]['name']:
+                # check __call__
+                # if self.root['children'] and call_name.split('(')[0] == self.root['children'][-1]['name']:
 
-                    new_node = {
-                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
-                        "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
+                #     new_node = {
+                #         "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
+                #         "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
 
-                    self.check_args(node, new_node)
+                #     self.check_args(node, new_node)
 
-                    self.check_keywords(node, new_node)
+                #     self.check_keywords(node, new_node)
 
-                    self.root['children'][-1]['children'].append(new_node)
-                    return True
+                #     self.root['children'][-1]['children'].append(new_node)
+                #     return True
         return False
 
     def visit_Call(self, node):
@@ -427,46 +428,32 @@ class TFTokenExplorer:
         for root in self.call_trees:
             graph = Graph()
             quad = []
-            self.build_rdf_graph(self.call_trees[root], graph, quad, root)
+            self.build_rdf_graph(self.call_trees[root], graph)
             self.build_rdf_quads(self.call_trees[root], graph, quad, root)
             self.rdf_graphs[root] = graph
             self.rdf_quads[root] = quad
 
     # need to use DFS (might encounter max recursion limit problem)
-    def build_rdf_graph(self, node, graph, quad, root):
+    def build_rdf_graph(self, node, graph):
 
-        if node["name"] != root:
-            quad.append(node["name"] + "\t" + "has_root" +
-                        "\t" + root + "\t" + node["idx"] + "\n")
-        
         node_uri = URIRef(type_manager.user_defined+'/'+node['rdf_name'])
 
         if node["type"] == "tf_keyword":
             graph.add((node_uri, type_manager.is_type, node["url"]))
-            quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
         else:
-            if isinstance(node["type"], Flavor):
-                node["type"] = node["type"].value
-            
             graph.add((node_uri, type_manager.is_type, type_manager.user_defined))
-            quad.append(node["name"] + "\t" + "is_type" +
-                        "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "name" in node:
-            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
+            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"])))
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 child_uri = URIRef(type_manager.user_defined+'/'+child['rdf_name'])
-
                 graph.add((node_uri, type_manager.call, child_uri))
-                quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
                     prev_child_uri = URIRef(type_manager.user_defined+'/'+node["children"][idx-1]["rdf_name"])
                     graph.add((prev_child_uri, type_manager.followedby, child_uri))
-                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
-                
-                self.build_rdf_graph(child, graph, quad, root)
+                self.build_rdf_graph(child, graph)
 
         if "args" in node and self.config.show_arg:
             # print("\n Node:---->",node, node['args'])
@@ -475,8 +462,52 @@ class TFTokenExplorer:
                 k_size.replace('\n','').replace('\t','').replace(' ','')
                 has_output_feature_size = URIRef(type_manager.dcc_prefix+'/has_output_feature_size')
                 has_kernel_size = URIRef(type_manager.dcc_prefix+'/has_kernel_size')
-                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
-                graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
+                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0]))) 
+                graph.add((node_uri, has_kernel_size, Literal(k_size)))
+            else:
+                for idx, arg in enumerate(node['args']):
+                    arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
+                    arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
+                    graph.add((arg_uri, type_manager.is_type, OWL.DatatypeProperty))
+                    graph.add((node_uri, arg_uri, Literal(arg)))
+
+        if "keywords" in node and self.config.show_arg:
+            for keyword in node['keywords']:
+                keyword_uri = URIRef(type_manager.dcc_prefix+'/has_keyword_'+str(keyword))
+                graph.add((keyword_uri, type_manager.is_type, OWL.DatatypeProperty))
+                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword])))
+                # change type according to what's inside
+
+    def build_rdf_quads(self, node, graph, quad, root):
+        if node["name"] != root:
+            quad.append(node["name"] + "\t" + "has_root" +
+                        "\t" + root + "\t" + node["idx"] + "\n")
+        
+        node_uri = URIRef(type_manager.user_defined+'/'+node['rdf_name'])
+
+        if node["type"] == "tf_keyword":
+            quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
+        else:
+            if isinstance(node["type"], Flavor):
+                node["type"] = node["type"].value
+            quad.append(node["name"] + "\t" + "is_type" +
+                        "\t" + node["type"] + "\t" + node["idx"] + "\n")
+
+        if "children" in node:
+            for idx, child in enumerate(node["children"]):
+                child_uri = URIRef(type_manager.user_defined+'/'+child['rdf_name'])
+                quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                if idx > 0:
+                    prev_child_uri = URIRef(type_manager.user_defined+'/'+node["children"][idx-1]["rdf_name"])
+                    quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                self.build_rdf_quads(child, graph, quad, root)
+
+        if "args" in node and self.config.show_arg:
+            if len(node['args']) == 3:
+                k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
+                k_size.replace('\n','').replace('\t','').replace(' ','')
+                has_output_feature_size = URIRef(type_manager.dcc_prefix+'/has_output_feature_size')
+                has_kernel_size = URIRef(type_manager.dcc_prefix+'/has_kernel_size')
                 quad.append(node["name"] + "\t" + "has_output_feature_size" +
                             "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
                 quad.append(node["name"] + "\t" + "has_kernel_size" +
@@ -485,22 +516,14 @@ class TFTokenExplorer:
                 for idx, arg in enumerate(node['args']):
                     arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
                     arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
-                    graph.add((arg_uri, type_manager.is_type, OWL.DatatypeProperty))
-                    graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
-
                     quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
                         '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 keyword_uri = URIRef(type_manager.dcc_prefix+'/has_keyword_'+str(keyword))
-                graph.add((keyword_uri, type_manager.is_type, OWL.DatatypeProperty))
-                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
                 # change type according to what's inside
                 quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
-
-    def build_rdf_quads(self, node, graph, quad, root):
-        pass
 
     def build_tfsequences(self):
         for root in self.call_trees:
