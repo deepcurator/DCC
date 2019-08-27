@@ -93,7 +93,7 @@ class CallVisitor(ast.NodeVisitor):
             matching = type_manager.type_hash[result[0]]
             # print(call_name, matching)
             new_node = {"name": matching['name'].split(
-                '.')[-1], "url": matching['url'], "children": [], "type":
+                '.')[-1], "url": matching['uri'], "children": [], "type":
                 "tf_keyword", "args": [], "keywords": {}}
             new_node["args"] = []
 
@@ -112,7 +112,7 @@ class CallVisitor(ast.NodeVisitor):
                 if call_name.split('(')[0] == self.root['children'][-1]['name']:
 
                     new_node = {
-                        "name": call_name, "url": self.root['children'][-1]['url'], "children": [],
+                        "name": call_name, "url": self.root['children'][-1]['uri'], "children": [],
                         "type": self.root['children'][-1]['type'], "args": [], "keywords": {}}
 
                     self.check_args(node, new_node)
@@ -169,7 +169,7 @@ class CallVisitor(ast.NodeVisitor):
                             result = type_manager.fuzzy_search(value.s)
                             if result:
                                 matching = type_manager.type_hash[result[0]]
-                                new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
+                                new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
                                             "children": [], "args": [], "type": "tf_keyword"}
                                 self.root['children'].append(new_node)
 
@@ -180,7 +180,7 @@ class CallVisitor(ast.NodeVisitor):
                                         item.s)
                                     if result:
                                         matching = type_manager.type_hash[result[0]]
-                                        new_node = {"name": matching['name'].split('.')[-1], "url": matching['url'],
+                                        new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
                                                     "children": [], "args": [], "type": "tf_keyword"}
                                         self.root['children'].append(new_node)
 
