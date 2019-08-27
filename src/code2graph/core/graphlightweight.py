@@ -452,20 +452,6 @@ class TFTokenExplorer:
         if "name" in node:
             graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
 
-        # if "type" in node:
-        #     if node["type"] == "tf_keyword":
-        #         graph.add(
-        #             (node_uri, type_manager.is_type, node["url"]))
-        #         quad.append(node["name"] + "\t" + "is_type" +
-        #                     "\t" + node["url"] + "\t" + node["idx"] + "\n")
-        #     else:
-        #         if isinstance(node["type"], Flavor):
-        #             node["type"] = node["type"].value
-        #         graph.add(
-        #             (node_uri, type_manager.is_type, BNode(node["type"])))
-        #         quad.append(node["name"] + "\t" + "is_type" +
-        #                     "\t" + node["type"] + "\t" + node["idx"] + "\n")
-
         if "children" in node:
             for idx, child in enumerate(node["children"]):
                 child_uri = URIRef(type_manager.user_defined+'/'+child['rdf_name'])
@@ -476,6 +462,7 @@ class TFTokenExplorer:
                     prev_child_uri = URIRef(type_manager.user_defined+'/'+node["children"][idx-1]["rdf_name"])
                     graph.add((prev_child_uri, type_manager.followedby, child_uri))
                     quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
+                
                 self.build_rdf_graph(child, graph, quad, root)
 
         if "args" in node and self.config.show_arg:
@@ -552,7 +539,6 @@ class TFTokenExplorer:
                 self.code_repo_path/root.replace('.', '')))
 
     def dump_tfsequences(self):
-
         pprint.pprint(self.tfsequences)
 
     def dump_rdf_triples(self):
@@ -586,21 +572,13 @@ class TFTokenExplorer:
                         combined_file.write(quad)
 
     def dump_rdf(self):
-        
         combined_graph = copy.deepcopy(type_manager.g)
-        # for graph in self.rdf_graphs.values():
-        #     combined_graph += graph
-
-        # combined_graph += type_manager.g
         for graph in self.rdf_graphs.values():
             for triple in graph.triples((None, None, None)):
-                print(triple)
                 combined_graph.add(triple)
         combined_graph.serialize(destination=str(
             self.code_repo_path / "rdf_graph.rdf"), format='turtle')        
-        # combined_graph.serialize(destination=str(
-        #     self.code_repo_path / "rdf_graph.rdf"), format='turtle')
-
+        
     def pyvis_draw(self, graph, name):
 
         cnames = ['blue', 'green', 'red', 'cyan', 'orange',
