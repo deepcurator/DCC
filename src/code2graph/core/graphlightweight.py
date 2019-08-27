@@ -426,6 +426,7 @@ class TFTokenExplorer:
             graph = Graph()
             quad = []
             self.build_rdf_graph(self.call_trees[root], graph, quad, root)
+            self.build_rdf_quads(self.call_trees[root], graph, quad, root)
             self.rdf_graphs[root] = graph
             self.rdf_quads[root] = quad
 
@@ -495,6 +496,8 @@ class TFTokenExplorer:
                 # change type according to what's inside
                 quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
 
+    def build_rdf_quads(self, node, graph, quad, root):
+        pass
 
     def build_tfsequences(self):
         for root in self.call_trees:
