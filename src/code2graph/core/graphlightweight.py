@@ -75,8 +75,6 @@ class CallVisitor(ast.NodeVisitor):
                         self.function_to_be_visited.append((cand, new_node))
 
                         return True
-                elif isinstance(cand.ast_node, ast.FunctionDef):
-                    pass
         return False
 
     def check_tensorflow_function(self, call_name, node):
