@@ -8,13 +8,17 @@ class OntologyManager:
 		self.scraper = TFVocScraper("r1.14")	
 		
 		self.g = Graph()
-		self.g.parse('C:\\Users\\AICPS\\123.owl', format="turtle")
+		self.g.parse('https://raw.githubusercontent.com/deepcurator/DCC/development/src/ontology/DeepSciKG.owl', format="html")
 
 		self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
 		self.call = self.dcc_prefix['calls']
 		self.is_type = RDF.type
+		self.followedby = self.dcc_prefix['followedBy']
 
 		self.tensorflow_defined = self.dcc_prefix['TensorFlowDefined']
+		self.user_defined = self.dcc_prefix['UserDefined']
+		self.has_function = self.dcc_prefix['hasFunction']
+
 		self.tensorflow_functions = list(self.g.triples((None, RDFS.subClassOf, self.tensorflow_defined)))
 		self.tf_types = self.scraper.root
 
