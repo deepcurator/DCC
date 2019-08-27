@@ -201,8 +201,7 @@ class CallVisitor(ast.NodeVisitor):
         if len(node.keywords):
             # import pdb; pdb.set_trace()
             for keyword in node.keywords:
-                another_visitor = CallVisitor(
-                    self.pyan_edges, new_node)
+                another_visitor = CallVisitor(self.pyan_edges, new_node)
                 another_visitor.visit(keyword)
 
                 if isinstance(keyword.value, ast.Str):
@@ -229,18 +228,27 @@ class ProgramLineVisitor:
     def __init__(self, pyan_edges, node):
         self.pyan_edges = pyan_edges
 
-        self.root = {"name": get_name(
-            node), "children": [], "type": node.flavor, "pyan": node}
+        self.root = {"name": get_name(node), 
+                     "children": [],
+                     "type": node.flavor,
+                     "pyan": node}
 
     def visit(self, node, parent):
+
+        # These types of AST nodes are basically statements so we inspect whether there is function call inside.
+        type_statements = (ast.Expr, ast.UnaryOp, ast.withitem, 
+                           ast.Assign, ast.Compare, ast.AugAssign, 
+                           ast.Return, ast.Call, ast.Assert)
+
+        # These types of AST nodes are blocks so programlinevisitor will go deeper and look for statements.
+        type_blocks = (ast.If, ast.Try, ast.ExceptHandler, ast.For, ast.With)
 
         if node is None:
             return
 
         for child in ast.iter_child_nodes(node):
-            # print("parent:", parent, "child:",child)
-            if isinstance(child, (ast.Expr, ast.UnaryOp, ast.withitem, ast.Assign, ast.Compare,
-                                  ast.AugAssign, ast.Return, ast.Call, ast.Assert)):
+            
+            if isinstance(child, type_statements):
 
                 call_visitor = CallVisitor(self.pyan_edges, parent)
                 call_visitor.visit(child)  # search function calls by line
@@ -249,13 +257,14 @@ class ProgramLineVisitor:
                     if function_node['name'] != parent['name']:
                         self.visit(function.ast_node, function_node)
 
-            elif isinstance(child, (ast.If, ast.Try, ast.ExceptHandler, ast.For, ast.With)):
+            elif isinstance(child, type_blocks):
                 self.visit(child, parent)
 
             elif isinstance(child, ast.FunctionDef):
+                # ignore for now. (only the function being called matters)
                 pass
             elif isinstance(child, ast.arguments):
-                # node["args"].append(child.n)
+                # ignore for now. (Don't know how to process)
                 pass
 
 
@@ -276,8 +285,7 @@ class TFTokenExplorer:
         self.config = config
 
         self.code_repo_path = Path(code_path).resolve()
-        self.all_py_files = glob("%s/**/*.py" %
-                                 str(self.code_repo_path), recursive=True)
+        self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
 
         self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
@@ -361,10 +369,8 @@ class TFTokenExplorer:
                 callee_name = get_name(callee)
                 callee_type = callee.flavor
 
-                self.call_graph.add(
-                    (BNode(callee_name), type_manager.is_type, BNode(callee_type)))
-                self.call_graph.add(
-                    (BNode(caller_name), type_manager.call,    BNode(callee_name)))
+                self.call_graph.add((BNode(callee_name), type_manager.is_type, BNode(callee_type)))
+                self.call_graph.add((BNode(caller_name), type_manager.call,    BNode(callee_name)))
 
                 self.pyan_node_dict[callee_name] = callee
 
@@ -399,14 +405,12 @@ class TFTokenExplorer:
         return starts
 
     def grow_function_calls(self, start):
-        # TODO self.call_graph_visitor should be removed as only node dict is needed.
-        line_visitor = ProgramLineVisitor(
-            self.pyan_edges, self.pyan_node_dict[start])
-        line_visitor.visit(
-            self.pyan_node_dict[start].ast_node, line_visitor.root)
+        line_visitor = ProgramLineVisitor(self.pyan_edges, self.pyan_node_dict[start])
+        line_visitor.visit(self.pyan_node_dict[start].ast_node, line_visitor.root)
 
         return line_visitor.root
 
+    # need to use DFS (might encounter max recursion limit problem)
     def populate_call_tree(self, node):
 
         if "idx" not in node:
@@ -550,15 +554,12 @@ class TFTokenExplorer:
 
         with open(combined_triplets_path, 'w') as combined_file:
             for root in self.rdf_graphs:
-                stored_path = str(self.code_repo_path /
-                                  (root.replace('.', '') + '.triples'))
+                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.triples'))
 
                 with open(stored_path, 'w') as triplets_file:
                     for sub, pred, obj in self.rdf_graphs[root].triples((None, None, None)):
-                        sub = sub.replace('\n', '').replace(
-                            '\t', '').replace('    ', '')
-                        obj = obj.replace('\n', '').replace(
-                            '\t', '').replace('    ', '')
+                        sub = sub.replace('\n', '').replace('\t', '').replace('    ', '')
+                        obj = obj.replace('\n', '').replace('\t', '').replace('    ', '')
                         triplets_file.write(sub+'\t'+pred+'\t'+obj+'\n')
                         combined_file.write(sub+'\t'+pred+'\t'+obj+'\n')
 
@@ -567,20 +568,20 @@ class TFTokenExplorer:
 
         with open(combined_quads_path, 'w') as combined_file:
             for root in self.rdf_quads:
-                stored_path = str(self.code_repo_path /
-                                  (root.replace('.', '') + '.quads'))
+                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.quads'))
                 with open(stored_path, 'w') as quads_file:
                     for quad in self.rdf_quads[root]:
                         quads_file.write(quad)
                         combined_file.write(quad)
 
     def dump_rdf(self):
+        exported_path = str(self.code_repo_path / "rdf_graph.rdf")
         combined_graph = copy.deepcopy(type_manager.g)
+        
         for graph in self.rdf_graphs.values():
-            for triple in graph.triples((None, None, None)):
-                combined_graph.add(triple)
-        combined_graph.serialize(destination=str(
-            self.code_repo_path / "rdf_graph.rdf"), format='turtle')        
+            combined_graph += graph
+        
+        combined_graph.serialize(destination=exported_path, format='turtle')
         
     def pyvis_draw(self, graph, name):
 
@@ -590,7 +591,6 @@ class TFTokenExplorer:
         G = Network(height="800px", width="70%", directed=True)
 
         for src, edge, dst in graph:
-            # print(src, edge, dst)
 
             if edge == type_manager.is_type and not self.config.show_url:
                 continue
@@ -627,6 +627,4 @@ class TFTokenExplorer:
                      damping=0.09)
 
         G.show_buttons(filter_=['physics'])
-
-        # G.show("%s.html" % name)
         G.save_graph("%s.html" % name)
