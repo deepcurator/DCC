@@ -27,7 +27,7 @@ import networkx as nx
 
 from glob import glob
 from pathlib import Path
-from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal, XSD
+from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal, XSD, OWL
 from pyvis.network import Network
 
 from .ontologymanager import OntologyManager
@@ -488,36 +488,35 @@ class TFTokenExplorer:
                     quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 self.build_rdf_graph(child, graph, quad, root)
 
-        # if "args" in node and self.config.show_arg:
-        #     # print("\n Node:---->",node, node['args'])
-        #     if len(node['args']) == 3:
-        #         k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
-        #         graph.add((node_uri, BNode(
-        #             "has_output_feature_size"), BNode((node['args'][0]))))
-        #         graph.add((node_uri, BNode(
-        #             "has_kernel_size"), BNode(k_size)))
-        #         quad.append(node["name"] + "\t" + "has_output_feature_size" +
-        #                     "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
-        #         quad.append(node["name"] + "\t" + "has_kernel_size" +
-        #                     "\t" + k_size + "\t" + node["idx"] + "\n")
-        #     else:
-        #         for idx, arg in enumerate(node['args']):
-        #             # print(arg)
-        #             graph.add((node_uri, BNode(
-        #                 "has_arg%d" % idx), BNode((arg))))
-        #             quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
-        #                 '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
+        if "args" in node and self.config.show_arg:
+            # print("\n Node:---->",node, node['args'])
+            if len(node['args']) == 3:
+                k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
+                graph.add((node_uri, BNode(
+                    "has_output_feature_size"), BNode((node['args'][0]))))
+                graph.add((node_uri, BNode(
+                    "has_kernel_size"), BNode(k_size)))
+                quad.append(node["name"] + "\t" + "has_output_feature_size" +
+                            "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
+                quad.append(node["name"] + "\t" + "has_kernel_size" +
+                            "\t" + k_size + "\t" + node["idx"] + "\n")
+            else:
+                for idx, arg in enumerate(node['args']):
+                    # print(arg)
+                    arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
+                    graph.add((arg_uri, type_manager.is_type, OWL.DatatypeProperty))
+                    graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
-        # if "keywords" in node and self.config.show_arg:
-        #     for keyword in node['keywords']:
-        #         graph.add((node_uri, BNode(
-        #             "has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
-        #         quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) +
-        #                     "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
-        # for keyword in node['keywords']:
-        #     keyword_uri = URIRef(type_manager.dcc_prefix+'/'+str(keyword))
-        #     graph.add((node_uri, BNode("has_%s" % str(keyword)), BNode(node['keywords'][keyword])))
-        #     quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
+                    quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
+                        '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
+
+        if "keywords" in node and self.config.show_arg:
+            for keyword in node['keywords']:
+                keyword_uri = URIRef(type_manager.dcc_prefix+'/has_keyword_'+str(keyword))
+                graph.add((keyword_uri, type_manager.is_type, OWL.DatatypeProperty))
+                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
+                # change type according to what's inside
+                quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
 
 
     def build_tfsequences(self):
