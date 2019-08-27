@@ -20,9 +20,7 @@
 # Defense Advanced Research Projects Agency (DARPA)
 # under Agreement No. HR00111990010
 
-import ast
-import astor
-import pprint
+import copy, ast, astor, pprint
 import networkx as nx
 
 from glob import glob
@@ -40,9 +38,7 @@ def get_name(node):
 
 type_manager = OntologyManager()
 
-class CallVisitor(ast.NodeVisitor):
-
-    
+class CallVisitor(ast.NodeVisitor):  
 
     def __init__(self, pyan_edges, parent):
 
@@ -86,8 +82,6 @@ class CallVisitor(ast.NodeVisitor):
     def check_tensorflow_function(self, call_name, node):
         # print("inside Call name .!!")
         result = type_manager.fuzzy_search(call_name)
-        # print("\ncall_name:", call_name)
-        # print("match list:", result)
 
         if result:
             matching = type_manager.type_hash[result[0]]
@@ -105,8 +99,7 @@ class CallVisitor(ast.NodeVisitor):
             return True
         else:
             if isinstance(node.func, ast.Call):
-                func_visitor = CallVisitor(
-                    self.pyan_edges, self.root)
+                func_visitor = CallVisitor(self.pyan_edges, self.root)
                 func_visitor.visit(node.func)
                 # import pdb; pdb.set_trace()
                 if self.root['children'] and call_name.split('(')[0] == self.root['children'][-1]['name']:
@@ -286,11 +279,11 @@ class TFTokenExplorer:
         self.all_py_files = glob("%s/**/*.py" %
                                  str(self.code_repo_path), recursive=True)
 
-        self.call_graph = Graph()  # generated in build the one complete call graph
+        self.call_graph = Graph() # generated in build the one complete call graph
         self.call_trees = {}      # generated in build call trees
         self.rdf_graphs = {}      # generated in build rdf graphs
-        self.rdf_quads = {}      # generated in build rdf graphs
-        self.tfsequences = {}      # generated in build tfseqeuences
+        self.rdf_quads  = {}      # generated in build rdf graphs
+        self.tfsequences= {}      # generated in build tfseqeuences
 
     def build_pyan_call_graph(self):
         self.call_graph_visitor = CallGraphVisitor(self.all_py_files)
@@ -335,14 +328,11 @@ class TFTokenExplorer:
         self.build_pyan_call_graph()
         self.build_call_graph()
         self.build_call_trees()
-        self.recognize_tf_calls()
         self.build_rdf_graphs()
         self.build_tfsequences()
 
         self.dump_information()
 
-    def recognize_tf_calls(self):
-        pass
 
     def build_call_graph(self):
 
@@ -596,7 +586,7 @@ class TFTokenExplorer:
                         combined_file.write(quad)
 
     def dump_rdf(self):
-        import copy 
+        
         combined_graph = copy.deepcopy(type_manager.g)
         # for graph in self.rdf_graphs.values():
         #     combined_graph += graph
