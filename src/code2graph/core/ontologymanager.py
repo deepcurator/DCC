@@ -26,6 +26,8 @@ class OntologyManager:
 		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/followedBy')
 
 		self.tensorflow_defined = self.dcc_prefix['TensorFlowDefined']
+		self.tf_functions = self.tensorflow_defined + '/functions'
+		self.tf_classes   = self.tensorflow_defined + '/classes'
 		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/TensorFlowDefined')
 
 		self.user_defined = self.dcc_prefix['UserDefined']
@@ -50,16 +52,16 @@ class OntologyManager:
 	def addin_ontology(self):
 		''' expand the self.g with the ontology code2graph has crawled from tensorflow website '''
 
-		self.g.add((self.tensorflow_defined+'/functions', RDFS.subClassOf, self.tensorflow_defined))
-		self.g.add((self.tensorflow_defined+'/classes', RDFS.subClassOf, self.tensorflow_defined))
+		self.g.add((self.tf_functions, RDFS.subClassOf, self.tensorflow_defined))
+		self.g.add((self.tf_classes  , RDFS.subClassOf, self.tensorflow_defined))
 		
 		for key in self.type_hash:
 			uri = self.type_hash[key]['uri']
 
 			if self.type_hash[key]['type'] == 'class':
-				self.g.add((uri, RDFS.subClassOf, self.tensorflow_defined+'/classes'))
+				self.g.add((uri, RDFS.subClassOf, self.tf_classes))
 			if self.type_hash[key]['type'] == 'function':
-				self.g.add((uri, RDFS.subClassOf, self.tensorflow_defined+'/functions'))
+				self.g.add((uri, RDFS.subClassOf, self.tf_functions))
 
 	def update_type_hash(self):
 		# updating type and uri for each node in type_hash
