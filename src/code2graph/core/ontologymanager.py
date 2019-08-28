@@ -19,7 +19,7 @@ class OntologyManager:
 		self.call = self.dcc_prefix['calls']
 		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/calls')
 
-		self.is_type = RDF.type
+		self.type = RDF.type
 		# rdflib.term.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
 		self.followedby = self.dcc_prefix['followedBy']

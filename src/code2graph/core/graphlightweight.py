@@ -354,7 +354,7 @@ class TFTokenExplorer:
             caller_type = caller.flavor
 
             self.call_graph.add(
-                (BNode(caller_name), type_manager.is_type, BNode(caller_type)))
+                (BNode(caller_name), type_manager.type, BNode(caller_type)))
 
             self.pyan_node_dict[caller_name] = caller
 
@@ -368,8 +368,8 @@ class TFTokenExplorer:
                 callee_name = get_name(callee)
                 callee_type = callee.flavor
 
-                self.call_graph.add((BNode(callee_name), type_manager.is_type, BNode(callee_type)))
-                self.call_graph.add((BNode(caller_name), type_manager.call,    BNode(callee_name)))
+                self.call_graph.add((BNode(callee_name), type_manager.type, BNode(callee_type)))
+                self.call_graph.add((BNode(caller_name), type_manager.call, BNode(callee_name)))
 
                 self.pyan_node_dict[callee_name] = callee
 
@@ -439,9 +439,9 @@ class TFTokenExplorer:
         node_uri = URIRef(type_manager.user_defined+'/'+node['rdf_name'])
 
         if node["type"] == "tf_keyword":
-            graph.add((node_uri, type_manager.is_type, node["url"]))
+            graph.add((node_uri, type_manager.type, node["url"]))
         else:
-            graph.add((node_uri, type_manager.is_type, type_manager.user_defined))
+            graph.add((node_uri, type_manager.type, type_manager.user_defined))
 
         if "name" in node:
             graph.add((node_uri, RDFS.label, Literal(node["rdf_name"])))
@@ -468,13 +468,13 @@ class TFTokenExplorer:
                 for idx, arg in enumerate(node['args']):
                     arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
                     arg_uri = URIRef(type_manager.dcc_prefix+'/has_arg_%d'%idx)
-                    graph.add((arg_uri, type_manager.is_type, OWL.DatatypeProperty))
+                    graph.add((arg_uri, type_manager.type, OWL.DatatypeProperty))
                     graph.add((node_uri, arg_uri, Literal(arg)))
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 keyword_uri = URIRef(type_manager.dcc_prefix+'/has_keyword_'+str(keyword))
-                graph.add((keyword_uri, type_manager.is_type, OWL.DatatypeProperty))
+                graph.add((keyword_uri, type_manager.type, OWL.DatatypeProperty))
                 graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword])))
                 # change type according to what's inside
 
@@ -486,11 +486,11 @@ class TFTokenExplorer:
         node_uri = URIRef(type_manager.user_defined+'/'+node['rdf_name'])
 
         if node["type"] == "tf_keyword":
-            quad.append(node["name"] + "\t" + "is_type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
+            quad.append(node["name"] + "\t" + "type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
         else:
             if isinstance(node["type"], Flavor):
                 node["type"] = node["type"].value
-            quad.append(node["name"] + "\t" + "is_type" +
+            quad.append(node["name"] + "\t" + "type" +
                         "\t" + node["type"] + "\t" + node["idx"] + "\n")
 
         if "children" in node:
@@ -614,11 +614,11 @@ class TFTokenExplorer:
 
         for src, edge, dst in graph:
 
-            if edge == type_manager.is_type and not self.config.show_url:
+            if edge == type_manager.type and not self.config.show_url:
                 continue
 
-            src_type = [x for x in graph[src:type_manager.is_type]]
-            dst_type = [x for x in graph[dst:type_manager.is_type]]
+            src_type = [x for x in graph[src:type_manager.type]]
+            dst_type = [x for x in graph[dst:type_manager.type]]
 
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):
