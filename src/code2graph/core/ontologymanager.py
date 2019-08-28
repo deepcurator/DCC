@@ -1,6 +1,6 @@
-from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-from rdflib import OWL, Namespace
+from rdflib import Graph, RDFS, RDF, URIRef, Namespace
 from .scraper_tf_voc import TFVocScraper
+
 
 class OntologyManager:
 
