@@ -25,7 +25,7 @@ import networkx as nx
 
 from glob import glob
 from pathlib import Path
-from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal, XSD, OWL
+from rdflib import Graph, BNode, RDFS, URIRef, Literal, OWL
 from pyvis.network import Network
 
 from .ontologymanager import OntologyManager
@@ -168,8 +168,7 @@ class CallVisitor(ast.NodeVisitor):
                         elif isinstance(value, list):
                             for item in value:
                                 if isinstance(item, ast.Str):
-                                    result = om.search(
-                                        item.s)
+                                    result = om.search(item.s)
                                     if result:
                                         matching = om.type_hash[result[0]]
                                         new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
@@ -414,13 +413,11 @@ class TFTokenExplorer:
 
         if "idx" not in node:
             node["idx"] = "1"
-        node["name"] = node["name"].replace(
-            '\n', '').replace('\t', '').replace('    ', '')
+        node["name"] = node["name"].replace('\n', '').replace('\t', '').replace('    ', '')
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
-                child["rdf_name"] = node["rdf_name"] + \
-                    "." + child["name"] + "_" + str(idx)
+                child["rdf_name"] = node["rdf_name"] + "." + child["name"] + "_" + str(idx)
                 child["idx"] = node["idx"] + "-" + str(idx)
                 self.populate_call_tree(child)
 
