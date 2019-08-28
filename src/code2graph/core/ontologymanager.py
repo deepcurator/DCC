@@ -26,8 +26,8 @@ class OntologyManager:
 		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/followedBy')
 
 		self.tensorflow_defined = self.dcc_prefix['TensorFlowDefined']
-		self.tf_functions = self.tensorflow_defined + '/functions'
-		self.tf_classes   = self.tensorflow_defined + '/classes'
+		self.tf_functions = self.dcc_prefix['TensorFlowDefined/functions']
+		self.tf_classes   = self.dcc_prefix['TensorFlowDefined/classes']
 		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/TensorFlowDefined')
 
 		self.user_defined = self.dcc_prefix['UserDefined']
