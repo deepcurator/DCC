@@ -45,8 +45,12 @@ class OntologyManager:
 		'''
 		self.recur_build_hash(self.scraper.root)
 		self.update_type_hash()
-		
-		self.g.add((self.tensorflow_defined+'/functions', RDFS.subClassOf, self.tensorflow_defined))	
+		self.addin_ontology()
+	
+	def addin_ontology(self):
+		''' expand the self.g with the ontology code2graph has crawled from tensorflow website '''
+
+		self.g.add((self.tensorflow_defined+'/functions', RDFS.subClassOf, self.tensorflow_defined))
 		self.g.add((self.tensorflow_defined+'/classes', RDFS.subClassOf, self.tensorflow_defined))
 		
 		for key in self.type_hash:
@@ -56,7 +60,7 @@ class OntologyManager:
 				self.g.add((uri, RDFS.subClassOf, self.tensorflow_defined+'/classes'))
 			if self.type_hash[key]['type'] == 'function':
 				self.g.add((uri, RDFS.subClassOf, self.tensorflow_defined+'/functions'))
-		
+
 	def update_type_hash(self):
 		# updating type and uri for each node in type_hash
 
