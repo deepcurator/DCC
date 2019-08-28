@@ -79,7 +79,7 @@ class CallVisitor(ast.NodeVisitor):
 
     def check_tensorflow_function(self, call_name, node):
         # print("inside Call name .!!")
-        result = type_manager.fuzzy_search(call_name)
+        result = type_manager.search(call_name)
 
         if result:
             matching = type_manager.type_hash[result[0]]
@@ -158,7 +158,7 @@ class CallVisitor(ast.NodeVisitor):
                             self.function_to_be_visited += another_visitor_k.function_to_be_visited
 
                         elif isinstance(value, ast.Str):
-                            result = type_manager.fuzzy_search(value.s)
+                            result = type_manager.search(value.s)
                             if result:
                                 matching = type_manager.type_hash[result[0]]
                                 new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
@@ -168,7 +168,7 @@ class CallVisitor(ast.NodeVisitor):
                         elif isinstance(value, list):
                             for item in value:
                                 if isinstance(item, ast.Str):
-                                    result = type_manager.fuzzy_search(
+                                    result = type_manager.search(
                                         item.s)
                                     if result:
                                         matching = type_manager.type_hash[result[0]]

@@ -5,35 +5,46 @@ from .scraper_tf_voc import TFVocScraper
 class OntologyManager:
 
 	def __init__(self):
-		self.scraper = TFVocScraper("r1.14")	
 		
+		# This scrapes all the functions and classes from TF Website.
+		self.scraper = TFVocScraper("r1.14")
+		
+		# self.g stores the template owl file acquired from Siemens.
 		self.g = Graph()
 		self.g.parse('../core/123.owl', format="turtle")
-		# self.g.serialize(destination=str('./temp.rdf'), format='turtle')   
+		
 		self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
+		# Namespace('https://github.com/deepcurator/DCC/')
+
 		self.call = self.dcc_prefix['calls']
+		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/calls')
+
 		self.is_type = RDF.type
+		# rdflib.term.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
+
 		self.followedby = self.dcc_prefix['followedBy']
+		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/followedBy')
 
 		self.tensorflow_defined = self.dcc_prefix['TensorFlowDefined']
-		self.user_defined = self.dcc_prefix['UserDefined']
-		self.has_function = self.dcc_prefix['hasFunction']
+		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/TensorFlowDefined')
 
-		self.tensorflow_functions = list(self.g.triples((None, RDFS.subClassOf, self.tensorflow_defined)))
-		self.tf_types = self.scraper.root
+		self.user_defined = self.dcc_prefix['UserDefined']
+		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/UserDefined')
+
+		self.has_function = self.dcc_prefix['hasFunction']
+		# rdflib.term.URIRef('https://github.com/deepcurator/DCC/hasFunction')
 
 		self.type_hash = {}
 		''' 
 			Each item in type_hash looks like: 
-			{'name': 'tfdbg.LocalCLIDebugHook', 
-			 'url': '/versions/r1.14/api_docs/python/tfdbg/LocalCLIDebugHook', 
-			 'type': 'class', 
-			 'uri': rdflib.term.URIRef('https://github.com/deepcurator/DCC/tfdbg/LocalCLIDebugHook')}
+			'tfdbg.watch_graph_with_blacklists': 
+				{'name': 'tfdbg.LocalCLIDebugHook', 
+				 'url': '/versions/r1.14/api_docs/python/tfdbg/LocalCLIDebugHook', 
+				 'type': 'class', 
+				 'uri': rdflib.term.URIRef('https://github.com/deepcurator/DCC/tfdbg/LocalCLIDebugHook')},
 		'''
-
-		self.recur_build_hash(self.tf_types)
-
-		self.ontology_scraper()
+		self.recur_build_hash(self.scraper.root)
+		self.update_type_hash()
 		
 		self.g.add((self.tensorflow_defined+'/functions', RDFS.subClassOf, self.tensorflow_defined))	
 		self.g.add((self.tensorflow_defined+'/classes', RDFS.subClassOf, self.tensorflow_defined))
@@ -46,7 +57,9 @@ class OntologyManager:
 			if self.type_hash[key]['type'] == 'function':
 				self.g.add((uri, RDFS.subClassOf, self.tensorflow_defined+'/functions'))
 		
-	def ontology_scraper(self):
+	def update_type_hash(self):
+		# updating type and uri for each node in type_hash
+
 		self.functions = set()
 		self.classes = set()
 
@@ -62,7 +75,8 @@ class OntologyManager:
 			self.type_hash[key]['uri'] = URIRef(self.dcc_prefix+suffix)
 
 	def recur_build_hash(self, node):
-		
+		# constructing new entry in type_hash whenever the process reaches leaf nodes.
+
 		if "children" not in node: 
 			self.type_hash[node['name']] = node
 		
@@ -77,20 +91,9 @@ class OntologyManager:
 			for child in node['children']:
 				self.recur_build_hash(child)
 
-	# exact search
-	def exact_search(self, key):
-		results = []
+	def search(self, key):
+		# please see the test cases to understand how this search works.
 
-		for hashkey in self.type_hash:
-			comp = hashkey.split('.')[-1]
-
-			if comp == key: 
-				results.append(hashkey)
-
-		return results
-
-	# fuzzy search 
-	def fuzzy_search(self, key):
 		keys = key.split('.')[::-1]
 
 		scores = {}
@@ -129,7 +132,6 @@ class OntologyManager:
 
 		sorted_by_value = sorted(scores.items(), key=lambda kv: -kv[1])
 		sorted_scores = dict(sorted_by_value)
-		# print(list(sorted_scores.items())[0:10])
 		return_list = list(sorted_scores.keys())
 
 		return return_list
@@ -138,31 +140,19 @@ class OntologyManager:
 def test_ontology_manager():
 	ontology_manager = OntologyManager()
 
-	print("Exact Search:")
-	print(ontology_manager.exact_search("Dense"))
-	print(ontology_manager.exact_search("dense"))
-	print(ontology_manager.exact_search("relu"))
-	print(ontology_manager.exact_search("crelu"))
-	print(ontology_manager.exact_search("exp"))
-	print(ontology_manager.exact_search("tf.exp"))
-
 	print("Fuzzy Search:")
-	print(ontology_manager.fuzzy_search("Dense"))
-	print(ontology_manager.fuzzy_search("dense"))
-	print(ontology_manager.fuzzy_search("relu"))
-	print(ontology_manager.fuzzy_search("crelu"))
-	print(ontology_manager.fuzzy_search("exp"))
-	print(ontology_manager.fuzzy_search("tf.exp"))
-	print(ontology_manager.fuzzy_search("log.warning"))
-	print(ontology_manager.fuzzy_search("np.mean"))
-	print(ontology_manager.fuzzy_search("np.squeeze"))
-	print(ontology_manager.fuzzy_search("keras.Sequential"))
+	print(ontology_manager.search("Dense"))
+	print(ontology_manager.search("dense"))
+	print(ontology_manager.search("relu"))
+	print(ontology_manager.search("crelu"))
+	print(ontology_manager.search("exp"))
+	print(ontology_manager.search("tf.exp"))
+	print(ontology_manager.search("log.warning"))
+	print(ontology_manager.search("np.mean"))
+	print(ontology_manager.search("np.squeeze"))
+	print(ontology_manager.search("keras.Sequential"))
 
 	return ontology_manager
 
 if __name__ == "__main__":
 	ontology_manager = test_ontology_manager()
-	
-
-	
-
