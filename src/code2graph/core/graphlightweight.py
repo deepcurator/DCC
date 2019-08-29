@@ -350,9 +350,8 @@ class TFTokenExplorer:
                 continue
             
             caller_uri = URIRef(om.user_defined + "/" + get_name(caller))
-            caller_type = URIRef(om.user_defined + "/" + caller.flavor.value)
             
-            self.call_graph.add((caller_uri, om.type, caller_type))
+            self.call_graph.add((caller_uri, om.type, om.user_defined))
 
             self.pyan_node_dict[str(caller_uri)] = caller
 
@@ -364,9 +363,8 @@ class TFTokenExplorer:
                     continue
 
                 callee_uri = URIRef(om.user_defined + "/" + get_name(callee))
-                callee_type = URIRef(om.user_defined + "/" + callee.flavor.value)
 
-                self.call_graph.add((callee_uri, om.type, callee_type))
+                self.call_graph.add((callee_uri, om.type, om.user_defined))
                 self.call_graph.add((caller_uri, om.call, callee_uri))
 
                 self.pyan_node_dict[str(callee_uri)] = callee
