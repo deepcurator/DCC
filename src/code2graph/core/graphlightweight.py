@@ -25,7 +25,7 @@ import networkx as nx
 
 from glob import glob
 from pathlib import Path
-from rdflib import Graph, BNode, RDFS, URIRef, Literal, OWL
+from rdflib import Graph, BNode, RDFS, URIRef, Literal, OWL, XSD
 from pyvis.network import Network
 
 from .ontologymanager import OntologyManager
@@ -348,14 +348,13 @@ class TFTokenExplorer:
                 continue
             if caller.flavor is Flavor.UNKNOWN:
                 continue
+            
+            caller_uri = URIRef(om.user_defined + "/" + get_name(caller))
+            caller_type = URIRef(om.user_defined + "/" + caller.flavor.value)
+            
+            self.call_graph.add((caller_uri, om.type, caller_type))
 
-            caller_name = get_name(caller)
-            caller_type = caller.flavor
-
-            self.call_graph.add(
-                (BNode(caller_name), om.type, BNode(caller_type)))
-
-            self.pyan_node_dict[caller_name] = caller
+            self.pyan_node_dict[str(caller_uri)] = caller
 
             for callee in callees:
 
@@ -364,17 +363,17 @@ class TFTokenExplorer:
                 if callee.flavor is Flavor.UNKNOWN:
                     continue
 
-                callee_name = get_name(callee)
-                callee_type = callee.flavor
+                callee_uri = URIRef(om.user_defined + "/" + get_name(callee))
+                callee_type = URIRef(om.user_defined + "/" + callee.flavor.value)
 
-                self.call_graph.add((BNode(callee_name), om.type, BNode(callee_type)))
-                self.call_graph.add((BNode(caller_name), om.call, BNode(callee_name)))
+                self.call_graph.add((callee_uri, om.type, callee_type))
+                self.call_graph.add((caller_uri, om.call, callee_uri))
 
-                self.pyan_node_dict[callee_name] = callee
+                self.pyan_node_dict[str(callee_uri)] = callee
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
-
+        
         for root in roots:
             print("Start from root:", self.pyan_node_dict[root])
 
@@ -441,7 +440,7 @@ class TFTokenExplorer:
             graph.add((node_uri, om.type, om.user_defined))
 
         if "name" in node:
-            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"])))
+            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
@@ -459,20 +458,20 @@ class TFTokenExplorer:
                 k_size.replace('\n','').replace('\t','').replace(' ','')
                 has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
                 has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
-                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0]))) 
-                graph.add((node_uri, has_kernel_size, Literal(k_size)))
+                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
+                graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
             else:
                 for idx, arg in enumerate(node['args']):
                     arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
                     arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
                     graph.add((arg_uri, om.type, OWL.DatatypeProperty))
-                    graph.add((node_uri, arg_uri, Literal(arg)))
+                    graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
                 keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
                 graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
-                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword])))
+                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
                 # change type according to what's inside
 
     def build_rdf_quads(self, node, graph, quad, root):
@@ -573,7 +572,7 @@ class TFTokenExplorer:
 
         with open(combined_triplets_path, 'w') as combined_file:
             for root in self.rdf_graphs:
-                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.triples'))
+                stored_path = str(self.code_repo_path/((root.split('/')[-1]).replace('.', '') + '.triples'))
 
                 with open(stored_path, 'w') as triplets_file:
                     for sub, pred, obj in self.rdf_graphs[root].triples((None, None, None)):
@@ -587,7 +586,7 @@ class TFTokenExplorer:
 
         with open(combined_quads_path, 'w') as combined_file:
             for root in self.rdf_quads:
-                stored_path = str(self.code_repo_path/(root.replace('.', '') + '.quads'))
+                stored_path = str(self.code_repo_path/((root.split('/')[-1]).replace('.', '') + '.quads'))
                 with open(stored_path, 'w') as quads_file:
                     for quad in self.rdf_quads[root]:
                         quads_file.write(quad)
