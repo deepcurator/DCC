@@ -1,6 +1,3 @@
-from core.database import Database
-from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
-from core.graphlightweight import TFTokenExplorer
 from pathlib import Path
 from zipfile import ZipFile
 from argparse import Namespace
@@ -15,6 +12,9 @@ from dateutil import parser
 import sys
 sys.path.append('../')
 
+from core.database import Database
+from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
+from core.graphlightweight import TFTokenExplorer
 
 cols = ['Folder Name', 'Title', 'Framework', 'Lightweight',
         'Error Msg', 'Date', 'Tags', 'Stars', 'Code Link', 'Paper Link']
