@@ -3,7 +3,7 @@ import yaml
 import pickle 
 import rdflib 
 import urllib.parse
-
+import pandas as pd
 #from nltk.corpus import stopwords
 #en_stopwords = stopwords.words('english')
 
@@ -17,9 +17,24 @@ f = open(os.path.join(model_dir,'cso_dict.pcl'), 'rb')
 f.close()
 
 ### load brat annotations:
-f = open(os.path.join(model_dir,'dictionaries.pcl'), 'rb')
-[vocab,rel_vocab]=pickle.load(f)
-f.close()
+#f = open(os.path.join(model_dir,'dictionaries.pcl'), 'rb')
+#[vocab,rel_vocab]=pickle.load(f)
+#f.close()
+
+# note: we load from manually cleaned files
+fn=os.path.join(model_dir,'brat_entities_clean.txt')
+z=pd.read_csv(fn, sep='\t', header=None)
+z.columns=['text','ent_type']
+vocab=dict(zip(z.text,z.ent_type))
+### manual corrections:
+vocab['hses']='Other'
+
+fn=os.path.join(model_dir,'brat_relations_clean.txt')
+z=pd.read_csv(fn, sep='\t', header=None)
+z.columns=['pair','rel_type']
+ps=z.pair.apply(lambda x: tuple(x.split('--'))).values
+rel_vocab=dict(zip(ps,z.rel_type))
+
 
 ### generate connected components from brat annotations:
 import networkx as nx
@@ -45,9 +60,10 @@ for comp_set in cc:
         if term in cso_entity_map:
             uri=cso_entity_map[term]
             break
+    # component doesn't have a URI: likely because there are no brat entities corresponding to relation in question
     if uri=='':
-        # create a new uri for all:
-        uri=rdflib.URIRef('https://siemens/'+urllib.parse.quote(comp[0]))
+        #print('Component of size {} not mapped'.format(len(comp)))
+        continue
     # add uri for all terms:
     for term in comp:
         if term not in cso_entity_map:
@@ -85,11 +101,16 @@ for term,entity in vocab.items():
 uri2rel={}
 for pair,rel in rel_vocab.items():
     if rel!='sameAs':
+        # if entities not in vocab, ignore rel:
+        if pair[0] not in cso_entity_map or pair[1] not in cso_entity_map:
+            #print('Skipping"{}"-"{}": {}'. format(pair[0],pair[1],rel))
+            continue
         uri1=cso_entity_map[pair[0]]
         uri2=cso_entity_map[pair[1]]
         if (uri1,uri2) not in uri2rel:
             uri2rel[(uri1,uri2)]=rel
-        elif rel!=uri2rel[(uri1,uri2)]:              
+        elif rel!=uri2rel[(uri1,uri2)]:  
+            print(pair)            
             print('Conflict(3) for "{}"-"{}": {} vs {}'. format(uri1,uri2,rel, uri2rel[(uri1,uri2)]))
 
 # add rels from cso:

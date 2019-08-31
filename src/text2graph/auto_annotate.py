@@ -1,6 +1,5 @@
 import os
 import re
-import numpy as np
 import yaml 
 import pickle 
 import itertools
@@ -68,8 +67,6 @@ f.close()
 annotator=TextAnnotator(entity_map,uri2entity, uri2rel)
 
 file_path=config['SENTENCE_ANNOTATED_TEXT_PATH']
-#'C:\\home\\projects\\DARPA ASKE\\IoannisNotebook\\abstract-sentences-test'
-#C:\home\projects\DARPA ASKE\DCC-Github\src\text2graph\Data\Abstracts-annotated
 
 ################## Process multiple files ############
 
@@ -81,8 +78,8 @@ for f in files:
     ann_triples=annotator.match_terms(text)
     # output to .ann file:
     outfile=os.path.join(file_path,f).replace('.txt','.ann2')
-    with open(outfile,'w',encoding='utf8') as fp:
-        for ann in ann_triples:
-            fp.write('\t'.join(ann)+'\n')
+#    with open(outfile,'w',encoding='utf8') as fp:
+#        for ann in ann_triples:
+#            fp.write('\t'.join(ann)+'\n')
             
     
