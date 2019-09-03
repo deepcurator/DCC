@@ -1,4 +1,4 @@
-import ast, pprint, itertools
+import ast, pprint, itertools, astor
 from glob import glob
 from pathlib import Path
 
@@ -182,6 +182,12 @@ class ASTExplorer:
 
                         f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
     
+    def dump_functions_source_code(self, filepath):
+        assert(self.resolution is "function")
+        with open(str(filepath), 'w') as file:
+            for function in self.nodes.values():
+                file.write(astor.to_source(function).replace('\n', ' <nl>') + '\n')
+
     def dump_node(self, node):
         # utility function.
         print(ast.dump(node))
