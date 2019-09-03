@@ -408,69 +408,135 @@ class TFTokenExplorer:
     # need to use DFS (might encounter max recursion limit problem)
     def populate_call_tree(self, node):
 
-        if "idx" not in node:
-            node["idx"] = "1"
-        node["name"] = node["name"].replace('\n', '').replace('\t', '').replace('    ', '')
+        # BFS
+        queue = []
+        queue.append(node)
 
-        if "children" in node:
-            for idx, child in enumerate(node["children"]):
-                child["rdf_name"] = node["rdf_name"] + "." + child["name"] + "_" + str(idx)
-                child["idx"] = node["idx"] + "-" + str(idx)
-                self.populate_call_tree(child)
+        while queue:
+            s = queue.pop(0)
+            s["name"] = s["name"].replace('\n', '').replace('\t', '').replace('    ', '')
+            
+            if "idx" not in s:
+                s["idx"] = "1"
+            
+            if "children" in s:
+                for idx, child in enumerate(s["children"]):
+                    child["rdf_name"] = s["rdf_name"] + "." + s["name"] + "_" + str(idx)
+                    child["idx"] = s["idx"] + "-" + str(idx)
+                    queue.append(child)
+            
+        # # DFS
+        # node["name"] = node["name"].replace('\n', '').replace('\t', '').replace('    ', '')
+        # if "idx" not in node:
+        #     node["idx"] = "1"
+        #     
+        # if "children" in node:
+        #     for idx, child in enumerate(node["children"]):
+        #         child["rdf_name"] = node["rdf_name"] + "." + child["name"] + "_" + str(idx)
+        #         child["idx"] = node["idx"] + "-" + str(idx)
+        #         self.populate_call_tree(child)
 
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
-            quad = []
             self.build_rdf_graph(self.call_trees[root], graph)
-            self.build_rdf_quads(self.call_trees[root], graph, quad, root)
             self.rdf_graphs[root] = graph
-            self.rdf_quads[root] = quad
+
+            # quad = []
+            # self.build_rdf_quads(self.call_trees[root], graph, quad, root)
+            # self.rdf_quads[root] = quad
 
     # need to use DFS (might encounter max recursion limit problem)
     def build_rdf_graph(self, node, graph):
+        # BFS
+        queue = []
+        queue.append(node)
 
-        node_uri = URIRef(om.user_defined+'/'+node['rdf_name'])
+        while queue:
+            s = queue.pop(0)
+            node_uri = URIRef(om.user_defined+'/'+s['rdf_name'])
 
-        if node["type"] == "tf_keyword":
-            graph.add((node_uri, om.type, node["url"]))
-        else:
-            graph.add((node_uri, om.type, om.user_defined))
-
-        if "name" in node:
-            graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
-
-        if "children" in node:
-            for idx, child in enumerate(node["children"]):
-                child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
-                graph.add((node_uri, om.call, child_uri))
-                if idx > 0:
-                    prev_child_uri = URIRef(om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
-                    graph.add((prev_child_uri, om.followedby, child_uri))
-                self.build_rdf_graph(child, graph)
-
-        if "args" in node and self.config.show_arg:
-            # print("\n Node:---->",node, node['args'])
-            if len(node['args']) == 3:
-                k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
-                k_size.replace('\n','').replace('\t','').replace(' ','')
-                has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
-                has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
-                graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
-                graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
+            if s["type"] == "tf_keyword":
+                graph.add((node_uri, om.type, s["url"]))
             else:
-                for idx, arg in enumerate(node['args']):
-                    arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
-                    arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
-                    graph.add((arg_uri, om.type, OWL.DatatypeProperty))
-                    graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
+                graph.add((node_uri, om.type, om.user_defined))
 
-        if "keywords" in node and self.config.show_arg:
-            for keyword in node['keywords']:
-                keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
-                graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
-                graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
-                # change type according to what's inside
+            if "name" in s:
+                graph.add((node_uri, RDFS.label, Literal(s["rdf_name"], datatype=XSD.string)))
+
+            if "children" in s:
+                for idx, child in enumerate(s["children"]):
+                    child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
+                    graph.add((node_uri, om.call, child_uri))
+                    if idx > 0:
+                        prev_child_uri = URIRef(om.user_defined+'/'+s["children"][idx-1]["rdf_name"])
+                        graph.add((prev_child_uri, om.followedby, child_uri))
+                    queue.append(child)
+
+            if "args" in s and self.config.show_arg:
+                # print("\n Node:---->",node, s['args'])
+                if len(s['args']) == 3:
+                    k_size = "("+str(s['args'][1])+","+str(s['args'][2])+")"
+                    k_size.replace('\n','').replace('\t','').replace(' ','')
+                    has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
+                    has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
+                    graph.add((node_uri, has_output_feature_size, Literal(str(s['args'][0]), datatype=XSD.string))) 
+                    graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
+                else:
+                    for idx, arg in enumerate(s['args']):
+                        arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
+                        arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
+                        graph.add((arg_uri, om.type, OWL.DatatypeProperty))
+                        graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
+
+            if "keywords" in node and self.config.show_arg:
+                for keyword in s['keywords']:
+                    keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
+                    graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
+                    graph.add((node_uri, keyword_uri, Literal(str(s['keywords'][keyword]), datatype=XSD.string)))
+
+        # DFS
+        # node_uri = URIRef(om.user_defined+'/'+node['rdf_name'])
+
+        # if node["type"] == "tf_keyword":
+        #     graph.add((node_uri, om.type, node["url"]))
+        # else:
+        #     graph.add((node_uri, om.type, om.user_defined))
+
+        # if "name" in node:
+        #     graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
+
+        # if "children" in node:
+        #     for idx, child in enumerate(node["children"]):
+        #         child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
+        #         graph.add((node_uri, om.call, child_uri))
+        #         if idx > 0:
+        #             prev_child_uri = URIRef(om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
+        #             graph.add((prev_child_uri, om.followedby, child_uri))
+        #         self.build_rdf_graph(child, graph)
+
+        # if "args" in node and self.config.show_arg:
+        #     # print("\n Node:---->",node, node['args'])
+        #     if len(node['args']) == 3:
+        #         k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
+        #         k_size.replace('\n','').replace('\t','').replace(' ','')
+        #         has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
+        #         has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
+        #         graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
+        #         graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
+        #     else:
+        #         for idx, arg in enumerate(node['args']):
+        #             arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
+        #             arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
+        #             graph.add((arg_uri, om.type, OWL.DatatypeProperty))
+        #             graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
+
+        # if "keywords" in node and self.config.show_arg:
+        #     for keyword in node['keywords']:
+        #         keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
+        #         graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
+        #         graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
+        #         # change type according to what's inside
 
     def build_rdf_quads(self, node, graph, quad, root):
         if node["name"] != root:
@@ -503,7 +569,7 @@ class TFTokenExplorer:
                 has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
                 has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
                 quad.append(node["name"] + "\t" + "has_output_feature_size" +
-                            "\t" + node["args"][0] + "\t" + node["idx"] + "\n")
+                            "\t" + str(node["args"][0]) + "\t" + node["idx"] + "\n")
                 quad.append(node["name"] + "\t" + "has_kernel_size" +
                             "\t" + k_size + "\t" + node["idx"] + "\n")
             else:
