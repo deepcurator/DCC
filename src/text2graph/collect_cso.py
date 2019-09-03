@@ -8,6 +8,8 @@ import yaml
 import pickle 
 from nltk.corpus import stopwords
 en_stopwords = stopwords.words('english')
+# expand with some confusion abbreviations: ir - information retrieval or impulse radio
+en_stopwords.extend(['ir'])
 
 ################## Load graph and prepare structures for matching ############
 config = yaml.safe_load(open('../../conf/conf.yaml'))
