@@ -31,8 +31,8 @@ class Doc2Vec:
         self.train_path = data_dir / "train.txt"
         self.test_path = data_dir / "test.txt"
 
-        self.train_set = list(self.read_dataset(self.train_path))
-        self.test_set = list(self.read_dataset(self.test_path), True)
+        self.train_corpus = list(self.read_dataset(self.train_path))
+        self.test_corpus = list(self.read_dataset(self.test_path, True))
 
     def read_dataset(self, fname, tokens_only=False):
         with open(fname, encoding="iso-8859-1") as f:
@@ -43,10 +43,12 @@ class Doc2Vec:
                     # For training data, add tags
                     yield gensim.models.doc2vec.TaggedDocument(gensim.utils.simple_preprocess(line), [i])
 
-    def train_model(self, vector_size=50, min_count=2, epochs=40):
-        self.model = gensim.models.doc2vec.Doc2Vec(vector_size, min_count, epochs)
-        self.model.build_vocab(train_set)
-        self.model.train(train_set, total_examples=self.model.corpus_count, epochs=self.model.epochs)
+    def train_model(self, vector_size=50, window=2, min_count=2, epochs=40, workers=4):
+        self.model = gensim.models.doc2vec.Doc2Vec(vector_size=vector_size, window=window, 
+                                                   min_count=min_count, epochs=epochs,
+                                                   workers=workers)
+        self.model.build_vocab(self.train_corpus)
+        self.model.train(self.train_corpus, total_examples=self.model.corpus_count, epochs=self.model.epochs)
 
     def infer_vector(self, function: str):
         assert(self.model)
@@ -57,12 +59,21 @@ class Doc2Vec:
         assert(self.model)
         vector = self.infer_vector(function)
         sims = self.model.docvecs.most_similar([vector], topn=len(model.docvecs))
-        return sims[0]
+        return ' '.join(self.train_corpus[sims[0][0]].words)
+
+    def save_model(fname):
+        self.model.save(fname)
+
+    def load_model(fname):
+        self.model = Doc2Vec.load(fname)
 
 if __name__ == "__main__":
-    raw_data_path = Path("../functions").resolve()
+
+    raw_data_path = Path("../graphast_output").resolve()
     save_path = Path("../doc2vec").resolve()
-    preprocess(raw_data_path, "functions.txt", save_path)
+    save_path.mkdir(exist_ok=True)
+    # preprocess(raw_data_path, "functions.txt", save_path)
     
     d2v = Doc2Vec(save_path)
     d2v.train_model()
+    d2v.save_model("d2v_model")

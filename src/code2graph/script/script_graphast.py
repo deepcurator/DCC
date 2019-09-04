@@ -3,6 +3,7 @@ from zipfile import ZipFile
 from argparse import Namespace
 import shutil
 import glob
+from dateutil import parser
 
 import sys
 sys.path.append('../')
@@ -15,7 +16,6 @@ metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 def extract_data(data_path: Path) -> list:
 
     subdirs = [x for x in data_path.iterdir() if x.is_dir()]
-
     dataset = []
 
     for subdir in subdirs:
@@ -32,8 +32,8 @@ def extract_data(data_path: Path) -> list:
                         repo[meta_prefix] = None
             except:
                 repo[meta_prefix] = None
-
-        repo['stars'] = int(repo['stars'].replace(",", ""))
+        if repo['stars']:
+            repo['stars'] = int(repo['stars'].replace(",", ""))
         repo['folder_name'] = subdir.name
 
         if repo['date']:
@@ -88,12 +88,16 @@ def copy_files(data_path, dest_path, filetype, name_index=-3):
 
 
 def move_output_files(config):
+    config.dest_path.mkdir(exist_ok=True)
     copy_files(config.input_path, config.dest_path, "functions.txt")
 
 
 def run_graphast_method(code_path, resolution):
-    explorer = ASTExplorer(str(code_path), resolution)
-    explorer.dump_functions_source_code()
+    try:
+        explorer = ASTExplorer(str(code_path), resolution)
+        explorer.dump_functions_source_code()
+    except Exception as e:
+        print(e)
 
 
 def graphast_pipeline(args):
@@ -107,7 +111,7 @@ def graphast_pipeline(args):
         tasks.append(config.input_path)
 
     for task in tasks:
-        run_graphast_method(tasks, config.resolution)
+        run_graphast_method(task, config.resolution)
 
     move_output_files(config)
 
