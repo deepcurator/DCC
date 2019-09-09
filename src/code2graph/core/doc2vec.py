@@ -1,5 +1,6 @@
 import gensim
 import collections
+import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
@@ -50,6 +51,13 @@ class Doc2Vec:
         self.model.build_vocab(self.train_corpus)
         self.model.train(self.train_corpus, total_examples=self.model.corpus_count, epochs=self.model.epochs)
 
+    def get_learned_vector(self, tag):
+        return self.model.docvecs[tag]
+
+    def dump_vectors(self):
+        file_path = self.data_dir / "doc2vec_vectors.txt"
+        self.model.docvecs.save_word2vec_format(str(file_path))
+
     def infer_vector(self, function: str):
         assert(self.model)
         tokens = gensim.utils.simple_preprocess(function)
@@ -61,11 +69,13 @@ class Doc2Vec:
         sims = self.model.docvecs.most_similar([vector], topn=len(model.docvecs))
         return ' '.join(self.train_corpus[sims[0][0]].words)
 
-    def save_model(fname):
-        self.model.save(fname)
+    def save_model(self, fname):
+        save_path = self.data_dir / fname
+        self.model.save(str(save_path))
 
-    def load_model(fname):
-        self.model = Doc2Vec.load(fname)
+    def load_model(self, fname):
+        load_path = self.data_dir / fname
+        self.model = Doc2Vec.load(str(load_path))
 
 if __name__ == "__main__":
 
