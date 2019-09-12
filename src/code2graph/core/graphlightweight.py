@@ -625,7 +625,7 @@ class TFTokenExplorer:
     def dump_rdf_graphs(self):
         for root in self.rdf_graphs:
             self.pyvis_draw(self.rdf_graphs[root], str(
-                self.code_repo_path/root.replace('.', '')))
+                self.code_repo_path/root.split('/')[-1].replace('.', '')))
 
     def dump_tfsequences(self):
         pprint.pprint(self.tfsequences)

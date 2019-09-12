@@ -40,25 +40,26 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
     code_path = extract_code(paper['stored_dir_path'])
     preprocess(code_path)
 
-    args = Namespace(code_path=code_path, is_dataset=False, dest_path=".",
-                     combined_triples_only=False,
+    args = Namespace(input_path=code_path, is_dataset=False, dest_path=".",
+                     combined_triples_only=False, recursive=False,
                      output_types=[1, 3, 5, 6], show_arg=True, show_url=True)
     config = LightWeightMethodConfig(args)
 
     success, error_msg = run_lightweight_method(code_path, config)
     for filetype in out_types:
-        copy_files(code_path, out_path, filetype, 8)
+        copy_files(code_path, out_path, filetype)
         
     return success, error_msg
 
 def service(scraper: PWCScraper):
     print("Starting Hourly Scraper...")
     output_path = Path("./output").resolve()
-    output_types = ['*.triples', '*.html', '*.rdf']
+    output_types = ['*.triples', 'call_graph.html', '*.rdf']
     scraper.scrape()
     while True:
         try:
             paper = scraper.tf_papers.get_nowait()
+            print(paper)
             success, err_msg = run_lightweight(paper, output_path, output_types)
             scraper.database.update_query(paper['stored_dir_name'], success, err_msg)
         except queue.Empty:
@@ -79,7 +80,7 @@ def service_scrape_papers(args):
     scraper = PWCScraper(config)
 
     scheduler = BlockingScheduler()
-    scheduler.add_job(service, 'interval', args=(scraper,), hours=1)
+    scheduler.add_job(service, 'interval', args=(scraper,), minutes=5)
     scheduler.add_job(email_metadata, 'interval', args=(scraper,), days=1)
 
     scheduler.start()
