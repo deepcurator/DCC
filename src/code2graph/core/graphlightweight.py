@@ -421,7 +421,7 @@ class TFTokenExplorer:
             
             if "children" in s:
                 for idx, child in enumerate(s["children"]):
-                    child["rdf_name"] = s["rdf_name"] + "." + s["name"] + "_" + str(idx)
+                    child["rdf_name"] = s["rdf_name"] + "." + child["name"] + "_" + str(idx)
                     child["idx"] = s["idx"] + "-" + str(idx)
                     queue.append(child)
             
@@ -460,9 +460,10 @@ class TFTokenExplorer:
                 graph.add((node_uri, om.type, s["url"]))
             else:
                 graph.add((node_uri, om.type, om.user_defined))
-
-            if "name" in s:
-                graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
+                
+                if "name" in s:
+                    graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
+            
 
             if "children" in s:
                 for idx, child in enumerate(s["children"]):
