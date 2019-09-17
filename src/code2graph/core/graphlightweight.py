@@ -462,7 +462,7 @@ class TFTokenExplorer:
                 graph.add((node_uri, om.type, om.user_defined))
 
             if "name" in s:
-                graph.add((node_uri, RDFS.label, Literal(s["rdf_name"], datatype=XSD.string)))
+                graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
 
             if "children" in s:
                 for idx, child in enumerate(s["children"]):
@@ -504,7 +504,7 @@ class TFTokenExplorer:
         #     graph.add((node_uri, om.type, om.user_defined))
 
         # if "name" in node:
-        #     graph.add((node_uri, RDFS.label, Literal(node["rdf_name"], datatype=XSD.string)))
+        #     graph.add((node_uri, RDFS.label, Literal(node["name"], datatype=XSD.string)))
 
         # if "children" in node:
         #     for idx, child in enumerate(node["children"]):
