@@ -486,13 +486,13 @@ class TFTokenExplorer:
                 else:
                     for idx, arg in enumerate(s['args']):
                         arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
-                        arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
+                        arg_uri = URIRef(om.dcc_prefix+'has_arg_%d'%idx)
                         graph.add((arg_uri, om.type, OWL.DatatypeProperty))
                         graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
-            if "keywords" in node and self.config.show_arg:
+            if "keywords" in s and self.config.show_arg:
                 for keyword in s['keywords']:
-                    keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
+                    keyword_uri = URIRef(om.dcc_prefix+'has_keyword_'+str(keyword))
                     graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
                     graph.add((node_uri, keyword_uri, Literal(str(s['keywords'][keyword]), datatype=XSD.string)))
 
