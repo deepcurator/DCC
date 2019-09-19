@@ -125,7 +125,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
         if repo['framework'] and 'tf' in repo['framework']:
 
             if repo['code_path'] is not None:
-                task = {'code_path': repo['code_path'], 'id': idx+1}
+                task = {'code_path': repo['code_path'], 'meta': repo, 'id': idx+1}
                 tasks.append(task)
             else:
                 success = "Error"
@@ -138,7 +138,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
     return tasks, metadata
 
 
-def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> tuple:
+def run_lightweight_method(code_path: Path, meta: dict, config: LightWeightMethodConfig) -> tuple:
     """Runs lightweight method.
     Capture exception and return the error message.
 
@@ -151,7 +151,7 @@ def run_lightweight_method(code_path: Path, config: LightWeightMethodConfig) -> 
     """
 
     try:
-        explorer = TFTokenExplorer(code_path, config)
+        explorer = TFTokenExplorer(code_path, config, meta)
         explorer.explore_code_repository()
         success = "Success"
         error_msg = "N/A"
@@ -228,13 +228,13 @@ def pipeline_the_lightweight_approach(args):
         tasks, metadata = recursive(config.input_path, config)
 
     else:
-        task = {'code_path': config.input_path}
+        task = {'code_path': config.input_path, 'meta': {}}
         tasks.append(task)
 
     for task in tasks:
         preprocess(task['code_path'])
         task['success'], task['err_msg'] = run_lightweight_method(
-            task['code_path'], config)
+            task['code_path'], task['meta'], config)
 
     export_data(metadata, tasks, config)
 

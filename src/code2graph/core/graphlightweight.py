@@ -268,7 +268,7 @@ class ProgramLineVisitor:
 
 class TFTokenExplorer:
 
-    def __init__(self, code_path, config):
+    def __init__(self, code_path, config, meta={}):
         """Initializing the class"""
 
         self.dump_functions = {
@@ -283,6 +283,7 @@ class TFTokenExplorer:
         self.config = config
 
         self.code_repo_path = Path(code_path).resolve()
+        self.metadata = meta
         self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
 
         self.call_graph = Graph() # generated in build the one complete call graph
@@ -334,6 +335,7 @@ class TFTokenExplorer:
         self.build_pyan_call_graph()
         self.build_call_graph()
         self.build_call_trees()
+        self.build_meta_graph()
         self.build_rdf_graphs()
         self.build_tfsequences()
 
@@ -436,6 +438,23 @@ class TFTokenExplorer:
         #         child["idx"] = node["idx"] + "-" + str(idx)
         #         self.populate_call_tree(child)
 
+    def build_meta_graph(self):
+        graph = Graph()
+        if self.metadata:
+            publication_id_uri = URIRef(om.dcc_prefix + self.metadata['folder_name'])
+            repo_type_uri = URIRef(om.dcc_prefix + "Repository")
+            graph.add((publication_id_uri, om.type, repo_type_uri))
+
+            github_link_pred = URIRef(om.dcc_prefix + "githubrepo")
+            graph.add((publication_id_uri, github_link_pred, Literal(self.metadata['code'], datatype=XSD.string)))
+
+            hasFile_pred = URIRef(om.dcc_prefix + "hasFile")
+            for file in self.all_py_files:
+                file_name = om.dcc_prefix + self.metadata['folder_name'] + '/' + Path(file).name
+                graph.add((publication_id_uri, hasFile_pred, Literal(file_name, datatype=XSD.string)))
+
+        self.rdf_graphs['metadata'] = graph
+
     def build_rdf_graphs(self):
         for root in self.call_trees:
             graph = Graph()
@@ -486,7 +505,8 @@ class TFTokenExplorer:
                 else:
                     for idx, arg in enumerate(s['args']):
                         arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
-                        arg_uri = URIRef(om.dcc_prefix+'has_arg_%d'%idx)
+                        # arg_uri = URIRef(om.dcc_prefix+'has_arg_%d'%idx)
+                        arg_uri = URIRef(om.dcc_prefix+'has_arg')
                         graph.add((arg_uri, om.type, OWL.DatatypeProperty))
                         graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
