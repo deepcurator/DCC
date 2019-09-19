@@ -54,7 +54,7 @@ def extract_data(data_path: Path) -> list:
                 repo[meta_prefix] = None
 
         repo['stars'] = int(repo['stars'].replace(",", ""))
-        repo['folder_name'] = subdir.name
+        repo['stored_dir_name'] = subdir.name
 
         if repo['date']:
             try:
@@ -95,7 +95,7 @@ def preprocess(code_path: str):
     # check if the code is python3 compatible by compiling it
     result = compile_dir(code_path, force=True)
 
-    if result == False:
+    if result is False:
         subprocess.run("2to3 -w -n %s" % code_path, shell=True)
         subprocess.run("autopep8 --in-place -r %s" % code_path, shell=True)
 
@@ -131,7 +131,7 @@ def recursive(data_path: Path, config: LightWeightMethodConfig) -> tuple:
                 success = "Error"
                 error_msg = "There is no zip file."
 
-        metadata.append([repo['folder_name'], repo['title'], repo['framework'], success, error_msg,
+        metadata.append([repo['stored_dir_name'], repo['title'], repo['framework'], success, error_msg,
                          repo['date'], repo['tags'], repo['stars'], repo['code'],
                          repo['paper']])
 
