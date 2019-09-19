@@ -15,6 +15,8 @@ class TextAnnotator:
 
     ########## Generate annotations for text #########
     def match_terms(self,text):        
+        # ensure text is lower case
+        text=text.lower()        
         countT=1
         ann_triples=[]
         # list matched entities - note that countT will be shifted by 1
@@ -57,29 +59,30 @@ class TextAnnotator:
                 ann_triples.append(triple)
         return(ann_triples)
 
-################## Load entity and relation maps: ############
-config = yaml.safe_load(open('../../conf/conf.yaml'))
-model_dir=config['MODEL_PATH']
-
-f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
-[entity_map,uri2entity, uri2rel]=pickle.load(f)
-f.close()
-annotator=TextAnnotator(entity_map,uri2entity, uri2rel)
-
-file_path=config['SENTENCE_ANNOTATED_TEXT_PATH']
-
-################## Process multiple files ############
-
-files=[x for x in os.listdir(file_path) if os.path.splitext(x)[1]=='.txt']
-for f in files:
-    with open(os.path.join(file_path,f),encoding='utf8') as fp:
-       text = fp.read().strip()
-    print('Processing '+f)
-    ann_triples=annotator.match_terms(text)
-    # output to .ann file:
-    outfile=os.path.join(file_path,f).replace('.txt','.ann2')
-#    with open(outfile,'w',encoding='utf8') as fp:
-#        for ann in ann_triples:
-#            fp.write('\t'.join(ann)+'\n')
-            
+if __name__ == '__main__':
+    ################## Load entity and relation maps: ############
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    model_dir=config['MODEL_PATH']
+    
+    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+    [entity_map,uri2entity, uri2rel]=pickle.load(f)
+    f.close()
+    annotator=TextAnnotator(entity_map,uri2entity, uri2rel)
+    
+    file_path=config['SENTENCE_ANNOTATED_TEXT_PATH']
+    
+    ################## Process multiple files ############
+    
+    files=[x for x in os.listdir(file_path) if os.path.splitext(x)[1]=='.txt']
+    for f in files:
+        with open(os.path.join(file_path,f),encoding='utf8') as fp:
+           text = fp.read().strip()
+        print('Processing '+f)
+        ann_triples=annotator.match_terms(text)
+        # output to .ann file:
+        outfile=os.path.join(file_path,f).replace('.txt','.ann2')
+        with open(outfile,'w',encoding='utf8') as fp:
+            for ann in ann_triples:
+                fp.write('\t'.join(ann)+'\n')
+                
     

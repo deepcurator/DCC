@@ -16,24 +16,44 @@ f = open(os.path.join(model_dir,'cso_dict.pcl'), 'rb')
 [cso_entity_map,cso_relation_map]=pickle.load(f)
 f.close()
 
-### load brat annotations:
-#f = open(os.path.join(model_dir,'dictionaries.pcl'), 'rb')
-#[vocab,rel_vocab]=pickle.load(f)
-#f.close()
+### load and merge our brat and UWA annotations:
+def merge_annot(annot1, annot2):
+    out_df=pd.concat([annot1, annot2], axis=0).drop_duplicates()
+    out_df2=out_df.groupby(by=out_df.columns[0]).filter(lambda x: len(x) == 1)
+    return(out_df2)
+    #gr=ents.groupby(by='text')
+    #for nm,g in gr:
+    #    if len(g)>1:
+    #        print('conflict {}: {} vs {}'.format(nm,g.ent_type.iloc[0],g.ent_type.iloc[1]))
 
 # note: we load from manually cleaned files
 fn=os.path.join(model_dir,'brat_entities_clean.txt')
-z=pd.read_csv(fn, sep='\t', header=None)
-z.columns=['text','ent_type']
-vocab=dict(zip(z.text,z.ent_type))
-### manual corrections:
-vocab['hses']='Other'
+brat_entities=pd.read_csv(fn, sep='\t', header=None)
+brat_entities.columns=['text','ent_type']
 
 fn=os.path.join(model_dir,'brat_relations_clean.txt')
-z=pd.read_csv(fn, sep='\t', header=None)
-z.columns=['pair','rel_type']
-ps=z.pair.apply(lambda x: tuple(x.split('--'))).values
-rel_vocab=dict(zip(ps,z.rel_type))
+brat_relations=pd.read_csv(fn, sep='\t', header=None)
+brat_relations.columns=['pair','rel_type']
+
+# load UWA annotationss
+fn=os.path.join(model_dir,'uwa_brat_entities.txt')
+uwa_entities=pd.read_csv(fn, sep='\t', header=None)
+uwa_entities.columns=['text','ent_type']
+
+fn=os.path.join(model_dir,'uwa_brat_relations.txt')
+uwa_relations=pd.read_csv(fn, sep='\t', header=None)
+uwa_relations.columns=['pair','rel_type']
+
+
+ent_df=merge_annot(brat_entities,uwa_entities)
+rel_df=merge_annot(brat_relations,uwa_relations)
+
+vocab=dict(zip(ent_df.text,ent_df.ent_type))
+### manual corrections:
+vocab['hses']='Other'
+ps=rel_df.pair.apply(lambda x: tuple(x.split('--'))).values
+rel_vocab=dict(zip(ps,rel_df.rel_type))
+
 
 
 ### generate connected components from brat annotations:
@@ -103,7 +123,7 @@ for pair,rel in rel_vocab.items():
     if rel!='sameAs':
         # if entities not in vocab, ignore rel:
         if pair[0] not in cso_entity_map or pair[1] not in cso_entity_map:
-            #print('Skipping"{}"-"{}": {}'. format(pair[0],pair[1],rel))
+            #print('Skipping "{}"-"{}": {}'. format(pair[0],pair[1],rel))
             continue
         uri1=cso_entity_map[pair[0]]
         uri2=cso_entity_map[pair[1]]
