@@ -283,6 +283,8 @@ class TFTokenExplorer:
         self.config = config
 
         self.code_repo_path = Path(code_path).resolve()
+        self.repo_name = '-'.join(self.code_repo_path.name.split('-')[:-1])
+        self.repo_name_uri = URIRef(om.dcc_prefix + self.repo_name)
         self.metadata = meta
         self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
 
@@ -352,7 +354,7 @@ class TFTokenExplorer:
                 continue
             
             caller_uri = URIRef(om.user_defined + "/" + get_name(caller))
-            
+    
             self.call_graph.add((caller_uri, om.type, om.user_defined))
 
             self.pyan_node_dict[str(caller_uri)] = caller
@@ -373,7 +375,7 @@ class TFTokenExplorer:
 
     def build_call_trees(self):
         roots = self.find_roots(self.call_graph)
-        
+
         for root in roots:
             print("Start from root:", self.pyan_node_dict[root])
 
@@ -442,16 +444,13 @@ class TFTokenExplorer:
         graph = Graph()
         if self.metadata:
             publication_id_uri = URIRef(om.dcc_prefix + self.metadata['folder_name'])
-            repo_type_uri = URIRef(om.dcc_prefix + "Repository")
-            graph.add((publication_id_uri, om.type, repo_type_uri))
+            graph.add((self.repo_name_uri, om.type, om.repository))
+            graph.add((self.repo_name_uri, om.has_publication_id, publication_id_uri))
+            graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
-            github_link_pred = URIRef(om.dcc_prefix + "githubrepo")
-            graph.add((publication_id_uri, github_link_pred, Literal(self.metadata['code'], datatype=XSD.string)))
-
-            hasFile_pred = URIRef(om.dcc_prefix + "hasFile")
             for file in self.all_py_files:
                 file_name = om.dcc_prefix + self.metadata['folder_name'] + '/' + Path(file).name
-                graph.add((publication_id_uri, hasFile_pred, Literal(file_name, datatype=XSD.string)))
+                graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
 
         self.rdf_graphs['metadata'] = graph
 
@@ -474,6 +473,7 @@ class TFTokenExplorer:
         while queue:
             s = queue.pop(0)
             node_uri = URIRef(om.user_defined+'/'+s['rdf_name'])
+            graph.add((self.repo_name_uri, om.has_function, node_uri))
 
             if s["type"] == "tf_keyword":
                 graph.add((node_uri, om.type, s["url"]))
