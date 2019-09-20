@@ -449,14 +449,15 @@ class TFTokenExplorer:
             else:
                 publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
             graph.add((self.repo_name_uri, om.type, om.repository))
-            graph.add((self.repo_name_uri, om.has_publication_id, publication_id_uri))
+            graph.add((publication_id_uri, om.has_repository, self.repo_name_uri))
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
                 file_name = om.dcc_prefix + self.metadata['stored_dir_name'] + '/' + Path(file).name
                 graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
-
-        self.rdf_graphs['metadata'] = graph
+                graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
+            
+            self.rdf_graphs['metadata'] = graph
 
     def build_rdf_graphs(self):
         for root in self.call_trees:
