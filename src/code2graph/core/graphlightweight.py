@@ -443,7 +443,11 @@ class TFTokenExplorer:
     def build_meta_graph(self):
         graph = Graph()
         if self.metadata:
-            publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
+            if self.metadata['paper']:
+                pub_id = '.'.join(self.metadata['paper'].split('/')[-1].split('.')[:-1])
+                publication_id_uri = URIRef(om.dcc_prefix + pub_id)
+            else:
+                publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
             graph.add((self.repo_name_uri, om.type, om.repository))
             graph.add((self.repo_name_uri, om.has_publication_id, publication_id_uri))
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
