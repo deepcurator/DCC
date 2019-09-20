@@ -36,8 +36,8 @@ class OntologyManager:
         self.has_function = self.dcc_prefix['hasFunction']
         # rdflib.term.URIRef('https://github.com/deepcurator/DCC/hasFunction')
         
-        self.has_publication_id = self.dcc_prefix['hasPublicationID']
-        self.repository = self.dcc_prefix['hasRepository']
+        self.repository = self.dcc_prefix['Repository']
+        self.has_repository = self.dcc_prefix['hasRepository']
         self.githubrepo = self.dcc_prefix['githubrepo']
         self.has_file = self.dcc_prefix['hasFile']
         self.part_of = self.dcc_prefix['partOf']
