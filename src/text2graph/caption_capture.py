@@ -65,6 +65,7 @@ if __name__ == '__main__':
                             if "fig." not in head and "Fig." not in head and "figure" not in head and "Figure" not in head:
                                 count += 1
                             else:
+                                cap_fp.write(figure_uid+'\thasHead\t'+head+'\n')
                                 figDesc = getFigDesc(fig)
                                 # output caption text
                                 text_fn=os.path.join('../../Data/extracted_captions/',paper_name+'.'+fid+'.txt')

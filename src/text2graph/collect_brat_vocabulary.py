@@ -32,6 +32,8 @@ def preprocess_ent(text):
         text= re.sub(r"\b"+t+r"\b", "",text)
         #print(text)
     text=text.replace(r"\s+"," ").strip().lower()
+    ### convert plural to singular?:
+    #text=re.sub(r"[^s]s$",r'\1',text)
     return(text)
 
 def collect_annotations(textIterator):

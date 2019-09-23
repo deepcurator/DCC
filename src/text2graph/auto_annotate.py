@@ -3,6 +3,7 @@ import re
 import yaml 
 import pickle 
 import itertools
+import pandas as pd
 #from nltk.corpus import stopwords
 #en_stopwords = stopwords.words('english')
 
@@ -18,7 +19,7 @@ class TextAnnotator:
         # ensure text is lower case
         text=text.lower()        
         countT=1
-        ann_triples=[]
+        anns=[]
         # list matched entities - note that countT will be shifted by 1
         entity_matches=[]
         for (ent, uri) in self.entity_map.items():
@@ -30,9 +31,16 @@ class TextAnnotator:
                 # known entity
                 if uri in self.uri2entity:
                     ent_type=self.uri2entity[uri]
-                    ann_triples.append(('T'+str(countT),'{} {} {}'.format(ent_type,start,end), text[start:end]))
+                    anns.append([countT,start,end,text[start:end],len(ent),uri,ent_type])
                     entity_matches.append((countT,uri))
                     countT=countT+1
+        # generate ann triples for entities: sort by start, end and length of entity
+        ann_df=pd.DataFrame(anns,columns=['ID','SP','EP','TEXT','LEN','URI','ENT_TYPE']).sort_values(by=['SP','EP','LEN'])
+        ann_df=TextAnnotator.clean_annotations(ann_df)
+        # create annotation tuples and get map of entity matches
+        ann_triples=ann_df.apply(lambda row: ('T'+str(row.ID),'{} {} {}'.format(row.ENT_TYPE,row.SP,row.EP), row.TEXT), axis=1).values.tolist()    
+        entity_matches=ann_df.apply(lambda row: (row.ID,row.URI), axis=1).values.tolist()
+        
         countR=1
         # generate all candidate pairs:
         pair_list=itertools.combinations(entity_matches, 2)
@@ -58,6 +66,33 @@ class TextAnnotator:
                 #print(triple)
                 ann_triples.append(triple)
         return(ann_triples)
+
+    '''
+    Assume data frame is sorted by start position, end position and length of entity
+    '''
+    @staticmethod
+    def clean_annotations(ann_df):
+        ids_to_remove=[]
+        for i in range(len(ann_df)):
+            row1=ann_df.iloc[i]
+            if row1.ID not in ids_to_remove:
+                for j in range(i+1,len(ann_df)):
+                    row2=ann_df.iloc[j]
+                    if row2.SP >= row1.EP:
+                        # no overlap between rows
+                        break
+                    if row2.SP == row1.SP:
+                        # skip row1 - it is inside row2
+                        ids_to_remove.append(row1.ID)
+                        break
+                    if row2.EP <= row1.EP:
+                        # row2 is within row1 (row1 is not covered by any other)
+                        # but keep going, there may be more like this
+                        ids_to_remove.append(row2.ID)
+        ann_df = ann_df[~ann_df['ID'].isin(ids_to_remove)]
+        return(ann_df)
+
+    
 
 if __name__ == '__main__':
     ################## Load entity and relation maps: ############
