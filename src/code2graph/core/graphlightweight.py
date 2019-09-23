@@ -123,7 +123,7 @@ class CallVisitor(ast.NodeVisitor):
         # print("finding call full name: %s, base name: %s" %(call_name, base_name))
         # pprint.pprint(astor.dump_tree(node))
         # print(self.root)
-        # import pdb; pdb.set_trace()
+        
         if base_name == "__init__":
             base_name = call_name.split('.')[-2] + "." + base_name
 
@@ -352,7 +352,7 @@ class TFTokenExplorer:
                 continue
             if caller.flavor is Flavor.UNKNOWN:
                 continue
-            
+
             caller_uri = URIRef(om.user_defined + "/" + get_name(caller))
     
             self.call_graph.add((caller_uri, om.type, om.user_defined))
@@ -453,7 +453,7 @@ class TFTokenExplorer:
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
-                file_name = om.dcc_prefix + self.metadata['stored_dir_name'] + '/' + Path(file).name
+                file_name = om.dcc_prefix + self.repo_name + '/' + Path(file).name
                 graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
                 graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
             
