@@ -165,10 +165,10 @@ class PWCScraper:
                 links_html_source = self.browser.page_source
                 links_soup = BeautifulSoup(links_html_source, "lxml")
 
-                paper['paper_link'] = links_soup.find(
+                paper['paper'] = links_soup.find(
                     'a', {'class': 'badge badge-light'})['href']
                 # might be multiple code_link, what to do?
-                paper['code_link'] = links_soup.find(
+                paper['code'] = links_soup.find(
                     'a', {'class': 'code-table-link'})['href']
                 paper['framework'] = None
 
@@ -200,7 +200,7 @@ class PWCScraper:
             values = (paper['stored_dir_name'], paper['title'], paper['framework'],
                       'N/A', 'N/A', paper['date'], ','.join(paper['tags']),
                       int(paper['stars'].replace(",", "")),
-                      paper['code_link'], paper['paper_link'])
+                      paper['code'], paper['paper'])
             values_list.append(values)
         self.database.upsert_query(values_list)
 
@@ -234,17 +234,17 @@ class PWCScraper:
             else:
                 self.write_to_file(
                     ','.join(paper['tags']), paper_directory / "tags.txt")
-            self.write_to_file(paper['paper_link'],
+            self.write_to_file(paper['paper'],
                                paper_directory / "paper.txt")
 
-            wget.download(paper['paper_link'], out=str(
+            wget.download(paper['paper'], out=str(
                 paper['stored_dir_path']/(paper['stored_dir_name']+'.pdf')))
 
-            self.write_to_file(paper['code_link'],
+            self.write_to_file(paper['code'],
                                paper_directory / "code.txt")
 
             try:
-                self.fetch_code(paper['code_link'], paper_directory)
+                self.fetch_code(paper['code'], paper_directory)
             except:
                 continue
 

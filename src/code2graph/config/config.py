@@ -76,8 +76,8 @@ class GenerateSummaryArgParser:
                                  type=str,
                                  help="Path to code directory.")
 
-    def get_args(self):
-        return self.parser.parse_args()
+    def get_args(self, args):
+        return self.parser.parse_args(args)
 
 
 class GraphHandlerArgParser:
@@ -96,8 +96,8 @@ class GraphHandlerArgParser:
                                  type=str,
                                  help='directory for saved graph')
 
-    def get_args(self):
-        return self.parser.parse_args()
+    def get_args(self, args):
+        return self.parser.parse_args(args)
 
 class PWCConfigArgParser:
 
@@ -125,3 +125,40 @@ class PWCConfig:
         self.cred_path = str(Path(args.cred_path).resolve())
         self.storage_path = Path(args.save_path)
         self.tot_paper_to_scrape_per_shot = 1
+
+class GraphASTArgParser:
+    '''
+        Argument Parser for graphast script.
+    '''
+    
+    def __init__(self):
+        self.parser = ArgumentParser(description='The parameters for graphast method.')
+        
+        self.parser.add_argument('-ip', dest='input_path',
+                                 default='../test/fashion_mnist', type=str,
+                                 help='Path to the source code. Default: ../test/fashion_mnist')
+        self.parser.add_argument('-r', dest='recursive', 
+                                 action='store_true',
+                                 help='Recursively apply graphast method on all papers in the input path.')
+        self.parser.set_defaults(recursive=False)
+        self.parser.add_argument('-dp', '--dest_path',
+                                 default='../graphast_output', type=str,
+                                 help='Path to save output files.')
+        self.parser.add_argument('-res', dest='resolution',
+                                 default='function', type=str,
+                                 help='Processing resolution of the method: function or method. Default: function.')
+
+    def get_args(self, args):
+        return self.parser.parse_args(args)
+
+
+class GraphASTConfig:
+    '''
+        Config class for graphast method.
+    '''
+
+    def __init__(self, arg):
+        self.input_path = Path(arg.input_path).resolve()
+        self.recursive = arg.recursive
+        self.dest_path = Path(arg.dest_path).resolve()
+        self.resolution = arg.resolution
