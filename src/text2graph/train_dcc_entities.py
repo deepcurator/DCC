@@ -23,12 +23,14 @@ from pathlib import Path
 import spacy
 from spacy.util import minibatch, compounding
 from spacy.util import decaying
+from spacy.pipeline import EntityRuler
 
 from brat2spacy import create_training_data
 from ner_utils import ner_eval, test_ner_model
 
-# new entity label
+# new entity labels
 new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Eval', 'Other']
+#new_entities_list = ['Method', 'Generic', 'Task', 'Material', 'Metric', 'OtherScientificTerm']
 
 
 config = yaml.safe_load(open('../../conf/conf.yaml'))
@@ -36,6 +38,10 @@ input_dir = config['SENTENCE_ANNOTATED_TEXT_PATH']
 model_dir = config['MODEL_PATH']
 test_dir = config['TEST_DATA_PATH']
 output_dir = config['TEXT_OUTPUT_PATH']
+
+#input_dir = 'C:/Home02/src02/DCCdev_921/grobid/Text_Files_In_Sentences_V3_Partial/'
+#input_dir = 'C:/Home02/src02/DCCdev_921/All_Data_For_NER/'
+#input_dir = 'C:/Home02/src02/DCCdev_921/extracted_captions/'
 
 n_iter = 50
 
@@ -58,8 +64,14 @@ n_iter = 50
 # Output -
 #   The trained entity model stored in the output_dir
 def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_dir=model_dir, output_dir=output_dir, test_dir=test_dir, n_iter=n_iter):
+    random.seed(1234)
+
     # create the training from annotated data produced by using Brat
+    data_reading_start_time = time.time()
     training_data = create_training_data(input_dir)
+    data_reading_end_time = time.time()
+    data_reading_time = data_reading_end_time - data_reading_start_time
+    print("--->data reading time: ", data_reading_time)
 
     # check if the user provides an existing language model
     if model is not None:
@@ -92,21 +104,35 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
     # start the training of the recognizer (and the time)
     training_start_time = time.time()
     for itn in range(n_iter):
+        iter_start_time = time.time()
         dropout = decaying(0.4, 0.2, 1.0e-2)
         random.shuffle(training_data)
         losses = {}
         # batch up the examples using spaCy's minibatch
         batches = minibatch(training_data, size=compounding(4., 32., 1.001))
-        for batch in batches:
+        for ib, batch in enumerate(batches):
+            # print("     batch ", ib)
+            ignore_batch = False
+            for bl in range(len(batch)):
+                # print(batch[bl])
+                # print(len(batch[bl]))
+                if len(batch[bl]) < 2:
+                    ignore_batch = True
+            if ignore_batch == True:
+                continue
             texts, annotations = zip(*batch)
+            # print(texts)
+            # print(annotations)
             nlp.update(texts, annotations, sgd=optimizer, drop=0.35,
                        losses=losses)
-        print('iter:', itn)
-        print('Losses', losses)
+        iter_end_time = time.time()
+        iter_elapsed_time = iter_end_time - iter_start_time
+        print('     iter:', itn)
+        print('     Losses', losses)
+        print('     iter elapsed time:', iter_elapsed_time)
 
     training_end_time = time.time()
     print("training time: ", training_end_time-training_start_time)
-
 
     ############################
     # test the ner model on a set of text data taken from papers
@@ -125,7 +151,7 @@ def main(model=None, new_model_name='DCC_ent', input_dir=input_dir, saved_model_
         ('Recurrent neural networks are used for forecasting and natural language processing.',
          [(0, 25, 'Method'), (39, 50, 'Task'), (55, 82, 'Task')]),
         ('Convolutional neural networks are frequently used in object recognition and medical image processing.',
-         [(0, 25, 'Method'), (39, 50, 'Task'), (55, 82, 'Task')])
+         [(0, 29, 'Method'), (53, 72, 'Task'), (84, 101, 'Task')])
     ]
     res = ner_eval(nlp, examples)
     print("\nModel evaluation results:")
