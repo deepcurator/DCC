@@ -45,7 +45,7 @@ class ArrowDetect:
     
     def reachTextBox(self, text_list, px, py):
         for index in range(len(text_list)):
-            ((startX, startY, endX, endY), op, prob) = text_list[index]
+            ((startX, startY, endX, endY), op, prob, textID) = text_list[index]
             comp = np.array([[[startX, startY]],[[startX, endY]],[[endX, endY]], [[endX, startY]]], dtype=np.int32)                              
             dist = cv2.pointPolygonTest(comp,(px, py),False)
             if dist >= 0:
@@ -58,7 +58,7 @@ class ArrowDetect:
         
         for index in range(len(text_list)):
             if(index != exclude_comp):
-                ((startX, startY, endX, endY), op, prob) = text_list[index]
+                ((startX, startY, endX, endY), op, prob, textID) = text_list[index]
                 comp = np.array([[[startX, startY]],[[endX, startY]],[[endX, endY]],[[startX, endY]]], dtype=np.int32)
                 D = cv2.pointPolygonTest(comp,(px, py),True)
                 if D > max_dist:
@@ -165,9 +165,7 @@ class ArrowDetect:
                         extend_line_x2 = endx
                         extend_line_y2 = endy
                     
-        # cv2.imshow('arrow_detect imcpy',imcpy)
-        # cv2.waitKey(0)
-    
+       
         return extended_lines
         
         
@@ -271,13 +269,6 @@ class ArrowDetect:
         lines = cv2.HoughLinesP(thresh_imcpy, rho=1, theta=np.pi/180, threshold=15, minLineLength = self.min_line_length, maxLineGap = 0)        
         retained_lines = self.discardLineInsideComp(lines, components, text_list)
         
-        # imcpy2 = img.copy()
-        # for line in retained_lines:
-        #     for x1, y1, x2, y2 in line:
-        #         cv2.line(imcpy2,(x1,y1),(x2,y2),(255,0,0),2)
-                
-        # cv2.imshow('img_copy2', imcpy2)
-        # cv2.waitKey(0)
-        
+               
         return retained_lines
             

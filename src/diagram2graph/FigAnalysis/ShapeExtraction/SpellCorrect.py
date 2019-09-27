@@ -30,15 +30,40 @@ class SpellCorrect:
         else: 
             correct = spell.correction(misspelled_lower)
             return correct
+
+    def correctListWord(self, misspelled, fig_text):
+        if fig_text != []:
+            spellList = SpellChecker(language = None)  # load default dictionary
+            spellList.word_frequency.load_words(fig_text)
+            misspelled_lower = misspelled.lower()
             
-    def correctWord(self, misspelled):
+            if misspelled_lower in spellList:
+                return (misspelled, 1.0)
+            else: 
+                correct = spellList.correction(misspelled_lower)
+                prob = spellList.word_probability(misspelled_lower, total_words = 1)
+                return (correct, prob)
+        else:
+            return (None, 0.0)
+
+            
+    def correctWord(self, misspelled, fig_text):
         
-        (correctDL, probDL) = self.correctDLWord(misspelled)
-        if correctDL == misspelled and probDL == 1.0: # found word in dictionary
-            return correctDL
-        elif correctDL != misspelled and probDL == 0.0: # corrected word from DL dictionary
-            return correctDL               
-        else: #elif correctDL == misspelled.lower() and probDL == 0.0: #Not corrected by DL dictionary, returned original
-            correct = self.correctRegularWord(misspelled)
-            return correct
+        (correctListWord, probListWord) = self.correctListWord(misspelled, fig_text)
+
+        if correctListWord != None and correctListWord == misspelled and probListWord == 1.0: # found word in fig_list
+           return correctListWord
+        elif correctListWord != None  and (correctListWord != misspelled and probListWord == 0.0): # corrected word from fig_list
+            return correctListWord
+        elif (correctListWord == None) or (correctListWord == misspelled and probListWord == 0.0):# not found word in fig_list
+           
+            (correctDL, probDL) = self.correctDLWord(misspelled)
+
+            if correctDL == misspelled and probDL == 1.0: # found word in dictionary
+                return correctDL
+            elif correctDL != misspelled and probDL == 0.0: # corrected word from DL dictionary
+                return correctDL               
+            else: #elif correctDL == misspelled.lower() and probDL == 0.0: #Not corrected by DL dictionary, returned original
+                correct = self.correctRegularWord(misspelled)
+                return correct
             

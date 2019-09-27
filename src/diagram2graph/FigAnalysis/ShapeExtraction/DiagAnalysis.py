@@ -5,10 +5,13 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import glob
 import os
 
+from ShapeDetect import ShapeDetect as sd
 from ArrowDetect import ArrowDetect as ad
 from TextDetect_OPENCV import TextDetectAll as tda
-from Diag2Graph import Diag2Graph as tg
-from ShapeDetect import ShapeDetect as sd
+#from Diag2Graph import Diag2Graph as tg
+from Diag2Graph_v2 import Diag2Graph as tgv2
+from ParseJSON import ParseJSON as pj
+
 
 def preprocessImage(image_path, resize):
     
@@ -47,17 +50,25 @@ if __name__ == '__main__':
         print(filename)
         im, thresh_im, gray_imcv = preprocessImage(filename, 0)
         
+        parsejson = pj()
+        paper_title, paper_file_name, paper_conf, paper_year, fig_caption, fig_text = parsejson.getCaption(filename)
+        if not os.path.isdir(os.path.join(op_dir, paper_file_name)):
+            os.mkdir(os.path.join(op_dir, paper_file_name))
+            os.mkdir(os.path.join(op_dir, paper_file_name, "diag2graph"))
+            os.mkdir(os.path.join(op_dir, paper_file_name, "Figures"))
+
+        cv2.imwrite(os.path.join(op_dir, paper_file_name+ "/Figures/" + os.path.basename(filename)), im)        
         
         shapedetector = sd()
-        component = shapedetector.find_component(filename, op_dir, im, thresh_im, gray_imcv)
+        component, flow_dir = shapedetector.find_component(filename, op_dir, im, thresh_im, gray_imcv)
                
         textdetector = tda()
-        text_list = textdetector.combinedTextDetect(filename, im, component)
+        text_list = textdetector.combinedTextDetect(filename, im, component, fig_text)
         
         arrowdetector = ad()            
         line_connect = arrowdetector.detectLines(im, thresh_im, gray_imcv, component, text_list)
     
-        graphcreator = tg()
-        graphcreator.createDiag2Graph(op_dir, filename, im, thresh_im, component, text_list, line_connect)
+        graphcreator = tgv2()
+        graphcreator.createDiag2Graph(op_dir, filename, im, thresh_im, component, flow_dir, text_list, line_connect, paper_title, paper_file_name, paper_conf, paper_year, fig_caption)
         
         
