@@ -1,0 +1,1061 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:17+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Acquisition of Localization Confidence for Accurate Object Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Borui</forename><surname>Jiang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">School of Electronics Engineering and Computer Science</orgName>
+								<orgName type="institution">Peking University</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">Megvii Inc. (Face++)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruixuan</forename><surname>Luo</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">School of Electronics Engineering and Computer Science</orgName>
+								<orgName type="institution">Peking University</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">Megvii Inc. (Face++)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiayuan</forename><surname>Mao</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Institute for Interdisciplinary Information Sciences</orgName>
+								<orgName type="laboratory">ITCS</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="department">Toutiao AI Lab</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tete</forename><surname>Xiao</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">School of Electronics Engineering and Computer Science</orgName>
+								<orgName type="institution">Peking University</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">Megvii Inc. (Face++)</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuning</forename><surname>Jiang</surname></persName>
+							<email>jiangyuning@bytedance.com</email>
+							<affiliation key="aff3">
+								<orgName type="department">Toutiao AI Lab</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Acquisition of Localization Confidence for Accurate Object Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>
+					<term>object localization</term>
+					<term>bounding box regression</term>
+					<term>non-maximum suppression</term>
+				</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. Modern CNN-based object detectors rely on bounding box regression and non-maximum suppression to localize objects. While the probabilities for class labels naturally reflect classification confidence, localization confidence is absent. This makes properly localized bounding boxes degenerate during iterative regression or even suppressed during NMS. In the paper we propose IoU-Net learning to predict the IoU between each detected bounding box and the matched ground-truth. The network acquires this confidence of localization, which improves the NMS procedure by preserving accurately localized bounding boxes. Furthermore, an optimization-based bounding box refinement method is proposed, where the predicted IoU is formulated as the objective. Extensive experiments on the MS-COCO dataset show the effectiveness of IoU-Net, as well as its compatibility with and adaptivity to several state-of-the-art object detectors.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Object detection serves as a prerequisite for a broad set of downstream vision applications, such as instance segmentation <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref>, human skeleton <ref type="bibr" target="#b26">[27]</ref>, face recognition <ref type="bibr" target="#b25">[26]</ref> and high-level object-based reasoning <ref type="bibr" target="#b29">[30]</ref>. Object detection combines both object classification and object localization. A majority of modern object detectors are based on two-stage frameworks <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b9">10]</ref>, in which object detection is formulated as a multi-task learning problem: 1) distinguish foreground object proposals from background and assign them with proper class labels; 2) regress a set of coefficients which localize the object by maximizing intersection-over-union (IoU) or other metrics between detection results and the ground-truth. Finally, redundant bounding boxes (duplicated detections on the same object) are removed by a non-maximum suppression (NMS) procedure.</p><p>(a) Demonstrative cases of the misalignment between classification confidence and localization accuracy. The yellow bounding boxes denote the ground-truth, while the red and green bounding boxes are both detection results yielded by FPN <ref type="bibr" target="#b15">[16]</ref>. Localization confidence is computed by the proposed IoU-Net. Using classification confidence as the ranking metric will cause accurately localized bounding boxes (in green) being incorrectly eliminated in the traditional NMS procedure. Quantitative analysis is provided in Section 2.1  Classification and localization are solved differently in such detection pipeline. Specifically, given a proposal, while the probability for each class label naturally acts as an "classification confidence" of the proposal, the bounding box regression module finds the optimal transformation for the proposal to best fit the groundtruth. However, the "localization confidence" is absent in the loop.</p><p>This brings about two drawbacks. (1) First, the suppression of duplicated detections is ignorant of the localization accuracy while the classification scores are typically used as the metric for ranking the proposals. In <ref type="figure" target="#fig_1">Figure 1</ref>(a), we show a set of cases where the detected bounding boxes with higher classification confidences contrarily have smaller overlaps with the corresponding ground-truth. Analog to Gresham's saying that bad money drives out good, the misalignment between classification confidence and localization accuracy may lead to accurately localized bounding boxes being suppressed by less accurate ones in the NMS procedure. (2) Second, the absence of localization confidence makes the widely-adopted bounding box regression less interpretable. As an example, previous works <ref type="bibr" target="#b2">[3]</ref> report the non-monotonicity of iterative bounding box regression. That is, bounding box regression may degenerate the localization of input bounding boxes if applied for multiple times (shown as <ref type="figure" target="#fig_1">Figure 1(b)</ref>).</p><p>In this paper we introduce IoU-Net, which predicts the IoU between detected bounding boxes and their corresponding ground-truth boxes, making the networks aware of the localization criterion analog to the classification module. This simple coefficient provides us with new solutions to the aforementioned problems:</p><p>1. IoU is a natural criterion for localization accuracy. We can replace classification confidence with the predicted IoU as the ranking keyword in NMS. This technique, namely IoU-guided NMS, help to eliminate the suppression failure caused by the misleading classification confidences. 2. We present an optimization-based bounding box refinement procedure on par with the traditional regression-based methods. During the inference, the predicted IoU is used as the optimization objective, as well as an interpretable indicator of the localization confidence. The proposed Precise RoI Pooling layer enables us to solve the IoU optimization by gradient ascent. We show that compared with the regression-based method, the optimization-based bounding box refinement empirically provides a monotonic improvement on the localization accuracy. The method is fully compatible with and can be integrated into various CNN-based detectors <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b9">10]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Delving into object localization</head><p>First of all, we explore two drawbacks in object localization: the misalignment between classification confidence and localization accuracy and the non-monotonic bounding box regression. A standard FPN <ref type="bibr" target="#b15">[16]</ref> detector is trained on MS-COCO trainval35k as the baseline and tested on minival for the study.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Misaligned classification and localization accuracy</head><p>With the objective to remove duplicated bounding boxes, NMS has been an indispensable component in most object detectors since <ref type="bibr" target="#b3">[4]</ref>. NMS works in an iterative manner. At each iteration, the bounding box with the maximum classification confidence is selected and its neighboring boxes are eliminated using a predefined overlapping threshold. In Soft-NMS <ref type="bibr" target="#b1">[2]</ref> algorithm, box elimination is replaced by the decrement of confidence, leading to a higher recall. Recently, a set of learning-based algorithms have been proposed as alternatives to the parameterfree NMS and Soft-NMS. <ref type="bibr" target="#b23">[24]</ref> calculates an overlap matrix of all bounding boxes and performs affinity propagation clustering to select exemplars of clusters as the final detection results. <ref type="bibr" target="#b10">[11]</ref> proposes the GossipNet, a post-processing network trained for NMS based on bounding boxes and the classification confidence. <ref type="bibr" target="#b11">[12]</ref> proposes an end-to-end network learning the relation between detected bounding boxes. However, these parameter-based methods require more computational resources which limits their real-world application.  In the widely-adopted NMS approach, the classification confidence is used for ranking bounding boxes, which can be problematic. We visualize the distribution of classification confidences of all detected bounding boxes before NMS, as shown in <ref type="figure" target="#fig_3">Figure 2(a)</ref>. The x-axis is the IoU between the detected box and its matched ground-truth, while the y-axis denotes its classification confidence. The Pearson correlation coefficient indicates that the localization accuracy is not well correlated with the classification confidence.</p><p>We attribute this to the objective used by most of the CNN-based object detectors in distinguishing foreground (positive) samples from background (negative) samples. A detected bounding box box det is considered positive during training if its IoU with one of the ground-truth bounding box is greater than a threshold Ω train . This objective can be misaligned with the localization accuracy. <ref type="figure" target="#fig_1">Figure 1(a)</ref> shows cases where bounding boxes having higher classification confidence have poorer localization.</p><p>Recall that in traditional NMS, when there exists duplicated detections for a single object, the bounding box with maximum classification confidence will be preserved. However, due to the misalignment, the bounding box with better localization will probably get suppressed during the NMS, leading to the poor localization of objects.   bounding boxes. We can see that the absence of localization confidence makes more than half of detected bounding boxes with IoU &gt; 0.9 being suppressed in the traditional NMS procedure, which degrades the localization quality of the detection results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Non-monotonic bounding box regression</head><p>In general, single object localization can be classified into two categories: bounding box-based methods and segment-based methods. The segment-based methods <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b9">10]</ref> aim to generate a pixel-level segment for each instance but inevitably require additional segmentation annotation. This work focuses on the bounding box-based methods.</p><p>Single object localization is usually formulated as a bounding box regression task. The core idea is that a network directly learns to transform (i.e., scale or shift) a bounding box to its designated target. In <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b7">8]</ref> linear regression or fully-connected layer is applied to refine the localization of object proposals generated by external pre-processing modules (e.g., Selective Search <ref type="bibr" target="#b27">[28]</ref> or EdgeBoxes <ref type="bibr" target="#b32">[33]</ref>). Faster R-CNN <ref type="bibr" target="#b22">[23]</ref> proposes region proposal network (RPN) in which only predefined anchors are used to train an end-to-end object detector. <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b31">32]</ref> utilize anchor-free, fully-convolutional networks to handle object scale variation. Meanwhile, Repulsion Loss is proposed in <ref type="bibr" target="#b28">[29]</ref> to robustly detect objects with crowd occlusion. Due to its effectiveness and simplicity, bounding box regression has become an essential component in most CNN-based detectors.</p><p>A broad set of downstream applications such as tracking and recognition will benefit from accurately localized bounding boxes. This raises the demand for improving localization accuracy. In a series of object detectors <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b20">21]</ref>, refined boxes will be fed to the bounding box regressor again and go through the refinement for another time. This procedure is performed for several times, namely iterative bounding box regression. Faster R-CNN <ref type="bibr" target="#b22">[23]</ref> first performs the bounding box regression twice to transform predefined anchors into final detected bounding boxes. <ref type="bibr" target="#b14">[15]</ref> proposes a group recursive learning approach to iteratively refine detection results and minimize the offsets between object proposals and the ground-truth considering the global dependency among multiple proposals. G-CNN is proposed in <ref type="bibr" target="#b17">[18]</ref> which starts with a multi-scale regular grid over the image and iteratively pushes the boxes in the grid towards the ground-truth. However, as reported in <ref type="bibr" target="#b2">[3]</ref>, applying bounding box regression more than twice brings no further improvement. <ref type="bibr" target="#b2">[3]</ref> attribute this to the distribution mismatch in multi-step bounding box regression and address it by a resampling strategy in multi-stage bounding box regression.</p><p>We experimentally show the performance of iterative bounding box regression based on FPN and Cascade R-CNN frameworks. The Average Precision (AP) of the results after each iteration are shown as the blue curves in <ref type="figure" target="#fig_6">Figure 4</ref>(a) and <ref type="figure" target="#fig_6">Figure 4</ref>(b), respectively. The AP curves in <ref type="figure" target="#fig_6">Figure 4</ref> show that the improvement on localization accuracy, as the number of iterations increase, is non-monotonic for iterative bounding box regression. The non-monotonicity, together with the noninterpretability, brings difficulties in applications. Besides, without localization confidence for detected bounding boxes, we can not have fine-grained control over the refinement, such as using an adaptive number of iterations for different bounding boxes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">IoU-Net</head><p>To quantitatively analyze the effectiveness of IoU prediction, we first present the methodology adopted for training an IoU predictor in Section 3.1. In Section 3.2 and Section 3.3, we show how to use IoU predictor for NMS and bounding box refinement, respectively. Finally in Section 3.4 we integrate the IoU predictor into existing object detectors such as FPN <ref type="bibr" target="#b15">[16]</ref>. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Learning to predict IoU</head><p>Shown in <ref type="figure" target="#fig_7">Figure 5</ref>, the IoU predictor takes visual features from the FPN and estimates the localization accuracy (IoU) for each bounding box. We generate bounding boxes and labels for training the IoU-Net by augmenting the groundtruth, instead of taking proposals from RPNs. Specifically, for all ground-truth bounding boxes in the training set, we manually transform them with a set of randomized parameters, resulting in a candidate bounding box set. We then remove from this candidate set the bounding boxes having an IoU less than Ω train = 0.5 with the matched ground-truth. We uniformly sample training data from this candidate set w.r.t. the IoU. This data generation process empirically brings better performance and robustness to the IoU-Net. For each bounding box, the features are extracted from the output of FPN with the proposed Precise RoI Pooling layer (see Section 3.3). The features are then fed into a two-layer feedforward network for the IoU prediction. For a better performance, we use class-aware IoU predictors.</p><p>The IoU predictor is compatible with most existing RoI-based detectors. The accuracy of a standalone IoU predictor can be found in <ref type="figure" target="#fig_3">Figure 2</ref>. As the training procedure is independent of specific detectors, it is robust to the change of the input distributions (e.g., when cooperates with different detectors). In later sections, we will further demonstrate how this module can be jointly optimized in a full detection pipeline (i.e., jointly with RPNs and R-CNN).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">IoU-guided NMS</head><p>We resolve the misalignment between classification confidence and localization accuracy with a novel IoU-guided NMS procedure, where the classification confi-Algorithm 1 IoU-guided NMS. Classification confidence and localization confidence are disentangled in the algorithm. We use the localization confidence (the predicted IoU) to rank all detected bounding boxes, and update the classification confidence based on a clustering-like rule.</p><p>Input: B = {b1, ..., bn}, S, I, Ωnms B is a set of detected bounding boxes. S and I are functions (neural networks) mapping bounding boxes to their classification confidence and IoU estimation (localization confidence) respectively. Ωnms is the NMS threshold. Output: D, the set of detected bounding boxes with classification scores.</p><p>1: D ← ∅ 2: while B = ∅ do 3: bm ← arg max I(bj) 4:</p><p>B ← B \ {bm} 5:</p><p>s ← S(bm) 6:</p><p>for bj ∈ B do 7:</p><p>if IoU(bm, bj) &gt; Ωnms then 8:</p><p>s ← max(s, S(bj)) 9:</p><p>B ← B \ {bj} 10:</p><p>end if 11:</p><p>end for 12:</p><p>D ← D ∪ { bm, s } 13: end while 14: return D dence and localization confidence (an estimation of the IoU) are disentangled. In short, we use the predicted IoU instead of the classification confidence as the ranking keyword for bounding boxes. Analog to the traditional NMS, the box having the highest IoU with a ground-truth will be selected to eliminate all other boxes having an overlap greater than a given threshold Ω nms . To determine the classification scores, when a box i eliminates box j, we update the classification confidence s i of box i by s i = max(s i , s j ). This procedure can also be interpreted as a confidence clustering: for a group of bounding boxes matching the same ground-truth, we take the most confident prediction for the class label. A psuedo-code for this algorithm can be found in Algorithm 1.</p><p>IoU-guided NMS resolves the misalignment between classification confidence and localization accuracy. Quantitative results show that our method outperforms traditional NMS and other variants such as Soft-NMS <ref type="bibr" target="#b1">[2]</ref>. Using IoU-guided NMS as the post-processor further pushes forward the performance of several state-of-the-art object detectors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 2 Optimization-based bounding box refinement</head><p>Input: B = {b1, ..., bn}, F, T, λ, Ω1, Ω2</p><p>B is a set of detected bounding boxes, in the form of (x0, y0, x1, y1). F is the feature map of the input image. T is number of steps. λ is the step size, and Ω1 is an early-stop threshold and Ω2 &lt; 0 is an localization degeneration tolerance. Function PrPool extracts the feature representation for a given bounding box and function IoU denotes the estimation of IoU by the IoU-Net. Output: The set of final detection bounding boxes.</p><p>1: A ← ∅ 2: for i = 1 to T do 3: for bj ∈ B and bj / ∈ A do 4:</p><p>grad ← ∇ bj IoU(PrPool(F , bj)) 5:</p><p>P revScore ← IoU(PrPool(F , bj)) 6:</p><p>bj ← bj + λ * scale(grad, bj) 7:</p><p>N ewScore ← IoU(PrPool(F , bj)) 8:</p><p>if |P revScore − N ewScore| &lt; Ω1 or N ewScore − P revScore &lt; Ω2 then 9:</p><p>A ← A ∪ {bj} 10:</p><p>end if 11:</p><p>end for 12: end for 13: return B</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Bounding box refinement as an optimization procedure</head><p>The problem of bounding box refinement can formulated mathematically as finding the optimal c * s.t.:</p><formula xml:id="formula_0">c * = arg min c crit(transform(box det , c), box gt ) ,<label>(1)</label></formula><p>where box det is the detected bounding box, box gt is a (targeting) ground-truth bounding box and transform is a bounding box transformation function taking c as parameter and transform the given bounding box. crit is a criterion measuring the distance between two bounding boxes. In the original Fast R-CNN <ref type="bibr" target="#b4">[5]</ref> framework, crit is chosen as an smooth-L1 distance of coordinates in log-scale, while in <ref type="bibr" target="#b31">[32]</ref>, crit is chosen as the − ln(IoU) between two bounding boxes. Regression-based algorithms directly estimate the optimal solution c * with a feed-forward neural network. However, iterative bounding box regression methods are vulnerable to the change in the input distribution <ref type="bibr" target="#b2">[3]</ref> and may result in nonmonotonic localization improvement, as shown in <ref type="figure" target="#fig_6">Figure 4</ref>. To tackle these issues, we propose an optimization-based bounding box refinement method utilizing IoU-Net as a robust localization accuracy (IoU) estimator. Furthermore, IoU estimator can be used as an early-stop condition to implement iterative refinement with adaptive steps.</p><p>IoU-Net directly estimates IoU(box det , box gt ). While the proposed Precise RoI Pooling layer enables the computation of the gradient of IoU w.r.t. bounding box coordinates § , we can directly use gradient ascent method to find the optimal solution to Equation 1. Shown in Algorithm 2, viewing the estimation of the IoU as an optimization objective, we iteratively refine the bounding box coordinates with the computed gradient and maximize the IoU between the detected bounding box and its matched ground-truth. Besides, the predicted IoU is an interpretable indicator of the localization confidence on each bounding box and helps explain the performed transformation.</p><p>In the implementation, shown in Algorithm 2 Line 6, we manually scale up the gradient w.r.t. the coordinates with the size of the bounding box on that axis (e.g., we scale up ∇x 1 with width(b j )). This is equivalent to perform the optimization in log-scaled coordinates (x/w, y/h, log w, log h) as in <ref type="bibr" target="#b4">[5]</ref>. We also employ a one-step bounding box regression for an initialization of the coordinates.</p><p>Precise RoI Pooling. We introduce Precise RoI Pooling (PrRoI Pooling, for short) powering our bounding box refinement * . It avoids any quantization of coordinates and has a continuous gradient on bounding box coordinates. Given the feature map F before RoI/PrRoI Pooling (e.g. from Conv4 in ResNet-50), let w i,j be the feature at one discrete location (i, j) on the feature map. Using bilinear interpolation, the discrete feature map can be considered continuous at any continuous coordinates (x, y):</p><formula xml:id="formula_1">f (x, y) = i,j IC(x, y, i, j) × w i,j ,<label>(2)</label></formula><p>where IC(x, y, i, j) = max(0, 1 − |x − i|) × max(0, 1 − |y − j|) is the interpolation coefficient. Then denote a bin of a RoI as bin = {(x 1 , y 1 ), (x 2 , y 2 )}, where (x 1 , y 1 ) and (x 2 , y 2 ) are the continuous coordinates of the top-left and bottom-right § We prefer Precise RoI-Pooling layer to RoI-Align layer <ref type="bibr" target="#b9">[10]</ref> as Precise RoI-Pooling layer is continuously differentiable w.r.t. the coordinates while RoI-Align is not. * The code is released at: https://github.com/vacancy/PreciseRoIPooling points, respectively. We perform pooling (e.g., average pooling) given bin and feature map F by computing a two-order integral:</p><formula xml:id="formula_2">PrPool(bin, F) = y2 y1 x2 x1</formula><p>f (x, y) dxdy</p><formula xml:id="formula_3">(x 2 − x 1 ) × (y 2 − y 1 ) .<label>(3)</label></formula><p>For a better understanding, we visualize RoI Pooling, RoI Align <ref type="bibr" target="#b9">[10]</ref> and our PrRoI Pooing in <ref type="figure" target="#fig_8">Figure 6</ref>: in the traditional RoI Pooling, the continuous coordinates need to be quantized first to calculate the sum of the activations in the bin; to eliminate the quantization error, in RoI Align, N = 4 continuous points are sampled in the bin, denoted as (a i , b i ), and the pooling is performed over the sampled points. Contrary to RoI Align where N is pre-defined and not adaptive w.r.t. the size of the bin, the proposed PrRoI pooling directly compute the two-order integral based on the continuous feature map.</p><p>Moreover, based on the formulation in Equation 3, PrPool(Bin, F) is differentiable w.r.t. the coordinates of bin. For example, the partial derivative of PrPool(B, F) w.r.t. x 1 could be computed as:</p><formula xml:id="formula_4">∂PrPool(bin, F) ∂x 1 = PrPool(bin, F) x 2 − x 1 − y2 y1</formula><p>f (x 1 , y) dy</p><formula xml:id="formula_5">(x 2 − x 1 ) × (y 2 − y 1 ) .<label>(4)</label></formula><p>The partial derivative of PrPool(bin, F) w.r.t. other coordinates can be computed in the same manner. Since we avoids any quantization, PrPool is continuously differentiable.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Joint training</head><p>The IoU predictor can be integrated into standard FPN pipelines for end-to-end training and inference. For clarity, we denote backbone as the CNN architecture for image feature extraction and head as the modules applied to individual RoIs. Shown in <ref type="figure" target="#fig_7">Figure 5</ref>, the IoU-Net uses ResNet-FPN <ref type="bibr" target="#b15">[16]</ref> as the backbone, which has a top-down architecture to build a feature pyramid. FPN extracts features of RoIs from different levels of the feature pyramid according to their scale. The original RoI Pooling layer is replaced by the Precise RoI Pooling layer. As for the network head, the IoU predictor works in parallel with the R-CNN branch (including classification and bounding box regression) based on the same visual feature from the backbone.</p><p>We initialize weights from pre-trained ResNet models on ImageNet <ref type="bibr" target="#b24">[25]</ref>. All new layers are initialized with a zero-mean Gaussian with standard deviation 0.01 or 0.001. We use smooth-L1 loss for training the IoU predictor. The training data for the IoU predictor is separately generated as described in Section 3.1 within images in a training batch. IoU labels are normalized s.t. the values are distributed over <ref type="bibr">[−1, 1]</ref>.</p><p>Input images are resized to have 800px along the short axis and a maximum of 1200px along the long axis. The classification and regression branch take 512</p><p>RoIs per image from RPNs. We use a batch size 16 for the training. The network is optimized for 160k iterations, with a learning rate of 0.01 which is decreased by a factor of 10 after 120k iterations. We also warm up the training by setting the learning rate to 0.004 for the first 10k iteration. We use a weight decay of 1e-4 and a momentum of 0.9.</p><p>During inference, we first apply bounding box regression for the initial coordinates. To speed up the inference, we first apply IoU-guided NMS on all detected bounding boxes. 100 bounding boxes with highest classification confidence are further refined using the optimization-based algorithm. We set λ = 0.5 as the step size, Ω 1 = 0.001 as the early-stop threshold, Ω 2 = −0.01 as the localization degeneration tolerance and T = 5 as the number of iterations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We perform experiments on the 80-category MS-COCO detection dataset <ref type="bibr" target="#b16">[17]</ref>. Following <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b15">16]</ref>, the models are trained on the union of 80k training images and 35k validation images (trainval35k ) and evaluated on a set of 5k validation images (minival ). To validate the proposed methods, in both Section 4.1 and 4.2, a standalone IoU-Net (without R-CNN modules) is trained separately with the object detectors. IoU-guided NMS and optimization-based bounding box refinement, powered by the IoU-Net, are applied to the detection results. <ref type="table" target="#tab_1">Table 1</ref> summarizes the performance of different NMS methods. While Soft-NMS preserve more bounding boxes (there is no real "suppression"), IoU-guided NMS improves the results by improving the localization of the detected bounding boxes. As a result, IoU-guided NMS performs significantly better than the baselines on high IoU metrics (e.g., AP 90 ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">IoU-guided NMS</head><p>We delve deeper into the behavior of different NMS algorithms by analyzing their recalls at different IoU threshold. The raw detected bounding boxes are generated by a ResNet50-FPN without any NMS. As the requirement of localization accuracy increases, the performance gap between IoU-guided NMS and other methods goes larger. In particular, the recall at matching IoU Ω test = 0.9 drops to 18.7% after traditional NMS, while the IoU-NMS reaches 28.9% and the No-NMS "upper bound" is 39.7%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Optimization-based bounding box refinement</head><p>The proposed optimization-based bounding box refinement is compatible with most of the CNN-based object detectors <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b9">10]</ref>, as shown in <ref type="table" target="#tab_2">Table 2</ref>. Applying the bounding box refinement after the original pipelines with the standalone IoU-Net further improve the performance by localizing object more accurately. The refinement further improves AP 90 by 2.8% and the overall AP by 0.8% even for Cascade R-CNN which has a three-stage bounding box regressor.   The optimization-based bounding box refinement further improves the performance of several CNN-based object detectors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Joint training</head><p>IoU-Net can be end-to-end optimized in parallel with object detection frameworks. We find that adding IoU predictor to the network helps the network to learn more discriminative features which improves the overall AP by 0.6 and 0.4 percent for ResNet50-FPN and ResNet101-FPN respectively. The IoU-guided NMS and bounding box refinement further push the performance forward. We achieve 40.6% AP with ResNet101-FPN compared to the baseline 38.5% (improved by</p><p>Backbone Method +IoU-NMS +Refine AP AP50 AP60 AP70 AP80 AP90   <ref type="table">Table 4</ref>: Inference speed of multiple object detectors on a single TITAN X GPU. The models share the same backbone network ResNet50-FPN. The input resolution is 1200x800. All hyper-parameters are set to be the same. <ref type="table" target="#tab_4">Table 3</ref>, showing that IoU-Net improves the detection performance with tolerable computation overhead. We mainly attribute the inferior results on AP 50 in <ref type="table" target="#tab_4">Table 3</ref> to the IoU estimation error. When the bounding boxes have a lower IoU with the groundtruth, they have a larger variance in appearance. Visualized in <ref type="figure" target="#fig_3">Figure 2(b)</ref>, the IoU estimation becomes less accurate for boxes with lower IoU. This degenerates the performance of the downstream refinement and suppression. We empirically find that this problem can be partially solved by techniques such as sampling more bounding boxes with lower IoU during the training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>2.1%). The inference speed is demonstrated in</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>In this paper, a novel network architecture, namely IoU-Net, is proposed for accurate object localization. By learning to predict the IoU with matched groundtruth, IoU-Net acquires "localization confidence" for the detected bounding box. This empowers an IoU-guided NMS procedure where accurately localized bounding boxes are prevented from being suppressed. The proposed IoU-Net is intuitive and can be easily integrated into a broad set of detection models to improve their localization accuracy. Experimental results on MS-COCO demonstrate its effectiveness and potential in practical applications. This paper points out the misalignment of classification and localization confidences in modern detection pipelines. We also formulate an novel optimization view on the problem of bounding box refinement, and the proposed solution surpasses the regression-based methods. We hope these novel viewpoints provide insights to future works on object detection, and beyond.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>cases of the non-monotonic localization in iterative bounding box regression. Quantitative analysis is provided in Section 2.2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: Visualization on two drawbacks brought by the absence of localization confidence. Examples are selected from MS-COCO minival [17].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 2 :</head><label>2</label><figDesc>Fig. 2: The correlation between the IoU of bounding boxes with the matched ground-truth and the classification/localization confidence. Considering detected bounding boxes having an IoU (&gt; 0.5) with the corresponding ground-truth, the Pearson correlation coefficients are: (a) 0.217, and (b) 0.617. (a) The classification confidence indicates the category of a bounding box, but cannot be interpreted as the localization accuracy. (b) To resolve the issue, we propose IoU-Net to predict the localization confidence for each detected bounding box, i.e., its IoU with corresponding ground-truth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3</head><label>3</label><figDesc>quantitatively shows the number of positive bounding boxes after NMS. The bounding boxes are grouped by their IoU with the matched ground-truth. For multiple detections matched with the same ground-truth, only the one with the highest score is considered positive. Therefore, No-NMS could be considered as the upper-bound for the number of positive</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: The number of positive bounding boxes after the NMS, grouped by their IoU with the matched groundtruth. In traditional NMS (blue bar), a significant portion of accurately localized bounding boxes get mistakenly suppressed due to the misalignment of classification confidence and localization accuracy, while IoU-guided NMS (yellow bar) preserves more accurately localized bounding boxes.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Optimization-based v.s. Regression-based BBox refinement. (a) Comparison in FPN. When applying the regression iteratively, the AP of detection results firstly get improved but drops quickly in later iterations. (b) Camparison in Cascade R-CNN. Iteration 0, 1 and 2 represents the 1st, 2nd and 3rd regression stages in Cascade R-CNN. For iteration i ≥ 3, we refine the bounding boxes with the regressor of the third stage. After multiple iteration, AP slightly drops, while the optimization-based method further improves the AP by 0.8%.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Fig. 5 :</head><label>5</label><figDesc>Fig. 5: Full architecture of the proposed IoU-Net described in Section 3.4. Input images are first fed into an FPN backbone. The IoU predictor takes the output features from the FPN backbone. We replace the RoI Pooling layer with a PrRoI Pooling layer described in Section 3.3. The IoU predictor shares a similar structure with the R-CNN branch. The modules marked within the dashed box form a standalone IoU-Net.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Fig. 6 :</head><label>6</label><figDesc>Fig. 6: Illustration of RoI Pooling, RoI Align and PrRoI Pooling.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Method +Soft-NMS +IoU-NMS AP AP50 AP60 AP70 AP80 AP90</figDesc><table>FPN 
+
+36.4 58.0 53.1 44.9 31.2 9.8 
+36.8 57.5 53.1 45.7 32.3 10.3 
+37.3 56.0 52.2 45.6 33.9 13.3 
+
+Cascade R-CNN 
+
+40.6 59.3 55.2 49.1 38.7 16.7 
+40.9 58.2 54.7 49.4 39.9 17.8 
+40.7 58.0 54.7 49.2 38.8 18.9 
+
+Mask-RCNN 
+
+37.5 58.6 53.9 46.3 33.2 10.9 
+37.9 58.2 53.9 47.1 34.4 11.5 
+38.1 56.4 52.7 46.7 35.1 14.6 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Comparison of IoU-guided NMS with other NMS methods. By preserving bounding boxes with accurate localization, IoU-guided NMS shows significant improvement in AP with high matching IoU threshold (e.g., AP 90 ). Fig. 7: Recall curves of different NMS methods at different IoU threshold for matching detected bounding boxes with the ground- truth. No-NMS (no box is sup- pressed) is provided as the upper bound of the recall. The proposed IoU-NMS has a higher recall and effectively narrows the gap to the upper-bound at high IoU thresh- old (e.g., 0.9).</figDesc><table>Method 
++Refinement 
+AP 
+AP50 AP60 AP70 AP80 AP90 
+
+FPN 
+36.4 
+58.0 
+53.1 
+44.9 
+31.2 
+9.8 
+38.0 
+57.7 
+53.1 
+46.1 
+34.3 
+14.6 
+
+Cascade R-CNN 
+40.6 
+59.3 
+55.2 
+49.1 
+38.7 
+16.7 
+41.4 
+59.3 
+55.3 
+49.6 
+39.4 
+19.5 
+
+Mask-RCNN 
+37.5 
+58.6 
+53.9 
+46.3 
+33.2 
+10.9 
+39.2 
+57.9 
+53.6 
+47.4 
+36.5 
+16.4 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Final experiment results on MS-COCO. IoU-Net denotes ResNet-FPN embedded with IoU predictor. We improve the FPN baseline by ≈ 2% in AP.</figDesc><table>Method 
+FPN 
+Mask-RCNN Cascade R-CNN 
+IoU-Net 
+Speed (sec./image) 
+0.255 
+0.267 
+0.384 
+0.305 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Inside-outside net: Detecting objects in context with skip pooling and recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lawrence Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2874" to="2883" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Improving object detection with one line of code</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bodla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.04503</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Cascade r-cnn: Delving into high quality object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.00726</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="886" to="893" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Fast feature pyramids for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Appel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1532" to="1545" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Object detection via a multi-region and semantic segmentation-aware cnn model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gidaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1134" to="1142" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Attend refine repeat: Active box proposal generation via in-out localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gidaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.04446</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Fast r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2014-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Mask r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE International Conference on Computer Vision (ICCV</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Learning non-maximum suppression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.11575</idno>
+		<title level="m">Relation networks for object detection</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Fastmask: Segment multi-scale object candidates in one shot</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Sha</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="991" to="999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Densebox: Unifying landmark localization with end to end object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.04874</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Multi-stage object detection with group recursive learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Feature pyramid networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Microsoft coco: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European conference on computer vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="740" to="755" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">G-cnn: an iterative grid based object detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Najibi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rastegari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2369" to="2377" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning to segment object candidates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1990" to="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning to refine object segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="75" to="91" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Refinenet: Iterative refinement for accurate object localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">N</forename><surname>Rajaram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ohn-Bar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Trivedi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Transportation Systems (ITSC)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1528" to="1533" />
+		</imprint>
+	</monogr>
+	<note>IEEE 19th International Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="91" to="99" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cortes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">D</forename><surname>Lawrence</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">D</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sugiyama</surname></persName>
+		</author>
+		<ptr target="http://papers.nips.cc/paper/5638-faster-r-cnn-towards-real-time-object-detection-with-region-proposal-networks.pdf" />
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<editor>Garnett, R.</editor>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="91" to="99" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Non-maximum suppression for object detection by passing messages between windows</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rothe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Guillaumin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Asian Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="290" to="306" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">ImageNet Large Scale Visual Recognition Challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<idno type="doi">10.1007/s11263-015-0816-y</idno>
+		<ptr target="https://doi.org/10.1007/s11263-015-0816-y" />
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">115</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="211" to="252" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Deepface: Closing the gap to humanlevel performance in face verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1701" to="1708" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Deeppose: Human pose estimation via deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1653" to="1660" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of computer vision</title>
+		<imprint>
+			<biblScope unit="volume">104</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="154" to="171" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.07752</idno>
+		<title level="m">Repulsion loss: Detecting pedestrians in a crowd</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Learning to see physics via visual de-animation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">B</forename><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1604.03239</idno>
+		<title level="m">Craft objects from images</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Unitbox: An advanced object detection network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Huang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2016 ACM on Multimedia Conference</title>
+		<meeting>the 2016 ACM on Multimedia Conference</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="516" to="520" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="391" to="405" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
