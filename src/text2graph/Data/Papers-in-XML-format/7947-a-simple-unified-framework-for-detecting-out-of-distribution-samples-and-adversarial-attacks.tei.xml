@@ -1,0 +1,1007 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">A Simple Unified Framework for Detecting Out-of-Distribution Samples and Adversarial Attacks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kimin</forename><surname>Lee</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Korea Advanced Institute of Science and Technology (KAIST)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kibok</forename><surname>Lee</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">University of Michigan</orgName>
+								<address>
+									<addrLine>3 Google Brain 4 AItrics</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Honglak</forename><surname>Lee</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinwoo</forename><surname>Shin</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Korea Advanced Institute of Science and Technology (KAIST)</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">University of Michigan</orgName>
+								<address>
+									<addrLine>3 Google Brain 4 AItrics</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">A Simple Unified Framework for Detecting Out-of-Distribution Samples and Adversarial Attacks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Detecting test samples drawn sufficiently far away from the training distribution statistically or adversarially is a fundamental requirement for deploying a good classifier in many real-world machine learning applications. However, deep neural networks with the softmax classifier are known to produce highly overconfident posterior distributions even for such abnormal samples. In this paper, we propose a simple yet effective method for detecting any abnormal samples, which is applicable to any pre-trained softmax neural classifier. We obtain the class conditional Gaussian distributions with respect to (low-and upper-level) features of the deep models under Gaussian discriminant analysis, which result in a confidence score based on the Mahalanobis distance. While most prior methods have been evaluated for detecting either out-of-distribution or adversarial samples, but not both, the proposed method achieves the state-of-the-art performances for both cases in our experiments. Moreover, we found that our proposed method is more robust in harsh cases, e.g., when the training dataset has noisy labels or small number of samples. Finally, we show that the proposed method enjoys broader usage by applying it to class-incremental learning: whenever out-of-distribution samples are detected, our classification rule can incorporate new classes well without further training deep models.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Deep neural networks (DNNs) have achieved high accuracy on many classification tasks, e.g., speech recognition <ref type="bibr" target="#b0">[1]</ref>, object detection <ref type="bibr" target="#b8">[9]</ref> and image classification <ref type="bibr" target="#b11">[12]</ref>. However, measuring the predictive uncertainty still remains a challenging problem <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21]</ref>. Obtaining well-calibrated predictive uncertainty is indispensable since it could be useful in many machine learning applications (e.g., active learning <ref type="bibr" target="#b7">[8]</ref> and novelty detection <ref type="bibr" target="#b17">[18]</ref>) as well as when deploying DNNs in real-world systems <ref type="bibr" target="#b1">[2]</ref>, e.g., self-driving cars and secure authentication system <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b29">30]</ref>.</p><p>The predictive uncertainty of DNNs is closely related to the problem of detecting abnormal samples that are drawn far away from in-distribution (i.e., distribution of training samples) statistically or adversarially. For detecting out-of-distribution (OOD) samples, recent works have utilized the confidence from the posterior distribution <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b20">21]</ref>. For example, Hendrycks &amp; Gimpel <ref type="bibr" target="#b12">[13]</ref> proposed the maximum value of posterior distribution from the classifier as a baseline method, and it is improved by processing the input and output of DNNs <ref type="bibr" target="#b20">[21]</ref>. For detecting adversarial samples, confidence scores were proposed based on density estimators to characterize them in feature spaces of DNNs <ref type="bibr" target="#b6">[7]</ref>. More recently, Ma et al. <ref type="bibr" target="#b21">[22]</ref> proposed the local intrinsic dimensionality (LID) and empirically showed that the characteristics of test samples can be estimated effectively using the LID. However, most prior works on this line typically do not evaluate both OOD and adversarial samples. To best of our knowledge, no universal detector is known to work well on both tasks.</p><p>Contribution. In this paper, we propose a simple yet effective method, which is applicable to any pre-trained softmax neural classifier (without re-training) for detecting abnormal test samples including OOD and adversarial ones. Our high-level idea is to measure the probability density of test sample on feature spaces of DNNs utilizing the concept of a "generative" (distance-based) classifier. Specifically, we assume that pre-trained features can be fitted well by a class-conditional Gaussian distribution since its posterior distribution can be shown to be equivalent to the softmax classifier under Gaussian discriminant analysis (see Section 2.1 for our justification). Under this assumption, we define the confidence score using the Mahalanobis distance with respect to the closest classconditional distribution, where its parameters are chosen as empirical class means and tied empirical covariance of training samples. To the contrary of conventional beliefs, we found that using the corresponding generative classifier does not sacrifice the softmax classification accuracy. Perhaps surprisingly, its confidence score outperforms softmax-based ones very strongly across multiple other tasks: detecting OOD samples, detecting adversarial samples and class-incremental learning.</p><p>We demonstrate the effectiveness of the proposed method using deep convolutional neural networks, such as DenseNet <ref type="bibr" target="#b13">[14]</ref> and ResNet <ref type="bibr" target="#b11">[12]</ref> trained for image classification tasks on various datasets including CIFAR <ref type="bibr" target="#b14">[15]</ref>, SVHN <ref type="bibr" target="#b27">[28]</ref>, ImageNet <ref type="bibr" target="#b4">[5]</ref> and LSUN <ref type="bibr" target="#b31">[32]</ref>. First, for the problem of detecting OOD samples, the proposed method outperforms the current state-of-the-art method, ODIN <ref type="bibr" target="#b20">[21]</ref>, in all tested cases. In particular, compared to ODIN, our method improves the true negative rate (TNR), i.e., the fraction of detected OOD (e.g., LSUN) samples, from 45.6% to 90.9% on ResNet when 95% of in-distribution (e.g., CIFAR-100) samples are correctly detected. Next, for the problem of detecting adversarial samples, e.g., generated by four attack methods such as FGSM <ref type="bibr" target="#b9">[10]</ref>, BIM <ref type="bibr" target="#b15">[16]</ref>, DeepFool <ref type="bibr" target="#b25">[26]</ref> and CW <ref type="bibr" target="#b2">[3]</ref>, our method outperforms the state-of-the-art detection measure, LID <ref type="bibr" target="#b21">[22]</ref>. In particular, compared to LID, ours improves the TNR of CW from 82.9% to 95.8% on ResNet when 95% of normal CIFAR-10 samples are correctly detected.</p><p>We also found that our proposed method is more robust in the choice of its hyperparameters as well as against extreme scenarios, e.g., when the training dataset has some noisy, random labels or a small number of data samples. In particular, Liang et al. <ref type="bibr" target="#b20">[21]</ref> tune the hyperparameters of ODIN using validation sets of OOD samples, which is often impossible since the knowledge about OOD samples is not accessible a priori. We show that hyperparameters of the proposed method can be tuned only using in-distribution (training) samples, while maintaining its performance. We further show that the proposed method tuned on a simple attack, i.e., FGSM, can be used to detect other more complex attacks such as BIM, DeepFool and CW.</p><p>Finally, we apply our method to class-incremental learning <ref type="bibr" target="#b28">[29]</ref>: new classes are added progressively to a pre-trained classifier. Since the new class samples are drawn from an out-of-training distribution, it is natural to expect that one can classify them using our proposed metric without re-training the deep models. Motivated by this, we present a simple method which accommodates a new class at any time by simply computing the class mean of the new class and updating the tied covariance of all classes. We show that the proposed method outperforms other baseline methods, such as Euclidean distance-based classifier and re-trained softmax classifier. This evidences that our approach have a potential to apply to many other related machine learning tasks, such as active learning <ref type="bibr" target="#b7">[8]</ref>, ensemble learning <ref type="bibr" target="#b18">[19]</ref> and few-shot learning <ref type="bibr" target="#b30">[31]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Mahalanobis distance-based score from generative classifier</head><p>Given deep neural networks (DNNs) with the softmax classifier, we propose a simple yet effective method for detecting abnormal samples such as out-of-distribution (OOD) and adversarial ones. We first present the proposed confidence score based on an induced generative classifier under Gaussian discriminant analysis (GDA), and then introduce additional techniques to improve its performance. We also discuss how the confidence score is applicable to incremental learning.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Why Mahalanobis distance-based score?</head><p>Derivation of generative classifiers from softmax ones. Let x 2 X be an input and y 2 Y = {1, · · · , C} be its label. Suppose that a pre-trained softmax neural classifier is given: </p><formula xml:id="formula_0">P (y = c|x) = exp(w &gt; c f (x)+bc) P c 0 exp(w &gt; c 0 f (x)+b c 0 )</formula><p>, where w c and b c are the weight and the bias of the softmax classifier for class c, and f (·) denotes the output of the penultimate layer of DNNs. Then, without any modification on the pre-trained softmax neural classifier, we obtain a generative classifier assuming that a class-conditional distribution follows the multivariate Gaussian distribution. Specifically, we define C class-conditional Gaussian distributions with a tied covariance ⌃:</p><formula xml:id="formula_1">P (f (x)|y = c) = N (f (x)|µ c , ⌃)</formula><p>, where µ c is the mean of multivariate Gaussian distribution of class c 2 {1, ..., C}. Here, our approach is based on a simple theoretical connection between GDA and the softmax classifier: the posterior distribution defined by the generative classifier under GDA with tied covariance assumption is equivalent to the softmax classifier (see the supplementary material for more details). Therefore, the pre-trained features of the softmax neural classifier f (x) might also follow the class-conditional Gaussian distribution.</p><p>To estimate the parameters of the generative classifier from the pre-trained softmax neural classifier, we compute the empirical class mean and covariance of training samples {(x 1 , y 1 ), . . . , (x N , y N )}:</p><formula xml:id="formula_2">b µ c = 1 N c X i:yi=c f (x i ), b ⌃ = 1 N X c X i:yi=c (f (x i ) b µ c ) (f (x i ) b µ c ) &gt; ,<label>(1)</label></formula><p>where N c is the number of training samples with label c. This is equivalent to fitting the classconditional Gaussian distributions with a tied covariance to training samples under the maximum likelihood estimator.</p><p>Mahalanobis distance-based confidence score. Using the above induced class-conditional Gaussian distributions, we define the confidence score M (x) using the Mahalanobis distance between test sample x and the closest class-conditional Gaussian distribution, i.e.,</p><formula xml:id="formula_3">M (x) = max c (f (x) b µ c ) &gt; b ⌃ 1 (f (x) b µ c ) .<label>(2)</label></formula><p>Note that this metric corresponds to measuring the log of the probability densities of the test sample. Here, we remark that abnormal samples can be characterized better in the representation space of DNNs, rather than the "label-overfitted" output space of softmax-based posterior distribution used in the prior works <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b20">21]</ref> for detecting them. It is because a confidence measure obtained from the posterior distribution can show high confidence even for abnormal samples that lie far away from the softmax decision boundary. Feinman et al. <ref type="bibr" target="#b6">[7]</ref> and Ma et al. <ref type="bibr" target="#b21">[22]</ref> process the DNN features for detecting adversarial samples in a sense, but do not utilize the Mahalanobis distance-based metric, i.e., they only utilize the Euclidean distance in their scores. In this paper, we show that Mahalanobis distance is significantly more effective than the Euclidean distance in various tasks.</p><p>Experimental supports for generative classifiers. To evaluate our hypothesis that trained features of DNNs support the assumption of GDA, we measure the classification accuracy as follows:</p><formula xml:id="formula_4">b y(x) = arg min c (f (x) b µ c ) &gt; b ⌃ 1 (f (x) b µ c ) .<label>(3)</label></formula><p>Algorithm 1 Computing the Mahalanobis distance-based confidence score. Input: Test sample x, weights of logistic regression detector ↵`, noise " and parameters of Gaussian distributions {b µ`, c , b</p><formula xml:id="formula_5">⌃`: 8`, c} Initialize score vectors: M(x) = [M`: 8`] for each layer`2 1, . . . , L do Find the closest class: b c = arg min c (f`(x) b µ`, c ) &gt; b ⌃ 1 (f`(x) b µ`, c )</formula><p>Add small noise to test sample: We remark that this corresponds to predicting a class label using the posterior distribution from generative classifier with the uniform class prior. Interestingly, we found that the softmax accuracy (red bar) is also achieved by the Mahalanobis distance-based classifier (blue bar), while conventional knowledge is that a generative classifier trained from scratch typically performs much worse than a discriminative classifier such as softmax. For visual interpretation, <ref type="figure" target="#fig_0">Figure 1</ref>(a) presents embeddings of final features from CIFAR-10 test samples constructed by t-SNE <ref type="bibr" target="#b22">[23]</ref>, where the colors of points indicate the classes of the corresponding objects. One can observe that all ten classes are clearly separated in the embedding space, which supports our intuition. In addition, we also show that Mahalanobis distance-based metric can be very useful in detecting out-of-distribution samples. For evaluation, we obtain the receiver operating characteristic (ROC) curve using a simple thresholdbased detector by computing the confidence score M (x) on a test sample x and decide it as positive (i.e., in-distribution) if M (x) is above some threshold. The Euclidean distance, which only utilizes the empirical class means, is considered for comparison. We train ResNet on CIFAR-10, and TinyImageNet dataset <ref type="bibr" target="#b4">[5]</ref> is used for an out-of-distribution. As shown in <ref type="figure" target="#fig_0">Figure 1</ref>(c), the Mahalanobis distance-based metric (blue bar) performs better than Euclidean one (green bar) and the maximum value of the softmax distribution (red bar).</p><formula xml:id="formula_6">b x = x "sign ⇣ 5 x (f`(x) b µ`, b c ) &gt; b ⌃ 1 (f`(x) b µ`, b c ) ⌘ Computing confidence score: M`= max c (f`(b x) b µ`, c ) &gt; b ⌃ 1 (f`(b x) b µ`, c ) end</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Calibration techniques</head><p>Input pre-processing. To make in-and out-of-distribution samples more separable, we consider adding a small controlled noise to a test sample. Specifically, for each test sample x, we calculate the pre-processed sample b x by adding the small perturbations as follows:</p><formula xml:id="formula_7">b x = x + "sign (5 x M (x)) = x "sign ⇣ 5 x (f (x) b µ b c ) &gt; b ⌃ 1 (f (x) b µ b c ) ⌘ ,<label>(4)</label></formula><p>where " is a magnitude of noise and b c is the index of the closest class. Next, we measure the confidence score using the pre-processed sample. We remark that the noise is generated to increase the proposed confidence score (2) unlike adversarial attacks <ref type="bibr" target="#b9">[10]</ref>. In our experiments, such perturbation can have stronger effect on separating the in-and out-of-distribution samples. We remark that similar input pre-processing was studied in <ref type="bibr" target="#b20">[21]</ref>, where the perturbations are added to increase the softmax score of the predicted label. However, our method is different in that the noise is generated to increase the proposed metric. </p><formula xml:id="formula_8">µ C+1 1 N C+1 P i f (x i ) Compute the covariance of the new class: b ⌃ C+1 1 N C+1 P i (f (x i ) b µ C+1 )(f (x i ) b µ C+1 ) &gt; Update the shared covariance: b ⌃ C C+1 b ⌃ + 1 C+1 b ⌃ C+1</formula><p>return Mean and covariance of all classes {b µ c : 8c = 1 . . . C + 1}, b ⌃ Feature ensemble. To further improve the performance, we consider measuring and combining the confidence scores from not only the final features but also the other low-level features in DNNs. Formally, given training data, we extract the`-th hidden features of DNNs, denoted by f`(x), and compute their empirical class means and tied covariances, i.e., b µ`, c and b ⌃`. Then, for each test sample x, we measure the confidence score from the`-th layer using the formula in <ref type="bibr" target="#b1">(2)</ref>. One can expect that this simple but natural scheme can bring an extra gain in obtaining a better calibrated score by extracting more input-specific information from the low-level features. We measure the area under ROC (AUROC) curves of the threshold-based detector using the confidence score in (2) computed at different basic blocks of DenseNet <ref type="bibr" target="#b13">[14]</ref> trained on CIFAR-10 dataset, where the overall trends on ResNet are similar. <ref type="figure" target="#fig_1">Figure 2</ref> shows the performance on various OOD samples such as SVHN <ref type="bibr" target="#b27">[28]</ref>, LSUN <ref type="bibr" target="#b31">[32]</ref>, TinyImageNet and adversarial samples generated by DeepFool <ref type="bibr" target="#b25">[26]</ref>, where the dimensions of the intermediate features are reduced using average pooling (see Section 3 for more details). As shown in <ref type="figure" target="#fig_1">Figure 2</ref>, the confidence scores computed at low-level features often provide better calibrated ones compared to final features (e.g., LSUN, TinyImageNet and DeepFool). To further improve the performance, we design a feature ensemble method as described in Algorithm 1. We first extract the confidence scores from all layers, and then integrate them by weighted averaging:</p><formula xml:id="formula_9">P`↵`M`( x)</formula><p>, where M`(·) and ↵`is the confidence score at the`-th layer and its weight, respectively. In our experiments, following similar strategies in <ref type="bibr" target="#b21">[22]</ref>, we choose the weight of each layer ↵`by training a logistic regression detector using validation samples. We remark that such weighted averaging of confidence scores can prevent the degradation on the overall performance even in the case when the confidence scores from some layers are not effective: the trained weights (using validation) would be nearly zero for those ineffective layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Class-incremental learning using Mahalanobis distance-based score</head><p>As a natural extension, we also show that the Mahalanobis distance-based confidence score can be utilized in class-incremental learning tasks <ref type="bibr" target="#b28">[29]</ref>: a classifier pre-trained on base classes is progressively updated whenever a new class with corresponding samples occurs. This task is known to be challenging since one has to deal with catastrophic forgetting <ref type="bibr" target="#b23">[24]</ref> with a limited memory. To this end, recent works have been toward developing new training methods which involve a generative model or data sampling, but adopting such training methods might incur expensive back-and-forth costs. Based on the proposed confidence score, we develop a simple classification method without the usage of complicated training methods. To do this, we first assume that the classifier is well pre-trained with a certain amount of base classes, where the assumption is quite reasonable in many practical scenarios. <ref type="bibr" target="#b0">1</ref> In this case, one can expect that not only the classifier can detect OOD samples well, but also might be good for discriminating new classes, as the representation learned with the base classes can characterize new ones. Motivated by this, we present a Mahalanobis distance-based classifier based on (3), which tries to accommodate a new class by simply computing and updating the class mean and covariance, as described in Algorithm 2. The class-incremental adaptation of our confidence score shows its potential to be applied to a wide range of new applications in the future.  <ref type="table">Table 1</ref>: Contribution of each proposed method on distinguishing in-and out-of-distribution test set data. We measure the detection performance using ResNet trained on CIFAR-10, when SVHN dataset is used as OOD. All values are percentages and the best results are indicated in bold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Experimental results</head><p>In this section, we demonstrate the effectiveness of the proposed method using deep convolutional neural networks such as DenseNet <ref type="bibr" target="#b13">[14]</ref> and ResNet <ref type="bibr" target="#b11">[12]</ref> on various vision datasets: CIFAR <ref type="bibr" target="#b14">[15]</ref>, SVHN <ref type="bibr" target="#b27">[28]</ref>, ImageNet <ref type="bibr" target="#b4">[5]</ref> and LSUN <ref type="bibr" target="#b31">[32]</ref>. Due to the space limitation, we provide the more detailed experimental setups and results in the supplementary material. Our code is available at https: //github.com/pokaxpoka/deep_Mahalanobis_detector.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Detecting out-of-distribution samples</head><p>Setup. For the problem of detecting out-of-distribution (OOD) samples, we train DenseNet with 100 layers and ResNet with 34 layers for classifying CIFAR-10, CIFAR-100 and SVHN datasets. The dataset used in training is the in-distribution (positive) dataset and the others are considered as OOD (negative). We only use test datasets for evaluation. In addition, the TinyImageNet (i.e., subset of ImageNet dataset) and LSUN datasets are also tested as OOD. For evaluation, we use a thresholdbased detector which measures some confidence score of the test sample, and then classifies the test sample as in-distribution if the confidence score is above some threshold. We measure the following metrics: the true negative rate (TNR) at 95% true positive rate (TPR), the area under the receiver operating characteristic curve (AUROC), the area under the precision-recall curve (AUPR), and the detection accuracy. For comparison, we consider the baseline method <ref type="bibr" target="#b12">[13]</ref>, which defines a confidence score as a maximum value of the posterior distribution, and the state-of-the-art ODIN <ref type="bibr" target="#b20">[21]</ref>, which defines the confidence score as a maximum value of the processed posterior distribution.</p><p>For our method, we extract the confidence scores from every end of dense (or residual) block of DenseNet (or ResNet). The size of feature maps on each convolutional layers is reduced by average pooling for computational efficiency:</p><formula xml:id="formula_10">F ⇥ H ⇥ W ! F ⇥ 1,</formula><p>where F is the number of channels and H ⇥ W is the spatial dimension. As shown in Algorithm 1, the output of the logistic regression detector is used as the final confidence score in our case. All hyperparameters are tuned on a separate validation set, which consists of 1,000 images from each in-and out-of-distribution pair. Similar to Ma et al. <ref type="bibr" target="#b21">[22]</ref>, the weights of logistic regression detector are trained using nested cross validation within the validation set, where the class label is assigned positive for in-distribution samples and assigned negative for OOD samples. Since one might not have OOD validation datasets in practice, we also consider tuning the hyperparameters using in-distribution (positive) samples and corresponding adversarial (negative) samples generated by FGSM <ref type="bibr" target="#b9">[10]</ref>.</p><p>Contribution by each technique and comparison with ODIN. <ref type="table">Table 1</ref> validates the contributions of our suggested techniques under the comparison with the baseline method and ODIN. We measure the detection performance using ResNet trained on CIFAR-10, when SVHN dataset is used as OOD. We incrementally apply our techniques to see the stepwise improvement by each component. One can note that our method significantly outperforms the baseline method without feature ensembles and input pre-processing. This implies that our method can characterize the OOD samples very effectively compared to the posterior distribution. By utilizing the feature ensemble and input preprocessing, the detection performance are further improved compared to that of ODIN. The left-hand column of <ref type="table" target="#tab_2">Table 2</ref> reports the detection performance with ODIN for all in-and out-of-distribution    dataset pairs. Our method outperforms the baseline and ODIN for all tested cases. In particular, our method improves the TNR, i.e., the fraction of detected LSUN samples, compared to ODIN: 41.2% ! 91.4% using DenseNet, when 95% of CIFAR-100 samples are correctly detected.</p><p>Comparison of robustness. In order to evaluate the robustness of our method, we measure the detection performance when all hyperparameters are tuned only using in-distribution and adversarial samples generated by FGSM <ref type="bibr" target="#b9">[10]</ref>. As shown in the right-hand column of <ref type="table" target="#tab_2">Table 2</ref>, ODIN is working poorly compared to the baseline method in some cases (e.g., DenseNet trained on SVHN), while our method still outperforms the baseline and ODIN consistently. We remark that our method validated without OOD but adversarial samples even outperforms ODIN validated with OOD. We also verify the robustness of our method under various training setups. Since our method utilizes empirical class mean and covariance of training samples, there is a caveat such that it can be affected by the properties of training data. In order to verify the robustness, we measure the detection performance when we train ResNet by varying the number of training data and assigning random label to training data on CIFAR-10 dataset. As shown in <ref type="figure" target="#fig_4">Figure 3</ref>, our method (blue bar) maintains high detection performances even for small number of training data or noisy one, while baseline (red bar) and ODIN (yellow bar) do not. Finally, we remark that our method using softmax neural classifier trained by standard cross entropy loss typically outperforms the ODIN using softmax neural classifier trained by confidence loss <ref type="bibr" target="#b19">[20]</ref> which involves jointly training a generator and a classifier to calibrate the posterior distribution even though training such model is computationally more expensive (see the supplementary material for more details).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Detecting adversarial samples</head><p>Setup. For the problem of detecting adversarial samples, we train DenseNet and ResNet for classifying CIFAR-10, CIFAR-100 and SVHN datasets, and the corresponding test dataset is used as the  positive samples to measure the performance. We use adversarial images as the negative samples generated by the following attack methods: FGSM <ref type="bibr" target="#b9">[10]</ref>, BIM <ref type="bibr" target="#b15">[16]</ref>, DeepFool <ref type="bibr" target="#b25">[26]</ref> and CW <ref type="bibr" target="#b2">[3]</ref>, where the detailed explanations can be found in the supplementary material. For comparison, we use a logistic regression detector based on combinations of kernel density (KD) <ref type="bibr" target="#b6">[7]</ref> and predictive uncertainty (PU), i.e., maximum value of posterior distribution. We also compare the state-of-theart local intrinsic dimensionality (LID) scores <ref type="bibr" target="#b21">[22]</ref>. Following the similar strategies in <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b21">22]</ref>, we randomly choose 10% of original test samples for training the logistic regression detectors and the remaining test samples are used for evaluation. Using nested cross-validation within the training set, all hyper-parameters are tuned.</p><p>Comparison with LID and generalization analysis. The left-hand column of <ref type="table" target="#tab_4">Table 3</ref> reports the AUROC score of a logistic regression detectors for all normal and adversarial pairs. One can note that the proposed method outperforms all tested methods in most cases. In particular, ours improves the AUROC of LID from 82.2% to 95.8% when we detect CW samples using ResNet trained on the CIFAR-10 dataset. Similar to <ref type="bibr" target="#b21">[22]</ref>, we also evaluate whether the proposed method is tuned on a simple attack can be generalized to detect other more complex attacks. To this end, we measure the detection performance when we train the logistic regression detector using samples generated by FGSM. As shown in the right-hand column of <ref type="table" target="#tab_4">Table 3</ref>, our method trained on FGSM can accurately detect much more complex attacks such as BIM, DeepFool and CW. Even though LID can also generalize well, our method still outperforms it in most cases. A natural question that arises is whether the LID can be useful in detecting OOD samples. We indeed compare the performance of our method with that of LID in the supplementary material, where our method still outperforms LID in all tested case.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Class-incremental learning</head><p>Setup. For the task of class-incremental learning, we train ResNet with 34 layers for classifying CIFAR-100 and downsampled ImageNet <ref type="bibr" target="#b3">[4]</ref>. As described in Section 2.3, we assume that a classifier is pre-trained on a certain amount of base classes and new classes with corresponding datasets are incrementally provided one by one. Specifically, we test two different scenarios: in the first scenario, half of CIFAR-100 classes are bases classes and the rest are new classes. In the second scenario, all classes in CIFAR-100 are considered to be base classes and 100 of ImageNet classes are new classes. All scenarios are tested five times and then averaged. Class splits are randomly generated for each trial. For comparison, we consider a softmax classifier, which is fine-tuned whenever new class data come in, and a Euclidean classifier <ref type="bibr" target="#b24">[25]</ref>, which tries to accommodate a new class by only computing the class mean. For the softmax classifier, we only update the softmax layer to achieve near-zero cost training <ref type="bibr" target="#b24">[25]</ref>, and follow the memory management in Rebuffi &amp; Kolesnikov <ref type="bibr" target="#b28">[29]</ref>: a small number of samples from old classes are kept in the limited memory, where the size of the memory is matched with that for keeping the parameters for Mahalanobis distance-based classifier. Namely, the number of old exemplars kept for training the softmax classifier is chosen as the sum of the number of learned classes and the dimension (512 in our experiments) of the hidden features. For evaluation, similar to <ref type="bibr" target="#b17">[18]</ref>, we first draw base-new class accuracy curve by adjusting an additional bias to the new class scores, and measure the area under curve (AUC) since averaging base and new class accuracy may cause an imbalanced measure of the performance between base and new classes.</p><p>Comparison with other classifiers. <ref type="figure" target="#fig_5">Figure 4</ref> compares the incremental learning performance of methods in terms of AUC in the two scenarios mentioned above. In each sub-figure, AUC with respect to the number of learned classes (left) and the base-new class accuracy curve after the last new classes is added (right) are drawn. Our proposed Mahalanobis distance-based classifier outperforms the other methods by a significant margin, as the number of new classes increases, although there is a crossing in the right figure of <ref type="figure" target="#fig_5">Figure 4</ref>(b) in small regimes (due to the catastrophic forgetting issue). In particular, the AUC of our proposed method is 40.0% (22.1%), which is better than 32.7% (15.6%) of the softmax classifier and 32.9% (17.1%) of the Euclidean distance classifier after all new classes are added in the first (second) experiment. We also report the experimental results in the supplementary material for the case when classes of CIFAR-100 are base classes and those of CIFAR-10 are new classes, where the overall trend is similar. The experimental results additionally demonstrate the superiority of our confidence score, compared to other plausible ones.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Conclusion</head><p>In this paper, we propose a simple yet effective method for detecting abnormal test samples including both out-of-distribution and adversarial ones. In essence, our main idea is inducing a generative classifier under LDA assumption, and defining new confidence score based on it. With calibration techniques such as input pre-processing and feature ensemble, our method performs very strongly across multiple tasks: detecting out-of-distribution samples, detecting adversarial attacks and classincremental learning. We also found that our proposed method is more robust in the choice of its hyperparameters as well as against extreme scenarios, e.g., when the training dataset has some noisy, random labels or a small number of data samples. We believe that our approach have a potential to apply to many other related machine learning tasks, e.g., active learning <ref type="bibr" target="#b7">[8]</ref>, ensemble learning <ref type="bibr" target="#b18">[19]</ref> and few-shot learning <ref type="bibr" target="#b30">[31]</ref>.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Experimental results under the ResNet with 34 layers. (a) Visualization of final features from ResNet trained on CIFAR-10 by t-SNE, where the colors of points indicate the classes of the corresponding objects. (b) Classification test set accuracy of ResNet on CIFAR-10, CIFAR-100 and SVHN datasets. (c) Receiver operating characteristic (ROC) curves: the x-axis and y-axis represent the false positive rate (FPR) and true positive rate (TPR), respectively.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: AUROC (%) of threshold-based detector using the confidence score in (2) computed at different basic blocks of DenseNet trained on CIFAR-10 dataset. We measure the detection performance using (a) TinyImageNet, (b) LSUN, (c) SVHN and (d) adversarial (DeepFool) samples.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Algorithm 2</head><label>2</label><figDesc>Updating Mahalanobis distance-based classifier for class-incremental learning. Input: set of samples from a new class {x i : 8i = 1 . . . N C+1 }, mean and covariance of observed classes {b µ c : 8c = 1 . . . C}, b ⌃ Compute the new class mean: b</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Comparison of AUROC (%) under extreme scenarios: (a) small number of training data, where the x-axis represents the number of training data. (b) Random label is assigned to training data, where the x-axis represents the percentage of training data with random label.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Experimental results of class-incremental learning on CIFAR-100 and ImageNet datasets. In each experiment, we report (left) AUC with respect to the number of learned classes and, (right) the base-new class accuracy curve after the last new classes is added.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Distinguishing in-and out-of-distribution test set data for image classification under various 
+validation setups. All values are percentages and the best results are indicated in bold. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 :</head><label>3</label><figDesc></figDesc><table>Comparison of AUROC (%) under various validation setups. For evaluation on unknown 
+attack, FGSM samples denoted by "seen" are used for validation. For our method, we use both 
+feature ensemble and input pre-processing. The best results are indicated in bold. 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">For example, state-of-the-art CNNs trained on large-scale image dataset are off-the-shelf [12, 14], so they are a starting point in many computer vision tasks [9, 18, 25].</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Deep speech 2: End-to-end speech recognition in english and mandarin</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dario</forename><surname>Amodei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ananthanarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sundaram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Anubhai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rishita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jingliang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Battenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eric</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Case</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Carl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jared</forename><surname>Casper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Catanzaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Qiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Guoliang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dario</forename><surname>Amodei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Steinhardt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christiano</forename><surname>Jacob</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dan</forename><surname>Mané</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.06565</idno>
+		<title level="m">Concrete problems in ai safety</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Adversarial examples are not easily detected: Bypassing ten detection methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Wagner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM workshop on AISec</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">A downsampled variant of imagenet as an alternative to the cifar datasets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patryk</forename><surname>Chrabaszcz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Loshchilov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><surname>Hutter</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.08819</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jia</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li-Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kai</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Robust physical-world attacks on machine learning models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivan</forename><surname>Evtimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eykholt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kevin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fernandes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Earlence</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kohno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tadayoshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Prakash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amir</forename><surname>Rahmati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dawn</forename><surname>Song</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Detecting adversarial samples from artifacts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Reuben</forename><surname>Feinman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan</forename><forename type="middle">R</forename><surname>Curtin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Saurabh</forename><surname>Shintre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">B</forename><surname>Gardner</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00410</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Deep bayesian active learning with image data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yarin</forename><surname>Gal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Riashat</forename><surname>Islam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Fast r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Explaining and harnessing adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chuan</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mayank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moustapha</forename><surname>Cissé</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Der Maaten</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.00117</idno>
+		<title level="m">Laurens. Countering adversarial images using input transformations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">A baseline for detecting misclassified and out-ofdistribution examples in neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dan</forename><surname>Hendrycks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Gimpel</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Densely connected convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gao</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhuang</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.02533</idno>
+		<title level="m">Adversarial examples in the physical world</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Principled hybrids of generative and discriminative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julia</forename><forename type="middle">A</forename><surname>Lasserre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bishop</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minka</forename><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Hierarchical novelty detection for visual object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kibok</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kimin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Min</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yuting</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinwoo</forename><surname>Shin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Honglak</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Confident multiple choice learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kimin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hwang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Changho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyoungsoo</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinwoo</forename><surname>Shin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Training confidence-calibrated classifiers for detecting out-of-distribution samples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kimin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Honglak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kibok</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinwoo</forename><surname>Shin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Principled detection of out-of-distribution examples in neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shiyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yixuan</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Srikant</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Characterizing adversarial subspaces using local intrinsic dimensionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xingjun</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yisen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sarah</forename><forename type="middle">M</forename><surname>Erfani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wijewickrema</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sudanthi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">E</forename><surname>Houle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schoenebeck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grant</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dawn</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Bailey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Visualizing data using t-sne</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurens</forename><surname>Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of machine learning research</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Catastrophic interference in connectionist networks: The sequential learning problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Mccloskey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neal</forename><forename type="middle">J</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Psychology of learning and motivation</title>
+		<imprint>
+			<publisher>Elsevier</publisher>
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Distance-based image classification: Generalizing to new classes at near-zero cost</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jakob</forename><surname>Verbeek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Florent</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gabriela</forename><surname>Csurka</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Deepfool: a simple and accurate method to fool deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moosavi</forename><surname>Dezfooli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Seyed</forename><surname>Mohsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alhussein</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Machine learning: a probabilistic perspective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Reading digits in natural images with unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Netzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Bissacco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bo</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS workshop</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">icarl: Incremental classifier and representation learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rebuffi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sylvestre-Alvise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Kolesnikov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Accessorize to a crime: Real and stealthy attacks on state-of-the-art face recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mahmood</forename><surname>Sharif</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bhagavatula</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sruti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lujo</forename><surname>Bauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">K</forename><surname>Reiter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM SIGSAC</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Matching networks for one shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Daan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fisher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ari</forename><surname>Seff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yinda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shuran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiao</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianxiong</forename><surname>Lsun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.03365</idno>
+		<title level="m">Construction of a large-scale image dataset using deep learning with humans in the loop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
