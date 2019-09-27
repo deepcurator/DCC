@@ -1,0 +1,1265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Reversible Recurrent Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthew</forename><surname>Mackay</surname></persName>
+							<email>mmackay@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto Vector Institute</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Vicol</surname></persName>
+							<email>pvicol@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto Vector Institute</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto Vector Institute</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><surname>Grosse</surname></persName>
+							<email>rgrosse@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto Vector Institute</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Reversible Recurrent Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Recurrent neural networks (RNNs) provide state-of-the-art performance in processing sequential data but are memory intensive to train, limiting the flexibility of RNN models which can be trained. Reversible RNNs-RNNs for which the hidden-to-hidden transition can be reversed-offer a path to reduce the memory requirements of training, as hidden states need not be stored and instead can be recomputed during backpropagation. We first show that perfectly reversible RNNs, which require no storage of the hidden activations, are fundamentally limited because they cannot forget information from their hidden state. We then provide a scheme for storing a small number of bits in order to allow perfect reversal with forgetting. Our method achieves comparable performance to traditional models while reducing the activation memory cost by a factor of 10-15. We extend our technique to attention-based sequence-to-sequence models, where it maintains performance while reducing activation memory cost by a factor of 5-10 in the encoder, and a factor of 10-15 in the decoder.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Recurrent neural networks (RNNs) have attained state-of-the-art performance on a variety of tasks, including speech recognition <ref type="bibr" target="#b0">[Graves et al., 2013]</ref>, language modeling <ref type="bibr" target="#b1">[Melis et al., 2017</ref><ref type="bibr" target="#b2">, Merity et al., 2017</ref>, and machine translation <ref type="bibr" target="#b4">, Wu et al., 2016</ref>. However, RNNs are memory intensive to train. The standard training algorithm is truncated backpropagation through time <ref type="bibr">(TBPTT)</ref>  <ref type="bibr" target="#b5">[Werbos, 1990</ref><ref type="bibr" target="#b6">, Rumelhart et al., 1986</ref>. In this algorithm, the input sequence is divided into subsequences of smaller length, say T . Each of them is processed and the gradient is backpropagated. If H is the size of our model's hidden state, the memory required for TBPTT is O(T H).</p><p>Decreasing the memory requirements of the TBPTT algorithm would allow us to increase the length T of our truncated sequences, capturing dependencies over longer time scales. Alternatively, we could increase the size H of our hidden state or use deeper input-to-hidden, hidden-to-hidden, or hidden-tooutput transitions, granting our model greater expressivity. Increasing the depth of these transitions has been shown to increase performance in polyphonic music prediction, language modeling, and neural machine translation (NMT) <ref type="bibr" target="#b7">[Pascanu et al., 2013</ref><ref type="bibr" target="#b8">, Barone et al., 2017</ref><ref type="bibr" target="#b9">, Zilly et al., 2016</ref>.</p><p>Reversible recurrent network architectures present an enticing way to reduce the memory requirements of TBPTT. Reversible architectures enable the reconstruction of the hidden state at the current timestep given the next hidden state and the current input, which would enable us to perform TBPTT without storing the hidden states at each timestep. In exchange, we pay an increased computational cost to reconstruct the hidden states during backpropagation.</p><p>We first present reversible analogues of the widely used Gated Recurrent Unit (GRU)  and Long Short-Term Memory (LSTM) <ref type="bibr" target="#b11">[Hochreiter and Schmidhuber, 1997]</ref> architectures. We then show that any perfectly reversible RNN requiring no storage of hidden activations will fail on a simple one-step prediction task. This task is trivial to solve even for vanilla RNNs, but perfectly reversible models fail since they need to memorize the input sequence in order to solve the task.</p><p>In light of this finding, we extend the memory-efficient reversal method of <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref>, storing a handful of bits per unit in order to allow perfect reversal for architectures which forget information.</p><p>We evaluate the performance of these models on language modeling and neural machine translation benchmarks. Depending on the task, dataset, and chosen architecture, reversible models (without attention) achieve 10-15-fold memory savings over traditional models. Reversible models achieve approximately equivalent performance to traditional LSTM and GRU models on word-level language modeling on the Penn TreeBank dataset <ref type="bibr" target="#b13">[Marcus et al., 1993]</ref> and lag 2-5 perplexity points behind traditional models on the WikiText-2 dataset <ref type="bibr" target="#b14">[Merity et al., 2016]</ref>.</p><p>Achieving comparable memory savings with attention-based recurrent sequence-to-sequence models is difficult, since the encoder hidden states must be kept simultaneously in memory in order to perform attention. We address this challenge by performing attention over a small subset of the hidden state, concatenated with the word embedding. With this technique, our reversible models succeed on neural machine translation tasks, outperforming baseline GRU and LSTM models on the Multi30K dataset <ref type="bibr" target="#b15">[Elliott et al., 2016]</ref> and achieving competitive performance on the IWSLT 2016 <ref type="bibr" target="#b16">[Cettolo et al., 2016]</ref> benchmark. Applying our technique reduces memory cost by a factor of 10-15 in the decoder, and a factor of 5-10 in the encoder. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Background</head><p>We begin by describing techniques to construct reversible neural network architectures, which we then adapt to RNNs. Reversible networks were first motivated by the need for flexible probability distributions with tractable likelihoods <ref type="bibr" target="#b17">[Papamakarios et al., 2017</ref><ref type="bibr" target="#b18">, Dinh et al., 2016</ref><ref type="bibr" target="#b19">, Kingma et al., 2016</ref>. Each of these architectures defines a mapping between probability distributions, one of which has a simple, known density. Because this mapping is reversible with an easily computable Jacobian determinant, maximum likelihood training is efficient.</p><p>A recent paper, closely related to our work, showed that reversible network architectures can be adapted to image classification tasks <ref type="bibr" target="#b20">[Gomez et al., 2017]</ref>. Their architecture, called the Reversible Residual Network or RevNet, is composed of a series of reversible blocks. Each block takes an input x and produces an output y of the same dimensionality. The input x is separated into two groups: x = [x 1 ; x 2 ], and outputs are produced according to the following coupling rule:</p><formula xml:id="formula_0">y 1 = x 1 + F (x 2 ) y 2 = x 2 + G(y 1 )<label>(1)</label></formula><p>where F and G are residual functions analogous to those in standard residual networks <ref type="bibr" target="#b21">[He et al., 2016]</ref>. The output y is formed by concatenating y 1 and y 2 , y = [y 1 ; y 2 ]. Each layer's activations can be reconstructed from the next layer's activations as follows:</p><formula xml:id="formula_1">x 2 = y 2 − G(y 1 ) x 1 = y 1 − F (x 2 )<label>(2)</label></formula><p>Because of this property, activations from the forward pass need not be stored for use in the backwards pass. Instead, starting from the last layer, activations of previous layers are reconstructed during backpropagation 2 . Because reversible backprop requires an additional computation of the residual functions to reconstruct activations, it requires 33% more arithmetic operations than ordinary backprop and is about 50% more expensive in practice. Full details of how to efficiently combine reversibility with backpropagation may be found in <ref type="bibr" target="#b20">Gomez et al. [2017]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Reversible Recurrent Architectures</head><p>The techniques used to construct RevNets can be combined with traditional RNN models to produce reversible RNNs. In this section, we propose reversible analogues of the GRU and the LSTM.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Reversible GRU</head><p>We start by recalling the GRU equations used to compute the next hidden state h (t+1) given the current hidden state h (t) and the current input x (t) (omitting biases):</p><formula xml:id="formula_2">[z (t) ; r (t) ] = σ(W [x (t) ; h (t−1) ]) g (t) = tanh(U [x (t) ; r (t) h (t−1) ]) h (t) = z (t) h (t−1) + (1 − z (t) ) g (t)<label>(3)</label></formula><p>Here, denotes elementwise multiplication. To make this update reversible, we separate the hidden state h into two groups, h = [h 1 ; h 2 ]. These groups are updated using the following rules:</p><formula xml:id="formula_3">[z (t) 1 ; r (t) 1 ] = σ(W 1 [x (t) ; h (t−1) 2 ]) g (t) 1 = tanh(U 1 [x (t) ; r (t) 1 h (t−1) 2 ]) h (t) 1 = z (t) 1 h (t−1) 1 + (1 − z (t) 1 ) g (t) 1 (4) [z (t) 2 ; r (t) 2 ] = σ(W 2 [x (t) ; h (t) 1 ]) g (t) 2 = tanh(U 2 [x (t) ; r (t) 2 h (t) 1 ]) h (t) 2 = z (t) 2 h (t−1) 2 + (1 − z (t) 2 ) g (t) 2 (5)</formula><p>Note that h </p><p>2 , and g</p><p>2 by redoing part of our forwards computation. Then we can find h (t−1) 2 using:</p><formula xml:id="formula_6">h (t−1) 2 = [h (t) 2 − (1 − z (t) 2 ) g (t) 2 ] 1/z (t) 2 (6) h (t−1) 1</formula><p>is reconstructed similarly. We address numerical issues which arise in practice in Section 3.3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Reversible LSTM</head><p>We next construct a reversible LSTM. The LSTM separates the hidden state into an output state h and a cell state c. The update equations are:</p><formula xml:id="formula_7">[f (t) , i (t) , o (t) ] = σ(W [x (t) ; h (t−1) ]) (7) g (t) = tanh(U [x (t) ; h (t−1) ])<label>(8)</label></formula><formula xml:id="formula_8">c (t) = f (t) c (t−1) + i (t) g (t) (9) h (t) = o (t) tanh(c (t) )<label>(10)</label></formula><p>We cannot straightforwardly apply our reversible techniques, as the update for h (t) is not a non-zero linear transformation of h (t−1) . Despite this, reversibility can be achieved using the equations:</p><formula xml:id="formula_9">[f (t) 1 , i (t) 1 , o (t) 1 , p (t) 1 ] = σ(W 1 [x (t) ; h (t−1) 2 ]) (11) g (t) 1 = tanh(U 1 [x (t) ; h (t−1) 2 ])<label>(12)</label></formula><formula xml:id="formula_10">c (t) 1 = f (t) 1 c (t−1) 1 + i (t) 1 g (t) 1 (13) h (t) 1 = p (t) 1 h (t−1) 1 + o (t) 1 tanh(c (t) 1 )<label>(14)</label></formula><p>We calculate the updates for c 2 , h 2 in an identical fashion to the above equations, using c</p><p>1 and h</p><p>1 . We call this model the Reversible LSTM, or RevLSTM.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Reversibility in Finite Precision Arithmetic</head><p>We have defined RNNs which are reversible in exact arithmetic. In practice, the hidden states cannot be perfectly reconstructed due to finite numerical precision. Consider the RevGRU equations 4 and 5. If the hidden state h is stored in fixed point, multiplication of h by z (whose entries are less than 1) destroys information, preventing perfect reconstruction. Multiplying a hidden unit by 1/2, for example, corresponds to discarding its least-significant bit, whose value cannot be recovered in the reverse computation. These errors from information loss accumulate exponentially over timesteps, causing the initial hidden state obtained by reversal to be far from the true initial state. The same issue also affects the reconstruction of the RevLSTM hidden states. Hence, we find that forgetting is the main roadblock to constructing perfectly reversible recurrent architectures.</p><p>There are two possible avenues to address this limitation. The first is to remove the forgetting step. For the RevGRU, this means we compute z i as before, and update h (t) i using:</p><formula xml:id="formula_13">h (t) i = h (t−1) i + (1 − z (t) i ) g (t) i (15)</formula><p>We term this model the No-Forgetting RevGRU or NF-RevGRU. Because the updates of the NFRevGRU do not discard information, we need only store one hidden state in memory at a given time during training. Similar steps can be taken to define a NF-RevLSTM.</p><p>The second avenue is to accept some memory usage and store the information forgotten from the hidden state in the forward pass. We can then achieve perfect reconstruction by restoring this information to our hidden state in the reverse computation. We discuss how to do so efficiently in Section 5.</p><formula xml:id="formula_14">h (0) A h (3) h (1) A B h (2) B C C h (3) C h (0) h (2) B B h (1) A A C Figure 1:</formula><p>Unrolling the reverse computation of an exactly reversible model on the repeat task yields a sequenceto-sequence computation. Left: The repeat task itself, where the model repeats each input token. Right: Unrolling the reversal. The model effectively uses the final hidden state to reconstruct all input tokens, implying that the entire input sequence must be stored in the final hidden state.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Impossibility of No Forgetting</head><p>We have shown reversible RNNs in finite precision can be constructed by ensuring that no information is discarded. We were unable to find such an architecture that achieved acceptable performance on tasks such as language modeling 3 . This is consistent with prior work which found forgetting to be crucial to LSTM performance <ref type="bibr" target="#b22">[Gers et al., 1999</ref><ref type="bibr" target="#b23">, Greff et al., 2017</ref>. In this section, we argue that this results from a fundamental limitation of no-forgetting reversible models: if none of the hidden state can be forgotten, then the hidden state at any given timestep must contain enough information to reconstruct all previous hidden states. Thus, any information stored in the hidden state at one timestep must remain present at all future timesteps to ensure exact reconstruction, overwhelming the storage capacity of the model.</p><p>We make this intuition concrete by considering an elementary sequence learning task, the repeat task. In this task, an RNN is given a sequence of discrete tokens and must simply repeat each token at the subsequent timestep. This task is trivially solvable by ordinary RNN models with only a handful of hidden units, since it doesn't require modeling long-distance dependencies. But consider how an exactly reversible model would perform the repeat task. Unrolling the reverse computation, as shown in <ref type="figure">Figure 1</ref>, reveals a sequence-to-sequence computation in which the encoder and decoder weights are tied. The encoder takes in the tokens and produces a final hidden state. The decoder uses this final hidden state to produce the input sequence in reverse sequential order.</p><p>Notice the relationship to another sequence learning task, the memorization task, used as part of a curriculum learning strategy by <ref type="bibr" target="#b24">Zaremba and Sutskever [2014]</ref>. After an RNN observes an entire sequence of input tokens, it is required to output the input sequence in reverse order. As shown in <ref type="figure">Figure 1</ref>, the memorization task for an ordinary RNN reduces to the repeat task for an NF-RevRNN. Hence, if the memorization task requires a hidden representation size that grows with the sequence length, then so does the repeat task for NF-RevRNNs.</p><p>We confirmed experimentally that NF-RevGRU and NF-RevLSM networks with limited capacity were unable to solve the repeat task 4 . Interestingly, the NF-RevGRU was able to memorize input sequences using considerably fewer hidden units than the ordinary GRU or LSTM, suggesting it may be a useful architecture for tasks requiring memorization. Consistent with the results on the repeat task, the NF-RevGRU and NF-RevLSTM were unable to match the performance of even vanilla RNNs on word-level language modeling on the Penn TreeBank dataset <ref type="bibr" target="#b13">[Marcus et al., 1993]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Reversibility with Forgetting</head><p>The impossibility of zero forgetting leads us to explore the second possibility to achieve reversibility: storing information lost from the hidden state during the forward computation, then restoring it in the reverse computation. Initially, we investigated discrete forgetting, in which only an integral number of bits are allowed to be forgotten. This leads to a simple implementation: if n bits are forgotten in the forwards pass, we can store these n bits on a stack, to be popped off and restored to the hidden state during reconstruction. However, restricting our model to forget only an integral number of bits led to a substantial drop in performance compared to baseline models 5 . For the remainder of Algorithm 1 Exactly reversible multiplication <ref type="bibr" target="#b12">(Maclaurin et al. [2015]</ref>) −R H h * this paper, we turn to fractional forgetting, in which a fractional number of bits are allowed to be forgotten.</p><formula xml:id="formula_15">1: Input: Buffer integer B, hidden state h = 2 −R H h * , forget value z = 2 −R Z z * with 0 &lt; z * &lt; 2 R Z 2: B ← B × 2 R Z {make room for new information on buffer} 3: B ← B + (h * mod 2 R Z ) {store lost information in buffer} 4: h * ← h * ÷ 2 R Z {divide</formula><p>To allow forgetting of a fractional number of bits, we use a technique introduced by <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref> to store lost information. To avoid cumbersome notation, we do away with superand subscripts and consider a single hidden unit h and its forget value z. We represent h and z as fixed-point numbers (integers with an implied radix point). For clarity, we write h = 2 −R H h * and z = 2 −R Z z * . Hence, h * is the number stored on the computer and multiplication by 2 −R H supplies the implied radix point. In general, R H and R Z are distinct. Our goal is to multiply h by z, storing as few bits as necessary to make this operation reversible.</p><p>The full process of reversible multiplication is shown in detail in Algorithm 1. The algorithm maintains an integer information buffer which stores h * mod 2 R Z at each timestep, so integer division of h * by 2 R Z is reversible. However, this requires enlarging the buffer by R Z bits at each timestep. <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref> reduced this storage requirement by shifting information from the buffer back onto the hidden state. Reversibility is preserved if the shifted information is small enough so that it does not affect the reverse operation (integer division of h * by z * ). We include a full review of the algorithm of <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref> in Appendix C.1.</p><p>However, this trick introduces a new complication not discussed by <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref>: the information shifted from the buffer could introduce significant noise into the hidden state. Shifting information requires adding a positive value less than z * to h * . Because z * ∈ (0, 2 R Z ) (z is the output of a sigmoid function and z = 2 −R Z z * ), h = 2 −R H h * may be altered by as much (2 R Z − 1)/2 R H . If R Z ≥ R H , this can alter the hidden state h by 1 or more <ref type="bibr">6</ref> . This is substantial, as in practice we observe |h| ≤ 16. Indeed, we observed severe performance drops for R H and R Z close to equal.</p><p>The solution is to limit the amount of information moved from the buffer to the hidden state by setting R Z smaller than R H . We found R H = 23 and R Z = 10 to work well. The amount of noise added onto the hidden state is bounded by 2 R Z −R H , so with these values, the hidden state is altered by at most 2 −13 . While the precision of our forgetting value z is limited to 10 bits, previous work has found that neural networks can be trained with precision as low as 10-15 bits and reach the same performance as high precision networks <ref type="bibr" target="#b25">[Gupta et al., 2015</ref><ref type="bibr" target="#b26">, Courbariaux et al., 2014</ref>. We find our situation to be similar.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Memory Savings</head><p>To analyze the savings that are theoretically possible using the procedure above, consider an idealized memory buffer which maintains dynamically resizing storage integers B i h for each hidden unit h in groups i = 1, 2 of the RevGRU model. Using the above procedure, at each timestep the number of bits stored in each B i h grows by:</p><formula xml:id="formula_16">R Z − log 2 (z * i,h ) = log 2 2 R Z /z * i,h = log 2 (1/z i,h )<label>(16)</label></formula><p>If the entries of z i,h are not close to zero, this compares favorably with the naïve cost of 32 bits per timestep. The total storage cost of TBPTT for a RevGRU model with hidden state size H on a sequence of length T will be 7 :</p><formula xml:id="formula_17">− T t=T H h=1 log 2 (z (t) 1,h ) + log 2 (z (t) 2,h )<label>(17)</label></formula><p>Thus, in the idealized case, the number of bits stored equals the number of bits forgotten. <ref type="bibr">6</ref> We illustrate this phenomenon with a concrete example in Appendix C.2. <ref type="bibr">7</ref> For the RevLSTM, we would sum over p </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Attention</head><p>...</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>&lt;SOS&gt; Decoder Encoder</head><p>Figure 2: Attention mechanism for NMT. The word embeddings, encoder hidden states, and decoder hidden states are color-coded orange, blue, and green, respectively; the striped regions of the encoder hidden states represent the slices that are stored in memory for attention. The final vectors used to compute the context vector are concatenations of the word embeddings and encoder hidden state slices.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">GPU Considerations</head><p>For our method to be used as part of a practical training procedure, we must run it on a parallel architecture such as a GPU. This introduces additional considerations which require modifications to Algorithm 1: (1) we implement it with ordinary finite-bit integers, hence dealing with overflow, and (2) for GPU efficiency, we ensure uniform memory access patterns across all hidden units.</p><p>Overflow. Consider the storage required for a single hidden unit. Algorithm 1 assumes unboundedly large integers, and hence would need to be implemented using dynamically resizing integer types, as was done by <ref type="bibr" target="#b12">Maclaurin et al. [2015]</ref>. But such data structures would require non-uniform memory access patterns, limiting their efficiency on GPU architectures. Therefore, we modify the algorithm to use ordinary finite integers. In particular, instead of a single integer, the buffer is represented with a sequence of 64-bit integers (B 0 , . . . , B D ). Whenever the last integer in our buffer is about to overflow upon multiplication by 2 R Z , as required by step 1 of Algorithm 1, we append a new integer B D+1 to the sequence. Overflow will occur if B D &gt; 2 64−R Z .</p><p>After appending a new integer B D+1 , we apply Algorithm 1 unmodified, using B D+1 in place of B.</p><p>It is possible that up to R Z − 1 bits of B D will not be used, incurring an additional penalty on storage cost. We experimented with several ways of alleviating this penalty but found that none improved significantly over the storage cost of the initial method.</p><p>Vectorization. Vectorization imposes an additional penalty on storage. For efficient computation, we cannot maintain different size lists as buffers for each hidden unit in a minibatch. Rather, we must store the buffer as a three-dimensional tensor, with dimensions corresponding to the minibatch size, the hidden state size, and the length of the buffer list. This means each list of integers being used as a buffer for a given hidden unit must be the same size. Whenever a buffer being used for any hidden unit in the minibatch overflows, an extra integer must be added to the buffer list for every hidden unit in the minibatch. Otherwise, the steps outlined above can still be followed.</p><p>We give the complete, revised algorithm in Appendix C.3. The compromises to address overflow and vectorization entail additional overhead. We measure the size of this overhead in Section 6.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Memory Savings with Attention</head><p>Most modern architectures for neural machine translation make use of attention mechanisms <ref type="bibr" target="#b4">, Wu et al., 2016</ref>; in this section, we describe the modifications that must be made to obtain memory savings when using attention. We denote the source tokens by x (1) , x (2) , . . . , x (T ) , and the corresponding word embeddings by e (1) , e (2) , . . . , e <ref type="bibr">(T )</ref> . We also use the following notation to denote vector slices: given a vector v ∈ R D , we let v[: k] ∈ R k denote the vector consisting of the first k dimensions of v. Standard attention-based models for NMT perform attention over the encoder hidden states; this is problematic from the standpoint of memory savings, because we must retain the hidden states in memory to use them when computing attention. To remedy this, we explore several alternatives to storing the full hidden state in memory. In particular, we consider performing attention over: 1) the embeddings e (t) , which capture the semantics of individual words; 2) slices of . Since the embeddings are computed directly from the input tokens, they don't need to be stored. When we slice the hidden state, only the slices that are attended to must be stored. We apply our memory-saving buffer technique to the remaining D − k dimensions.</p><p>In our NMT models, we make use of the global attention mechanism introduced by <ref type="bibr" target="#b27">Luong et al. [2015]</ref>, where each decoder hidden state h (t) dec is modified by incorporating context from the source annotations: a context vector c (t) is computed as a weighted sum of source annotations (with weights</p><formula xml:id="formula_18">α (t) j ); h (t)</formula><p>dec and c (t) are used to produce an attentional decoder hidden state h</p><formula xml:id="formula_19">(t)</formula><p>dec . <ref type="figure">Figure 2</ref> illustrates this attention mechanism, where attention is performed over the concatenated embeddings and hidden state slices. Additional details on attention are provided in Appendix F.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3">Additional Considerations</head><p>Restricting forgetting. In order to guarantee memory savings, we may restrict the entries of z (t) i to lie in (a, 1) rather than (0, 1), for some a &gt; 0. Setting a = 0.5, for example, forces our model to forget at most one bit from each hidden unit per timestep. This restriction may be accomplished by applying the linear transformation x → (1 − a)x + a to z (t) i after its initial computation 8 .</p><p>Limitations. The main flaw of our method is the increased computational cost. We must reconstruct hidden states during the backwards pass and manipulate the buffer at each timestep. We find that each step of reversible backprop takes about 2-3 times as much computation as regular backprop. We believe this overhead could be reduced through careful engineering. We did not observe a slowdown in convergence in terms of number of iterations, so we only pay an increased per-iteration cost.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Experiments</head><p>We evaluated the performance of reversible models on two standard RNN tasks: language modeling and machine translation. We wished to determine how much memory we could save using the techniques we have developed, how these savings compare with those possible using an idealized buffer, and whether these memory savings come at a cost in performance. We also evaluated our proposed attention mechanism on machine translation tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1">Language Modeling Experiments</head><p>We evaluated our one-and two-layer reversible models on word-level language modeling on the Penn Treebank <ref type="bibr" target="#b13">[Marcus et al., 1993]</ref> and WikiText-2 <ref type="bibr" target="#b14">[Merity et al., 2016]</ref> corpora. In the interest of a fair comparison, we kept architectural and regularization hyperparameters the same between all models and datasets. We regularized the hidden-to-hidden, hidden-to-output, and input-to-hidden connections, as well as the embedding matrix, using various forms of dropout 9 . We used the hyperparameters from <ref type="bibr" target="#b2">Merity et al. [2017]</ref>. Details are provided in Appendix G.1. We include training/validation curves for all models in Appendix I.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.1">Penn TreeBank Experiments</head><p>We conducted experiments on Penn TreeBank to understand the performance of our reversible models, how much restrictions on forgetting affect performance, and what memory savings are achievable. <ref type="bibr">8</ref> For the RevLSTM, we would apply this transformation to p (t) i and f (t) i . <ref type="bibr">9</ref> We discuss why dropout does not require additional storage in Appendix E. Performance. With no restriction on the amount forgotten, one-and two-layer RevGRU and RevLSTM models obtained roughly equivalent validation performance 10 compared to their nonreversible counterparts, as shown in <ref type="table" target="#tab_2">Table 1</ref>. To determine how little could be forgotten without affecting performance, we also experimented with restricting forgetting to at most 2, 3, or 5 bits per hidden unit per timestep using the method of Section 5.3. Restricting the amount of forgetting to 2, 3, or 5 bits from each hidden unit did not significantly impact performance. Performance suffered once forgetting was restricted to at most 1 bit. This caused a 4-5 increase in perplexity for the RevGRU. It also made the RevLSTM unstable for this task since its hidden state, unlike the RevGRU's, can grow unboundedly if not enough is forgotten. Hence, we do not include these results.</p><p>Memory savings. We tracked the size of the information buffer throughout training and used this to compare the memory required when using reversibility vs. storing all activations. As shown in Appendix H, the buffer size remains roughly constant throughout training. Therefore, we show the average ratio of memory requirements during training in <ref type="table" target="#tab_2">Table 1</ref>. Overall, we can achieve a 10-15-fold reduction in memory when forgetting at most 2-3 bits, while maintaining comparable performance to standard models. Using Equation 17, we also compared the actual memory savings to the idealized memory savings possible with a perfect buffer. In general, we use about twice the amount of memory as theoretically possible. Plots of memory savings for all models, both idealized and actual, are given in Appendix H.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.2">WikiText-2 Experiments</head><p>We conducted experiments on the WikiText-2 dataset (WT2) to see how reversible models fare on a larger, more challenging dataset. We investigated various restrictions, as well as no restriction, on forgetting and contrasted with baseline models as shown in <ref type="table" target="#tab_3">Table 2</ref>. The RevGRU model matched the performance of the baseline GRU model, even with forgetting restricted to 2 bits. The RevLSTM lagged behind the baseline LSTM by about 5 perplexity points for one-and two-layer models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2">Neural Machine Translation Experiments</head><p>We further evaluated our models on English-to-German neural machine translation (NMT). We used a unidirectional encoder-decoder model and our novel attention mechanism described in Section 5.2. We experimented on two datasets: Multi30K <ref type="bibr" target="#b15">[Elliott et al., 2016]</ref>, a dataset of ∼30,000 sentence pairs derived from Flickr image captions, and IWSLT 2016 <ref type="bibr" target="#b16">[Cettolo et al., 2016]</ref>, a larger dataset of ∼180,000 pairs. Experimental details are provided in Appendix G.2; training and validation curves are shown in Appendix I.3 (Multi30K) and I.4 (IWSLT); plots of memory savings during training are shown in Appendix H.2.</p><p>For Multi30K, we used single-layer RNNs with 300-dimensional hidden states and 300-dimensional word embeddings for both the encoder and decoder. Our baseline GRU and LSTM models achieved test BLEU scores of 32.60 and 37.06, respectively. The test BLEU scores and encoder memory savings achieved by our reversible models are shown in <ref type="table" target="#tab_4">Table 3</ref>, for several variants of attention and restrictions on forgetting. For attention, we use Emb to denote word embeddings, xH for a x-dimensional slice of the hidden state (300H denotes the whole hidden state), and Emb+xH to denote the concatenation of the two. Overall, while Emb attention achieved the best memory savings, Emb+20H achieved the best balance between performance and memory savings. The RevGRU with Emb+20H attention and forgetting at most 2 bits achieved a test BLEU score of 34.41, outperforming the standard GRU, while reducing activation memory requirements by 7.1× and 14.8× in the encoder and decoder, respectively. The RevLSTM with Emb+20H attention and forgetting at most 3 bits achieved a test BLEU score of 37.23, outperforming the standard LSTM, while reducing activation memory requirements by 8.9× and 11.1× in the encoder and decoder respectively. For IWSLT 2016, we used 2-layer RNNs with 600-dimensional hidden states and 600-dimensional word embeddings for the encoder and decoder. We evaluated reversible models in which the decoder used Emb+60H attention. The baseline GRU and LSTM models achieved test BLEU scores of 16.07 and 22.35, respectively. The RevGRU achieved a test BLEU score of 20.70, outperforming the GRU, while saving 7.15× and 12.92× in the encoder and decoder, respectively. The RevLSTM achieved a score of 22.34, competitive with the LSTM, while saving 8.32× and 6.57× memory in the encoder and decoder, respectively. Both reversible models were restricted to forget at most 5 bits.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Related Work</head><p>Several approaches have been taken to reduce the memory requirements of RNNs. Frameworks that use static computational graphs <ref type="bibr" target="#b28">[Abadi et al., 2016</ref><ref type="bibr" target="#b29">, Al-Rfou et al., 2016</ref> aim to allocate memory efficiently in the training algorithms themselves. Checkpointing <ref type="bibr" target="#b30">[Martens and Sutskever, 2012</ref><ref type="bibr" target="#b32">, Gruslys et al., 2016</ref>] is a frequently used method. In this strategy, certain activations are stored as checkpoints throughout training and the remaining activations are recomputed as needed in the backwards pass. Checkpointing has previously been used to train recurrent neural networks on sequences of length T by storing the activations every √ T layers <ref type="bibr" target="#b30">[Martens and Sutskever, 2012]</ref>. <ref type="bibr" target="#b32">Gruslys et al. [2016]</ref> further developed this strategy by using dynamic programming to determine which activations to store in order to minimize computation for a given storage budget.</p><p>Decoupled neural interfaces  use auxilliary neural networks trained to produce the gradient of a layer's weight matrix given the layer's activations as input, then use these predictions to train, rather than the true gradient. This strategy depends on the quality of the gradient approximation produced by the auxilliary network. Hidden activations must still be stored as in the usual backpropagation algorithm to train the auxilliary networks, unlike our method.</p><p>Unitary recurrent neural networks <ref type="bibr" target="#b35">[Arjovsky et al., 2016</ref><ref type="bibr" target="#b36">, Wisdom et al., 2016</ref><ref type="bibr" target="#b37">, Jing et al., 2016</ref> refine vanilla RNNs by parametrizing their transition matrix to be unitary. These networks are reversible in exact arithmetic <ref type="bibr" target="#b35">[Arjovsky et al., 2016]</ref>: the conjugate transpose of the transition matrix is its inverse, so the hidden-to-hidden transition is reversible. In practice, this method would run into numerical precision issues as floating point errors accumulate over timesteps. Our method, through storage of lost information, avoids these issues.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8">Conclusion</head><p>We have introduced reversible recurrent neural networks as a method to reduce the memory requirements of truncated backpropagation through time. We demonstrated the flaws of exactly reversible RNNs, and developed methods to efficiently store information lost during the hidden-to-hidden transition, allowing us to reverse the transition during backpropagation. Reversible models can achieve roughly equivalent performance to standard models while reducing the memory requirements by a factor of 5-15 during training. We believe reversible models offer a compelling path towards constructing more flexible and expressive recurrent neural networks.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>return updated buffer B, updated value h = 2</figDesc><table>by denominator of z} 
+5: h 
+ *  ← h 
+ *  × z 
+ *  {multiply by numerator of z} 
+6: h 
+ *  ← h 
+ *  + (B mod z 
+ *  ) {add information to hidden state} 
+7: B ← B ÷ z 
+ *  {shorten information buffer} 
+8: </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Validation perplexities (memory savings) on Penn TreeBank word-level language modeling. Results shown when forgetting is restricted to 2, 3, and 5 bits per hidden unit per timestep and when there is no restriction.</figDesc><table>Reversible Model 
+2 bit 
+3 bits 
+5 bits 
+No limit 
+Usual Model 
+No limit 
+
+1 layer RevGRU 
+82.2 (13.8) 81.1 (10.8) 81.1 (7.4) 81.5 (6.4) 
+1 layer GRU 
+82.2 
+2 layer RevGRU 
+83.8 (14.8) 83.8 (12.0) 82.2 (9.4) 82.3 (4.9) 
+2 layer GRU 
+81.5 
+
+1 layer RevLSTM 79.8 (13.8) 79.4 (10.1) 78.4 (7.4) 78.2 (4.9) 
+1 layer LSTM 
+78.0 
+2 layer RevLSTM 74.7 (14.0) 72.8 (10.0) 72.9 (7.3) 72.9 (4.9) 
+2 layer LSTM 
+73.0 
+
+the encoder hidden states, h 
+
+(t) 
+
+enc [: k] (where we consider k = 20 or 100); and 3) the concatenation of 
+embeddings and hidden state slices, [e 
+(t) ; h 
+
+(t) 
+
+enc [: k]]</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Validation perplexities on WikiText-2 word-level language modeling. Results shown when forgetting is restricted to 2, 3, and 5 bits per hidden unit per timestep and when there is no restriction.</figDesc><table>Reversible Model 2 bits 3 bits 5 bits No limit 
+Usual model 
+No limit 
+
+1 layer RevGRU 
+97.7 
+97.2 
+96.3 
+97.1 
+1 layer GRU 
+97.8 
+2 layer RevGRU 
+95.2 
+94.7 
+95.3 
+95.0 
+2 layer GRU 
+93.6 
+
+1 layer RevLSTM 
+94.8 
+94.5 
+94.5 
+94.1 
+1 layer LSTM 
+89.3 
+2 layer RevLSTM 
+90.7 
+87.7 
+87.0 
+86.0 
+2 layer LSTM 
+82.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Performance on the Multi30K dataset with different restrictions on forgetting. P denotes the test BLEU scores; M denotes the average memory savings of the encoder during training.</figDesc><table>Model 
+Attention 
+1 bit 
+2 bit 
+3 bit 
+5 bit 
+No Limit 
+
+P 
+M 
+P 
+M 
+P 
+M 
+P 
+M 
+P 
+M 
+
+RevLSTM 
+
+20H 
+29.18 11.8 30.63 
+9.5 
+30.47 
+8.5 
+30.02 
+7.3 
+29.13 
+6.1 
+100H 
+27.90 
+4.9 
+35.43 
+4.3 
+36.03 
+4.0 
+35.75 
+3.7 
+34.96 
+3.5 
+300H 
+26.44 
+1.0 
+36.10 
+1.0 
+37.05 
+1.0 
+37.30 
+1.0 
+36.80 
+1.0 
+Emb 
+31.92 20.0 31.98 15.1 31.60 13.9 31.42 10.7 31.45 10.1 
+Emb+20H 36.80 12.1 36.78 
+9.9 
+37.23 
+8.9 
+36.45 
+8.1 
+37.30 
+7.4 
+
+RevGRU 
+
+20H 
+26.52 
+7.2 
+26.86 
+7.2 
+28.26 
+6.8 
+27.71 
+6.5 
+27.86 
+5.7 
+100H 
+33.28 
+2.6 
+32.53 
+2.6 
+31.44 
+2.5 
+31.60 
+2.4 
+31.66 
+2.3 
+300H 
+34.86 
+1.0 
+33.49 
+1.0 
+33.01 
+1.0 
+33.03 
+1.0 
+33.08 
+1.0 
+Emb 
+28.51 13.2 28.76 13.2 28.86 12.9 27.93 12.8 28.59 12.9 
+Emb+20H 34.00 
+7.2 
+34.41 
+7.1 
+34.39 
+6.4 
+34.04 
+5.9 
+34.94 
+5.7 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="32">nd Conference on Neural Information Processing Systems (NeurIPS 2018), Montréal, Canada.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Code will be made available at https://github.com/matthewjmackay/reversible-rnn 2 The activations prior to a pooling step must still be saved, since this involves projection to a lower dimensional space, and hence loss of information.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">We discuss our failed attempts in Appendix A. 4 We include full results and details in Appendix B. The argument presented applies to idealized RNNs able to implement any hidden-to-hidden transition and whose hidden units can store 32 bits each. We chose to use the LSTM and the NF-RevGRU as approximations to these idealized models since they performed best at their respective tasks. 5 Algorithmic details and experimental results for discrete forgetting are given in Appendix D.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="10">Test perplexities exhibit similar patterns but are 3-5 perplexity points lower.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>We thank Kyunghyun Cho for experimental advice and discussion. We also thank Aidan Gomez, Mengye Ren, Gennady Pekhimenko, and David Duvenaud for helpful discussion. MM is supported by an NSERC CGS-M award, and PV is supported by an NSERC PGS-D award.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Speech Recognition with Deep Recurrent Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abdel-Rahman</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Acoustics, Speech and Signal Processing (ICASSP)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="6645" to="6649" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">On the State of the Art of Evaluation in Neural Language Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gábor</forename><surname>Melis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.05589</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Merity</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.02182</idno>
+		<title level="m">Nitish Shirish Keskar, and Richard Socher. Regularizing and Optimizing LSTM Language Models</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dzmitry</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.0473</idno>
+		<title level="m">Neural Machine Translation by Jointly Learning to Align and Translate</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yonghui</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mike</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhifeng</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mohammad</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wolfgang</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maxim</forename><surname>Macherey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan</forename><surname>Krikun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qin</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Macherey</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.08144</idno>
+		<title level="m">Google&apos;s Neural Machine Translation System: Bridging the Gap between Human and Machine Translation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Backpropagation through Time: What It Does and How to Do It</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Werbos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">78</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1550" to="1560" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning Representations by Back-propagating Errors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>David E Rumelhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald J</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">323</biblScope>
+			<biblScope unit="issue">6088</biblScope>
+			<biblScope unit="page">533</biblScope>
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Caglar</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6026</idno>
+		<title level="m">How to Construct Deep Recurrent Neural Networks</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antonio</forename><surname>Valerio Miceli Barone</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jindřich</forename><surname>Helcl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rico</forename><surname>Sennrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barry</forename><surname>Haddow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandra</forename><surname>Birch</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.07631</idno>
+		<title level="m">Deep Architectures for Neural Machine Translation</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julian</forename><surname>Georg Zilly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rupesh Kumar</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Koutník</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.03474</idno>
+		<title level="m">Recurrent Highway Networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bart</forename><surname>Van Merriënboer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Caglar</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dzmitry</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fethi</forename><surname>Bougares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Holger</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.1078</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Long Short-Term Memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Gradient-based Hyperparameter Optimization through Reversible Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dougal</forename><surname>Maclaurin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan P</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 32nd International Conference on Machine Learning (ICML)</title>
+		<meeting>the 32nd International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Building a Large Annotated Corpus of English: The Penn Treebank</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mary</forename><forename type="middle">Ann</forename><surname>Marcus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Beatrice</forename><surname>Marcinkiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Santorini</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="313" to="330" />
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Merity</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Caiming</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Bradbury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.07843</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Pointer Sentinel Mixture Models</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Desmond</forename><surname>Elliott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stella</forename><surname>Frank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Khalil</forename><surname>Sima&amp;apos;an</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lucia</forename><surname>Specia</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.00459</idno>
+		<title level="m">Multi30K: Multilingual EnglishGerman Image Descriptions</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">The IWSLT 2016 Evaluation Campaign</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mauro</forename><surname>Cettolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Niehues</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sebastian</forename><surname>Stüker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luisa</forename><surname>Bentivogli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcello</forename><surname>Federico</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 13th International Workshop on Spoken Language Translation (IWSLT)</title>
+		<meeting>the 13th International Workshop on Spoken Language Translation (IWSLT)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Masked Autoregressive Flow for Density Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Papamakarios</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iain</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Theo</forename><surname>Pavlakou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2335" to="2344" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurent</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jascha</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.08803</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Density Estimation using Real NVP</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Improving Variational Inference with Inverse Autoregressive Flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rafal</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4743" to="4751" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">The Reversible Residual Network: Backpropagation Without Storing Activations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Aidan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mengye</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger B</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2211" to="2221" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deep Residual Learning for Image Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Learning to Forget: Continual Prediction with LSTM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Felix A Gers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fred</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cummins</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">LSTM: A Search Space Odyssey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rupesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Koutník</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Steunebrink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Neural Networks and Learning Systems</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="2222" to="2232" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Learning to Execute</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.4615</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Deep Learning with Limited Numerical Precision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Suyog</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ankur</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kailash</forename><surname>Gopalakrishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pritish</forename><surname>Narayanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1737" to="1746" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jean-Pierre</forename><surname>David</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.7024</idno>
+		<title level="m">Training Deep Neural Networks with Low Precision Multiplications</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Effective Approaches to AttentionBased Neural Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh-Thang</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hieu</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher D</forename><surname>Manning</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1508.04025</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eugene</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhifeng</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Craig</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Devin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.04467</idno>
+		<title level="m">Large-Scale Machine Learning on Heterogeneous Distributed Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rami</forename><surname>Al-Rfou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guillaume</forename><surname>Alain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amjad</forename><surname>Almahairi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christof</forename><surname>Angermueller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dzmitry</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Ballas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frédéric</forename><surname>Bastien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Bayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anatoly</forename><surname>Belikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Belopolsky</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.02688</idno>
+		<title level="m">A Python Framework for Fast Computation of Mathematical Expressions</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Training Deep and Recurrent Networks with Hessian-Free Optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Networks: Tricks of the Trade</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="479" to="535" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tianqi</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bing</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chiyuan</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carlos</forename><surname>Guestrin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1604.06174</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Training Deep Nets with Sublinear Memory Cost</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Memory-Efficient Backpropagation through Time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Audrunas</forename><surname>Gruslys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rémi</forename><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivo</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><surname>Lanctot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4125" to="4133" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Decoupled Neural Interfaces using Synthetic Gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wojciech</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Simon</forename><surname>Czarnecki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><forename type="middle">Marian</forename><surname>Czarnecki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Grzegorzświrszcz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Simon</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Osindero</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00522</idno>
+		<title level="m">Oriol Vinyals, and Koray Kavukcuoglu. Understanding Synthetic Gradients and Decoupled Neural Interfaces</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Unitary Evolution Recurrent Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Arjovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amar</forename><surname>Shah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1120" to="1128" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Full-Capacity Unitary Recurrent Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Wisdom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Powers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Hershey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">Le</forename><surname>Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Les</forename><surname>Atlas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4880" to="4888" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Jing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yichen</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tena</forename><surname>Dubček</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Peurifoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Skirlo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Tegmark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marin</forename><surname>Soljačić</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.05231</idno>
+		<title level="m">Tunable Efficient Unitary Neural Networks (EUNN) and their Application to RNN</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
