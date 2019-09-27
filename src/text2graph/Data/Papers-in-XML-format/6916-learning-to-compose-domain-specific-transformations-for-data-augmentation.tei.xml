@@ -1,0 +1,953 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning to Compose Domain-Specific Transformations for Data Augmentation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">J</forename><surname>Ratner</surname></persName>
+							<email>ajratner@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Henry</forename><forename type="middle">R</forename><surname>Ehrenberg</surname></persName>
+							<email>henryre@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zeshan</forename><surname>Hussain</surname></persName>
+							<email>zeshanmh@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jared</forename><surname>Dunnmon</surname></persName>
+							<email>jdunnmon@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Ré</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning to Compose Domain-Specific Transformations for Data Augmentation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Data augmentation is a ubiquitous technique for increasing the size of labeled training sets by leveraging task-specific data transformations that preserve class labels. While it is often easy for domain experts to specify individual transformations, constructing and tuning the more sophisticated compositions typically needed to achieve state-of-the-art results is a time-consuming manual task in practice. We propose a method for automating this process by learning a generative sequence model over user-specified transformation functions using a generative adversarial approach. Our method can make use of arbitrary, non-deterministic transformation functions, is robust to misspecified user input, and is trained on unlabeled data. The learned transformation model can then be used to perform data augmentation for any end discriminative model. In our experiments, we show the efficacy of our approach on both image and text datasets, achieving improvements of 4.0 accuracy points on CIFAR-10, 1.4 F1 points on the ACE relation extraction task, and 3.4 accuracy points when using domain-specific transformation operations on a medical imaging dataset as compared to standard heuristic augmentation approaches.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Modern machine learning models, such as deep neural networks, may have billions of free parameters and accordingly require massive labeled data sets for training. In most settings, labeled data is not available in sufficient quantities to avoid overfitting to the training set. The technique of artificially expanding labeled training sets by transforming data points in ways which preserve class labels -known as data augmentation -has quickly become a critical and effective tool for combatting this labeled data scarcity problem. Data augmentation can be seen as a form of weak supervision, providing a way for practitioners to leverage their knowledge of invariances in a task or domain. And indeed, data augmentation is cited as essential to nearly every state-of-the-art result in image classification <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b23">24]</ref> (see Supplemental Materials), and is becoming increasingly common in other modalities as well <ref type="bibr" target="#b19">[20]</ref>.</p><p>Even on well studied benchmark tasks, however, the choice of data augmentation strategy is known to cause large variances in end performance and be difficult to select <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b6">7]</ref>, with papers often reporting their heuristically found parameter ranges <ref type="bibr" target="#b2">[3]</ref>. In practice, it is often simple to formulate a large set of primitive transformation operations, but time-consuming and difficult to find the parameterizations and compositions of them needed for state-of-the-art results. In particular, many transformation operations will have vastly different effects based on parameterization, the set of other transformations they are applied with, and even their particular order of composition. For example, brightness and saturation enhancements might be destructive when applied together, but produce realistic images when paired with geometric transformations. Two example sequences of incremental image TFs applied to CIFAR-10 images (left); a conditional word-swap TF using an externally trained language model and specifically targeting nouns (NN) between entity mentions (E1,E2) for a relation extraction task (middle); and an unsupervised segementation-based translation TF applied to mass-containing mammography images (right).</p><p>Given the difficulty of searching over this configuration space, the de facto norm in practice consists of applying one or more transformations in random order and with random parameterizations selected from hand-tuned ranges. Recent lines of work attempt to automate data augmentation entirely, but either rely on large quantities of labeled data <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b20">21]</ref>, restricted sets of simple transformations <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b12">13]</ref>, or consider only local perturbations that are not informed by domain knowledge <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b21">22]</ref> (see Section 4). In contrast, our aim is to directly and flexibly leverage domain experts' knowledge of invariances as a valuable form of weak supervision in real-world settings where labeled training data is limited.</p><p>In this paper, we present a new method for data augmentation that directly leverages user domain knowledge in the form of transformation operations, and automates the difficult process of composing and parameterizing them. We formulate the problem as one of learning a generative sequence model over black-box transformation functions (TFs): user-specified operators representing incremental transformations to data points that need not be differentiable nor deterministic. For example, TFs could rotate an image by a small degree, swap a word in a sentence, or translate a segmented structure in an image <ref type="figure" target="#fig_0">(Fig. 1)</ref>. We then design a generative adversarial objective <ref type="bibr" target="#b8">[9]</ref> which allows us to train the sequence model to produce transformed data points which are still within the data distribution of interest, using unlabeled data. Because the TFs can be stochastic or non-differentiable, we present a reinforcement learning-based training strategy for this model. The learned model can then be used to perform data augmentation on labeled training data for any end discriminative model.</p><p>Given the flexibility of our representation of the data augmentation process, we can apply our approach in many different domains, and on different modalities including both text and images. On a real-world mammography image task, we achieve a 3.4 accuracy point boost above randomly composed augmentation by learning to appropriately combine standard image TFs with domainspecific TFs derived in collaboration with radiology experts. Using novel language model-based TFs, we see a 1.4 F1 boost over heuristic augmentation on a text relation extraction task from the ACE corpus. And on a 10%-subsample of the CIFAR-10 dataset, we achieve a 4.0 accuracy point gain over a standard heuristic augmentation approach and are competitive with comparable semi-supervised approaches. Additionally, we show empirical results suggesting that the proposed approach is robust to misspecified TFs. Our hope is that the proposed method will be of practical value to practitioners and of interest to researchers, so we have open-sourced the code at https: //github.com/HazyResearch/tanda.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Modeling Setup and Motivation</head><p>In the standard data augmentation setting, our aim is to expand a labeled training set by leveraging knowledge of class-preserving transformations. For a practitioner with domain expertise, providing individual transformations is straightforward. However, high performance augmentation techniques use compositions of finely tuned transformations to achieve state-of-the-art results <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b10">11]</ref>, and heuristically searching over this space of all possible compositions and parameterizations for a new task is often infeasible. Our goal is to automate this task by learning to compose and parameterize a set of user-specified transformation operators in ways that are diverse but still preserve class labels.</p><p>In our method, transformations are modeled as sequences of incremental user-specified operations, called transformation functions (TFs) <ref type="figure" target="#fig_0">(Fig. 1)</ref>. Rather than making the strong assumption that all the provided TFs preserve class labels, as existing approaches do, we assume a weaker form of class <ref type="figure">Figure 2</ref>: A high-level diagram of our method. Users input a set of transformation functions h 1 , ..., h K and unlabeled data. A generative adversarial approach is then used to train a null class discriminator, D ∅ , and a generator, G, which produces TF sequences h τ1 , ..., h τ L . Finally, the trained generator is used to perform data augmentation for an end discriminative model D f .</p><p>invariance which enables us to use unlabeled data to learn a generative model over transformation sequences. We then propose two representative model classes to handle modeling both commutative and non-commutative transformations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Augmentation as Sequence Modeling</head><p>In our approach, we represent transformations as sequences of incremental operations. In this setting, the user provides a set of K TFs,</p><formula xml:id="formula_0">h i : X → X , i ∈ [1, K].</formula><p>Each TF performs an incremental transformation: for example, h i could rotate an image by five degrees, swap a word in a sentence, or move a segmented tumor mass around a background mammography image (see <ref type="figure" target="#fig_0">Fig. 1</ref>). In order to accommodate a wide range of such user-defined TFs, we treat them as black-box functions which need not be deterministic nor differentiable.</p><p>This formulation gives us a tractable way to tune both the parameterization and composition of the TFs in a discretized but fine-grained manner. Our representation can be thought of as an implicit binning strategy for tuning parameterizations -e.g. a 15 degree rotation might be represented as three applications of a five-degree rotation TF. It also provides a direct way to represent compositions of multiple transformation operations. This is critical as a multitude of state-of-the-art results in the literature show the importance of using compositions of more than one transformations per image <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b10">11]</ref>, which we also confirm experimentally in Section 5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Weakening the Class-Invariance Assumption</head><p>Any data augmentation technique fundamentally relies on some assumption about the transformation operations' relation to the class labels. Previous approaches make the unrealistic assumption that all provided transformation operations preserve class labels for all data points. That is,</p><formula xml:id="formula_1">y(h τ L • . . . • h τ1 (x)) = y(x)<label>(1)</label></formula><p>for label mapping function y, any sequence of TF indices τ 1 , ..., τ L , and all data points x.</p><p>This assumption puts a large burden of precise specification on the user, and based on our observations, is violated by many real-world data augmentation strategies. Instead, we consider a weaker modeling assumption. We assume that transformation operations will not map between classes, but might destructively map data points out of the distribution of interest entirely:</p><formula xml:id="formula_2">y(h τ L • . . . • h τ1 (x)) ∈ {y(x), y ∅ }<label>(2)</label></formula><p>where y ∅ represents an out-of-distribution null class. Intuitively, this weaker assumption is motivated by the categorical image classification setting, where we observe that transformation operations provided by the user will almost never turn, for example, a plane into a car, but may often turn a plane into an indistinguishable "garbage" image ( <ref type="figure">Fig. 3)</ref>. We are the first to consider this weaker invariance assumption, which we believe more closely matches various practical data augmentation settings of interest. In Section 5, we also provide empirical evidence that this weaker assumption is useful in binary classification settings and over modalities other than image data. Critically, it also enables us to learn a model of TF sequences using unlabeled data alone.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Plane Auto Bird</head><p>Original Plane Auto Bird Cat Deer <ref type="figure">Figure 3</ref>: Our modeling assumption is that transformations may map out of the natural distribution of interest, but will rarely map between classes. As a demonstration, we take images from CIFAR-10 (each row) and randomly search for a transformation sequence that best maps them to a different class (each column), according to a trained discriminative model. The matches rarely resemble the target class but often no longer look like "normal" images at all. Note that we consider a fixed set of user-provided TFs, not adversarially selected ones. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Minimizing Null Class Mappings Using Unlabeled Data</head><p>Given assumption (2), our objective is to learn a model G θ which generates sequences of TF indices τ ∈ {1, K} L with fixed length L, such that the resulting TF sequences h τ1 , ..., h τ L are not likely to map data points into y ∅ . Crucially, this does not involve using the class labels of any data points, and so we can use unlabeled data. Our goal is then to minimize the the probability of a generated sequence mapping unlabeled data points into the null class, with respect to θ:</p><formula xml:id="formula_3">J ∅ = E τ ∼G θ E x∼U [P (y(h τ L • . . . • h τ1 (x)) = y ∅ )]<label>(3)</label></formula><p>where U is some distribution of unlabeled data.</p><p>Generative Adversarial Objective In order to approximate</p><formula xml:id="formula_4">P (y(h τ1 • . . . • h τ L (x)) = y ∅ )</formula><p>, we jointly train the generator G θ and a discriminative model D ∅ φ using a generative adversarial network (GAN) objective <ref type="bibr" target="#b8">[9]</ref>, now minimizing with respect to θ and maximizing with respect to φ:</p><formula xml:id="formula_5">J ∅ = E τ ∼G θ E x∼U log(1 − D ∅ φ (h τ L • . . . • h τ1 (x))) + E x ∼U log(D ∅ φ (x ))<label>(4)</label></formula><p>As in the standard GAN setup, the training procedure can be viewed as a minimax game in which the discriminator's goal is to assign low values to transformed, out-of-distribution data points and high values to real in-distribution data points, while simultaneously, the generator's goal is to generate transformation sequences which produce data points that are indistinguishable from real data points according to the discriminator. For D ∅ φ , we use an all-convolution CNN as in <ref type="bibr" target="#b22">[23]</ref>. For further details, see Supplemental Materials.</p><p>Diversity Objective An additional concern is that the model will learn a variety of null transformation sequences (e.g. rotating first left than right repeatedly). Given the potentially large state-space of actions, and the black-box nature of the user-specified TFs, it seems infeasible to hard-code sets of inverse operations to avoid. To mitigate this, we instead consider a second objective term:</p><formula xml:id="formula_6">J d = E τ ∼G θ E x∼U [d(h τ L • . . . • h τ1 (x), x)]<label>(5)</label></formula><p>where d : X × X → R is some distance function. For d, we evaluated using both distance in the raw input space, and in the feature space learned by the final pre-softmax layer of the discriminator D We minimize J with respect to θ and maximize with respect to φ.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4">Modeling Transformation Sequences</head><p>We now consider two model classes for G θ :</p><p>Independent Model We first consider a mean field model in which each sequential TF is chosen independently. This reduces our task to one of learning K parameters, which we can think of as representing the task-specific "accuracies" or "frequencies" of each TF. For example, we might want to learn that elastic deformations or swirls should only rarely be applied to images in CIFAR-10, but that small rotations can be applied frequently. In particular, a mean field model also provides a simple way of effectively learning stochastic, discretized parameterizations of the TFs. For example, if we have a TF representing five-degree rotations, Rotate5Deg, a marginal value of P G θ (Rotate5Deg) = 0.1 could be thought of as roughly equivalent to learning to rotate 0.5L degrees on average.</p><p>State-Based Model There are important cases, however, where the independent representation learned by the mean field model could be overly limited. In many settings, certain TFs may have very different effects depending on which other TFs are applied with them. As an example, certain similar pairs of image transformations might be overly lossy when applied together, such as a blur and a zoom operation, or a brighten and a saturate operation. A mean field model could not represent such disjunctions as these. Another scenario where an independent model fails is where the TFs are non-commutative, such as with lossy operators (e.g. image transformations which use aliasing). In both of these cases, modeling the sequences of transformations could be important. Therefore we consider a long short-term memory (LSTM) network as as a representative sequence model. The output from each cell of the network is a distribution over the TFs. The next TF in the sequence is then sampled from this distribution, and is fed as a one-hot vector to the next cell in the network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Learning a Transformation Sequence Model</head><p>The core challenge that we now face in learning G θ is that it generates sequences over TFs which are not necessarily differentiable or deterministic. This constraint is a critical facet of our approach from the usability perspective, as it allows users to easily write TFs as black-box scripts in the language of their choosing, leveraging arbitrary subfunctions, libraries, and methods. In order to work around this constraint, we now describe our model in the syntax of reinforcement learning (RL), which provides a convenient framework and set of approaches for handling computation graphs with non-differentiable or stochastic nodes <ref type="bibr" target="#b26">[27]</ref>. Reinforcement Learning Formulation Let τ i be the index of the ith TF applied, andx i be the resulting incrementally transformed data point. Then we consider s t = (x,x 1 ,x 2 , ...,x t , τ 1 , ...., τ t ) as the state after having applied t of the incremental TFs. Note that we include the incrementally transformed data pointsx 1 , ...,x t in s t since the TFs may be stochastic. Each of the model classes considered for G θ then uses a different state representationŝ. For the mean field model, the state representation used isŝ MF t = ∅. For the LSTM model, we useŝ LSTM t = LSTM(τ t , s t−1 ), the state update operation performed by a standard LSTM cell parameterized by θ.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Policy Gradient with Incremental Rewards</head><formula xml:id="formula_7">Let t (x, τ ) = log(1 − D ∅ φ (x t )</formula><p>) be the cumulative loss for a data point x at step t, with 0 (x) = 0 (x, τ ) ≡ log(1 − D ∅ φ (x)). Let R(s t ) = t (x, τ ) − t−1 (x, τ ) be the incremental reward, representing the difference in discriminator loss at incremental transformation step t. We can now recast the first term of our objectiveJ ∅ as an expected sum of incremental rewards:</p><formula xml:id="formula_8">U (θ) ≡ E τ ∼G θ E x∼U log(1 − D ∅ φ (h τ1 • . . . • h τ L (x))) = E τ ∼G θ E x∼U 0 (x) + L t=1 R(s t )<label>(6)</label></formula><p>We omit 0 in practice, equivalent to using the loss of x as a baseline term. Next, let π θ be the stochastic transition policy implictly defined by G θ . We compute the recurrent policy gradient <ref type="bibr" target="#b31">[32]</ref> of the objective U (θ) as:</p><formula xml:id="formula_9">∇ θ U (θ) = E τ ∼G θ E x∼U L t=1 R(s t )∇ θ log π θ (τ t |ŝ t−1 )<label>(7)</label></formula><p>Following standard practice, we approximate this quantity by sampling batches of n data points and m sampled action sequences per data point. We also use standard techniques of discounting with factor γ ∈ [0, 1] and considering only future rewards <ref type="bibr" target="#b11">[12]</ref>. See Supplemental Materials for details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Related Work</head><p>We now review related work, both to motivate comparisons in the experiments section and to present complementary lines of work.</p><p>Heuristic Data Augmentation Most state-of-the-art image classification pipelines use some limited form of data augmentation <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b6">7]</ref>. This generally consists of applying crops, flips, or small affine transformations, in fixed order or at random, and with parameters drawn randomly from hand-tuned ranges. In addition, various studies have applied heuristic data augmentation techniques to modalities such as audio <ref type="bibr" target="#b30">[31]</ref> and text <ref type="bibr" target="#b19">[20]</ref>. As reported in the literature, the selection of these augmentation strategies can have large performance impacts, and thus can require extensive selection and tuning by hand <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b6">7]</ref> (see Supplemental Materials as well).</p><p>Interpolation-Based Techniques Some techniques have explored generating augmented training sets by interpolating between labeled data points. For example, the well-known SMOTE algorithm applies this basic technique for oversampling in class-imbalanced settings <ref type="bibr" target="#b1">[2]</ref>, and recent work explores using a similar interpolation approach in a learned feature space <ref type="bibr" target="#b4">[5]</ref>. <ref type="bibr" target="#b12">[13]</ref> proposes learning a class-conditional model of diffeomorphisms interpolating between nearest-neighbor labeled data points as a way to perform augmentation. We view these approaches as complementary but orthogonal, as our goal is to directly exploit user domain knowledge of class-invariant transformation operations.</p><p>Adversarial Data Augmentation Several lines of recent work have explored techniques which can be viewed as forms of data augmentation that are adversarial with respect to the end classification model. In one set of approaches, transformation operations are selected adaptively from a given set in order to maximize the loss of the end classification model being trained <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b7">8]</ref>. These procedures make the strong assumption that all of the provided transformations will preserve class labels, or use bespoke models over restricted sets of operations <ref type="bibr" target="#b27">[28]</ref>. Another line of recent work has showed that augmentation via small adversarial linear perturbations can act as a regularizer <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b21">22]</ref>. While complimentary, this work does not consider taking advantage of non-local transformations derived from user knowledge of task or domain invariances.</p><p>Finally, generative adversarial networks (GANs) <ref type="bibr" target="#b8">[9]</ref> have recently made great progress in learning complete data generation models from unlabeled data. These can be used to augment labeled training sets as well. Class-conditional GANs <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b20">21]</ref> generate artificial data points but require large sets of labeled training data to learn from. Standard unsupervised GANs can be used to generate additional out-of-class data points that can then augment labeled training sets <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b28">29]</ref>. We compare our proposed approach with these methods empirically in Section 5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Experiments</head><p>We experimentally validate the proposed framework by learning augmentation models for several benchmark and real-world data sets, exploring both image recognition and natural language understanding tasks. Our focus is on the performance of end classification models trained on labeled datasets augmented with our approach and others used in practice. We also examine robustness to user misspecification of TFs, and sensitivity to core hyperparameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Datasets and Transformation Functions</head><p>Benchmark Image Datasets We ran experiments on the MNIST <ref type="bibr" target="#b17">[18]</ref> and CIFAR-10 <ref type="bibr" target="#b16">[17]</ref> datasets, using only a subset of the class labels to train the end classification models and treating the rest as unlabeled data. We used a generic set of TFs for both MNIST and CIFAR-10: small rotations, shears, central swirls, and elastic deformations. We also used morphologic operations for MNIST, and adjustments to hue, saturation, contrast, and brightness for CIFAR-10.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Benchmark Text Dataset</head><p>We applied our approach to the Employment relation extraction subtask from the NIST Automatic Content Extraction (ACE) corpus <ref type="bibr" target="#b5">[6]</ref>, where the goal is to identify mentions of employer-employee relations in news articles. Given the standard class imbalance in information extraction tasks like this, we used data augmentation to oversample the minority positive class. The flexibility of our TF representation allowed us to take a straightforward but novel approach to data augmentation in this setting. We constructed a trigram language model using the ACE corpus and Reuters Corpus Volume I <ref type="bibr" target="#b18">[19]</ref> from which we can sample a word conditioned on the preceding words. We then used this model as the basis for a set of TFs that select words to swap based on the part-of-speech tag and location relative to entities of interest (see Supplemental Materials for details).</p><p>Mammography Tumor-Classification Dataset To demonstrate the effectiveness of our approach on real-world applications, we also considered the task of classifying benign versus malignant tumors from images in the Digital Database for Screening Mammography (DDSM) dataset <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b25">26]</ref>, which is a class-balanced dataset consisting of 1506 labeled mammograms. In collaboration with domain experts in radiology, we constructed two basic TF sets. The first set consisted of standard image transformation operations subselected so as not to break class-invariance in the mammography setting. For example, brightness operations were excluded for this reason. The second set consisted of both the first set as well as several novel segmentation-based transplantation TFs. Each of these TFs utilized the output of an unsupervised segmentation algorithm to isolate the tumor mass, perform a transformation operation such as rotation or shifting, and then stitch it into a randomly-sampled benign tissue image. See <ref type="figure" target="#fig_0">Fig. 1 (right panel)</ref> for an illustrative example, and Supplemental Materials for further details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">End Classifier Performance</head><p>We evaluated our approach by using it to augment labeled training sets for the tasks mentioned above, and show that we achieve strong gains over heuristic baselines. In particular, for a given set of TFs, we evaluate the performance of mean field (MF) and LSTM generators trained using our approach against two standard data augmentation techniques used in practice. The first (Basic) consists of applying random crops to images, or performing simple minority class duplication for the ACE relation extraction task. The second (Heur.) is the standard heuristic approach of applying random compositions of the given set of transformation operations, the most common technique used in practice <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b13">14]</ref>. For both our approaches (MF and LSTM) and Heur., we additionally use the same random cropping technique as in the Basic approach. We present these results in <ref type="table">Table 1</ref>, where we report test set accuracy (or F1 score for ACE), and use a random subsample of the available labeled training data. Additionally, we include an extra row for the DDSM task highlighting the impact of adding domain-specific (DS) TFs -the segmentation-based operations described aboveon performance.</p><p>In <ref type="table" target="#tab_1">Table 2</ref> we additionally compare to two related generative-adversarial methods, the Categorical GAN (CatGAN) <ref type="bibr" target="#b28">[29]</ref>, and the semi-supervised GAN (SS-GAN) from <ref type="bibr" target="#b24">[25]</ref>. Both of these methods use GAN-based architectures trained on unlabeled data to generate new out-of-class data points with which to augment a labeled training set. Following their protocol for CIFAR-10, we train our generator on the full set of unlabeled data, and our end discriminator on ten disjoint random folds of the labeled training set not including the validation set (i.e. n = 4000 each), averaging the results.</p><p>In all settings, we train our TF sequence generator on the full set of unlabeled data. We select a fixed sequence length for each task via an initial calibration experiment <ref type="figure" target="#fig_3">(Fig. 5b)</ref>. We use L = 5 for ACE, L = 7 for DDSM + DS, and L = 10 for all other tasks. We note that our findings here mirrored those in the literature, namely that compositions of multiple TFs lead to higher end model accuracies. We selected hyperparameters of the generator via performance on a validation set. We then used the trained generator to transform the entire training set at each epoch of end classification model training. For MNIST and DDSM we use a four-layer all-convolutional CNN, for CIFAR10 we use a 56-layer ResNet <ref type="bibr" target="#b13">[14]</ref>, and for ACE we use a bi-directional LSTM. Additionally, we incorporate a basic transformation regularization term as in <ref type="bibr" target="#b23">[24]</ref> (see Supplemental Materials), and train for the last ten epochs without applying any transformations as in <ref type="bibr" target="#b10">[11]</ref>. In all cases, we use hyperparameters as   We see that across the applications studied, our approach outperforms the heuristic data augmentation approach most commonly used in practice. Furthermore, the LSTM generator outperforms the simple mean field one in most settings, indicating the value of modeling sequential structure in data augmentation. In particular, we realize significant gains over standard heuristic data augmentation on CIFAR-10, where we are competitive with comparable semi-supervised GAN approaches, but with significantly smaller variance. We also train the same CIFAR-10 end model using the full labeled training dataset, and again see strong relative gains (2.1 pts. in accuracy over heuristic), coming within 2.1 points of the current state-of-the-art <ref type="bibr" target="#b15">[16]</ref> using our much simpler end model.</p><p>On the ACE and DDSM tasks, we also achieve strong performance gains, showing the ability of our method to productively incorporate more complex transformation operations from domain expert users. In particular, in DDSM we observe that the addition of the segmentation-based TFs causes the heuristic augmentation approach to perform significantly worse, due to a large number of new failure modes resulting from combinations of the segmentation-based TFs -which use gradient-based blending -and the standard TFs such as zoom and rotate. In contrast, our LSTM model learns to avoid these destructive subsequences and achieves the highest score, resulting in a 9.0 point boost over the comparable heuristic approach.</p><p>Robustness to TF Misspecification One of the high-level goals of our approach is to enable an easier interface for users by not requiring that the TFs they specify be completely class-preserving. The lack of any assumption of well-specified transformation operations in our approach, and the strong empirical performance realized, is evidence of this robustness. To additionally illustrate the robustness of our approach to misspecified TFs, we train a mean field generator on MNIST using the standard TF set, but with two TFs (shear operations) parameterized so as to map almost all images to the null class. We see in <ref type="figure" target="#fig_3">Fig. 5a</ref> that the generator learns to avoid applying the misspecified TFs (red lines) almost entirely.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusion and Future Work</head><p>We presented a method for learning how to parameterize and compose user-provided black-box transformation operations used for data augmentation. Our approach is able to model arbitrary TFs, allowing practitioners to leverage domain knowledge in a flexible and simple manner. By training a generative sequence model over the specified transformation functions using reinforcement learning in a GAN-like framework, we are able to generate realistic transformed data points which are useful for data augmentation. We demonstrated that our method yields strong gains over standard heuristic approaches to data augmentation for a range of applications, modalities, and complex domain-specific transformation functions. There are many possible future directions of research for learning data augmentation strategies in the proposed model, such as conditioning the generator's stochastic policy on a featurized version of the data point being transformed, and generating TF sequences of dynamic length. More broadly, we are excited about further formalizing data augmentation as a novel form of weak supervision, allowing users to directly encode domain knowledge about invariants into machine learning models.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Three examples of transformation functions (TFs) in different domains: Two example sequences of incremental image TFs applied to CIFAR-10 images (left); a conditional word-swap TF using an externally trained language model and specifically targeting nouns (NN) between entity mentions (E1,E2) for a relation extraction task (middle); and an unsupervised segementation-based translation TF applied to mass-containing mammography images (right).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Some example transformed images generated using an augmentation generative model trained using our approach. Note that this is not meant as a comparison to Fig. 3.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>Combining eqns. 4 and 5, our final objective is then J =J ∅ +αJ −1 d where α &gt; 0 is a hyperparameter.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: (a) Learned TF frequency parameters for misspecified and normal TFs on MNIST. The mean field model correctly learns to avoid the misspecified TFs. (b) Larger sequence lengths lead to higher end model accuracy on CIFAR-10, while random performs best with shorter sequences, according to a sequence length calibration experiment.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Task % None Basic Heur. MF LSTMTable 1: Test set performance of end models trained on subsamples of the labeled training data (%), not including validation splits, using various data augmentation approaches. None indicates performance with no augmentation. All tasks are measured in accuracy, except ACE which is measured by F1 score.</figDesc><table>MNIST 
+1 
+90.2 95.3 
+95.9 96.5 
+96.7 
+10 97.3 98.7 
+99.0 99.2 
+99.1 
+
+CIFAR-10 
+10 66.0 73.1 
+77.5 79.8 
+81.5 
+100 87.8 91.9 
+92.3 94.4 
+94.0 
+
+ACE (F1) 
+100 62.7 59.9 
+62.8 62.9 
+64.2 
+
+DDSM 
+10 57.6 58.8 
+59.3 58.2 
+61.0 
+DDSM + DS 
+53.7 59.9 
+62.7 
+
+Model 
+Acc. (%) 
+
+CatGAN 80.42 ± 0.58 
+SS-GAN 81.37 ± 2.32 
+LSTM 81.47 ± 0.46 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Reported end 
+model accuracies, averaged 
+across 10% subsample folds, 
+on CIFAR-10 for compara-
+ble GAN methods. 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Adversarial transformation networks: Learning to generate adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baluja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Fischer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.09387</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Smote: synthetic minority over-sampling technique</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">V</forename><surname>Chawla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">W</forename><surname>Bowyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">O</forename><surname>Hall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">P</forename><surname>Kegelmeyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of artificial intelligence research</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="page" from="321" to="357" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Deep big simple neural nets excel on handwritten digit recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Ciresan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Meier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">M</forename><surname>Gambardella</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">80</biblScope>
+		</imprint>
+	</monogr>
+	<note>Cited on</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The cancer imaging archive (TCIA): Maintaining and operating a public information repository</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Clark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Vendt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Freymann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kirby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Koppel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Phillips</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maffitt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pringle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Tarbox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Prior</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Digital Imaging</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1045" to="1057" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Dataset augmentation in feature space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Devries</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">W</forename><surname>Taylor</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.05538</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The automatic content extraction (ace) program-tasks, data, and evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">R</forename><surname>Doddington</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Przybocki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Ramshaw</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Strassel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Weischedel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">LREC</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Discriminative unsupervised feature learning with exemplar convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.02753</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arxiv preprint. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Adaptive data augmentation for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Samulowitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Turaga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2016 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3688" to="3692" />
+		</imprint>
+	</monogr>
+	<note>Image Processing (ICIP</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2672" to="2680" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Explaining and harnessing adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6572</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Graham</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6071</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">Fractional max-pooling. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Variance reduction techniques for gradient estimates in reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Greensmith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">L</forename><surname>Bartlett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Baxter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page" from="1471" to="1530" />
+			<date type="published" when="2004-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Dreaming more data: Class-dependent distributions over diffeomorphisms for learned data augmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hauberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Freifeld</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B L</forename><surname>Larsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fisher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hansen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="342" to="350" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">The digital database for screening mammography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Heath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bowyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kopans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">P</forename><surname>Kegelmeyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 5th international workshop on digital mammography</title>
+		<meeting>the 5th international workshop on digital mammography</meeting>
+		<imprint>
+			<publisher>Medical Physics Publishing</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="page" from="212" to="218" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.06993</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Densely connected convolutional networks. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Rcv1: A new benchmark collection for text categorization research</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">D</forename><surname>Lewis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">G</forename><surname>Rose</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of machine learning research</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page" from="361" to="397" />
+			<date type="published" when="2004-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Enhancing text categorization with semantic-enriched representation and training data augmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Velivelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Medical Informatics Association</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="526" to="535" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.1784</idno>
+		<title level="m">Conditional generative adversarial nets</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Miyato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Koyama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Nakae</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ishii</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1507.00677</idno>
+		<title level="m">Distributional smoothing with virtual adversarial training</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06434</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Regularization with stochastic transformations and perturbations for deep semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sajjadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Javanmardi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tasdizen</surname></persName>
+		</author>
+		<idno>abs/1606.04586</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Improved techniques for training gans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2226" to="2234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Curated breast imaging subset of DDSM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sawyer Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Gimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hoogi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Rubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The Cancer Imaging Archive</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Gradient estimation using stochastic computation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3528" to="3536" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sixt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wild</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Landgraf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rendergan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01331</idno>
+		<title level="m">Generating realistic labeled data</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Unsupervised and semi-supervised learning with categorical generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06390</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Convex learning with invariances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Teo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Globerson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Roweis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1489" to="1496" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Improving music source separation based on deep neural networks through data augmentation and network blending</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Uhlich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Porcu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Giron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enenkl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kemp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Takahashi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mitsufuji</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+	<note>Submitted to ICASSP</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Recurrent policy gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Förster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Peters</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Logic Journal of IGPL</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="620" to="634" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
