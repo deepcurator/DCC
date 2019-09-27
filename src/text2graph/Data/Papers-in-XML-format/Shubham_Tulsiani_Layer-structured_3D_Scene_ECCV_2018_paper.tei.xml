@@ -1,0 +1,843 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Layer-structured 3D Scene Inference via View Synthesis</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shubham</forename><surname>Tulsiani</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley 2 Google</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Tucker</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley 2 Google</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><surname>Snavely</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley 2 Google</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Layer-structured 3D Scene Inference via View Synthesis</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. We present an approach to infer a layer-structured 3D representation of a scene from a single input image. This allows us to infer not only the depth of the visible pixels, but also to capture the texture and depth for content in the scene that is not directly visible. We overcome the challenge posed by the lack of direct supervision by instead leveraging a more naturally available multi-view supervisory signal. Our insight is to use view synthesis as a proxy task: we enforce that our representation (inferred from a single image), when rendered from a novel perspective, matches the true observed image. We present a learning framework that operationalizes this insight using a new, differentiable novel view renderer. We provide qualitative and quantitative validation of our approach in two different settings, and demonstrate that we can learn to capture the hidden aspects of a scene. The project website can be found at https://shubhtuls.github. io/lsi/.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Humans have the ability to perceive beyond what they see, and to imagine the structure of the world even when it is not directly visible. Consider the image in <ref type="figure" target="#fig_0">Figure 1</ref>. While we can clearly see a street scene with objects such as cars and trees, we can also reason about the shape and appearance of aspects of the scene hidden from view, such as the continuation of the buildings behind the trees, or the ground underneath the car.</p><p>While we humans can perceive the full 3D structure of a scene from a single image, scene representations commonly used in computer vision are often restricted to modeling the visible aspects, and can be characterized as 2.5D representations <ref type="bibr" target="#b16">[17]</ref>. 2.5D representations such as depth maps are straightforward to use and learn because there is a one-to-one mapping between the pixels of an input image and the output representation. For the same reason, they also fail to allow for any extrapolation beyond what is immediately visible. In contrast, a robot or other agent might wish to predict the appearance of a scene from a different viewpoint, or reason about which parts of the scene are navigable. Such tasks are beyond what can be achieved in 2.5D.</p><p>In this work, we take a step towards reasoning about the 3D structure of scenes by learning to predict a layer-based representation from a single image. We use a representation known as a layered depth image (LDI), originally developed in the computer graphics community <ref type="bibr" target="#b21">[22]</ref>. Unlike a depth map, which stores a single depth value per pixel, an LDI represents multiple ordered depths per pixel, along with an On the left is an image of a street scene. While some parts of the scene are occluded, such as the building behind the tree highlighted by the red box, humans have no trouble reasoning about the shape and appearance of such hidden parts. In this work we go beyond 2.5D shape representations and learn to predict layered scene representations from single images that capture more complete scenes, including hidden objects. On the right, we show our method's predicted 2-layer texture and shape for the highlighted area: a,b) show the predicted textures for the foreground and background layers respectively, and c,d) show the corresponding predicted inverse depth. Note how both predict structures behind the tree, such as the continuation of the building. associated color for each depth, representing the multiple intersections of a ray with scene geometry (foreground objects, background behind those objects, etc.) In graphics, LDIs are an attractive representation for image-based rendering applications. For our purposes, they are also appealing as a 3D scene representation as they maintain the direct relationship between input pixels and output layers, while allowing for much more flexible and general modeling of scenes.</p><p>A key challenge towards learning to predict such layered representations is the lack of available training data. Our approach, depicted in <ref type="figure">Figure 2</ref>, builds on the insight that multiple images of the same scene, but from different views, can provide us with indirect supervision for learning about the underlying 3D structure. In particular, given two views of a scene, there will often be parts of the scene that are hidden from one view but visible from the second. We therefore use view synthesis as a proxy task: given a single input image, we predict an LDI representation and enforce that the novel views rendered using the prediction correspond to the observed reality.</p><p>In Section 3, we present our learning setup that builds on this insight, and describe a training objective that enforces the desired prediction structure. To operationalize this learning procedure, we introduce an LDI rendering mechanism based on a new differentiable forward splatting layer. This layer may also be useful for other tasks at the intersection of graphics and learning. We then provide qualitative and quantitative validation of our approach in Section 4 using two settings: a) analysis using synthetic data with known ground truth 3D, and b) a real outdoor driving dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Single-view Depth/Surface Normal Prediction. Estimating pixel-wise depth and/or surface orientation has been a long-standing task in computer vision. Initial attempts <ref type="figure">Fig. 2</ref>: Approach overview. We learn a CNN that can predict, from a single input image, a layered representation of the scene (an LDI). During training, we leverage multi-view supervision using view synthesis as a proxy task, thereby allowing us to overcome the lack of direct supervision. While training our prediction CNN, we enforce that the predicted representation, when (differentiably) rendered from a novel view, matches the available target image.</p><p>treated geometric inference as a part of the inverse vision problem, leveraging primarily learning-free optimization methods for inference <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b3">4]</ref>. Over the years, the use of supervised learning has enabled more robust approaches <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b20">21]</ref>, most recently with CNN-based methods <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b27">28]</ref>, yielding impressive results.</p><p>We also adopt a learning-based approach, but go beyond commonly used 2.5D representations that only infer shape for the visible pixels. Some recent methods, with a similar goal, predict volumetric 3D from a depth image <ref type="bibr" target="#b23">[24]</ref>, or infer amodal aspects of a scene <ref type="bibr" target="#b5">[6]</ref>. However, these methods require direct 3D supervision and are thus restricted to synthetically generated data. In contrast, our approach leverages indirect multi-view supervision that is more naturally obtainable, as well as ecologically plausible.</p><p>Depth Prediction via View Synthesis. The challenge of leveraging indirect supervision for inference has been addressed by some recent multi-view supervised approaches. Garg et al. <ref type="bibr" target="#b8">[9]</ref> and Godard et al. <ref type="bibr" target="#b11">[12]</ref> used stereo images to learn a single-view depth prediction system by minimizing the inconsistency as measured by pixel-wise reprojection error. Subsequent works <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b32">33]</ref> further relax the constraint of having calibrated stereo images, and learn a single-view depth model from monocular videos.</p><p>We adopt a similar learning philosophy, i.e. learning using multi-view supervision via view synthesis. However, our layered representation is different from the per-pixel depth predicted by these approaches, and in this work we address the related technical challenges. As we describe in Section 3, our novel view rendering process is very different from the techniques used by these approaches.</p><p>Multi-view Supervised 3D Object Reconstruction. Learning-based approaches for single-view 3D object reconstruction have seen a similar shift in the forms of supervision required. Initial CNN-based methods <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b10">11]</ref> predicted voxel occupancy representations from a single input image but required full 3D supervision during training. Recent approaches have advocated alternate forms of supervision, e.g. multi-view foreground masks <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b24">25]</ref> or depth <ref type="bibr" target="#b24">[25]</ref>.</p><p>While these methods go beyond 2.5D predictions and infer full 3D structure, they use volumetric-occupancy-based representations that do not naturally extend to general scenes. The layered representations we use are instead closer to depth-based representations often used for scenes. Similarly, these methods commonly rely on cues like foreground masks from multiple views, which are more applicable to isolated objects than to complex scenes. In our scenario, we therefore rely only on multiple RGB images as supervision.</p><p>Layered Scene Representations. Various layer-based scene representations are popular in the computer vision and graphics communities for reasons of parsimony, efficiency and descriptive power. Single-view based <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b19">20]</ref> or optical flow methods <ref type="bibr" target="#b28">[29]</ref> often infer a parsimonious representation of the scene or flow by grouping the visible content into layers. While these methods do not reason about occlusion, Adelson <ref type="bibr" target="#b0">[1]</ref> proposed using a planar layer-based representation to capture hidden surfaces and demonstrated that these can be inferred using motion <ref type="bibr" target="#b26">[27]</ref>. Similarly, Baker et al. <ref type="bibr" target="#b1">[2]</ref> proposed a stereo method that represents scenes as planar layers. Our work is most directly inspired by Shade et al. <ref type="bibr" target="#b21">[22]</ref>, who introduced the layered depth image (LDI) representation to capture the structure of general 3D scenes for use in image-based rendering.</p><p>We aim for a similar representation. However, in contrast to classical approaches that require multiple images for inference, we use machine learning to predict this representation from a single image at test time. Further, unlike previous single-view based methods, our predicted representation also reasons about occluded aspects of the scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Learning LDI Prediction</head><p>Our aim is to predict a 3D representation of a scene that includes not only the geometry of what we see, but also aspects of the scene not directly visible. A standard approach to geometric inference is to predict a depth map, which answers, for each pixel the question: 'how far from the camera is the point imaged at this pixel?'. In this work, we propose to predict a Layered Depth Image (LDI) <ref type="bibr" target="#b21">[22]</ref> representation that, in addition to the question above, also answers: 'what lies behind the visible content at this pixel?'.</p><p>As we do not have access to a dataset of paired examples of images with their corresponding LDI representations, we therefore exploit indirect forms of supervision to learn LDI prediction. We note that since an LDI representation of a scene captures both visible and amodal aspects of a scene, it can allow us to geometrically synthesize novel views of the same scene, including aspects that are hidden to the input view. Our insight is that we can leverage view synthesis as a proxy target task. We first formally describe our training setup and representation, then present our approach based on this insight. We also introduce a differentiable mechanism for rendering an LDI representation from novel views via a novel 'soft z-buffering'-based forward splatting layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Overview</head><p>Training Data. We leverage multi-view supervision to learn LDI prediction. Our training dataset is comprised of multiple scenes, with images from a few views available per scene. We assume a known camera transformation between the different images of the same scene. This form of supervision can easily be obtained using a calibrated camera rig, or by any natural agent which has access to its egomotion. Equivalently, we can consider the training data to consist of numerous source and target image pairs, where the two images in each pair are from the same scene and are related by a known transformation.</p><p>Concretely, we denote our training dataset of N image pairs with associated cameras as</p><formula xml:id="formula_0">{(I n s , I n t , K n s , K n t , R n , t n )} N n=1</formula><p>. Here I n s , I n t represent two (source and target) images of the same scene, with camera intrinsics denoted as K n s , K n t respectively. The relative camera transformation between the two image frames is captured by a rotation R n and translation t n . We note that the training data leveraged does not assume any direct supervision for the scene's 3D structure.</p><p>Predicted LDI Representation. A Layered Depth Image (LDI) representation (see <ref type="figure" target="#fig_1">Figure 3</ref> for an illustration) represents the 3D structure of a scene using layers of depth and color images. An LDI representation with L layers is of the form</p><formula xml:id="formula_1">{(I l , D l )} L l=1 . Here (I l , D l )</formula><p>represent the texture (i.e., color) image I and disparity (inverse depth) image D corresponding to layer l. An important property of the LDI representation is that the structure captured in the layers is increasing in depth i.e. for any pixel p, if</p><formula xml:id="formula_2">l 1 &lt; l 2 , then D l1 (p) ≥ D l2 (p)</formula><p>(disparity is monotonically decreasing over layers, or, equivalently, depth is increasing). Therefore, the initial layer l = 1 represents the visible content from the camera viewpoint (layers in an LDI do not have an alpha channel or mask). In fact, a standard depth map representation can be considered as an LDI with a single layer, with I 1 being the observed image. In our work, we aim to learn an LDI prediction function f , parametrized as a CNN f θ , which, given a single input image I, can infer the corresponding LDI representation</p><formula xml:id="formula_3">{(I l , D l )} L l=1</formula><p>. Intuitively, the first layer corresponds to the aspects of the scene visible from the camera viewpoint, and the subsequent layers capture aspects occluded in the current view. Although in this work we restrict ourselves to inferring two layers, the learning procedure presented is equally applicable for the more general scenario.</p><p>View Synthesis as Supervision. Given a source image I s , we predict the corresponding</p><formula xml:id="formula_4">LDI representation f θ (I s ) = {(I l s , D l s )} L l=1</formula><p>. During training, we also have access to an image I t of the same scene as I s , but from a different viewpoint. We write V s→t ≡ (K s , K t , R, t) to denote the camera transform between the source frame and the target frame, including intrinsic and extrinsic camera parameters. With this transform and our predicted LDI representation, we can render a predicted image from the target viewpoint. In particular, using a geometrically defined rendering function R, we can express the novel target view rendered from the source image as R(f θ (I s ); V s→t ).</p><p>We can thus obtain a learning signal for our LDI predictor f θ by enforcing similarity between the predicted target view R(f θ (I s ); V s→t ) and the observed target image I t . There are two aspects of this learning setup that allow us to learn meaningful prediction: a) the novel view I t may contain new scene content compared to I s , e.g. disoccluded regions, therefore the LDI f θ (I s ) must capture more than the visible structure; and b) the LDI f θ (I s ) is predicted independently of the target view/image I t which may be sampled arbitrarily, and hence the predicted LDI should be able to explain content from many possible novel views.</p><p>The need for forward-rendering. As noted by Shade et al. when introducing the LDI representation <ref type="bibr" target="#b21">[22]</ref>, the rendering process for synthesizing a novel view given a source LDI requires forward-splatting-based rendering. This requirement leads to a subtle but important difference in our training procedure compared to prior multi-view supervised depth prediction methods <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b32">33]</ref>: while prior approaches rely on inverse warping for rendering, our representation necessitates the use of forward rendering.</p><p>Concretely, prior approaches, given a source image I s , predict a per-pixel depth map. Then, given a novel view image, I t , they reconstruct the source image by 'looking up' pixels from I t via the predicted depth and camera transform. Therefore, the 'rendered view' is the same as the input view for which the geometry is inferred, i.e. these methods do not render a novel view, but instead re-render the source view. This procedure only enforces that correct geometry is learned for pixels visible to both views.</p><p>However, in our scenario, since we explicitly want to predict beyond the visible structure, we cannot adopt this approach. Instead, we synthesize novel views using our layered representation, thereby allowing us to learn about both the visible and the occluded scene structure. This necessitates forward rendering, i.e. constructing a target view given the source view texture and geometry, as opposed to inverse warping, i.e. reconstructing a source view by using source geometry and target frame texture.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Differentiable Rendering of an LDI</head><p>Given a predicted LDI representation {(I l s , D l s )} in a source image frame, we want to render a novel viewpoint related by a transform V s→t . We do so by treating the LDI as a textured point cloud, with each pixel in each layer corresponding to a point. We first forward-project each source point onto the target frame, then handle occlusions by proposing a 'soft z-buffer', and finally render the target image by a weighted average of the colors of projected points. </p><formula xml:id="formula_5">t (p l s ) y t (p l s ) 1 d t (p l s )     ∼ K t0 0 1 Rt 0 1 K −1 s0 0 1     x s y s 1 d l s     (1)</formula><p>Splatting with soft z-buffering. Using the above transformation, we can forward splat this point cloud to the target frame. Intuitively, we consider the target frame image as an empty canvas. Then, each source point p l s adds paint onto the canvas, but only at the pixels immediately around its projection. Via this process, many source points may contribute to the same target image pixel, and we want the closer ones to occlude the further ones. In traditional rendering, this can be achieved using a z-buffer, with only the closest point contributing to the rendering of a pixel.</p><p>However, this process results in a discontinuous and non-differentiable rendering function that is unsuitable for our framework. Instead, we propose a soft z-buffer using a weight w(p t , p </p><formula xml:id="formula_6">w(p t , p l s ) = exp d t (p l s ) τ B(x t (p l s ), x t ) B(ȳ t (p l s ), y t )<label>(2)</label></formula><p>The initial exponential factor, modulated by the temperature τ , enforces higher precedence for points closer to the camera. A large value of τ results in 'softer' z-buffering, whereas a small value yields a rendering process analogous to standard z-buffering. The latter terms simply represent bilinear interpolation weights and ensure that each source point only contributes non-zero weight to target pixels in the immediate neighborhood.</p><p>Rendering. Finally, we compute the rendered textureĪ t (p t ) at each target pixel p t as a weighted average of the contributions of points that splat to that pixel:</p><formula xml:id="formula_7">I t (p t ) = p l s I l s w(p t , p l s ) + ǫ p l s w(p t , p l s ) + ǫ<label>(3)</label></formula><p>The small ǫ in the denominator ensures numerical stability for target pixels that correspond to no source point. A similar term in the numerator biases the color for such pixels towards white. All operations involved in rendering the novel target view are differentiable, including the forward projection, depth-dependent weight computation, and final color computation. Hence, we can use this rendering via forward splatting process as the differentiable R(f θ (I s ); V s→t ) required in our learning framework.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Network Architecture</head><p>We adopt the DispNet <ref type="bibr" target="#b17">[18]</ref> architecture for our LDI prediction CNN shown in <ref type="figure" target="#fig_4">Figure 4</ref>. Given the input color image, a convolutional encoder processes it to compute spatial features at various resolutions. We then decode these via upconvolutions to get back to the image resolution. Each layer in the decoder also receives the features from the corresponding encoder layer via skip connections. While we use a single CNN to predict disparities and textures for all LDI layers, we find it critical to have disjoint prediction branches to infer each LDI layer. We hypothesize that this occurs because the foreground layer gets more learning signal, and sharing all the prediction weights makes it difficult for the learning signals for the background layer to compete. Therefore, the last three decoding blocks and final prediction blocks are independent for each LDI layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Training Objective</head><p>To train our CNN f θ , we use view synthesis as a proxy task: given a source image I s , we predict a corresponding LDI and render it from a novel viewpoint. As a training objective, we enforce that this rendered image should be similar to the observed image from that viewpoint. However, there are some additional nuances that we need to consider when formulating our training objective.</p><p>Depth Monotonicity. The layers in our LDI representation are supposed to capture content at increasing depths. We therefore enforce that the inverse depth across layers at any pixel is non-increasing:</p><formula xml:id="formula_8">L inc (I s ) = ps,l max(0, D l+1 s (p s ) − D l s (p s )).<label>(4)</label></formula><p>Consistency with Source. The typical LDI representation enforces that the first layer's texture corresponds to the observed source. We additionally enforce a similar constraint even for background layers when the predicted geometry is close to the foreground layer. We compute a normalized weight for the layers at each pixel, denoted as w(p s , l) ∝ exp</p><formula xml:id="formula_9">D l s (ps) τ</formula><p>, and define a weighted penalty for deviation from the observed image:</p><formula xml:id="formula_10">L sc (I s ) = ps,l w(p s , l) I s (p s ) − I l s (p s ) 1 .<label>(5)</label></formula><p>This loss encourages the predicted texture at each layer to match the source texture, while allowing significant deviations in case of occlusions, i.e. where the background layer is much further than the foreground. In conjunction with L inc , this loss enforces that the predicted representation adheres to the constraints of being an LDI.</p><p>Allowing Content Magnification. The forward-splatting rendering method described in Section 3.2 computes a novel view image by splatting each source pixel onto the target frame. This may result in 'cracks' <ref type="bibr" target="#b12">[13]</ref>-target pixels that are empty because no source pixels splat onto them. For example, if the target image contains a close-up view of an object that is faraway in the source image, too few source points will splat into that large target region to cover it completely. To overcome this, we simply render the target frame at half the input resolution, i.e. the output image from the rendering function described in Section 3.2 is half the size of the input LDI. Ignoring Image Boundaries. While an LDI representation can explain the disoccluded content that becomes visible in a novel view, it cannot capture the pixels in the target frame that are outside the image boundary in the source frame. We would like to ignore such pixels in the view synthesis loss. However, we do not have ground-truth to tell us which pixels these are. Instead, we use the heuristic of ignoring pixels around the boundary. Denoting as M a binary mask that is zero around the image edges, we define our view synthesis loss as:</p><formula xml:id="formula_11">L vs (I s , I t , V s→t ) = M ⊙ I t − M ⊙Ī t 1 whereĪ t = R(f θ (I s ); V s→t ). (6)</formula><p>As described above, the rendered imageĪ t and the target image I t are spatially smaller than I s .</p><p>Overcoming Depth Precedence. Consider synthesizing pixel p t as described in Eq. 3. While the weighted averaging across layers resembles z-buffer-based rendering, it has the disadvantage of making it harder to learn a layer if there is another preceding (and possibly incorrectly predicted) layer in front of it. To overcome this, and therefore to speed up the learning of layers independent of other layers, we add an additional loss term. Denoting asĪ l t a target image rendered using only layer l, we add an additional 'min-view synthesis' loss measuring the minimum pixel-wise error across per-layer synthesized views:</p><formula xml:id="formula_12">L m−vs (I s , I t , V s→t ) = pt min l M (p t ) I t (p t ) −Ī l t (p t ) 1<label>(7)</label></formula><p>In contrast to the loss in Eq. 6, which combines the effects of all layers when measuring the reconstruction error at p t , this loss term simply enforces that at least one layer should correctly explain the observed I t (p t ). Therefore, a background layer can still get a meaningful learning signal even if there is a foreground layer incorrectly occluding it. Empirically, we found that this term is crucial to allow for learning the background layer.</p><p>Smoothness. We use a depth smoothness prior L sm which minimizes the L 1 norm of the second-order spatial derivatives of the predicted inverse depths D l s .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Fig. 5:</head><p>Procedurally generated synthetic data. We show 6 random training samples (top: source image and corresponding inverse depth, bottom: target image with corresponding inverse depth). Note that only the color images are used for learning.</p><p>Our final learning objective, combining the various loss terms defined above (with different weights) is:</p><formula xml:id="formula_13">L final = L vs + L m−vs + L sc + L inc + L sm<label>(8)</label></formula><p>Using this learning objective, we can train our LDI prediction CNN f θ using a dataset comprised only of paired source and target images of the same scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We consider two different scenarios to learn single-view inference of a layer-structured scene representation. We first study our approach in a synthetic, but nevertheless challenging, setting using procedurally generated data. We then use our method to learn from stereo pairs in an outdoor setting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Analysis using Synthetic Data</head><p>In order to examine our method in a controlled setting with full knowledge of the underlying 3D scene structure, we create a dataset of procedurally generated scenes. We first describe the details of the generation process, and then discuss the training details and our results.</p><p>Dataset. We generate our synthetic data to have a room-like layout with two side 'walls', one back 'wall', a 'ceiling' and a 'floor'. We additionally place one to three upright segmented objects on the floor. The 'room' box is always at a fixed location in the world frame, and is of a fixed size. The segmented foreground objects are randomly placed, from left to right, at increasing depths and lie on a front-facing planar surface. To obtain the foreground objects, we randomly sample from the unoccluded and untruncated object instances in the PASCAL VOC dataset <ref type="bibr" target="#b7">[8]</ref>. The textures on the room walls are obtained using random images from the SUN 2012 dataset <ref type="bibr" target="#b29">[30]</ref>.</p><p>To sample the source and target views for training our LDI prediction, we randomly assign one of them to correspond to the canonical front-facing world view. The other view corresponds to a random camera translation with a random rotation. We ensure that the transformation can be large enough such that the novel views can often image the content behind the foreground object(s) in the source view. We show some sample source and target pairs in <ref type="figure">Figure 5</ref>.</p><p>Note that while the geometry of the scene layout is relatively simple, the foreground objects can have differing shapes due their respective segmentation. Further, the surface textures are drawn from diverse real images and significantly add to the complexity, particularly as our aim is to infer both the geometry and the texture for the scene layers.</p><p>Training Details. We split the PASCAL VOC objects and the SUN 2012 images into random subsets corresponding to a train/validation/test split of 70% − 15% − 15%. We use the corresponding images and objects to generate training samples to train our LDI prediction CNN f θ . We train our CNN for 600k iterations using the ADAM optimizer <ref type="bibr" target="#b15">[16]</ref>. Based on the dataset statistics, we restrict the maximum inverse depth predicted to correspond to 1m.</p><p>Results. We visualize the predictions of our learned LDI prediction CNN in <ref type="figure" target="#fig_5">Figure 6</ref>. We observe that it is able to predict the correct geometry for the foreground layer i.e. per-pixel depth. More interestingly, it can leverage the background layer to successfully infer the geometry of the occluded scene content and hallucinate plausible corresponding textures. We observe some interesting error modes in the prediction, e.g. incorrect background layer predictions at the base of wide objects, or spurious details in the background layer at pixels outside the 'room'. Both these occur because we do not use any direct supervision for learning, but instead rely on a view synthesis loss. The first  <ref type="table">Table 1</ref>: View synthesis error on synthetic data. We compare our 2 layer LDI prediction CNN against a single layer model that can only capture the visible aspects. We report the mean pixelwise ℓ1 error between the ground-truth novel view and the corresponding view rendered using the predicted representations.</p><p>error mode occurs because we never fully 'see behind' the base of wide objects even in novel views. Similarly, the spurious details are only present in regions which are consistently occluded by the foreground layer and therefore ignored for view synthesis. We analyze our learned representation by evaluating how well we can synthesize novel views using it. We report in <ref type="table">Table 1</ref> the mean ℓ 1 error for view synthesis and compare our 2 layer model vs a single layer model also trained for the view synthesis task, using the same architecture and hyper-parameters. Note that that single layer model can only hope to capture the visible aspects, but not the occluded structure. We observe that we perform slightly better than the single layer model. Since most of the scene pixels are visible in both, the source and target views, a single layer model explains them well. However, we see that the error difference is more significant if we restrict our analysis to only the dis-occluded pixels i.e. pixels in the target image which are not visible in the source view. This supports the claim that our predicted LDI representation does indeed capture more than the directly visible structure.</p><p>We also report in <ref type="table" target="#tab_1">Table 2</ref> the error in the predicted inverse depth(s) against the known ground-truth. We restrict the error computation for the background layer to pixels where the depth differs from the foreground layer. Since the one layer model only captures the foreground, and does not predict the background depths, we measure its error for   the background layer using the foreground layer predictions. While this is an obviously harsh comparison, as the one layer model, by design, cannot capture the hidden depth, the fact that our predicted background layer is 'closer' serves to empirically show that our learned model infers meaningful geometry for the background layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Experiments on KITTI</head><p>We demonstrate the applicability of our framework in a more realistic setting: outdoor scenes with images collected using a calibrated stereo camera setup. We note that previous methods applied to this setting have been restricted to inferring the depth of the visible pixels, and that it is encouraging that we can go beyond this representation.</p><p>Dataset. We use the 'raw' sequences from the KITTI dataset <ref type="bibr" target="#b9">[10]</ref>, restricting our data to the 30 sequences from the city category as these more often contain interesting occluders e.g. people or traffic lights. The multi-view supervision we use corresponds to images from calibrated stereo cameras that are 0.5m apart. We use both the left and the right camera images as source images, and treat the other as the target view for which the view synthesis loss is minimized. Due to the camera setup, the view sampling corresponds to a lateral motion of 0.5m and is more restrictive compared to the synthetic data.</p><p>Training Details. We randomly choose 22 among the 30 city sequences for training, and use 4 each for validation and testing. This results in a training set of about 6,000 stereo pairs. We use similar hyper-parameters and optimization algorithm to the synthetic data scenario, but alter the closest possible depth to correspond to 2m.</p><p>Results. We visualize sample predictions of our learned LDI prediction CNN in <ref type="figure" target="#fig_6">Figure 7</ref>. We observe that it is able to predict the correct geometry for the foreground layer i.e. per-pixel depth. Similar to the synthetic data scenario, we observe that it can leverage the background layer to hallucinate plausible geometry and texture of the occluded scene content, although to a lesser extent. We hypothesize that the reduction in usage of the background layer is because the view transformation between the source and target views is small compared to the scene scale, and we therefore only infer background layer mostly corresponding to a) thin scene structures smaller than the stereo baseline, or b) around the boundaries of larger objects/structures e.g. cars.</p><p>We do not have the full 3D structure of the scenes to compare our predicted LDI against, but we can evaluate the ability of this representation to infer the available novel views, and we report these evaluations in <ref type="table" target="#tab_2">Table 3</ref>. As we do not have the ground-truth for the dis-occluded pixels, we instead use the unmatched pixels from an off-the-shelf stereo matching algorithm <ref type="bibr" target="#b30">[31]</ref>. This algorithm, in addition to computing disparity, attempts to identify pixels with no correspondence in the other view, thus providing (approximate) dis-occlusion labels (see supplementary material for visualizations). Measuring the pixel-wise reconstruction error, we again observe that our two-layer LDI model performs slightly better than a single layer model which only models the foreground. Additionally, the difference is a bit more prominent for the dis-occluded pixels.</p><p>While the above evaluation indicates our ability to capture occluded structure, it is also worth examining the accuracy of the predicted depth. To this end, we compared results on our test set against the publicly available model from Zhou et al. <ref type="bibr" target="#b32">[33]</ref>, since we use a similar CNN architecture facilitating a more apples-to-apples comparison. We perform comparably, achieving an Absolute Relative error of 0.1856, compared to an error of 0.2079 by <ref type="bibr" target="#b32">[33]</ref>. While other monocular depth estimation approaches can further achieve improved results using stronger supervision, better architectures or cycle consistency <ref type="bibr" target="#b11">[12]</ref>, we note that achieving state-of-the-art depth prediction is not our central goal. However, we find it encouraging that our proposed LDI prediction approach does yield somewhat competitive depth prediction results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Discussion</head><p>We have presented a learning-based method to infer a layer-structured representation of scenes that can go beyond common 2.5D representations and allow for reasoning about occluded structures. There are, however, a number of challenges yet to be addressed. As we only rely on multi-view supervision, the learned geometry is restricted by the extent of available motion across training views. Additionally, it would be interesting to extend our layered representation to include a notion of grouping, incorporate semantics and semantic priors (e.g. 'roads are flat'). Finally, we are still far from full 3D understanding of scenes. However, our work represents a step beyond 2.5D prediction and towards full 3D.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: Perception beyond the visible. On the left is an image of a street scene. While some parts</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: Layered Depth Images (LDIs). Illustration of a layered depth image (LDI) for a simple scene. The first layer captures the depth (darker indicates closer) and texture of the visible points, and the second layer describes the occluded structure.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>pixel p s ≡ (x s , y s ) in layer l, we can com- pute its projected position and inverse depth in the target frame coordinates using the (predicted) inverse depth d</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>the target image pixel p t . Defining B(x 0 , x 1 ) ≡ max (0, 1 − |x 0 − x 1 |), we compute the weights as:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Overview of our CNN architecture. We take as input an image and predict per-layer texture and inverse depth. Our CNN architecture consists of a convolutional encoder and decoder with skip-connections. We use disjoint prediction branches for inferring the texture and depth for each LDI layer.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 6 :</head><label>6</label><figDesc>Fig. 6: Sample LDI prediction results on synthetic data. For each input image on the left, we show our method's predicted 2-layer texture and geometry for the highlighted area: a,b) show the predicted textures for the foreground and background layers respectively, and c,d) depict the corresponding predicted disparity.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Fig. 7 :</head><label>7</label><figDesc>Fig. 7: Sample LDI prediction results on the KITTI dataset. For each input image on the left, we show our method's predicted 2-layer texture and geometry for the highlighted area: a, b) show the predicted textures for the foreground and background layers respectively, and c,d) depict the corresponding predicted disparity.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Geometry prediction error on synthetic data. We measure mean pixel-wise error in the predicted inverse depth(s) against the ground-truth. (*) As the single layer model does not infer background, we evaluate its error for the background layer using the foreground depth predictions. This serves to provide an instructive upper bound for the error of the LDI model.</figDesc><table>View Synthesis Error All Pixels Dis-occluded Pixels 
+
+1 layer model 
+0.0583 
+0.0813 
+2 layer model 
+0.0581 
+0.0800 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc>View synthesis error on KITTI. We compare our 2 layer LDI prediction CNN against a single layer model that can only capture the visible aspects. We report the mean pixel-wise view synthesis error when rendering novel views using the predicted representations.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments. We would like to thank Tinghui Zhou and John Flynn for helpful discussions and comments. This work was done while ST was an intern at Google.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Layered representations for image coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Tech. rep</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="1991" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">A layered approach to stereo reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anandan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Marr revisited: 2D-3D alignment via surface normal prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bansal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Shape, illumination, and reflectance from shading</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">3D-R2N2: A unified approach for single and multi-view 3D object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">B</forename><surname>Choy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Segan: Segmenting and generating the invisible</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ehsani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<idno>CoRR abs/1703.10239</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Predicting depth, surface normals and semantic labels with a common multi-scale convolutional architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ICCV</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<ptr target="http://www.pascal-network.org/challenges/VOC/voc2012/workshop/index.html11" />
+		<title level="m">The PAS-CAL Visual Object Classes Challenge 2012 (VOC2012) Results</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Unsupervised CNN for single view depth estimation: Geometry to the rescue</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Garg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<title level="m">Vision meets robotics: The KITTI Dataset. IJRR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Learning a predictable and generative vector representation for objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girdhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rodriguez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Unsupervised monocular depth estimation with left-right consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Godard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Mac Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Point sample rendering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Grossman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Rendering Techniques</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="page">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Automatic photo pop-up</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIGGRAPH</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Scene collaging: Analysis and synthesis of natural images with semantic layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Marr</surname></persName>
+		</author>
+		<title level="m">Vision: A Computational Investigation into the Human Representation and Processing of Visual Information</title>
+		<imprint>
+			<date type="published" when="1982" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">A large dataset to train convolutional networks for disparity, optical flow, and scene flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hausser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of 3D structure from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Battaglia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Segmenting scenes by matching image composites</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Make3D: Learning 3D scene structure from a single still image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Layered depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gortler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">W</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Recovering reflectance and illumination in a world of painted polyhedra</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1993" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Semantic scene completion from a single depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Multi-view supervision for single-view reconstruction via differentiable ray consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Vijayanarasimhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ricco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fragkiadaki</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.07804</idno>
+		<title level="m">SfM-Net: Learning of structure and motion from video</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Layered representation for motion analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1993" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Designing deep networks for surface normal estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sevilla-Lara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.01352</idno>
+		<title level="m">Optical flow in mostly rigid scenes</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">SUN database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Efficient joint segmentation, occlusion labeling, stereo and flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Perspective transformer nets: Learning singleview 3D object reconstruction without 3D supervision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Yumer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of depth and ego-motion from video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

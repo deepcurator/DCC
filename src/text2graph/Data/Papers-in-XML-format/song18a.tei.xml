@@ -1,0 +1,948 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader>
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:32+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Accelerating Natural Gradient with Higher-Order Invariance</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Song</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiaming</forename><surname>Song</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefano</forename><surname>Ermon</surname></persName>
+						</author>
+						<title level="a" type="main">Accelerating Natural Gradient with Higher-Order Invariance</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract xml:lang="en">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>An appealing property of the natural gradient is that it is invariant to arbitrary differentiable reparameterizations of the model. However, this invariance property requires infinitesimal steps and is lost in practical implementations with small but finite step sizes. In this paper, we study invariance properties from a combined perspective of Riemannian geometry and numerical differential equation solving. We define the order of invariance of a numerical method to be its convergence order to an invariant solution. We propose to use higher-order integrators and geodesic corrections to obtain more invariant optimization trajectories. We prove the numerical convergence properties of geodesic corrected updates and show that they can be as computational efficient as plain natural gradient. Experimentally, we demonstrate that invariance leads to faster optimization and our techniques improve on traditional natural gradient in deep neural network training and natural policy gradient for reinforcement learning.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text>
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Non-convex optimization is a key component of the success of deep learning. Current state-of-the-art training methods are usually variants of stochastic gradient descent (SGD), such as AdaGrad <ref type="bibr" target="#b10">(Duchi et al., 2011)</ref>, RMSProp <ref type="bibr" target="#b14">(Hinton et al., 2012)</ref> and Adam <ref type="bibr" target="#b18">(Kingma &amp; Ba, 2015)</ref>. While generally effective, performance of those first-order optimizers is highly dependent on the curvature of the optimization objective. When the Hessian matrix of the objective at the optimum has a large condition number, the problem is said to have pathological curvature <ref type="bibr" target="#b21">(Martens, 2010;</ref><ref type="bibr">Sutskever 1</ref> Computer Science Department, Stanford University. Correspondence to: Yang Song &lt;yangsong@cs.stanford.edu&gt;, Jiaming Song &lt;tsong@cs.stanford.edu&gt;, Stefano Ermon &lt;er-mon@cs.stanford.edu&gt;.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proceedings of the 35 th</head><p>International Conference on Machine <ref type="bibr">Learning, Stockholm, Sweden, PMLR 80, 2018</ref><ref type="bibr">. Copyright 2018</ref> by the author(s). <ref type="bibr">et al., 2013)</ref>, and first-order methods will have trouble in making progress. The curvature, however, depends on how the model is parameterized. There may be some equivalent way of parameterizing the same model which has better-behaved curvature and is thus easier to optimize with first-order methods. Model reparameterizations, such as good network architectures <ref type="bibr" target="#b32">(Simonyan &amp; Zisserman, 2014;</ref><ref type="bibr" target="#b13">He et al., 2016)</ref> and normalization techniques <ref type="bibr" target="#b19">(LeCun et al., 2012;</ref><ref type="bibr" target="#b16">Ioffe &amp; Szegedy, 2015;</ref><ref type="bibr" target="#b30">Salimans &amp; Kingma, 2016)</ref> are often critical for the success of first-order methods.</p><p>The natural gradient <ref type="bibr" target="#b1">(Amari, 1998)</ref> method takes a different perspective to the same problem. Rather than devising a different parameterization for first-order optimizers, it tries to make the optimizer itself invariant to reparameterizations by directly operating on the manifold of probabilistic models. This invariance, however, only holds in the idealized case of infinitesimal steps, i.e., for continuous-time natural gradient descent trajectories on the manifold <ref type="bibr" target="#b25">(Ollivier, 2013;</ref><ref type="bibr" target="#b26">2015)</ref>. Practical implementations with small but finite step size (learning rate) are only approximately invariant. Inspired by Newton-Raphson method, the learning rate of natural gradient method is usually set to values near 1 in real applications <ref type="bibr" target="#b21">(Martens, 2010;</ref><ref type="bibr" target="#b22">2014)</ref>, leading to potential loss of invariance.</p><p>In this paper, we investigate invariance properties within the framework of Riemannian geometry and numerical differential equation solving. We observe that both the exact solution of the natural gradient dynamics and its approximation obtained with Riemannian Euler method <ref type="bibr" target="#b4">(Bielecki, 2002)</ref> are invariant. We propose to measure the invariance of a numerical scheme by studying its rate of convergence to those idealized truly invariant solutions. It can be shown that the traditional natural gradient update (based on the forward Euler method) converges in first order. For improvement, we first propose to use a second-order Runge-Kutta integrator. Additionally, we introduce corrections based on the geodesic equation. We argue that the Runge-Kutta integrator converges to the exact solution in second order, and the method with geodesic corrections converges to the Riemannian Euler method in second order. Therefore, all the new methods have higher order of invariance, and experiments verify their faster convergence in deep neural network training and policy optimization for deep reinforcement learning. Moreover, the geodesic correction update has a faster variant which keeps the second-order invariance while being roughly as time efficient as the original natural gradient update. Our new methods can be used as drop-in replacements in any situation where natural gradient may be used.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Preliminaries</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Riemannian Geometry and Invariance</head><p>We use Einstein's summation convention throughout this paper to simplify formulas. The convention states that when any index variable appears twice in a term, once as a superscript and once as a subscript, it indicates summation of the term over all possible values of the index variable. For example, a</p><formula xml:id="formula_0">µ b µ , P n µ=1 a µ b µ when index variable µ 2 [n].</formula><p>Riemannian geometry is used to study intrinsic properties of differentiable manifolds equipped with metrics. The goal of this necessarily brief section is to introduce some key concepts related to the understanding of invariance. For more details, please refer to <ref type="bibr" target="#b29">(Petersen, 2006)</ref> and <ref type="bibr" target="#b2">(Amari et al., 1987)</ref>.</p><p>In this paper, we describe a family of probabilistic models as a manifold. Roughly speaking, a manifold M of dimension n is a smooth space whose local regions resemble R n <ref type="bibr">(Carroll, 2004)</ref>. Assume there exists a smooth mapping : M ! R n in some neighborhood of p and for any p 2 M, (p) is the coordinate of p. As an example, if p is a parameterized distribution, (p) will refer to its parameters. There is a linear space associated with each p 2 M called the tangent space </p><formula xml:id="formula_1">T p M. Each element v 2 T p M</formula><formula xml:id="formula_2">satisfy d✓ µ (@ ⌫ ) = µ ⌫ where µ ⌫ , ( 1, µ = ⌫ 0, µ 6 = ⌫ is the Kro- necker delta.</formula><p>Note that in this paper we abbreviate @ @✓ µ to @ µ and often refer to an entity (e.g., vector, covector and point on the manifold) with its coordinates.</p><p>Vectors and covectors are geometric objects associated with a manifold, which exist independently of the coordinate system. However, we rely on their representations w.r.t. some coordinate system for quantitative studies. Given a coordinate system, a vector a (covector a ⇤ ) can be represented by its coefficients w.r.t. the coordinate (dual coordinate) bases, which we denote as a µ (a µ ). Therefore, these coefficients depend on a specific coordinate system, and will change for different parameterizations. In order for those coefficients to represent coordinate-independent entities like vectors and covectors, their change should obey some appropriate transformation rules. Let the new coordinate system under a different parameterization be</p><formula xml:id="formula_3">0 (p) = (⇠ 1 , · · · , ⇠ n ) and let the old one be (p) = (✓ 1 , · · · , ✓ n ).</formula><p>It can be shown that the new coefficients of a 2 T p M will be given by</p><formula xml:id="formula_4">a µ 0 = a µ @⇠ µ 0 @✓ µ , while the new coefficients of a ⇤ 2 T ⇤ p M will be determined by a µ 0 = a µ @✓ µ @⇠ µ 0 .</formula><p>Due to the difference of transformation rules, we say a µ is contravariant while a µ is covariant, as indicated by superscripts and subscripts respectively. In this paper, we only use Greek letters to denote contravariant / covariant components.</p><p>Riemannian manifolds are equipped with a positive definite metric tensor g p 2 T ⇤ p M ⌦ T ⇤ p M, so that distances and angles can be characterized. The inner product of two</p><formula xml:id="formula_5">vectors a = a µ @ µ 2 T p M, b = b ⌫ @ ⌫ 2 T p M is defined as ha, bi , g p (a, b) = g µ⌫ d✓ µ ⌦ d✓ ⌫ (a µ @ µ , b ⌫ @ ⌫ ) = g µ⌫ a µ b ⌫ .</formula><p>For convenience, we denote the inverse of the metric tensor as g ↵ using superscripts, i.e., g ↵ g µ = ↵ µ . The introduction of inner product induces a natural map from a tangent space to its dual space. Let a = a µ @ µ 2</p><formula xml:id="formula_6">T p M, its natural correspondence in T ⇤ p M is the covector a ⇤ , ha, ·i = a ⌫ d✓ ⌫ . It can be shown that a ⌫ = a µ g µ⌫ and a µ = g µ⌫ a ⌫ .</formula><p>We say the metric tensor relates the coefficients of a vector and its covector by lowering and raising indices, which effectively changes the transformation rule.</p><p>The metric structure makes it possible to define geodesics on the manifold, which are constant speed curves : R ! M that are locally distance minimizing. Since the distances on manifolds are independent of parameterization, geodesics are invariant objects. Using a specific coordinate system, (t) can be determined by solving the geodesic equation</p><formula xml:id="formula_7">µ + µ ↵ ˙ ↵˙ = 0,<label>(1)</label></formula><p>where µ ↵ is the Levi-Civita connection defined by</p><formula xml:id="formula_8">µ ↵ , 1 2 g µ⌫ (@ ↵ g ⌫ + @ g ⌫↵ @ ⌫ g ↵ ).<label>(2)</label></formula><p>Note that we use˙ to denote</p><formula xml:id="formula_9">d dt and¨ for d 2 dt 2 . Given p 2 M and v 2 T p M, there exists a unique geodesic satisfying (0) = p,˙ (0) = v.</formula><p>If we follow the curve (t) from p = (0) for a unit time t = 1, we can reach another point p 0 = (1) on the manifold. In this way, traveling along geodesics defines a map from M ⇥ T M to M called exponential map</p><formula xml:id="formula_10">Exp(p, v) , (1),<label>(3)</label></formula><p>where (0) = p and˙ (0) = v. By simple re-scaling we also have Exp(p, hv) = (h).</p><p>As a summary, we provide a graphical illustration of relevant concepts in Riemannian geometry in <ref type="figure" target="#fig_0">Figure 1</ref>. Here we emphasize again the important ontological difference between an object and its coordinate. The manifold itself, along with geodesics and vectors (covectors) in its tangent (cotangent) spaces is intrinsic and independent of coordinates. The coordinates need to be transformed correctly to describe the same objects and properties on the manifold under a different coordinate system. This is where invariance emerges.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Numerical Differential Equation Solvers</head><p>Let the ordinary differential equation (ODE) beẋ(t) = f (t, x(t)), where x(0) = a and t 2 [0, T ]. Numerical integrators try to trace x(t) with iterative local approximations</p><formula xml:id="formula_11">{x k | k 2 N}.</formula><p>We discuss several useful numerical methods in this paper. The forward Euler method updates its approximation by</p><formula xml:id="formula_12">x k+1 = x k + hf (t k , x k ) and t k+1 = t k + h.</formula><p>It can be shown that as h ! 0, the error kx k x(t k )k can be bounded by O(h). The midpoint integrator is a Runge-Kutta method with O(h 2 ) error. Its update formula is given by <ref type="bibr" target="#b4">(Bielecki, 2002)</ref>) is a less common variant of the Euler method, which uses the Exponential map for its updates as x k+1 = Exp(x k , hf(t k , x k )), t k+1 = t k + h. While having the same asymptotic error O(h) as forward Euler, it has more desirable invariance properties.</p><formula xml:id="formula_13">x k+1 = x k + hf t k + 1 2 h, x k + h 2 f (t k , x k ) , t k+1 = t k + h. The Riemannian Euler method (see pp.3-6 in</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Revisiting Natural Gradient Method</head><p>Let r ✓ (x, t) = p ✓ (t | x)q(x) denote a probabilistic model parameterized by ✓ 2 ⇥, where x, t are random variables, q(x) is the marginal distribution of x and assumed to be fixed. Conventionally, x is used to denote the input and t represents its label. In a differential geometric framework, the set of all possible probabilistic models r ✓ constitutes a manifold M, and the parameter vector ✓ provides a coordinate system. Furthermore, the infinitesimal distance of probabilistic models can be measured by the Fisher information metric</p><formula xml:id="formula_14">g µ⌫ = E x⇠q E p ✓ (t|x) [@ µ log p ✓ (t | x)@ ⌫ log p ✓ (t | x)]. Let the loss function L(r ✓ ) = E x⇠q [log p ✓ (l | x)]</formula><p>be the expected negative log-likelihood, where l denotes the ground truth labels in the training dataset. Our learning goal is to find a model r ✓ ⇤ that minimizes the (empirical) loss L(r ✓ ).</p><p>The well known update rule of gradient descent</p><formula xml:id="formula_15">✓ µ k+1 = ✓ µ k h @ µ L(r ✓ k ) can be viewed as approximately solving the (continuous time) ODĖ ✓ µ = @ µ L(r ✓ )<label>(4)</label></formula><p>with forward Euler method. Here is a time scale constant, h is the step size, and their product h is the learning rate. Note that will only affect the "speed" but not trajectory of the system. It is notorious that the gradient descent ODE is not invariant to reparameterizations <ref type="bibr" target="#b25">(Ollivier, 2013;</ref><ref type="bibr" target="#b21">Martens, 2010)</ref>. For example, if we rescale</p><formula xml:id="formula_16">✓ µ to 2✓ µ , @ µ L(r ✓ ) will be downscaled to 1 2 @ µ L(r ✓ )</formula><p>. This is more evident from a differential geometric point of view. As can be verified by chain rule,✓ µ transforms contravariantly and can therefore be treated as a vector in T p M, while @ µ L(r ✓ ) transforms covariantly, thus being a covector in T ⇤ p M. Because Eq. (4) tries to relate objects in different spaces with different transformation rules, it is not an invariant relation.</p><p>Natural gradient alleviates this issue by approximately solving an invariant ODE. Recall that we can raise or lower an index given a metric tensor g µ⌫ . By raising the index of @ µ L(r ✓ ), the r.h.s. of the gradient descent ODE (Eq. (4)) becomes a vector in T p M, which solves the type mismatch problem of Eq. (4). The new ODĖ</p><formula xml:id="formula_17">✓ µ = g µ⌫ @ ⌫ L(r ✓ )<label>(5)</label></formula><p>is now invariant, and the forward Euler approximation becomes</p><formula xml:id="formula_18">✓ µ k+1 = ✓ µ k h g µ⌫ @ ⌫ L(r ✓ k )</formula><p>, which is the traditional natural gradient update <ref type="bibr" target="#b1">(Amari, 1998)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Higher-order Integrators</head><p>If we could integrate the learning trajectory equation✓ µ = g µ⌫ @ ⌫ L exactly, the optimization procedure would be invariant to reparameterizations. However, the naïve linear update of natural gradient</p><formula xml:id="formula_19">✓ µ k+1 = ✓ µ k h g</formula><p>µ⌫ @ ⌫ L is only a forward Euler approximation, and can only converge to the invariant exact solution in first order. Therefore, a natural improvement is to use higher-order integrators to obtain a more accurate approximation to the exact solution.</p><p>As mentioned before, the midpoint integrator has secondorder convergence and should be generally more accurate.</p><p>In our case, it becomes</p><formula xml:id="formula_20">✓ µ k+ 1 2 = ✓ µ k 1 2 h g µ⌫ (✓ k )@ ⌫ L(r ✓ k ), ✓ µ k+1 = ✓ µ k h g µ⌫ (✓ k+ 1 2 )@ ⌫ L(r ✓ k+ 1 2 ).</formula><p>where</p><formula xml:id="formula_21">g µ⌫ (✓ k ), g µ⌫ (✓ k+ 1 2</formula><p>) are the inverse metrics evaluated at ✓ k and ✓ k+ 1 2 respectively. Since our midpoint integrator converges to the invariant natural gradient ODE solution in second order, it preserves higher-order invariance compared to the first-order Euler integrator used in vanilla natural gradient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Riemannian Euler Method</head><p>For solving the natural gradient ODE (Eq. <ref type="formula" target="#formula_17">(5)</ref>), the Riemannian Euler method's update rule becomes</p><formula xml:id="formula_22">✓ µ k+1 = Exp(✓ µ k , h g µ⌫ @ ⌫ L(r ✓ k )),<label>(6)</label></formula><p>where Exp :</p><formula xml:id="formula_23">{(p, v) | p 2 M, v 2 T p M} ! M</formula><p>is the exponential map as defined in Section 2.1. The solution obtained by Riemannian Euler method is invariant to reparameterizations, because Exp is a function independent of parameterization and for each step, the two arguments of Exp are both invariant.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Geodesic Correction</head><p>For most models, it is not tractable to compute Exp, since it requires solving the geodesic equation (1) exactly. Nonetheless, there are two numerical methods to approximate geodesics, with different levels of accuracy.</p><p>According to Section 2.1,</p><formula xml:id="formula_24">Exp(✓ µ k , h g µ⌫ @ ⌫ L(r ✓ k )) = µ k (h)</formula><p>, where µ k satisfies the geodesic equation <ref type="formula" target="#formula_7">(1)</ref> and</p><formula xml:id="formula_25">µ k (0) = ✓ µ k µ k (0) = g µ⌫ @ ⌫ L(r ✓ k ).</formula><p>The first method for approximately solving µ k (t) ignores the whole geodesic equation and only uses information of first derivatives, giving</p><formula xml:id="formula_26">µ k (h) ⇡ ✓ µ k + h˙ µ k (0) = ✓ µ k h g µ⌫ @ ⌫ L,</formula><p>which corresponds to the naïve natural gradient update rule.</p><p>The more accurate method leverages information of second derivatives from the geodesic equation (1). The result is</p><formula xml:id="formula_27">µ k (h) ⇡ ✓ µ k + h˙ µ k (0) + 1 2 h 2¨ µ k (0) = ✓ µ k h g µ⌫ @ ⌫ L 1 2 h 2 µ ↵ ˙ ↵ k (0)˙ k (0).</formula><p>The additional second-order term given by the geodesic equation (1) reduces the truncation error to third-order. This corresponds to our new natural gradient update rule with geodesic correction, i.e.,</p><formula xml:id="formula_28">✓ µ k+1 = ✓ µ k + h˙ µ k (0) 1 2 h 2 µ ↵ ˙ ↵ k (0)˙ k (0), (7) where˙ µ k (0) = g µ⌫ @ ⌫ L(r ✓ k ).</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Faster Geodesic Correction</head><p>To obtain the second order term in the geodesic corrected update, we first need to compute˙ k (0), which requires inverting the Fisher information matrix. Then we have to plug in˙ k (0) and compute</p><formula xml:id="formula_29">µ ↵ ˙ ↵ k (0)˙ k (0)</formula><p>, which involves inverting the same Fisher information matrix again (see <ref type="formula" target="#formula_8">(2)</ref>). Matrix inversion (more precisely, solving the corresponding linear system) is expensive and it would be beneficial to combine the natural gradient and geodesic correction terms together and do only one inversion.</p><p>To this end, we propose to estimate˙</p><formula xml:id="formula_30">k (0) in µ ↵ ˙ k (0) ↵˙ k (0) with˙ k (0) ⇡ (✓ k ✓ k 1 )/h.</formula><p>Using this approximation and substituting (2) into <ref type="formula">(7)</ref> gives the following faster geodesic correction update rule:</p><formula xml:id="formula_31">✓ µ k = g µ⌫ ·  @ ⌫ L(r ✓ k ) (8) 1 4 h (@ ↵ g ⌫ + @ g ⌫↵ @ ⌫ g ↵ ) ✓ ↵ k 1 ✓ k 1 ✓ µ k+1 = ✓ µ k + h ✓ µ k ,<label>(9)</label></formula><p>which only involves one inversion of the Fisher information matrix.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Convergence Theorem</head><p>We summarize the convergence properties of geodesic correction and its faster variant in the following general theorem. Theorem 1 (Informal). Consider the initial value probleṁ x = f (t, x(t)), x(0) = a, 0  t  T . Let the interval [0, T ] be subdivided into n equal parts by the grid points 0 = t 0 &lt; t 1 &lt; · · · &lt; t n = T , with the grid size h = T /n. Denote x k andx k as the numerical solution given by geodesic correction and its faster version respectively. Define the error e k at each grid point</p><formula xml:id="formula_32">x k by e k = x 0 k x k , andê k = x 0 k x k , where x 0</formula><p>k is the numerical solution given by Riemannian Euler method. Then it follows that</p><formula xml:id="formula_33">ke k k  O(h 2 ) and kê k k  O(h 2 ), h ! 0, 8k 2 [n].</formula><p>As a corollary, both Euler's update with geodesic correction and its faster variant converge to the solution of ODE in 1st order.</p><p>Proof. Please refer to Appendix A for a rigorous statement and detailed proof.</p><p>The statement of Theorem 1 is general enough to hold beyond the natural gradient ODE (Eq. <ref type="formula" target="#formula_17">(5)</ref>). It shows that both geodesic correction and its faster variant converge to the invariant Riemannian Euler method in 2nd order. In contrast, vanilla forward Euler method, as used in traditional natural gradient, is a first order approximation of Riemannian Euler method. In this sense, geodesic corrected updates preserve higher-order invariance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Geodesic Correction for Neural Networks</head><p>Adding geodesic correction requires computing the LeviCivita connection ↵ µ⌫ (see <ref type="formula" target="#formula_8">(2)</ref>), which usually involves second-order derivatives. This is to the contrast of natural gradient, where the computation of Fisher information matrix only involves first-order derivatives of outputs. In this section, we address the computational issues of geodesic correction in optimizing deep neural networks.</p><p>In order to use natural gradient for neural network training, we first need to convert neural networks to probabilistic models. A feed-forward network can be treated as a conditional distribution p ✓ (t | x). For regression networks, p ✓ (t | x) is usually a family of multivariate Gaussians. For classification networks, p ✓ (t | x) usually becomes a family of categorical distributions. The joint probability density is q(x)p ✓ (t | x), where q(x) is the data distribution and is usually approximated with the empirical distribution.</p><p>The first result in this section is the analytical formula of the Levi-Civita connection of neural networks. Proposition 1. The Levi-Civita connection of a neural network model manifold is given by</p><formula xml:id="formula_34">µ ↵ = g µ⌫ E q(x) E p ✓ (t|x) ⇢ @ ⌫ log p ✓ (t | x)  @ ↵ @ log p ✓ (t | x)+ 1 2 @ ↵ log p ✓ (t | x)@ log p ✓ (t | x)<label>(10)</label></formula><p>Proof. In Appendix A.</p><p>We denote the outputs of a neural network as y(x, ✓) = (y 1 , y 2 , · · · , y o ), which is an o-dimensional vector if there are o output units. In this paper, we assume that y(x, ✓) are the values after final layer activation (e.g., softmax). For typical loss functions, the expectation with respect to the corresponding distributions can be calculated analytically. Specifically, we instantiate the Levi-Civita connection for model distributions induced by three common losses and summarize them in the following proposition.</p><p>Proposition 2. For the squared loss, we have</p><formula xml:id="formula_35">p ✓ (t | x) = o Y i=1 N (t i | y i , 2 ) g µ⌫ = 1 2 o X i=1 E q(x) [@ µ y i @ ⌫ y i ] µ ↵ = 1 2 o X i=1 g µ⌫ E q(x) [@ ⌫ y i @ ↵ @ y i ]</formula><p>For the binary cross-entropy loss, we have</p><formula xml:id="formula_36">p ✓ (t | x) = o Y i=1 y ti i (1 y i ) 1 ti g µ⌫ = o X i=1 E q(x)  1 y i (1 y i ) · @ µ y i @ ⌫ y i µ ↵ = g µ⌫ o X i=1 E q(x)  2y i 1 2y 2 i (1 y i ) 2 · @ ⌫ y i @ ↵ y i @ y i + 1 y i (1 y i ) · @ ⌫ y i @ ↵ @ y i .</formula><p>In the case of multi-class cross-entropy loss, we have</p><formula xml:id="formula_37">p ✓ (t | x) = o Y i=1 y ti i g µ⌫ = 1 2 o X i=1 E q(x)  1 y i · @ µ y i @ ⌫ y i µ ↵ = g µ⌫ o X i=1 E q(x)  1 y i · @ ⌫ y i @ ↵ @ y i 1 2y 2 i · @ ⌫ y i @ ↵ y i @ y i .</formula><p>Proof. In Appendix B.</p><p>For geodesic correction, we only need to compute connection-vector products µ ↵ ˙ ↵˙ . This can be done with a similar idea to Hessian-vector products <ref type="bibr" target="#b28">(Pearlmutter, 1994)</ref>, for which we provide detailed derivations and pseudocodes in Appendix C. It can also be easily handled with automatic differentiation frameworks. We discuss some practical considerations on how to apply them in real cases in Appendix D.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Related Work</head><p>The idea of using the geodesic equation to accelerate gradient descent on manifolds was first introduced in <ref type="bibr" target="#b36">Transtrum et al. (2011)</ref>. However, our geodesic correction has several important differences. Our framework is generally applicable to all probabilistic models. This is to be contrasted with "geodesic acceleration" in <ref type="bibr" target="#b36">Transtrum et al. (2011)</ref> and <ref type="bibr" target="#b35">Transtrum &amp; Sethna (2012)</ref>, which can only be applied to nonlinear least squares. Additionally, our geodesic correction is motivated from the perspective of preserving higher-order invariance, while in <ref type="bibr" target="#b35">Transtrum &amp; Sethna (2012)</ref> it is motivated as a higher-order correction to the Gaussian-Newton approximation of the Hessian under the so-called "small-curvature assumption". We discuss and evaluate empirically in Appendix F why the small-curvature approximation does not hold for training deep neural networks.</p><p>There has been a resurgence of interest in applying natural gradient to neural network training. <ref type="bibr" target="#b21">Martens (2010)</ref> and <ref type="bibr" target="#b24">Martens &amp; Sutskever (2011)</ref> show that Hessian-Free optimization, which is equivalent to natural gradient method in important cases in practice <ref type="bibr" target="#b27">(Pascanu &amp; Bengio, 2013;</ref><ref type="bibr" target="#b22">Martens, 2014)</ref>, is able to obtain state-of-the-art results in optimizing deep autoencoders and RNNs. To scale up natural gradient, some approximations for inverting the Fisher information matrix have been recently proposed, such as Krylov subspace descent <ref type="bibr" target="#b37">(Vinyals &amp; Povey, 2012)</ref>, FANG <ref type="bibr" target="#b12">(Grosse &amp; Salakhutdinov, 2015)</ref> and K-FAC <ref type="bibr" target="#b23">(Martens &amp; Grosse, 2015;</ref><ref type="bibr" target="#b11">Grosse &amp; Martens, 2016;</ref><ref type="bibr" target="#b3">Ba et al., 2017)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Experimental Evaluations</head><p>In this section, we demonstrate the benefit of respecting higher-order invariance through experiments on synthetic optimization problems, deep neural net optimization tasks and policy optimization in deep reinforcement learning.</p><p>Algorithms have abbreviated names in figures. We use "ng" to denote the basic natural gradient, "geo" to denote the one with geodesic correction, "geo f " to denote the faster geodesic correction, and "mid" to abbreviate natural gradient update using midpoint integrator.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.1.">Invariance</head><p>In this experiment, we investigate the effect of invariance under different parameterizations of the same objective. We test different algorithms on fitting a univariate Gamma distribution via Maximum Log-Likelihood. The problem is simple-we can calculate the Fisher information metric and corresponding Levi-Civita connection accurately. Moreover, we can use ODE-solving software to numerically integrate the continuous natural gradient equation and calculate the exponential map used in Riemannian Euler method.</p><p>The pdf of Gamma distribution is</p><formula xml:id="formula_38">p(x | ↵, ) = (x; ↵, ) , ↵ (↵) x ↵ 1 e x ,</formula><p>where ↵, are shape and rate parameters. Aside from the original parameterization, we test three others:</p><formula xml:id="formula_39">1) ↵ = ↵ 0 , = 1/ 0 ; 2) ↵ = ↵ 0 , = ( 0 ) 3 and 3) ↵ = (↵ 0 ) 2 , = ( 0 )</formula><p>2 , where ↵ 0 , 0 are new parameters. We generate 10000 synthetic data points from <ref type="bibr">(X; 20, 20)</ref>. During training, ↵ and are initialized to 1 and the learning rate is fixed to 0.5.</p><p>We summarize the results in <ref type="figure" target="#fig_1">Figure 2</ref>. Here "ng(exact)" is obtained by numerically integrating (5), and "geo(exact)" is obtained using Riemannian Euler method with a numerically calculated exponential map function. As predicted by the theory, both methods are exactly invariant under all parameterizations. From <ref type="figure" target="#fig_1">Figure 2</ref> we observe that the vanilla natural gradient update is not invariant under reparameterizations, due to its finite step size. We observe that our midpoint natural gradient method and geodesic corrected algorithms are more resilient to re-parameterizations, and all lead to accelerated convergence of natural gradient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.2.">Training Deep Neural Nets</head><p>We test our algorithms on deep autoencoding and classification problems. The datasets are CURVES, MNIST and FACES, all of which contain small gray-scale images of various objects, i.e., synthetic curves, hand-written digits and hu-   <ref type="bibr" target="#b34">(Todorov et al., 2012)</ref>. Titles indicate the environment used in OpenAI Gym <ref type="bibr" target="#b5">(Brockman et al., 2016)</ref>. man faces. Since all deep networks use fully-connected layers and sigmoid activation functions, the tasks are non-trivial to solve even for modern deep learning optimizers, such as Adam <ref type="bibr" target="#b18">(Kingma &amp; Ba, 2015)</ref>. Due to the high difficulty of this task, it has become a standard benchmark for neural network optimization algorithms <ref type="bibr" target="#b15">(Hinton &amp; Salakhutdinov, 2006;</ref><ref type="bibr" target="#b21">Martens, 2010;</ref><ref type="bibr" target="#b37">Vinyals &amp; Povey, 2012;</ref><ref type="bibr" target="#b33">Sutskever et al., 2013;</ref><ref type="bibr" target="#b23">Martens &amp; Grosse, 2015)</ref>. Since these tasks only involve squared loss and binary cross-entropy, we additionally test multi-class cross-entropy on a MNIST classification task. Additional details can be found in Appendix E.1. <ref type="figure" target="#fig_2">Figure 3</ref> summarizes our results on all three datasets. Here "ng" is the natural gradient method (Hessian-Free) as implemented in <ref type="bibr" target="#b21">Martens (2010)</ref>. For completeness, we also add Adam <ref type="bibr" target="#b18">(Kingma &amp; Ba, 2015)</ref> into comparison and denote it as "adam". The training error reported for all datasets is the squared reconstruction error. Since the test error traces the training error very well, we only report the result of training error due to space limitation. It is clear that all acceleration methods lead to per iteration improvements compared to naïve natural gradient. It is also remarkable that the performance of "geo f ", while being roughly half as expensive as "geo" per iteration, does not degrade too much compared to "geo". For performance comparisons with respect to time, "geo f " is usually the best (or comparable to the best). "mid" and "geo" are relatively slower, since they need roughly twice as much computation per iteration as "ng". Nonetheless, "mid" still has the best time performance for MNIST classification task.</p><p>We hereby emphasize again that geodesic correction methods are not aimed for providing more accurate solutions of the natural gradient ODE. Instead, they are higher-order approximations of an invariant solution (obtained by Riemannian Euler method), which itself is a first-order approximation to the exact solution. The improvements of both geodesic correction and midpoint integrator in <ref type="figure" target="#fig_1">Figure 2</ref> and <ref type="figure" target="#fig_2">Figure 3</ref> confirm our intuition that preserving higher-order invariance can accelerate natural gradient optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.3.">Model-free Reinforcement Learning for Continuous Control</head><p>Finally, we evaluate our methods in reinforcement learning over six continuous control tasks <ref type="bibr" target="#b34">(Todorov et al., 2012)</ref>. Specifically, we consider improving the algorithm of ACKTR , an efficient variant of natural policy gradient <ref type="bibr" target="#b17">(Kakade, 2002)</ref> which uses Kronecker factors <ref type="bibr" target="#b23">(Martens &amp; Grosse, 2015)</ref> to approximately compute the inverse of Fisher information matrix. For these methods, we evaluate sample efficiency (expected rewards per episode reached within certain numbers of interactions); in robotics tasks the cost of simulation often dominates the cost of the reinforcement learning algorithm, so requiring less interactions to achieve certain performance has higher priority than lower optimization time per iteration. Therefore we only test midpoint integrator and geodesic correction method for improving ACKTR, and omit the faster geodesic correction because of its less accurate approximation. <ref type="figure" target="#fig_3">Figure 4</ref> describes the results on the continuous control tasks, where we use "mid-" and "geo-" to denote our midpoint integrator and geodesic correction methods for ACKTR respectively. In each environment, we consider the same constant learning rate schedule for all three methods (detailed settings in Appendix E.2). While the Fisher information matrices are approximated via Kronecker factors, our midpoint integrator and geodesic correction methods are still able to outperform ACKTR in terms of sample efficiency in most of the environments. This suggests that preserving higher-order invariance could also benefit natural policy gradients in reinforcement learning, and our methods can be scaled to large problems via approximations of Fisher information matrices.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8.">Conclusion</head><p>Our contributions in this paper can be summarized as:</p><p>• We propose to measure the invariance of numerical schemes by comparing their convergence to idealized invariant solutions.</p><p>• To the best of our knowledge, we are the first to use midpoint integrators for natural gradient optimization.</p><p>• Based on Riemannian Euler method, we introduce geodesic corrected updates. Moreover, the faster geodesic correction has comparable time complexity with vanilla natural gradient. Computationally, we also introduce new backpropagation type algorithms to compute connectionvector products. Theoretically, we provide convergence proofs for both types of geodesic corrected updates.</p><p>• Experiments confirm the benefits of invariance and demonstrate faster convergence and improved sample efficiency of our proposed algorithms in supervised learning and reinforcement learning applications.</p><p>For future research, it would be interesting to perform a thorough investigation over applications in reinforcement learning, and studying faster variants and more efficient implementations of the proposed acceleration algorithms.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. An illustration of Riemannian geometry concepts: tangent spaces, cotangent spaces, coordinate basis, dual coordinate basis, geodesics and the exponential map.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. The effect of re-parameterizations on algorithms fitting a univariate Gamma distribution. Titles indicate which parameterization was used.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Training deep auto-encoders and classifiers with different acceleration algorithms. Solid lines show performance against number of iterations (bottom axes) while dashed lines depict performance against running time (top axes).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Sample efficiency of model-free reinforcement learning on continuous control tasks (Todorov et al., 2012). Titles indicate the environment used in OpenAI Gym (Brockman et al., 2016).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>is called a vector. For any tangent space T p M, there exists a dual space T@✓ n } forms a basis for T p M and is called the coordinate basis. Similarly, the dual space admits the dual coordinate basis {d✓ 1 , · · · , d✓</figDesc><table>⇤ 
+
+p M called the cotagent space, 
+which consists of all linear real-valued functions on the 
+tangent space. Each element v 
+⇤ in the dual space T 
+
+⇤ 
+
+p M 
+is called a covector. Let (p) = (✓ 
+1 , ✓ 
+2 , · · · , ✓ 
+n ) be the 
+coordinates of p, it can be shown that the set of operators 
+
+{ 
+
+@ 
+
+@✓ 1 , · · · , 
+
+@ 
+
+n 
+
+}. These two sets of bases 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>The authors would like to thank Jonathan McKinney for helpful discussions. This work was supported by NSF grants #1651565, #1522054, #1733686, Toyota Research Institute, Future of Life Institute, and Intel.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Tensorflow: A system for large-scale machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">OSDI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="page" from="265" to="283" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Natural gradient works efficiently in learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-I</forename><surname>Amari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="251" to="276" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Differential geometrical theory of statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-I</forename><surname>Amari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Barndorff-Nielsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kass</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lauritzen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Differential geometry in statistical inference</title>
+		<imprint>
+			<publisher>Institute of Mathematical Statistics</publisher>
+			<date type="published" when="1987" />
+			<biblScope unit="page" from="19" to="94" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Distributed second-order optimization using kronecker-factored approximations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Estimation of the euler method error on a riemannian manifold</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bielecki</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. Numer. Meth. Engng</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="757" to="763" />
+			<date type="published" when="2002-11-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Brockman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pettersson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zaremba</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.01540</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">W. Openai gym. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Spacetime and geometry. an introduction to general relativity. Spacetime and geometry/Sean Carroll</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Carroll</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title/>
+		<idno>ISBN 0-8053- 8732-3</idno>
+	</analytic>
+	<monogr>
+		<title level="j">XIV+ 513 pp</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<date type="published" when="2004" />
+			<publisher>Addison Wesley</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Identifying and attacking the saddle point problem in high-dimensional non-convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">N</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ganguli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2933" to="2941" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dhariwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hesse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Klimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Nichol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Plappert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sidor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Openai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Baselines</surname></persName>
+		</author>
+		<ptr target="https://github.com/openai/baselines" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A kronecker-factored approximate fisher matrix for convolution layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 33rd International Conference on Machine Learning</title>
+		<meeting>The 33rd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="573" to="582" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Scaling up natural gradient by sparsely factorizing the inverse fisher matrix</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 32nd International Conference on Machine Learning (ICML-15)</title>
+		<meeting>the 32nd International Conference on Machine Learning (ICML-15)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2304" to="2313" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Lecture 6a overview of mini-batch gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Reducing the dimensionality of data with neural networks. science</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">313</biblScope>
+			<biblScope unit="page" from="504" to="507" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="448" to="456" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">A natural policy gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Kakade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="1531" to="1538" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">A</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">B</forename><surname>Orr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-R</forename><surname>Müller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Efficient</surname></persName>
+		</author>
+		<title level="m">Neural networks: Tricks of the trade</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="9" to="48" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">An algorithm for least-squares estimation of nonlinear parameters</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Marquardt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the society for Industrial and Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="431" to="441" />
+			<date type="published" when="1963" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deep learning via hessian-free optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 27th International Conference on Machine Learning (ICML-10)</title>
+		<meeting>the 27th International Conference on Machine Learning (ICML-10)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="735" to="742" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">New insights and perspectives on the natural gradient method</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.1193</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Optimizing neural networks with kronecker-factored approximate curvature</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 32nd International Conference on Machine Learning</title>
+		<meeting>The 32nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2408" to="2417" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Learning recurrent neural networks with hessian-free optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 28th International Conference on Machine Learning (ICML-11)</title>
+		<meeting>the 28th International Conference on Machine Learning (ICML-11)</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="1033" to="1040" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Riemannian metrics for neural networks i: feedforward networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ollivier</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1303.0818</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Riemannian metrics for neural networks ii: recurrent networks and learning symbolic data sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ollivier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Information and Inference</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="154" to="193" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Revisiting natural gradient for deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1301.3584</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Fast exact multiplication by the hessian</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">A</forename><surname>Pearlmutter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="147" to="160" />
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Petersen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Riemannian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Geometry</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Springer</publisher>
+			<biblScope unit="volume">171</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Weight normalization: A simple reparameterization to accelerate training of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="901" to="909" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Fast curvature matrix-vector products for second-order gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">N</forename><surname>Schraudolph</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1723" to="1738" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">On the importance of initialization and momentum in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 30th International Conference on Machine Learning</title>
+		<meeting>The 30th International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1139" to="1147" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Mujoco: A physics engine for model-based control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Todorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tassa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS), 2012 IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="5026" to="5033" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Geodesic acceleration and the small-curvature approximation for nonlinear least squares</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">K</forename><surname>Transtrum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Sethna</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1207.4999</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Geometry of nonlinear least squares with applications to sloppy models and optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">K</forename><surname>Transtrum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">B</forename><surname>Machta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Sethna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physical Review E</title>
+		<imprint>
+			<biblScope unit="volume">83</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">36701</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Krylov subspace descent for deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Povey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1261" to="1268" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Scalable trust-region method for deep reinforcement learning using kronecker-factored approximation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mansimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5285" to="5294" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

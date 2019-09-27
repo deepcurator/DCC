@@ -1,0 +1,1025 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:22+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">First Order Generative Adversarial Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Calvin</forename><surname>Seward</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Unterthiner</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Urs</forename><surname>Bergmann</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikolay</forename><surname>Jetchev</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+						</author>
+						<title level="a" type="main">First Order Generative Adversarial Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>GANs excel at learning high dimensional distributions, but they can update generator parameters in directions that do not correspond to the steepest descent direction of the objective. Prominent examples of problematic update directions include those used in both Goodfellow's original GAN and the WGAN-GP. To formally describe an optimal update direction, we introduce a theoretical framework which allows the derivation of requirements on both the divergence and corresponding method for determining an update direction, with these requirements guaranteeing unbiased minibatch updates in the direction of steepest descent. We propose a novel divergence which approximates the Wasserstein distance while regularizing the critic's first order information. Together with an accompanying update direction, this divergence fulfills the requirements for unbiased steepest descent updates. We verify our method, the First Order GAN, with image generation on CelebA, LSUN and CIFAR-10 and set a new state of the art on the One Billion Word language generation task.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generative adversarial networks (GANs) <ref type="bibr" target="#b9">(Goodfellow et al., 2014)</ref> excel at learning generative models of complex distributions, such as images <ref type="bibr" target="#b16">Ledig et al., 2017)</ref>, textures <ref type="bibr" target="#b12">(Jetchev et al., 2016;</ref><ref type="bibr" target="#b3">Bergmann et al., 2017;</ref><ref type="bibr" target="#b13">Jetchev et al., 2017)</ref>, and even texts <ref type="bibr" target="#b10">(Gulrajani et al., 2017;</ref><ref type="bibr" target="#b11">Heusel et al., 2017)</ref>.</p><p>GANs learn a generative model G that maps samples from multivariate random noise into a high dimensional space. The goal of GAN training is to update G such that the generative model approximates a target probability distribution. In order to determine how close the generated and target distributions are, a class of divergences, the so-called adversarial divergences was defined and explored by <ref type="bibr" target="#b18">(Liu et al., 2017</ref>). This class is broad enough to encompass most popular GAN methods such as the original GAN <ref type="bibr" target="#b9">(Goodfellow et al., 2014)</ref>, f -GANs <ref type="bibr" target="#b26">(Nowozin et al., 2016)</ref>, moment matching networks <ref type="bibr" target="#b17">(Li et al., 2015)</ref>, Wasserstein GANs  and the tractable version thereof, the WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref>.</p><p>GANs learn a generative model with distribution Q by minimizing an objective function τ (P Q) measuring the similarity between target and generated distributions P and Q. In most GAN settings, the objective function to be minimized is an adversarial divergence <ref type="bibr" target="#b18">(Liu et al., 2017)</ref>, where a critic function is learned that distinguishes between target and generated data. For example, in the classic GAN <ref type="bibr" target="#b9">(Goodfellow et al., 2014</ref>) the critic f classifies data as real or generated, and the generator G is encouraged to generate samples that f will classify as real.</p><p>Unfortunately in GAN training, the generated distribution often fails to converge to the target distribution. Many popular GAN methods are unsuccessful with toy examples, for example failing to generate all modes of a mixture of Gaussians <ref type="bibr" target="#b32">(Srivastava et al., 2017;</ref><ref type="bibr" target="#b22">Metz et al., 2017)</ref> or failing to learn the distribution of data on a one-dimensional line in a high dimensional space <ref type="bibr" target="#b8">(Fedus et al., 2017)</ref>. In these situations, updates to the generator don't significantly reduce the divergence between generated and target distributions; if there always was a significant reduction in the divergence then the generated distribution would converge to the target.</p><p>The key to successful neural network training lies in the ability to efficiently obtain unbiased estimates of the gradients of a network's parameters with respect to some loss. With GANs, this idea can be applied to the generative setting. There, the generator G is parameterized by some values θ ∈ R m . If an unbiased estimate of the gradient of the divergence between target and generated distributions with respect to θ can be obtained during mini-batch learning, then SGD can be applied to learn G.</p><p>In GAN learning, intuition would dictate updating the generated distribution by moving θ in the direction of steepest descent −∇ θ τ (P Q θ ). Unfortunately, −∇ θ τ (P Q θ ) is generally intractable, therefore θ is updated according to a tractable method; in most cases a critic f is learned and the gradient of the expected critic value ∇ θ E Q θ [f ] is used as the update direction for θ. Usually, this update direction and the direction of steepest descent −∇ θ τ (P Q θ ), don't coincide and therefore learning isn't optimal. As we see later, popular methods such as WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref> are affected by this issue.</p><p>Therefore we set out to answer a simple but fundamental question: Is there an adversarial divergence and corresponding method that produces unbiased estimates of the direction of steepest descent in a mini-batch setting?</p><p>In this paper, under reasonable assumptions, we identify a path to such an adversarial divergence and accompanying update method. Similar to the WGAN-GP, this divergence also penalizes a critic's gradients, and thereby ensures that the critic's first order information can be used directly to obtain an update direction in the direction of steepest descent.</p><p>This program places four requirements on the adversarial divergence and the accompanying update rule for calculating the update direction that haven't to the best of our knowledge been formulated together. This paper will give rigorous definitions of these requirements, but for now we suffice with intuitive and informal definitions:</p><p>A. the divergence used must decrease as the target and generated distributions approach each other. For example, if we define the trivial distance between two probability distribution to be 0 if the distributions are equal, and 1 otherwise, i.e.</p><p>τ trivial (P Q) := 0 P = Q 1 otherwise then even as Q gets close to P, τ trivial (P Q) doesn't change. Without this requirement, ∇ θ τ (P Q θ ) = 0 and every direction is a "direction of steepest descent,"</p><p>B. critic learning must be tractable, C. the gradient ∇ θ τ (P Q θ ) and the result of an update rule must be well defined, D. the optimal critic enables an update which is an estimate of −∇ θ τ (P Q θ ).</p><p>In order to formalize these requirements, we define in Section 2 the notions of adversarial divergences and optimal critics. In Section 3 we will apply the adversarial divergence paradigm and begin to formalize the requirements above and better understand existing GAN methods. The last requirement is defined precisely in Section 4 where we explore criteria for an update rule guaranteeing a low variance unbiased estimate of the true gradient −∇ θ τ (P Q θ ).</p><p>After stating these conditions, we devote Section 5 to defining a divergence, the Penalized Wasserstein Divergence that fulfills the first two basic requirements. In this setting, a critic is learned, that similarly to the WGAN-GP critic, pushes real and generated data as far apart as possible while being penalized if the critic violates a Lipschitz condition.</p><p>As we will discover, an optimal critic for the Penalized Wasserstein Divergence between two distributions need not be unique. In fact, this divergence only specifies the values that the optimal critic assumes on the supports of generated and target distributions. Therefore, for many distributions, multiple critics with different gradients on the support of the generated distribution can all be optimal.</p><p>We apply this insight in Section 6 and add a gradient penalty to define the First Order Penalized Wasserstein Divergence. This divergence enforces not just correct values for the critic, but also ensures that the critic's gradient, its first order information, assumes values that allow for an easy formulation of an update rule. Together, this divergence and update rule fulfill all four requirements.</p><p>We hope that this gradient penalty trick will be applied to other popular GAN methods and ensure that they too return better generator updates. Indeed, <ref type="bibr" target="#b8">(Fedus et al., 2017)</ref> improves existing GAN methods by adding a gradient penalty.</p><p>Finally in Section 7, the effectiveness of our method is demonstrated by generating images and texts.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Notation, Definitions and Assumptions</head><p>In <ref type="bibr" target="#b18">(Liu et al., 2017)</ref> an adversarial divergence is defined: Definition 1 (Adversarial Divergence). Let X be a topological space, C(X 2 ) the set of all continuous real valued functions over the Cartesian product of X with itself and</p><formula xml:id="formula_0">set G ⊆ C(X 2 ), G = ∅. An adversarial divergence τ (· ·) over X is a function P(X) × P(X) → R ∪ {+∞} (P, Q) → τ (P Q) = sup g∈G E P⊗Q [g].</formula><p>The function class G ⊆ C(X 2 ) must be carefully selected if τ (· ·) is to be reasonable. For example, if G = C(X 2 ) then the divergence between two Dirac distributions τ (δ 0 δ 1 ) = ∞, and if G = {0}, i.e. G contains only the constant function which assumes zero everywhere, then τ (· ·) = 0.</p><p>Many existing GAN procedures can be formulated as an adversarial divergence. For example, setting</p><formula xml:id="formula_1">G = {x, y → log(u(x)) + log(1 − u(y)) | u ∈ V} V = (0, 1) X ∩ C(X) 1 1 (0, 1)</formula><p>X denotes all functions mapping X to (0, 1).</p><formula xml:id="formula_2">First Order Generative Adversarial Networks results in τ G (P Q) = sup g∈G E P⊗Q [g]</formula><p>, the divergence in Goodfellow's original GAN <ref type="bibr" target="#b9">(Goodfellow et al., 2014)</ref>. See <ref type="bibr" target="#b18">(Liu et al., 2017)</ref> for further examples.</p><p>For convenience, we'll restrict ourselves to analyzing a special case of the adversarial divergence (similar to Theorem 4 of <ref type="bibr" target="#b18">(Liu et al., 2017)</ref>), and use the notation: Definition 2 (Critic Based Adversarial Divergence). Let X be a topological space,</p><formula xml:id="formula_3">F ⊆ C(X), F = ∅. Further let f ∈ F, m f : X × X → R, m f : (x, y) → m 1 (f (x)) − m 2 (f (y)) and r f ∈ C(X 2 ). Then define τ : P(X) × P(X) × F → R ∪ {+∞} (P, Q, f ) → τ (P Q; f ) = E P⊗Q [m f − r f ]<label>(1)</label></formula><p>and set τ (P Q) = sup f ∈F τ (P Q; f ).</p><p>For example, the τ G from above can be equivalently defined by setting</p><formula xml:id="formula_4">F = (0, 1) X ∩ C(X), m 1 (x) = log(x), m 2 (x) = log(1 − x) and r f = 0. Then τ G (P Q) = sup f ∈F E P [m f − r f ]<label>(2)</label></formula><p>is a critic based adversarial divergence.</p><p>An example with a non-zero r f is the WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref>, which is a critic based adversarial divergence when F = C 1 (X), the set of all differentiable real functions on X, m 1 (x) = m 2 (x) = x, λ &gt; 0 and</p><formula xml:id="formula_5">r f (x, y) = λE α∼U ([0,1]) [( ∇ z f (z)| αx+(1−α)y − 1) 2 ].</formula><p>Then the WGAN-GP divergence τ I (P Q) is:</p><formula xml:id="formula_6">τ I (P Q) = sup f ∈F τ I (P Q; f ) = sup f ∈F E P⊗Q [m f − r f ].<label>(3)</label></formula><p>While Definition 1 is more general, Definition 2 is more in line with most GAN models. In most GAN settings, a critic in the simpler C(X) space is learned that separates real and generated data while reducing some penalty term r f which depends on both real and generated data. For this reason, we use exclusively the notation from Definition 2.</p><p>One desirable property of an adversarial divergence is that τ (P * P) obtains its infimum if and only if P * = P, leading to the following definition adapted from <ref type="bibr" target="#b18">(Liu et al., 2017)</ref>: Definition 3 (Strict adversarial divergence). Let τ be an adversarial divergence over a topological space X. τ is called a strict adversarial divergence if for any P, P * ∈ P(X),</p><formula xml:id="formula_7">τ (P * P) = inf P ∈P(X) τ (P * P ) ⇒ P * = P</formula><p>In order to analyze GANs that minimize a critic based adversarial divergence, we introduce the set of optimal critics.</p><p>Definition 4 (Optimal Critic, OC τ (P, Q)). Let τ be a critic based adversarial divergence over a topological space X and P, Q ∈ P(X), F ⊆ C(X), F = ∅. Define OC τ (P, Q) to be the set of critics in F that maximize τ (P Q; ·). That is</p><formula xml:id="formula_8">OC τ (P, Q) := {f ∈ F | τ (P Q; f ) = τ (P Q)}.</formula><p>Note that OC τ (P, Q) = ∅ is possible, . In this paper, we will always assume that if OC τ (P, Q) = ∅, then an optimal critic f * ∈ OC τ (P, Q) is known. Although is an unrealistic assumption, see <ref type="bibr" target="#b5">(Bińkowski et al., 2018)</ref>, it is a good starting point for a rigorous GAN analysis. We hope further works can extend our insights to more realistic cases of approximate critics.</p><p>Finally, we assume that generated data is distributed according to a probability distribution Q θ parameterized by θ ∈ Θ ⊆ R m satisfying the mild regularity Assumption 1. Furthermore, we assume that P and Q both have compact and disjoint support in Assumption 2. Although we conjecture that weaker assumptions can be made, we decide for the stronger assumptions to simplify the proofs. Assumption 1 (Adapted from ). Let Θ ⊆ R m . We say Q θ ∈ P(X), θ ∈ Θ satisfies assumption 1 if there is a locally Lipschitz function g : Θ×R d → X which is differentiable in the first argument and a distribution Z with bounded support in</p><formula xml:id="formula_9">R d such that for all θ ∈ Θ it holds Q θ ∼ g(θ, z) where z ∼ Z.</formula><p>Assumption 2 (Compact and Disjoint Distributions). Using Θ ⊆ R m from Assumption 1, we say that P and (Q θ ) θ∈Θ satisfies Assumption 2 if for all θ ∈ Θ it holds that the supports of P and Q θ are compact and disjoint.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Requirements Derived From Related Work</head><p>With the concept of an Adversarial Divergence now formally defined, we can investigate existing GAN methods from an Adversarial Divergence minimization standpoint. During the last few years, weaknesses in existing GAN frameworks have been highlighted and new frameworks have been proposed to mitigate or eliminate these weaknesses. In this section we'll trace this history and formalize requirements for adversarial divergences and optimal updates. Although using two competing neural networks for unsupervised learning isn't a new concept <ref type="bibr" target="#b30">(Schmidhuber, 1992)</ref>, recent interest in the field started when <ref type="bibr" target="#b9">(Goodfellow et al., 2014</ref>) generated images with the divergence τ G defined in Eq. 2. However,  shows if P, Q θ have compact disjoint support then ∇ θ τ G (P Q θ ) = 0, preventing the use of gradient based learning methods.</p><p>In response to this impediment, the Wasserstein GAN was proposed in  with the divergence: </p><formula xml:id="formula_10">τ W (P Q) = sup f L ≤1 E x∼P [f (x)] − E x ∼Q [f (x )]</formula><formula xml:id="formula_11">) n&gt;0 . Then τ W (δ 0 δ 1 n ) = 1 n while τ G (δ 0 δ 1 n ) = 1. As δ 1 n approaches δ 0 , the Wasserstein divergence decreases while τ G (δ 0 δ 1 n ) remains constant.</formula><p>This issue is explored in <ref type="bibr" target="#b18">(Liu et al., 2017)</ref> by creating a weak ordering, the so-called strength, of divergences. A divergence τ 1 is said to be stronger than τ 2 if for any sequence of probability measures (P n ) n∈N and any target probability measure P * the con-</p><formula xml:id="formula_12">vergence τ 1 (P * P n ) n→∞ −→ inf P∈P(X) τ 1 (P * P) implies τ 2 (P * P n ) n→∞ −→ inf P∈P(X) τ 2 (P * P).</formula><p>The divergences τ 1 and τ 2 are equivalent if τ 1 is stronger than τ 2 and τ 2 is stronger than τ 1 . The Wasserstein distance τ W is the weakest divergence in the class of strict adversarial divergences <ref type="bibr" target="#b18">(Liu et al., 2017)</ref>, leading to the following requirement:</p><p>Requirement 1 (Equivalence to τ W ). An adversarial divergence τ is said to fulfill Requirement 1 if τ is a strict adversarial divergence which is weaker than τ W .</p><p>The issue of the zero gradients was side stepped in (Goodfellow et al., 2014) (and the option more rigorously explored in <ref type="bibr" target="#b8">(Fedus et al., 2017)</ref>) by not updating with</p><formula xml:id="formula_13">−∇ θ E x ∼Q θ [log(1 − f (x ))] but instead using the gradi- ent ∇ θ E x ∼Q θ [f (x )].</formula><p>As will be shown in Section 4, this update direction doesn't generally move θ in the direction of steepest descent.</p><p>Although using the Wasserstein distance as a divergence between probability measures solves many theoretical problems, it requires that critics are Lipschitz continuous with Lipschitz constant 1. Unfortunately, no tractable algorithm has yet been found that is able to learn the optimal Lipschitz continuous critic (or a close approximation thereof). This is due in part to the fact that if the critic is parameterized by a neural network f ϑ , ϑ ∈ Θ C ⊆ R c , then the set of admissible parameters {ϑ ∈ Θ C | f ϑ L ≤ 1} is highly non-convex. Thus critic learning is a non-convex optimization problem (as is generally the case in neural network learning) with non-convex constraints on the parameters. Since neural network learning is generally an unconstrained optimization problem, adding complex nonconvex constraints makes learning intractable with current methods. Thus, finding an optimal Lipschitz continuous critic is a problem that can not yet be solved, leading to the second requirement:</p><p>Requirement 2 (Convex Admissible Critic Parameter Set). Assume τ is a critic based adversarial divergence where critics are chosen from a set F. Assume further that in training, a parameterization ϑ ∈ R c of the critic function f ϑ is learned. The critic based adversarial divergence τ is said to fulfill requirement 2 if the set of admissible parameters {ϑ ∈ R c | f ϑ ∈ F} is convex.  <ref type="bibr" target="#b10">(Gulrajani et al., 2017</ref>) that since a Wasserstein critic must have gradients of norm at most 1 everywhere, a reasonable strategy would be to transform the constrained optimization into an unconstrained optimization problem by penalizing the divergence when a critic has nonunit gradients. With this strategy, the so-called Improved Wasserstein GAN or WGAN-GP divergence defined in Eq. 3 is obtained.</p><p>The generator parameters are updated by training an optimal critic f * and updating with</p><formula xml:id="formula_14">∇ θ E Q θ [f * ].</formula><p>Although this method has impressive experimental results, it is not yet ideal. <ref type="bibr" target="#b27">(Petzka et al., 2018)</ref> showed that an optimal critic for τ I has undefined gradients on the support of the generated distribution Q θ . Thus, the update direction ∇ θ E Q θ [f * ] is undefined; even if a direction was chosen from the subgradient field (meaning the update direction is defined but random) the update direction won't generally point in the direction of steepest gradient descent. This naturally leads to the next requirement:</p><p>Requirement 3 (Well Defined Update Rule). An update rule is said to fulfill Requirement 3 on a target distribution P and a family of generated distributions (Q θ ) θ∈Θ if for every θ ∈ Θ the update rule at P and Q θ is well defined.</p><p>Note that kernel methods such as <ref type="bibr" target="#b7">(Dziugaite et al., 2015)</ref> and <ref type="bibr" target="#b17">(Li et al., 2015)</ref> provide exciting theoretical guarantees and may well fulfill all four requirements. Since these guarantees come at a cost in scalability, we won't analyze them further.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Correct Update Rule Requirement</head><p>In the previous section, we stated a bare minimum requirement for an update rule (namely that it is well defined). In this section, we'll go further and explore criteria for a "good" update rule. For example in Lemma 8 in Section A of Appendix, it is shown that there exists a target P and a family of generated distributions (Q θ ) θ∈Θ fulfilling Assumptions 1 and 2 such that for the optimal critic f * θ0 ∈ OC τ I (P, Q θ0 ) there is no γ ∈ R so that</p><formula xml:id="formula_15">∇ θ τ I (P Q θ )| θ0 = γ∇ θ E Q θ [f * θ0 ]| θ0</formula><p>for all θ 0 ∈ Θ if all terms are well defined. Thus, the update rule used in the WGAN-GP setting, although well defined for this specific P and Q θ0 , isn't guaranteed to move θ in the direction of steepest descent. In fact, <ref type="bibr" target="#b21">(Mescheder et al., 2018)</ref> shows that the WGAN-GP does not converge for specific classes of distributions. Therefore, the question arises what well defined update rule also moves θ in the direction of steepest descent?</p><p>The most obvious candidate for an update rule is simply use the direction −∇ θ τ (P Q θ ), but since in the adversarial divergence setting τ (P Q θ ) is the supremum over a set of infinitely many possible critics, calculating −∇ θ τ (P Q θ ) directly is generally intractable.</p><p>One strategy to address this issue is to use an envelope theorem <ref type="bibr" target="#b23">(Milgrom &amp; Segal, 2002)</ref>. Assuming all terms are well defined, then for every optimal critic f * ∈ OC τ (P,</p><formula xml:id="formula_16">Q θ0 ) it holds ∇ θ τ (P Q θ )| θ0 = ∇ θ τ (P Q θ ; f * )| θ0 .</formula><p>This strategy is outlined in detail in  when proving the Wasserstein GAN update rule, and explored in the context of the classic GAN divergence τ G in ).</p><p>Yet in many GAN settings, <ref type="bibr" target="#b9">(Goodfellow et al., 2014;</ref><ref type="bibr" target="#b29">Salimans et al., 2016;</ref><ref type="bibr" target="#b27">Petzka et al., 2018)</ref>, the update rule is to train an optimal critic f * and then take a step in the direction of ∇ θ E Q θ [f * ]. In the critic based adversarial divergence setting (Definition 2), a direct result of Eq. 1 together with Theorem 1 from <ref type="bibr" target="#b23">(Milgrom &amp; Segal, 2002)</ref> is that for every f * ∈ OC τ (P, Q θ0 )</p><formula xml:id="formula_17">∇ θ τ (P Q θ )| θ0 = ∇ θ τ (P Q; f * ) = −∇ θ (E Q θ [m 2 (f * )] + E P⊗Q θ [r f * ])| θ0<label>(4)</label></formula><p>when all terms are well defined. Thus, the update direction</p><formula xml:id="formula_18">∇ θ E Q θ [f * ]</formula><p>only points in the direction of steepest descent for special choices of m 2 and r f . One such example is the Wasserstein GAN where m 2 (x) = x and r f = 0.</p><p>Most popular GAN methods don't employ functions m 2 and r f such that the update direction ∇ θ E Q θ [f * ] points in the direction of steepest descent. For example, with the classic GAN, m 2 (x) = log(1 − x) and r f = 0, so the update direction</p><formula xml:id="formula_19">∇ θ E Q θ [f * ] clearly is not oriented in the direction of steepest descent ∇ θ E Q θ [log(1 − f * )]</formula><p>. The WGAN-GP is similar, since as we see in Lemma 8 in Appendix, Section A, To analyze this issue, we use the notation from <ref type="bibr" target="#b2">(Bellemare et al., 2017)</ref> where X m := X 1 , X 2 , . . . , X m are samples from P and the empirical distributionP m is defined bŷ</p><formula xml:id="formula_20">∇ θ E P⊗Q θ [r f * ] is not generally a multiple of ∇ θ E Q θ [f * ].</formula><formula xml:id="formula_21">P m :=P m (X m ) := 1 m m i=1 δ Xi .</formula><p>Further let V Xm∼P be the element-wise variance. Now with mini-batch learning we get</p><formula xml:id="formula_22">2 V Xm∼P [∇ θ EP m ⊗Q θ [m f * − r f * ]| θ0 ] = V Xm∼P [∇ θ (EP m [m 1 (f * )] − E Q θ [m 2 (f * )] − EP m⊗Qθ [r f * ])| θ0 ] = V Xm∼P [∇ θ EP m ⊗Q θ [r f * ]| θ0 ].</formula><p>Therefore, estimation of</p><formula xml:id="formula_23">∇ θ E P⊗Q θ [r f * ]</formula><p>is an extra source of variance.</p><p>Our solution to both these problems chooses the critic based adversarial divergence τ in such a way that there exists a γ ∈ R so that for all optimal critics f * ∈ OC τ (P, Q θ0 ) it holds</p><formula xml:id="formula_24">∇ θ E P⊗Q θ [r f * ]| θ0 ≈ γ∇ θ E Q θ [m 2 (f * )]| θ0 .<label>(5)</label></formula><p>In Theorem 2 we see conditions on P, Q θ such that equality holds. Now using Eq. 5 we see that</p><formula xml:id="formula_25">∇ θ τ (P Q θ )| θ0 = −∇ θ (E Q θ [m 2 (f * )] + E P⊗Q θ [r f * ])| θ0 ≈ −∇ θ (E Q θ [m 2 (f * )] + γE Q θ [m 2 (f * )])| θ0 = −(1 + γ)∇ θ E Q θ [m 2 (f * )]| θ0 making (1 + γ)∇ θ E Q θ [m 2 (f * )</formula><p>] a low variance update approximation of the direction of steepest descent.</p><p>We're then able to have the best of both worlds. On the one hand, when r f serves as a penalty term, training of a critic neural network can happen in an unconstrained optimization fashion like with the WGAN-GP. At the same time, the direction of steepest descent can be approximated by calculating</p><formula xml:id="formula_26">∇ θ E Q θ [m 2 (f * )]</formula><p>, and as in the Wasserstein GAN we get reliable gradient update steps.</p><p>With this motivation, Eq. 5 forms the basis of our final requirement:</p><p>Requirement 4 (Low Variance Update Rule). An adversarial divergence τ is said to fulfill requirement 4 if τ is a critic based adversarial divergence and for every optimal critic f * ∈ OC τ (P, Q θ0 ) fulfills Eq. 5.</p><p>2 Because the first expectation doesn't depend on θ,</p><formula xml:id="formula_27">∇ θ EP m [m1(f * )] = 0.</formula><p>In the same way, because the second expectation doesn't depend on the mini-batch Xm sampled,</p><formula xml:id="formula_28">V Xm∼P [E Q θ [m2(f * )]] = 0.</formula><p>It should be noted that the WGAN-GP achieves impressive experimental results; we conjecture that in many cases</p><formula xml:id="formula_29">∇ θ E Q θ [f * ]</formula><p>close enough to the true direction of steepest descent. Nevertheless, as the experiments in Section 7 show, our gradient estimates lead to better convergence in a challenging language modeling task.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Penalized Wasserstein Divergence</head><p>We now attempt to find an adversarial divergence that fulfills all four requirements. We start by formulating an adversarial divergence τ P and a corresponding update rule than can be shown to comply with Requirements 1 and 2. Subsequently in Section 6, τ P will be refined to make its update rule practical and conform to all four requirements.</p><p>The divergence τ P is inspired by the Wasserstein distance, there for an optimal critic between two Dirac distributions</p><formula xml:id="formula_30">f * ∈ OC τ (δ a , δ b ) it holds f (a) − f (b) = |a − b|. Now if we look at τ simple (δ a δ b ) := sup f ∈F f (a) − f (b) − (f (a) − f (b)) 2 |a − b|<label>(6)</label></formula><p>it's easy to calculate that τ simple (δ a δ b ) = 1 4 |a − b|, which is the same up to a constant (in this simple setting) as the Wasserstein distance, without being a constrained optimization problem. See <ref type="figure" target="#fig_1">Figure 1</ref> for an example.</p><p>This has another intuitive explanation. Because Eq. 6 can be reformulated as</p><formula xml:id="formula_31">τ simple (δ a δ b ) = sup f ∈F f (a)−f (b)−|a−b| f (a) − f (b) |a − b| 2</formula><p>which is a tug of war between the objective f (a) − f (b) and the squared Lipschitz penalty</p><formula xml:id="formula_32">|f (a)−f (b)| |a−b|</formula><p>weighted by |a−b|. This |a − b| term is important (and missing from <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref>, <ref type="bibr" target="#b27">(Petzka et al., 2018)</ref>) because otherwise the slope of the optimal critic between a and b will depend on |a − b|.</p><p>The penalized Wasserstein divergence τ P is a straightforward adaptation of τ simple to the multi dimensional case.</p><p>Definition 5 (Penalized Wasserstein Divergence). Assume X ⊆ R n and P, Q ∈ P(X) are probability measures over X, λ &gt; 0 and F = C 1 (X). Set</p><formula xml:id="formula_33">τ P (P Q; f ) := E x∼P [f (x)] − E x ∼Q [f (x )] −λ E x∼P,x ∼Q (f (x) − f (x )) 2 x − x .</formula><p>Define the penalized Wasserstein divergence as</p><formula xml:id="formula_34">τ P (P Q) = sup f ∈F τ P (P Q; f ).</formula><p>This divergence is updated by picking an optimal critic f * ∈ OC τ P (P, Q θ0 ) and taking a step in the direction of</p><formula xml:id="formula_35">∇ θ E Q θ [f * ]| θ0 .</formula><p>This formulation is similar to the WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref>, restated here in Eq. 3.</p><p>Theorem 1. Assume X ⊆ R n , and P, Q θ ∈ P(X) are probability measures over X fulfilling Assumptions 1 and 2. Then for every θ 0 ∈ Θ the Penalized Wasserstein Divergence with it's corresponding update direction fulfills Requirements 1 and 2.</p><p>Further, there exists an optimal critic f * ∈ OC τ P (P, Q θ0 ) that fulfills Eq. 5 and thus Requirement 4.</p><p>Proof. See Appendix, Section A.</p><p>Note that this theorem isn't unique to τ P . For example, for the penalty in Eq. 8 of <ref type="bibr" target="#b27">(Petzka et al., 2018)</ref> we conjecture that a similar result can be shown. The divergence τ P is still very useful because, as will be shown in the next section, τ P can be modified slightly to obtain a new critic τ F , where every optimal critic fulfills Requirements 1 to 4.</p><p>Since τ P only constrains the value of a critic on the supports of P and Q θ , many different critics are optimal, and in general ∇ θ E Q θ [f * ] depends on the optimal critic choice and is thus is not well defined. With this, Requirements 3 and 4 are not fulfilled. See <ref type="figure" target="#fig_1">Figure 1</ref> for a simple example.</p><p>In theory, τ P 's critic could be trained with a modified sampling procedure so that ∇ θ E Q θ [f * ] is well defined and Eq. 5 holds, as is done in both <ref type="bibr" target="#b14">(Kodali et al., 2017)</ref> and <ref type="bibr" target="#b33">(Unterthiner et al., 2018)</ref>. By using a method similar to <ref type="bibr" target="#b4">(Bishop et al., 1998)</ref>, one can minimize the divergence τ P (P,Q θ ) whereQ θ is data equal to x + where x is sampled from Q θ and is some zero-mean uniform distributed noise. In this way the support ofQ θ lives in the full space X and not the submanifold supp(Q θ ). Unfortunately, while this method works in theory, the number of samples required for accurate gradient estimates scales with the dimensionality of the underlying space X, not with the dimensionality of data or generated submanifolds supp(P) or supp(Q θ ). In response, we propose the First Order Penalized Wasserstein Divergence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">First Order Penalized Wasserstein Divergence</head><p>As was seen in the last section, since τ P only constrains the value of optimal critics on the supports of P and Q θ , the gradient</p><formula xml:id="formula_36">∇ θ E Q θ [f * ]</formula><p>is not well defined. A natural method to refine τ P to achieve a well defined gradient is to enforce two things: . Let θ0 = 0.5; our goal is to calculate d dθ τP (δ0 δ θ )| θ=θ 0 via our update rule. Since multiple critics are optimal for τP (δ0 δ θ ), we will explore how the choice of optimal critic affects the update. In Subfigure 1a, we chose the first order optimal critic f * θ 0 (x) = x(−4x 2 +4x−2), and</p><formula xml:id="formula_37">d dθ τP (δ0 δ θ )| θ=θ 0 = − 1 2 d dθ E δ θ [f * θ 0</formula><p>] θ=θ 0 and the update rule is correct (see how the red, black and green lines all intersect in one point). In Subfigure 1b, the optimal critic is set to f * ϑ 0 (x) = −2x 2 which is not a first order critic resulting in the update rule calculating an incorrect update.</p><p>• f * should be optimal on a larger manifold, namely the manifold Q θ that is created by "stretching" Q θ bit in the direction of P (the formal definition is below).</p><p>• The norm of the gradient of the optimal critic, ∇ x f * (x) on supp(Q θ ) should be equal to the norm of the maximal directional derivative in the support of Q θ (see Eq. 15 in Appendix).</p><p>By enforcing these two points, we assure that ∇ x f * (x) is well defined and points towards the real data P. Thus, the following definition emerges (see proof of Lemma 7 in Appendix, Section A for details). Definition 6 (First Order Penalized Wasserstein Divergence (FOGAN)). Assume X ⊆ R n and P, Q ∈ P(X) are probability measures over X. Set F = C 1 (X), λ, µ &gt; 0 and</p><formula xml:id="formula_38">τF (P Q; f ) := E x∼P [f (x)] − E x ∼Q [f (x )] − λ E x∼P,x ∼Q (f (x) − f (x )) 2 x − x − µ E x∼P,x ∼Q   ∇xf (x) x − Ex ∼P [(x − x ) f (x)−f (x ) x −x 3 ] Ex ∼P [ 1 x −x ]   2</formula><p>Define the First Order Penalized Wasserstein Divergence as</p><formula xml:id="formula_39">τ F (P Q) = sup f ∈F τ F (P Q; f ).</formula><p>This divergence is updated by picking an optimal critic f * ∈ OC τ P (P, Q θ0 ) and taking a step in the direction of</p><formula xml:id="formula_40">∇ θ E Q θ [f * ]| θ0 .</formula><p>In order to define a GAN from the First Order Penalized Wasserstein Divergence, we must define a slight modification of the generated distribution Q θ to obtain Q θ . Similar to the WGAN-GP setting, samples from Q θ are obtained by x − α(x − x) where x ∼ P and x ∼ Q θ . The difference is that α ∼ U([0, ε]), with ε chosen small, making Q θ and Q θ quite similar. Therefore updates to θ that reduce τ F (P Q θ ) also reduce τ F (P Q θ ).</p><p>Conveniently, as is shown in Lemma 5 in Appendix, Section A, any optimal critic for the First Order Penalized Wasserstein divergence is also an optimal critic for the Penalized Wasserstein Divergence. The key advantage to the First Order Penalized Wasserstein Divergence is that for any P, Q θ fulfilling Assumptions 1 and 2, τ F (P Q θ ) with its corresponding update rule ∇ θ E Q θ [f * ] on the slightly modified probability distribution Q θ fulfills requirements 3 and 4.</p><p>Theorem 2. Assume X ⊆ R n , and P, Q θ ∈ P(X) are probability measures over X fulfilling Assumptions 1 and 2 and Q θ is Q θ modified using the method above. Then for every θ 0 ∈ Θ there exists at least one optimal critic f * ∈ OC τ F (P, Q θ0 ) and τ F combined with update direction ∇ θ E Q θ [f * ]| θ0 fulfills Requirements 1 to 4. If P, Q θ are such that ∀x, x ∈ supp(P), supp(Q θ ) it holds f * (x) − f * (x ) = c x − x for some constant c, then equality holds for Eq. 5.</p><p>Proof. See Appendix, Section A Note that adding a gradient penalty, other than being a necessary step for the WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017)</ref>, DRAGAN <ref type="bibr" target="#b14">(Kodali et al., 2017)</ref> and Consensus Optimization GAN <ref type="bibr" target="#b20">(Mescheder et al., 2017)</ref>, has also been shown empirically to improve the performance the original GAN method (Eq. 2), see <ref type="bibr" target="#b8">(Fedus et al., 2017)</ref>. In addition, using stricter assumptions on the critic, <ref type="bibr" target="#b25">(Nagarajan &amp; Kolter, 2017)</ref> provides a theoretical justification for use of a gradient penalty in GAN learning. The analysis of Theorem 2 in Appendix, Section A provides a theoretical understanding why in the Penalized Wasserstein GAN setting adding a gradient penalty causes ∇ θ E Q θ [f * ] to be an update rule that points in the direction of steepest descent, and may provide a path for other GAN methods to make similar assurances.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Experimental Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.1.">Image Generation</head><p>We begin by testing the FOGAN on the CelebA image generation task <ref type="bibr" target="#b19">(Liu et al., 2015)</ref>, training a generative model with the DCGAN architecture  and obtaining Fréchet Inception Distance (FID) scores <ref type="bibr" target="#b11">(Heusel et al., 2017)</ref> competitive with state of the art methods without doing a tuning parameter search. Similarly, we show competitive results on LSUN <ref type="bibr" target="#b34">(Yu et al., 2015)</ref> and <ref type="bibr">CIFAR-10 (Krizhevsky &amp; Hinton, 2009</ref>). See <ref type="table" target="#tab_2">Table 2</ref>, Appendix B.1 and released code 3 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.2.">One Billion Word</head><p>Finally, we use the First Order Penalized Wasserstein Divergence to train a character level generative language model on the One Billion Word Benchmark <ref type="bibr" target="#b6">(Chelba et al., 2013)</ref>. In this setting, a 1D CNN deterministically transforms a latent vector into a 32 × C matrix, where C is the number of possible characters. A softmax nonlinearity is applied to this output, and given to the critic. Real data is one-hot encoding of 32 character texts sampled from the true data.</p><p>We conjecture this is an especially difficult task for GANs, since data in the target distribution lies in just a few corners of the 32 × C dimensional unit hypercube. As the generator is updated, it must push mass from one corner to another, passing through the interior of the hypercube far from any real data. Methods other than Coulomb GAN <ref type="bibr" target="#b33">(Unterthiner et al., 2018</ref>) WGAN-GP <ref type="bibr" target="#b10">(Gulrajani et al., 2017;</ref><ref type="bibr" target="#b11">Heusel et al., 2017)</ref> and the Sobolev GAN <ref type="bibr" target="#b24">(Mroueh et al., 2018)</ref> have not been shown to be successful at this task.</p><p>We use the same setup as in both <ref type="bibr" target="#b10">(Gulrajani et al., 2017;</ref><ref type="bibr" target="#b11">Heusel et al., 2017</ref>) with two differences. First, we train to minimize our divergence from Definition 6 with parameters λ = 0.1 and µ = 1.0 instead of the WGAN-GP divergence. Second, we use batch normalization in the generator, both for training our FOGAN method and the benchmark WGAN-GP; we do this because batch normalization improved performance and stability of both models.</p><p>As with <ref type="bibr" target="#b10">(Gulrajani et al., 2017;</ref><ref type="bibr" target="#b11">Heusel et al., 2017)</ref> we use the Jensen-Shannon-divergence (JSD) between n-grams from the model and the real world distribution as an evaluation metric. The JSD is estimated by sampling a finite number of 32 character vectors, and comparing the distributions of the n-grams from said samples and true data. This estimation is biased; smaller samples result in larger JSD estimations. A Bayes limit results from this bias; even when samples are drawn from real world data and compared with real world data, small sample sizes results in large JSD estimations. In order to detect performance difference when training with the FOGAN and WGAN-GP, a low Bayes limit is necessary. Thus, to compare the methods, we sampled 6400 32 character vectors in contrast with the 640 vectors sampled in past works. Therefore, the JSD values in those papers are higher than the results here.</p><p>For our experiments we trained both models for 500, 000 iterations in 5 independent runs, estimating the JSD between 6-grams of generated and real world data every 2000 training steps, see <ref type="figure" target="#fig_2">Figure 2</ref>. The results are even more impressive when aligned with wall-clock time. Since in WGAN-GP training an extra point between real and generated distributions must be sampled, it is slower than the FOGAN training; see <ref type="figure" target="#fig_2">Figure 2</ref> and observe the significant (2σ) drop in estimated JSD.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>f L is the Lipschitz constant of f . The following example shows the advantage of τ W . Consider a series of Dirac measures (δ 1 n</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Comparison of τP update rule given different optimal critics. Consider the simple example of divergence τP from Definition 5 between Dirac measures with update rule 1 2 d dθ E δ θ [f ] (the update rule is from Lemma 7 in Appendix, Section A). Recall that τP (δ0 δ θ ; f ) = −f (θ) − (f (θ)) 2</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>3Figure 2 .</head><label>2</label><figDesc>Figure 2. Five training runs of both WGAN-GP and FOGAN, with the average of all runs plotted in bold and the 2σ error margins denoted by shaded regions. For easy visualization, we plot the moving average of the last three n-gram JSD estimations. The first two plots both show training w.r.t. number of training iterations; the second plot starts at iteration 50. The last plot show training with respect to wall-clock time, starting after 6 hours of training.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Comparing existing GAN methods with regard to the four Requirements formulated in this paper.</figDesc><table>The methods compared 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>The question arises why this direction is used instead of directly calculating the direction of steepest descent? Using the correct update rule in Eq. 4 above involves estimat- ing ∇ θ E P⊗Q θ [r f * ], which requires sampling from both P and Q θ . GAN learning happens in mini-batches, therefore ∇ θ E P⊗Q θ [r f * ] isn't calculated directly, but estimated based on samples which can lead to variance in the estimate.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Comparison of different GAN methods for image and text generation. We measure performance with respect to the FID on the image datasets and JSD between n-grams for text generation.</figDesc><table>Task 
+BEGAN 
+DCGAN 
+Coulomb 
+WGAN-GP 
+FOGAN 
+
+CelebA 
+28.5 
+12.5 
+9.3 
+4.2 
+6.0 
+LSUN 
+112 
+57.5 
+31.2 
+9.5 
+11.4 
+CIFAR-10 
+-
+-
+27.3 
+24.8 
+27.4 
+4-gram 
+-
+-
+-
+.220 ± .006 
+.226 ± .006 
+6-gram 
+-
+-
+-
+.573 ± .009 
+.556 ± .004 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Zalando Research, Mühlenstraße 25, 10243 Berlin, Germany 2 LIT AI Lab &amp; Institute of Bioinformatics, Johannes Kepler University Linz, Austria. Correspondence to: Calvin Seward &lt;calvin.seward@zalando.de&gt;.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This work was supported by Zalando SE with Research Agreement 01/2016.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Towards principled methods for training generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Arjovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference of Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Wasserstein Generative Adversarial Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Arjovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 34th International Conference on Machine Learning (ICML)</title>
+		<meeting>the 34th International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">The cramer distance as a solution to biased wasserstein gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dabney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Lakshminarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hoyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Munos</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.10743</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Learning texture manifolds with the periodic spatial GAN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Bergmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jetchev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vollgraf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 34th International Conference on Machine Learning</title>
+		<meeting>the 34th International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Svensén</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gtm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The generative topographic mapping</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page" from="215" to="234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bińkowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Sutherland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Arbel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gretton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Demystifying</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gans</surname></persName>
+		</author>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">One billion word benchmark for measuring progress in statistical language modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chelba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brants</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Koehn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robinson</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.3005</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Training generative neural networks via maximum mean discrepancy optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">K</forename><surname>Dziugaite</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 31st Conference on Uncertainty in Artificial Intelligence (UAI)</title>
+		<meeting>the 31st Conference on Uncertainty in Artificial Intelligence (UAI)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Many paths to equilibrium: GANs do not need to decrease a divergence at every step</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Fedus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rosca</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Lakshminarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1710.08446</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 27 (NIPS)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Improved Training of Wasserstein GANs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Gulrajani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Ahmed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Arjovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Dumoulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Courville</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">GANs trained by a two time-scale update rule converge to a local nash equilibrium</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Heusel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ramsauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Unterthiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Nessler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Texture synthesis with spatial generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jetchev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Bergmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vollgraf</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.08207</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jetchev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Bergmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Seward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ganosaic</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.00269</idno>
+		<title level="m">Mosaic creation with generative texture manifolds</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">How to train your DRAGAN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kodali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Abernethy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kira</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.07215</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Photo-realistic single image superresolution using a generative adversarial network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ledig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Theis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Huszár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Caballero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cunningham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alejandro</forename><surname>Acosta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Aitken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tejani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Totz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Shi</surname></persName>
+		</author>
+		<idno>doi: 10. 1109/CVPR.2017.19</idno>
+	</analytic>
+	<monogr>
+		<title level="m">2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017-07" />
+			<biblScope unit="page" from="105" to="114" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Generative moment matching networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 32nd International Conference on Machine Learning (ICML)</title>
+		<meeting>the 32nd International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Approximation and convergence properties of generative adversarial learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Bousquet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chaudhuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 30 (NIPS)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5545" to="5553" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Deep learning face attributes in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3730" to="3738" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">The numerics of GANs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Mescheder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Which training methods for gans do actually converge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Mescheder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1801.04406v2</idno>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Unrolled generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Poole</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pfau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference of Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Envelope theorems for arbitrary choice sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Milgrom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Segal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Econometrica</title>
+		<imprint>
+			<biblScope unit="volume">70</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="583" to="601" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mroueh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-L</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sercu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Raj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sobolev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gan</surname></persName>
+		</author>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Gradient descent GAN optimization is locally stable</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nagarajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Z</forename><surname>Kolter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Training generative neural samplers using variational divergence minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Cseke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tomioka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>F-Gan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 29 (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">On the regularization of wasserstein GANs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Petzka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lukovnicov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference of Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Improved techniques for training GANs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chen</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 29 (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2234" to="2242" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning factorial codes by predictability minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="863" to="879" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Hilbert space embeddings and metrics on probability measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">K</forename><surname>Sriperumbudur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gretton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fukumizu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">R</forename><surname>Lanckriet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="1517" to="1561" />
+			<date type="published" when="2010-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">VEEGAN: Reducing mode collapse in GANs using implicit variational learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Valkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gutmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sutton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Unterthiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Nessler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Seward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Klambauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Heusel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ramsauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Coulomb</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gans</surname></persName>
+		</author>
+		<title level="m">Provably optimal nash equilibria via potential fields. International Conference of Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Seff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiao</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lsun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.03365</idno>
+		<title level="m">Construction of a large-scale image dataset using deep learning with humans in the loop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
