@@ -1,0 +1,1461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:22+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Efficient Neural Architecture Search via Parameter Sharing</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hieu</forename><surname>Pham</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Melody</forename><forename type="middle">Y</forename><surname>Guan</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barret</forename><surname>Zoph</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Dean</surname></persName>
+						</author>
+						<title level="a" type="main">Efficient Neural Architecture Search via Parameter Sharing</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We propose Efficient Neural Architecture Search (ENAS), a fast and inexpensive approach for automatic model design. ENAS constructs a large computational graph, where each subgraph represents a neural network architecture, hence forcing all architectures to share their parameters. A controller is trained with policy gradient to search for a subgraph that maximizes the expected reward on a validation set. Meanwhile a model corresponding to the selected subgraph is trained to minimize a canonical cross entropy loss. Sharing parameters among child models allows ENAS to deliver strong empirical performances, whilst using much fewer GPU-hours than existing automatic model design approaches, and notably, 1000x less expensive than standard Neural Architecture Search. On Penn Treebank, ENAS discovers a novel architecture that achieves a test perplexity of 56.3, on par with the existing state-of-the-art among all methods without post-training processing. On CIFAR-10, ENAS finds a novel architecture that achieves 2.89% test error, which is on par with the 2.65% test error of NASNet <ref type="bibr" target="#b48">(Zoph et al., 2018)</ref>.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Neural architecture search (NAS) has been successfully applied to design model architectures for image classification and language models <ref type="bibr" target="#b46">(Zoph &amp; Le, 2017;</ref><ref type="bibr" target="#b48">Zoph et al., 2018;</ref><ref type="bibr" target="#b5">Cai et al., 2018;</ref><ref type="bibr" target="#b26">Liu et al., 2017;</ref>. In NAS, a controller is trained in a loop: the controller first samples a candidate architecture, i.e. a child model, trains it to convergence, and measure its performance on the task of desire. The controller then uses the performance as a guiding signal to find more promising architectures. This process is repeated for many iterations. Despite its impressive empirical performance, NAS is computationally expensive and time consuming, e.g. <ref type="bibr" target="#b48">Zoph et al. (2018)</ref> use 450 GPUs for 3-4 days (i.e. 32, <ref type="bibr">200 GPU hours)</ref>. Meanwhile, using less resource tends to produce less compelling results <ref type="bibr" target="#b33">(Negrinho &amp; Gordon, 2017;</ref><ref type="bibr" target="#b0">Baker et al., 2017a)</ref>. We observe that the computational bottleneck of NAS is the training of each child model to convergence, only to measure its accuracy whilst throwing away all the trained weights.</p><p>The main contribution of this work is to improve the efficiency of NAS by forcing all child models to share weights to eschew training each child model from scratch to convergence. The idea has apparent complications, as different child models might utilize their weights differently, but was encouraged by previous work on transfer learning and multitask learning, which established that parameters learned for a particular model on a particular task can be used for other models on other tasks, with little to no modifications <ref type="bibr" target="#b35">(Razavian et al., 2014;</ref><ref type="bibr" target="#b47">Zoph et al., 2016;</ref><ref type="bibr" target="#b29">Luong et al., 2016)</ref>.</p><p>We empirically show that not only is sharing parameters among child models possible, but it also allows for very strong performance. Specifically, on CIFAR-10, our method achieves a test error of 2.89%, compared to 2.65% by NAS. On Penn Treebank, our method achieves a test perplexity of 56.3, which significantly outperforms NAS's test perplexity of 62.4 <ref type="bibr" target="#b46">(Zoph &amp; Le, 2017)</ref> and which is on par with the existing state-of-the-art among Penn Treebank's approaches that do not utilize post-training processing (56.0; <ref type="bibr" target="#b42">Yang et al. (2018)</ref>). Importantly, in all of our experiments, for which we use a single Nvidia GTX 1080Ti GPU, the search for architectures takes less than 16 hours. Compared to NAS, this is a reduction of GPU-hours by more than 1000x. Due to its efficiency, we name our method Efficient Neural Architecture Search (ENAS).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Methods</head><p>Central to the idea of ENAS is the observation that all of the graphs which NAS ends up iterating over can be viewed as sub-graphs of a larger graph. In other words, we can represent NAS's search space using a single directed acyclic graph <ref type="bibr">(DAG)</ref>. <ref type="figure">Figure 2</ref> illustrates a generic example DAG, where an architecture can be realized by taking a subgraph of the DAG. Intuitively, ENAS's DAG is the superposition of all possible child models in a search space of NAS, where the nodes represent the local computations and the edges <ref type="figure">Figure 1</ref>. An example of a recurrent cell in our search space with 4 computational nodes. Left: The computational DAG that corresponds to the recurrent cell. The red edges represent the flow of information in the graph. Middle: The recurrent cell. Right: The outputs of the controller RNN that result in the cell in the middle and the DAG on the left. Note that nodes 3 and 4 are never sampled by the RNN, so their results are averaged and are treated as the cell's output. <ref type="figure">Figure 2</ref>. The graph represents the entire search space while the red arrows define a model in the search space, which is decided by a controller. Here, node 1 is the input to the model whereas nodes 3 and 6 are the model's outputs.</p><p>represent the flow of information. The local computations at each node have their own parameters, which are used only when the particular computation is activated. Therefore, ENAS's design allows parameters to be shared among all child models, i.e. architectures, in the search space.</p><p>In the following, we facilitate the discussion of ENAS with an example that illustrates how to design a cell for recurrent neural networks from a specified DAG and a controller (Section 2.1). We will then explain how to train ENAS and how to derive architectures from ENAS's controller (Section 2.2). Finally, we will explain our search space for designing convolutional architectures (Sections 2.3 and 2.4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Designing Recurrent Cells</head><p>To design recurrent cells, we employ a DAG with N nodes, where the nodes represent local computations, and the edges represent the flow of information between the N nodes. ENAS's controller is an RNN that decides: 1) which edges are activated and 2) which computations are performed at each node in the DAG. This design of our search space for RNN cells is different from the search space for RNN cells in <ref type="bibr" target="#b46">Zoph &amp; Le (2017)</ref>, where the authors fix the topology of their architectures as a binary tree and only learn the operations at each node of the tree. In contrast, our search space allows ENAS to design both the topology and the operations in RNN cells, and hence is more flexible.</p><p>To create a recurrent cell, the controller RNN samples N blocks of decisions. Here we illustrate the ENAS mechanism via a simple example recurrent cell with N = 4 computational nodes (visualized in <ref type="figure">Figure 1)</ref>. Let x t be the input signal for a recurrent cell (e.g. word embedding), and h t−1 be the output from the previous time step. We sample as follows.</p><p>1. At node 1: The controller first samples an activation function.</p><p>In our example, the controller chooses the tanh activation function, which means that node 1 of the recurrent cell should</p><formula xml:id="formula_0">compute k1 = tanh (xt · W (x) + ht−1 · W (h) 1 ).</formula><p>2. At node 2: The controller then samples a previous index and an activation function. In our example, it chooses the previous index 1 and the activation function ReLU. Thus, node 2 of the cell computes k2 = ReLU(k1 · W</p><p>2,1 ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">At node 3:</head><p>The controller again samples a previous index and an activation function. In our example, it chooses the previous index 2 and the activation function ReLU. Therefore,</p><formula xml:id="formula_2">k3 = ReLU(k2 · W (h)</formula><p>3,2 ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">At node 4:</head><p>The controller again samples a previous index and an activation function. In our example, it chooses the previous index 1 and the activation function tanh, leading to k4 = tanh (k1 · W (h) 4,1 ).</p><p>5. For the output, we simply average all the loose ends, i.e. the nodes that are not selected as inputs to any other nodes. In our example, since the indices 3 and 4 were never sampled to be the input for any node, the recurrent cell uses their average (k3 + k4)/2 as its output. In other words, ht = (k3 + k4)/2.</p><p>In the example above, we note that for each pair of nodes j &lt; , there is an independent parameter matrix W (h)</p><p>,j . As shown in the example, by choosing the previous indices, the controller also decides which parameter matrices are used. Therefore, in ENAS, all recurrent cells in a search space share the same set of parameters.</p><p>Our search space includes an exponential number of configurations. Specifically, if the recurrent cell has N nodes and we allow 4 activation functions (namely tanh, ReLU, identity, and sigmoid), then the search space has 4 N ×(N − 1)! configurations. In our experiments, N = 12, which means there are approximately 10 14 models in our search space.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Training ENAS and Deriving Architectures</head><p>Our controller network is an LSTM with 100 hidden units <ref type="bibr" target="#b17">(Hochreiter &amp; Schmidhuber, 1997)</ref>. This LSTM samples decisions via softmax classifiers, in an autoregressive fashion: the decision in the previous step is fed as input embedding into the next step. At the first step, the controller network receives an empty embedding as input.</p><p>In ENAS, there are two sets of learnable parameters: the parameters of the controller LSTM, denoted by θ, and the shared parameters of the child models, denoted by ω. The training procedure of ENAS consists of two interleaving phases. The first phase trains ω, the shared parameters of the child models, on a whole pass through the training data set. For our Penn Treebank experiments, ω is trained for about 400 steps, each on a minibatch of 64 examples, where the gradient ∇ ω is computed using back-propagation through time, truncated at 35 time steps. Meanwhile, for CIFAR-10, ω is trained on 45, 000 training images, separated into minibatches of size 128, where ∇ ω is computed using standard back-propagation. The second phase trains θ, the parameters of the controller LSTM, for a fixed number of steps, typically set to 2000 in our experiments. These two phases are alternated during the training of ENAS. More details are as follows.</p><p>Training the shared parameters ω of the child models. In this step, we fix the controller's policy π(m; θ) and perform stochastic gradient descent (SGD) on ω to minimize the expected loss function E m∼π <ref type="bibr">[L(m; ω)</ref>]. Here, L(m; ω) is the standard cross-entropy loss, computed on a minibatch of training data, with a model m sampled from π(m; θ). The gradient is computed using the Monte Carlo estimate</p><formula xml:id="formula_3">∇ ω E m∼π(m;θ) [L(m; ω)] ≈ 1 M M i=1 ∇ ω L(m i , ω),<label>(1)</label></formula><p>where m i 's are sampled from π(m; θ) as described above. Eqn 1 provides an unbiased estimate of the gradient</p><formula xml:id="formula_4">∇ ω E m∼π(m;θ) [L(m; ω)].</formula><p>However, this estimate has a higher variance than the standard SGD gradient, where m is fixed. Nevertheless -and this is perhaps surprising -we find that M = 1 works just fine, i.e. we can update ω using the gradient from any single model m sampled from π(m; θ). As mentioned, we train ω during a entire pass through the training data.</p><p>Training the controller parameters θ. In this step, we fix ω and update the policy parameters θ, aiming to maximize the expected reward E m∼π(m;θ) <ref type="bibr">[R(m, ω)</ref>]. We employ the Adam optimizer <ref type="bibr" target="#b21">(Kingma &amp; Ba, 2015)</ref>, for which the gradient is computed using REINFORCE <ref type="bibr" target="#b41">(Williams, 1992)</ref>, with a moving average baseline to reduce variance.</p><p>The reward R(m, ω) is computed on the validation set, rather than on the training set, to encourage ENAS to select models that generalize well rather than models that overfit the training set well. In our language model experiment, the reward function is c/valid ppl, where the perplexity is computed on a minibatch of validation data. In our image classification experiments, the reward function is the accuracy on a minibatch of validation images.</p><p>Deriving Architectures. We discuss how to derive novel architectures from a trained ENAS model. We first sample several models from the trained policy π <ref type="bibr">(m, θ)</ref>. For each sampled model, we compute its reward on a single minibatch sampled from the validation set. We then take only the model with the highest reward to re-train from scratch. It is possible to improve our experimental results by training all the sampled models from scratch and selecting the model with the highest performance on a separated validation set, as done by other works <ref type="bibr" target="#b46">(Zoph &amp; Le, 2017;</ref><ref type="bibr" target="#b48">Zoph et al., 2018;</ref><ref type="bibr" target="#b26">Liu et al., 2017;</ref>. However, our method yields similar performance whilst being much more economical. We now discuss the search space for convolutional architectures. Recall that in the search space of the recurrent cell, the controller RNN samples two decisions at each decision block: 1) what previous node to connect to and 2) what activation function to use. In the search space for convolutional models, the controller RNN also samples two sets of decisions at each decision block: 1) what previous nodes to connect to and 2) what computation operation to use. These decisions construct a layer in the convolutional model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Designing Convolutional Networks</head><p>The decision of what previous nodes to connect to allows the model to form skip connections <ref type="bibr" target="#b15">(He et al., 2016a;</ref><ref type="bibr" target="#b46">Zoph &amp; Le, 2017)</ref>. Specifically, at layer k, up to k − 1 mutually distinct previous indices are sampled, leading to 2 k−1 possible decisions at layer k. We provide an illustrative example of sampling a convolutional network in <ref type="figure" target="#fig_0">Figure 3</ref>. In this example, at layer k = 4, the controller samples previous indices {1, 3}, so the outputs of layers 1 and 3 are concatenated along their depth dimension and sent to layer 4.</p><p>Meanwhile, the decision of what computation operation to use sets a particular layer into convolution or average pooling or max pooing. The 6 operations available for the controller are: convolutions with filter sizes 3 × 3 and 5 × 5, depthwise-separable convolutions with filter sizes 3 × 3 and 5 × 5 <ref type="bibr" target="#b6">(Chollet, 2017)</ref>, and max pooling and average pooling of kernel size 3 × 3. As for recurrent cells, each operation at each layer in our ENAS convolutional network has a distinct set of parameters.</p><p>Making the described set of decisions for a total of L times, we can sample a network of L layers. Since all decisions are independent, there are 6 L × 2 L(L−1)/2 networks in the search space. In our experiments, L = 12, resulting in 1.6 × 10 29 possible networks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Designing Convolutional Cells</head><p>Rather than designing the entire convolutional network, one can design smaller modules and then connect them together to form a network <ref type="bibr" target="#b48">(Zoph et al., 2018)</ref>. <ref type="figure" target="#fig_1">Figure 4</ref> illustrates this design, where the convolutional cell and reduction cell architectures are to be designed. We now discuss how to use ENAS to search for the architectures of these cells. We utilize the ENAS computational DAG with B nodes to represent the computations that happen locally in a cell.</p><p>In this DAG, node 1 and node 2 are treated as the cell's inputs, which are the outputs of the two previous cells in the final network (see <ref type="figure" target="#fig_1">Figure 4</ref>). For each of the remaining B − 2 nodes, we ask the controller RNN to make two sets of decisions: 1) two previous nodes to be used as inputs to the current node and 2) two operations to apply to the two sampled nodes. The 5 available operations are: identity, separable convolution with kernel size 3 × 3 and 5 × 5, and average pooling and max pooling with kernel size 3 × 3. At each node, after the previous nodes and their corresponding operations are sampled, the operations are applied on the previous nodes, and their results are added.</p><p>As before, we illustrate the mechanism of our search space with an example, here with B = 4 nodes (refer to <ref type="figure" target="#fig_2">Figure 5</ref>). Details are as follows.</p><p>1. Nodes 1, 2 are input nodes, so no decisions are needed for them. Let h1, h2 be the outputs of these nodes.</p><p>2. At node 3: the controller samples two previous nodes and two operations. In <ref type="figure" target="#fig_2">Figure 5</ref> Top Left, it samples node 2, node 2, separable conv 5x5, and identity. This means that h3 = sep conv 5x5(h2) + id(h2).</p><p>3. At node 4: the controller samples node 3, node 1, avg pool 3x3, and sep conv 3x3. This means that h4 = avg pool 3x3(h3) + sep conv 3x3(h1).</p><p>4. Since all nodes but h4 were used as inputs to at least another node, the only loose end, h4, is treated as the cell's output. If there are multiple loose ends, they will be concatenated along the depth dimension to form the cell's output.</p><p>A reduction cell can also be realized from the search space we discussed, simply by: 1) sampling a computational graph from the search space, and 2) applying all operations with a stride of 2. A reduction cell thus reduces the spatial dimensions of its input by a factor of 2. Following Zoph et al. <ref type="formula" target="#formula_3">(2018)</ref>, we sample the reduction cell conditioned on the convolutional cell, hence making the controller RNN run for a total of 2(B − 2) blocks.</p><p>Finally, we estimate the complexity of this search space. At node i (3 ≤ i ≤ B), the controller can select any two nodes from the i − 1 previous nodes, and any two operations from 5 operations. As all decisions are independent, there are (5 × (B − 2)!) 2 possible cells. Since we independently sample for a convolutional cell and a reduction cell, the final size of the search space is <ref type="figure" target="#fig_2">(5×(B −2)!)</ref> 4 . With B = 7 as in our experiments, the search space can realize 1.3×10</p><p>11 final networks, making it significantly smaller than the search space for entire convolutional networks (Section 2.3).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experiments</head><p>We first present our experimental results from employing ENAS to design recurrent cells on the Penn Treebank dataset and convolutional architectures on the CIFAR-10 dataset. We then present an ablation study which asserts the role of ENAS in discovering novel architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Language Model with Penn Treebank</head><p>Dataset and Settings. Penn Treebank <ref type="bibr" target="#b30">(Marcus et al., 1994</ref>) is a well-studied benchmark for language model. We use the standard pre-processed version of the dataset, which is also used by previous works, e.g. <ref type="bibr" target="#b43">Zaremba et al. (2014)</ref>.</p><p>Since the goal of our work is to discover cell architectures, we only employ the standard training and test process on Penn Treebank, and do not utilize post-training techniques such as neural cache <ref type="bibr" target="#b12">(Grave et al., 2017)</ref> and dynamic evaluation <ref type="bibr" target="#b22">(Krause et al., 2017)</ref>. Additionally, as <ref type="bibr" target="#b7">Collins et al. (2017)</ref> have established that RNN models with more parameters can learn to store more information, we limit the size of our ENAS cell to 24M parameters. We also do not tune our hyper-parameters extensively like <ref type="bibr" target="#b31">Melis et al. (2017)</ref>, nor do we train multiple architectures and select the best one based on their validation perplexities like <ref type="bibr" target="#b46">Zoph &amp; Le (2017)</ref>. Therefore, ENAS is not at any advantage, compared to Zoph &amp; Le (2017); <ref type="bibr" target="#b42">Yang et al. (2018)</ref>; <ref type="bibr" target="#b31">Melis et al. (2017)</ref>, and its improved performance is only due to the cell's architecture.</p><p>Training details. Our controller is trained using Adam, with a learning rate of 0.00035. To prevent premature convergence, we also use a tanh constant of 2.5 and a temperature of 5.0 for the sampling logits <ref type="bibr" target="#b2">(Bello et al., 2017a;</ref><ref type="bibr">b)</ref>, and add the controller's sample entropy to the reward, weighted by 0.0001. Additionally, we augment the simple transformations between nodes in the constructed recurrent cell with highway connections <ref type="bibr" target="#b45">(Zilly et al., 2017)</ref>. For instance, instead of having k 2 = ReLU(k 1 · W (h) 2,1 ) as shown in the example from Section 2.1, we have</p><formula xml:id="formula_5">k 2 = c 2 ⊗ ReLU(k 1 · W (h) 2,1 ) + (1 − c 2 ) ⊗ k 1 , where c 2 = sigmoid(k 1 · W (c) 2,1 )</formula><p>and ⊗ denotes elementwise multiplication.</p><p>The shared parameters of the child models ω are trained using SGD with a learning rate of 20.0, decayed by a factor of 0.96 after every epoch starting at epoch 15, for a total of 150 epochs. We clip the norm of the gradient ∇ ω at 0.25. We find that using a large learning rate whilst clipping the gradient norm at a small threshold makes the updates on ω more stable. We utilize three regularization techniques on ω: an 2 regularization weighted by 10 −7 ; variational dropout <ref type="bibr" target="#b10">(Gal &amp; Ghahramani, 2016)</ref>; and tying word embeddings and softmax weights <ref type="bibr" target="#b19">(Inan et al., 2017)</ref>. More details are in Appendix A.</p><p>Results. Running on a single Nvidia GTX 1080Ti GPU, ENAS finds a recurrent cell in about 10 hours. In <ref type="table">Table 1</ref>, we present the performance of the ENAS cell as well as other baselines that do not employ post-training processing. The ENAS cell achieves a test perplexity of 56.3, which is on par with the existing state-of-the-art of 56.0 achieved by Mixture of Softmaxes (MoS) <ref type="bibr" target="#b42">(Yang et al., 2018)</ref>. Note that we do not apply MoS to the ENAS cell. Importantly, ENAS cell outperforms NAS <ref type="bibr" target="#b46">(Zoph &amp; Le, 2017</ref>) by more than 6 perplexity points, whilst the search process of ENAS, in terms of GPU hours, is more than 1000x faster.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Architecture</head><p>Additional Techniques Params Test (million) PPL LSTM <ref type="bibr" target="#b43">(Zaremba et al., 2014)</ref> Vanilla Dropout 66 78.4 LSTM <ref type="bibr" target="#b10">(Gal &amp; Ghahramani, 2016</ref>) VD 66 75.2 LSTM <ref type="bibr" target="#b19">(Inan et al., 2017)</ref> VD, WT 51 68.5 RHN <ref type="bibr" target="#b45">(Zilly et al., 2017)</ref> VD, WT 24 66.0 LSTM <ref type="bibr" target="#b31">(Melis et al., 2017)</ref> Hyper-parameters Search 24 59.5 LSTM <ref type="bibr" target="#b42">(Yang et al., 2018)</ref> VD, WT, 2, AWD, MoC 22 57.6 LSTM <ref type="bibr" target="#b32">(Merity et al., 2017)</ref> VD, WT, 2, AWD 24 57.3 LSTM <ref type="bibr" target="#b42">(Yang et al., 2018)</ref> VD  Our ENAS cell, visualized in <ref type="figure" target="#fig_3">Figure 6</ref>, has a few interesting properties. First, all non-linearities in the cell are either ReLU or tanh, even though the search space also has two other functions: identity and sigmoid. Second, we suspect this cell is a local optimum, similar to the observations made by <ref type="bibr" target="#b46">Zoph &amp; Le (2017)</ref>. When we randomly pick some nodes and switch the non-linearity into identity or sigmoid, the perplexity increases up to 8 points. Similarly, when we randomly switch some ReLU nodes into tanh or vice versa, the perplexity also increases, but only up to 3 points. Third, as shown in <ref type="figure" target="#fig_3">Figure 6</ref>, the output of our ENAS cell is an average of 6 nodes. This behavior is similar to that of Mixture of Contexts (MoC) <ref type="bibr" target="#b42">(Yang et al., 2018)</ref>. Not only does ENAS independently discover MoC, but it also learns to balance between i) the number of contexts to mix, which increases the model's expressiveness, and ii) the depth of the recurrent cell, which learns more complex transformations <ref type="bibr" target="#b45">(Zilly et al., 2017)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Image Classification on CIFAR-10</head><p>Dataset. The CIFAR-10 dataset <ref type="bibr" target="#b23">(Krizhevsky, 2009</ref>) consists of 50, 000 training images and 10, 000 test images. We use the standard data pre-processing and augmentation techniques, i.e. subtracting the channel mean and dividing the channel standard deviation, centrally padding the training images to 40 × 40 and randomly cropping them back to 32 × 32, and randomly flipping them horizontally.</p><p>Search spaces. We apply ENAS to two search spaces: 1) the macro search space over entire convolutional models (Section 2.3); and 2) the micro search space over convolutional cells (Section 2.4).</p><p>Training details. The shared parameters ω are trained with Nesterov momentum <ref type="bibr" target="#b34">(Nesterov, 1983)</ref>, where the learning rate follows the cosine schedule with l max = 0.05, l min = 0.001, T 0 = 10, and T mul = 2 <ref type="bibr" target="#b28">(Loshchilov &amp; Hutter, 2017)</ref>. Each architecture search is run for 310 epochs. We initialize ω with He initialization <ref type="bibr" target="#b14">(He et al., 2015)</ref>. We also apply an 2 weight decay of 10 −4 . We train the architectures recommended by the controller using the same settings.</p><p>The policy parameters θ are initialized uniformly in [−0.1, 0.1], and trained with Adam at a learning rate of 0.00035. Similar to the procedure in Section 3.1, we apply a tanh constant of 2.5 and a temperature of 5.0 to the controller's logits, and add the controller entropy to the reward, weighted by 0.1. Additionally, in the macro search space, we enforce the sparsity in the skip connections by adding to the reward the KL divergence between: 1) the skip connection probability between any two layers and 2) our chosen probability ρ = 0.4, which represents the prior belief of a skip connection being formed. This KL divergence term is weighted by 0.8. More training details are in Appendix B.</p><p>Results. <ref type="table">Table 2</ref> summarizes the test errors of ENAS and other approaches. In this table, the first block presents the results of DenseNet <ref type="bibr" target="#b18">(Huang et al., 2016)</ref>, one of the highestperforming architectures that are designed by human experts. When trained with a strong regularization technique, such as Shake-Shake <ref type="bibr" target="#b11">(Gastaldi, 2016)</ref>, and a data augmentation technique, such as CutOut <ref type="bibr" target="#b9">(DeVries &amp; Taylor, 2017)</ref>, DenseNet impressively achieves the test error of 2.56%.</p><p>The second block of <ref type="table">Table 2</ref> presents the performances of approaches that attempt to design an entire convolutional network, along with the the number of GPUs and the time these methods take to discover their final models. As shown, ENAS finds a network architecture, which we visualize in <ref type="figure" target="#fig_4">Figure 7</ref>, and which achieves 4.23% test error. This test error is better than the error of 4.47%, achieved by the second best NAS model <ref type="bibr" target="#b46">(Zoph &amp; Le, 2017)</ref>. If we keep the architecture, but increase the number of filters in the network's highest layer to 512, then the test error decreases to 3.87%, which is not far away from NAS's best model, whose test error is 3.65%. Impressively, ENAS takes about 7 hours to find this architecture, reducing the number of GPU-hours by more than 50,000x compared to NAS.</p><p>The third block of <ref type="table">Table 2</ref> presents the performances of approaches that attempt to design one more more modules and then connect them together to form the final networks. ENAS takes 11.5 hours to discover the convolution cell and the reduction cell, which are visualized in <ref type="figure" target="#fig_5">Figure 8</ref>. With the convolutional cell replicated for N = 6 times (c.f. <ref type="figure" target="#fig_1">Figure 4)</ref>, ENAS achieves 3.54% test error, on par with the 3.41% error of NASNet-A <ref type="bibr" target="#b48">(Zoph et al., 2018)</ref>. With CutOut (DeVries &amp; Taylor, 2017), ENAS's error decreases to 2.89%, compared to 2.65% by NASNet-A.</p><p>In addition to ENAS's strong performance, we also find that the models found by ENAS are, in a sense, the local minimums in their search spaces. In particular, in the model that ENAS finds from the marco search space, if we replace all separable convolutions with normal convolutions, and then adjust the model size so that the number of parameters stay the same, then the test error increases by 1.7%. Similarly, if we randomly change several connections in the cells that ENAS finds in the micro search space, the test error increases by 2.1%. This behavior is also observed when ENAS searches for recurrent cells (c.f. Section 3.1), as well as in <ref type="bibr" target="#b46">Zoph &amp; Le (2017)</ref>. We thus believe that the controller RNN learned by ENAS is as good as the controller RNN learned by NAS, and that the performance gap between NAS and ENAS is due to the fact that we do not sample multiple architectures from our trained controller, train them, and then select the best architecture on the validation data. This extra step benefits NAS's performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">The Importance of ENAS</head><p>A question regarding ENAS's importance is whether ENAS is actually capable of finding good architectures, or if it is the design of the search spaces that leads to ENAS's  strong empirical performance.</p><p>Comparing to Guided Random Search. We uniformly sample a recurrent cell, an entire convolutional network, and a pair of convolutional and reduction cells from their search spaces and train them to convergence using the same settings as the architectures found by ENAS. For the macro space over entire networks, we sample the skip connections with an activation probability of 0.4, effectively balancing ENAS's advantage from the KL divergence term in its reward (see Section 3.2). Our random recurrent cell achieves the test perplexity of 81.2 on Penn Treebank, which is far worse than ENAS's perplexity of 56.3. Our random convolutional network reaches 5.86% test error, and our two random cells reache 6.77% on CIFAR-10, while ENAS achieves 4.23% and 3.54%, respectively.</p><p>Disabling ENAS Search. In addition to random search, we attempt to train only the shared parameters ω without updating the controller. We conduct this study for our macro search space (Section 2.3), where the effect of an untrained random controller is similar to dropout with a rate of 0.5 on the skip connections, and to drop-path on the operations <ref type="bibr" target="#b48">(Zoph et al., 2018;</ref><ref type="bibr" target="#b24">Larsson et al., 2017)</ref>. At convergence, the model has the error rate of 8.92%. On the validation set, an ensemble of 250 Monte Carlo configurations of this trained model can only reach 5.49% test error. We therefore conclude that the appropriate training of the ENAS controller is crucial for good performance. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Related Work and Discussions</head><p>There is a growing interest in improving the efficiency of NAS. Concurrent to our work are the promising ideas of using performance prediction <ref type="bibr" target="#b1">(Baker et al., 2017b;</ref><ref type="bibr" target="#b8">Deng et al., 2017)</ref>, using iterative search method for architectures of growing complexity <ref type="bibr" target="#b26">(Liu et al., 2017)</ref>, and using hierarchical representation of architectures . <ref type="table">Table 2</ref> shows that ENAS is significantly more efficient than these other methods, in GPU hours.</p><p>ENAS's design of sharing weights between architectures is inspired by the concept of weight inheritance in neural model evolution <ref type="bibr" target="#b36">(Real et al., 2017;</ref>. Additionally, ENAS's choice of representing computations using a DAG is inspired by the concept of stochastic computational graph <ref type="bibr" target="#b39">(Schulman et al., 2015)</ref>, which introduces nodes with stochastic outputs into a computational graph. ENAS's utilizes such stochastic decisions in a network to make discrete architectural decisions that govern subsequent computations in the network, trains the decision maker, i.e. the controller, and finally harvests the decisions to derive architectures.</p><p>Closely related to ENAS is SMASH <ref type="bibr" target="#b4">(Brock et al., 2018)</ref>, which designs an architecture and then uses a hypernetwork <ref type="bibr" target="#b13">(Ha et al., 2017)</ref> to generate its weight. Such usage of the hypernetwork in SMASH inherently restricts the weights of SMASH's child architectures to a low-rank space. This is because the hypernetwork generates weights for SMASH's child models via tensor products <ref type="bibr" target="#b13">(Ha et al., 2017)</ref>, which suffer from a low-rank restriction as for arbitrary matrices A and B, one always has the inequality: rank(A · B) ≤ min {rank(A), rank(B)}. Due to this limit, SMASH will find architectures that perform well in the restricted low-rank space of their weights, rather than architectures that perform well in the normal training setups, where the weights are no longer restricted. Meanwhile, ENAS allows the weights of its child models to be arbitrary, effectively avoiding such restriction. We suspect this is the reason behind ENAS's superior empirical performance to SMASH. In addition, it can be seen from our experiments that ENAS can be flexibly applied to multiple search spaces and disparate domains, e.g. the space of RNN cells for the text domain, the macro search space of entire networks, and the micro search space of convolutional cells for the image domain.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>NAS is an important advance that automatizes the designing process of neural networks. However, NAS's computational expense prevents it from being widely adopted. In this paper, we presented ENAS, a novel method that speeds up NAS by more than 1000x, in terms of GPU hours. ENAS's key contribution is the sharing of parameters across child models during the search for architectures. This insight is implemented by searching for a subgraph within a larger graph that incorporates architectures in a search space. We showed that ENAS works well on both CIFAR-10 and Penn Treebank datasets.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. An example run of a recurrent cell in our search space with 4 computational nodes, which represent 4 layers in a convolutional network. Top: The output of the controller RNN. Bottom Left: The computational DAG corresponding to the network's architecture. Red arrows denote the active computational paths. Bottom Right: The complete network. Dotted arrows denote skip connections.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Connecting 3 blocks, each with N convolution cells and 1 reduction cell, to make the final network.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. An example run of the controller for our search space over convolutional cells. Top: the controller's outputs. In our search space for convolutional cells, node 1 and node 2 are the cell's inputs, so the controller only has to design node 3 and node 4. Bottom Left: The corresponding DAG, where red edges represent the activated connections. Bottom Right: the convolutional cell according to the controller's sample.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. The RNN cell ENAS discovered for Penn Treebank.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 7 .</head><label>7</label><figDesc>Figure 7. ENAS's discovered network from the macro search space for image classification.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 8 .</head><label>8</label><figDesc>Figure 8. ENAS cells discovered in the micro search space.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1. Test perplexity on Penn Treebank of ENAS and other base- lines. Abbreviations: RHN is Recurrent Highway Network, VD is Variational Dropout; WT is Weight Tying; 2 is Weight Penalty; AWD is Averaged Weight Drop; MoC is Mixture of Contexts; MoS is Mixture of Softmaxes.</figDesc><table>, WT, 2, AWD, MoS 
+22 
+56.0 
+
+NAS (Zoph &amp; Le, 2017) 
+VD, WT 
+54 
+62.4 
+ENAS 
+VD, WT, 2 
+24 
+56.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Table 2. Classification errors of ENAS and baselines on CIFAR-10. In this table, the first block presents DenseNet, one of the state-of-the- art architectures designed by human experts. The second block presents approaches that design the entire network. The last block presents techniques that design modular cells which are combined to build the final network.</figDesc><table>Method 
+GPUs 
+Times Params Error 
+(days) (million) 
+(%) 
+
+DenseNet-BC (Huang et al., 2016) 
+− 
+− 
+25.6 
+3.46 
+DenseNet + Shake-Shake (Gastaldi, 2016) 
+− 
+− 
+26.2 
+2.86 
+DenseNet + CutOut (DeVries &amp; Taylor, 2017) 
+− 
+− 
+26.2 
+2.56 
+
+Budgeted Super Nets (Veniat &amp; Denoyer, 2017) 
+− 
+− 
+− 
+9.21 
+ConvFabrics (Saxena &amp; Verbeek, 2016) 
+− 
+− 
+21.2 
+7.43 
+Macro NAS + Q-Learning (Baker et al., 2017a) 
+10 
+8-10 
+11.2 
+6.92 
+Net Transformation (Cai et al., 2018) 
+5 
+2 
+19.7 
+5.70 
+FractalNet (Larsson et al., 2017) 
+− 
+− 
+38.6 
+4.60 
+SMASH (Brock et al., 2018) 
+1 
+1.5 
+16.0 
+4.03 
+NAS (Zoph &amp; Le, 2017) 
+800 
+21-28 
+7.1 
+4.47 
+NAS + more filters (Zoph &amp; Le, 2017) 
+800 
+21-28 
+37.4 
+3.65 
+
+ENAS + macro search space 
+1 
+0.32 
+21.3 
+4.23 
+ENAS + macro search space + more channels 
+1 
+0.32 
+38.0 
+3.87 
+
+Hierarchical NAS (Liu et al., 2018) 
+200 
+1.5 
+61.3 
+3.63 
+Micro NAS + Q-Learning (Zhong et al., 2018) 
+32 
+3 
+− 
+3.60 
+Progressive NAS (Liu et al., 2017) 
+100 
+1.5 
+3.2 
+3.63 
+NASNet-A (Zoph et al., 2018) 
+450 
+3-4 
+3.3 
+3.41 
+NASNet-A + CutOut (Zoph et al., 2018) 
+450 
+3-4 
+3.3 
+2.65 
+
+ENAS + micro search space 
+1 
+0.45 
+4.6 
+3.54 
+ENAS + micro search space + CutOut 
+1 
+0.45 
+4.6 
+2.89 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>The authors want to thank Jaime Carbonell, Zihang Dai, Lukasz Kaiser, Azalia Mirhoseini, Ashwin Paranjape, Daniel Selsam, and Xinyi Wang for their suggestions on improving the paper.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Designing neural network architectures using reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bowen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Otkrist</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikhil</forename><surname>Naik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ramesh</forename><surname>Raskar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Accelerating neural architecture search using performance prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bowen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Otkrist</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ramesh</forename><surname>Raskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikhil</forename><surname>Naik</surname></persName>
+		</author>
+		<idno>1705.10823</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Neural combinatorial optimization with reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Irwan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mohammad</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Neural optimizer search with reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Irwan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vijay</forename><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">SMASH: one-shot model architecture search through hypernetworks. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Brock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Theodore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">M</forename><surname>Ritchie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nick</forename><surname>Weston</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Efficient architecture search by network transformation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Han</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tianyao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu</forename><surname>Weinan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yong</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wang</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2018-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Xception: Deep learning with depthwise separable convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Francois</forename><surname>Chollet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Capacity and trainability in recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jasmine</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jascha</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Sussillo</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Boyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junjie</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dahua</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Peephole</surname></persName>
+		</author>
+		<title level="m">Predicting network performance before training. Arxiv, 1705.10823</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Improved regularization of convolutional neural networks with cutout</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Terrance</forename><surname>Devries</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Graham</forename><forename type="middle">W</forename><surname>Taylor</surname></persName>
+		</author>
+		<idno>1708.04552</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">A theoretically grounded application of dropout in recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yarin</forename><surname>Gal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Shake-shake regularization of 3-branch residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xavier</forename><surname>Gastaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop Track</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Improving neural language models with a continuous cache</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edouard</forename><surname>Grave</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Armand</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Usunier</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hypernetworks</surname></persName>
+		</author>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Delving deep into rectifiers: Surpassing humanlevel performance on imagenet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Rein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CPVR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Identity mappings in deep residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CPVR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Computations</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Densely connected convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gao</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurens</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Kilian</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Tying word vectors and word classifiers: a loss framework for language modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Inan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hakan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Khashayar</forename><surname>Khosravi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Dynamic evaluation of neural sequence models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kahembwe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Emmanuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iain</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Steve</forename><surname>Renals</surname></persName>
+		</author>
+		<idno>1709.07432</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gustav</forename><surname>Larsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakhnarovich</forename></persName>
+		</author>
+		<title level="m">Gregory. Fractalnet: Ultra-deep neural networks without residuals. In ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Min</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qiang</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+		</author>
+		<idno>1312.4400</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chenxi</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li-Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Murphy</surname></persName>
+		</author>
+		<idno>1712.00559</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Progressive neural architecture search. Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Hierarchical representations for efficient architecture search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hanxiao</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chrisantha</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Sgdr: Stochastic gradient descent with warm restarts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Loshchilov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><surname>Hutter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Multi-task sequence to sequence learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh</forename><forename type="middle">-</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Thang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ilya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lukasz</forename><surname>Kaiser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">The penn treebank: Annotating predicate argument structure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mitchell</forename><surname>Marcus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grace</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mary</forename><surname>Marcinkiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Macintyre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Robert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ann</forename><surname>Bies</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ferguson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Katz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Britta</forename><surname>Schasberger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Workshop on Human Language Technology</title>
+		<meeting>the Workshop on Human Language Technology</meeting>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">On the state of the art of evaluation in neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gábor</forename><surname>Melis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+		<idno>1707.05589</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Regularizing and optimizing LSTM language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Merity</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nitish</forename><surname>Keskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shirish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<idno>1708.02182</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Deeparchitect: Automatically designing and training deep architectures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Renato</forename><surname>Negrinho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoff</forename><surname>Gordon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CPVR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">A method for solving the convex programming problem with convergence rate o(1/k 2 )</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yurii</forename><forename type="middle">E</forename><surname>Nesterov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Soviet Mathematics Doklady</title>
+		<imprint>
+			<date type="published" when="1983" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Cnn features off-the-shelf: an astounding baseline for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ali</forename><surname>Razavian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sharif</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Azizpour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josephine</forename><surname>Hossein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sullivan</forename><surname>Carlsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefan</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Large-scale evolution of image classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Esteban</forename><surname>Real</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sherry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Selle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Leon</forename><surname>Saurabh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yutaka</forename><surname>Suematsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Kurakin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Peephole: Predicting network performance before training</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Esteban</forename><surname>Real</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Aggarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Alok</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yanping</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+		<idno>1802.01548</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shreyas</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jakob</forename><surname>Verbeek</surname></persName>
+		</author>
+		<title level="m">Convolutional neural fabrics. In NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Gradient estimation using stochastic computation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nicolas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Theophane</forename><surname>Weber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Learning time-efficient deep architectures with budgeted super networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Veniat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ludovic</forename><surname>Denoyer</surname></persName>
+		</author>
+		<idno>1706.00046</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Breaking the softmax bottleneck: A highrank rnn language model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhilin</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zihang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Recurrent neural network regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Arxiv</title>
+		<imprint>
+			<date type="published" when="1409" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Practical network blocks design with q-learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yan</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junjie</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cheng-Lin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>AAAI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Recurrent highway networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julian</forename><surname>Zilly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Georg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rupesh</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Koutník</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Neural architecture search with reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barret</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Transfer learning for low-resource neural machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barret</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Deniz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>May</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Knight</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Learning transferable architectures for scalable image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barret</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vijay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
