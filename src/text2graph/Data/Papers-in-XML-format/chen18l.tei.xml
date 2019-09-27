@@ -1,0 +1,1699 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">DRACO: Byzantine-resilient Distributed Training via Redundant Gradients</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lingjiao</forename><surname>Chen</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hongyi</forename><surname>Wang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zachary</forename><surname>Charles</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Papailiopoulos</surname></persName>
+						</author>
+						<title level="a" type="main">DRACO: Byzantine-resilient Distributed Training via Redundant Gradients</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Distributed model training is vulnerable to byzantine system failures and adversarial compute nodes, i.e., nodes that use malicious updates to corrupt the global model stored at a parameter server (PS). To guarantee some form of robustness, recent work suggests using variants of the geometric median as an aggregation rule, in place of gradient averaging. Unfortunately, median-based rules can incur a prohibitive computational overhead in large-scale settings, and their convergence guarantees often require strong assumptions. In this work, we present DRACO, a scalable framework for robust distributed training that uses ideas from coding theory. In DRACO, each compute node evaluates redundant gradients that are used by the parameter server to eliminate the effects of adversarial updates. DRACO comes with problemindependent robustness guarantees, and the model that it trains is identical to the one trained in the adversary-free setup. We provide extensive experiments on real datasets and distributed setups across a variety of large-scale models, where we show that DRACO is several times, to orders of magnitude faster than median-based approaches.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Distributed and parallel implementations of stochastic optimization algorithms have become the de facto standard in large-scale model training <ref type="bibr" target="#b30">(Li et al., 2014;</ref><ref type="bibr" target="#b39">Recht et al., 2011;</ref><ref type="bibr" target="#b47">Zhang et al., 2015;</ref><ref type="bibr" target="#b1">Agarwal et al., 2010;</ref><ref type="bibr" target="#b0">Abadi et al., 2016;</ref><ref type="bibr" target="#b10">Chen et al., 2015;</ref><ref type="bibr" target="#b35">Paszke et al., 2017a;</ref><ref type="bibr" target="#b12">Chilimbi et al., 2014)</ref>. Due to increasingly common malicious attacks, hardware and software errors <ref type="bibr" target="#b7">(Castro et al., 1999;</ref><ref type="bibr" target="#b24">Kotla et al., 2007;</ref><ref type="bibr" target="#b3">Blanchard et al., 2017;</ref><ref type="bibr" target="#b11">Chen et al., 2017)</ref>, protecting distributed machine learning against adversarial attacks and failures has become increasingly important. Unfortu-nately, even a single adversarial node in a distributed setup can introduce arbitrary bias and inaccuracies to the end model <ref type="bibr" target="#b3">(Blanchard et al., 2017)</ref>.</p><p>A recent line of work <ref type="bibr" target="#b3">(Blanchard et al., 2017;</ref><ref type="bibr" target="#b11">Chen et al., 2017)</ref> studies this problem under a synchronous training setup, where compute nodes evaluate gradient updates and ship them to a parameter server (PS) which stores and updates the global model. Many of the aforementioned work use median-based aggregation, including the geometric median (GM) instead of averaging in order to make their computations more robust. The advantage of median-based approaches is that they can be robust to up to a constant fraction of the compute nodes being adversarial <ref type="bibr" target="#b11">(Chen et al., 2017)</ref>. However, in large data settings, the cost of computing the geometric median can dwarf the cost of computing a batch of gradients <ref type="bibr" target="#b11">(Chen et al., 2017)</ref>, rendering it impractical. Furthermore, proofs of convergence for such systems require restrictive assumptions such as convexity, and need to be re-tailored to each different training algorithm. A scalable distributed training framework that is robust against adversaries and can be applied to a large family of training algorithms (e.g., mini-batch SGD, GD, coordinate descent, <ref type="bibr">SVRG, etc.)</ref> remains an open problem.</p><p>In this paper, we instead use ideas from coding theory to ensure robustness during distributed training. We present DRACO, a general distributed training framework that is robust against adversarial nodes and worst-case compute errors. We show that DRACO can resist any s adversarial compute nodes during training and returns a model identical to the one trained in the adversary-free setup. This allows DRACO to come with "black-box" convergence guarantees, i.e., proofs of convergence in the adversary-free setup carry through to the adversarial setup with no modification, unlike prior median-based approaches <ref type="bibr" target="#b3">(Blanchard et al., 2017;</ref><ref type="bibr" target="#b11">Chen et al., 2017)</ref>. Moreover, in median-based approaches such as <ref type="bibr" target="#b3">(Blanchard et al., 2017;</ref><ref type="bibr" target="#b11">Chen et al., 2017)</ref>, the median computation may dominate the overall training time. In DRACO, most of the computational effort is carried through by the compute nodes. This key factor allows our framework to offer up to orders of magnitude faster convergence in real distributed setups.</p><p>To design DRACO, we borrow ideas from coding theory and algorithmic redundancy. In standard adversary-free dis-  <ref type="figure" target="#fig_3">Figure 1</ref>. The high level idea behind DRACO's algorithmic redundancy. Suppose we have 4 data points x1, . . . , x4, and let gi be the gradient of the model with respect to data point xi. Instead of having each compute node i evaluate a single gradient gi, DRACO assigns each node redundant gradients. In this example, the replication ratio is 3, and the parameter server can recover the sum of the gradients from any 2 of the encoded gradient updates. Thus, the PS can still recover the sum of gradients in the presence of an adversary. This can be done through a majority vote on all 6 pairs of encoded gradient updates. This intuitive idea does not scale to a large number of compute nodes. DRACO implements a more systematic and efficient encoding and decoding mechanism that scales to any number of machines.</p><p>tributed computation setups, during each distributed round, each of the P compute nodes processes B/P gradients and ships their sum to the parameter server. In DRACO, each compute node processes rB/P gradients and sends a linear combination of those to the PS. Thus, DRACO incurs a computational redundancy ratio of r. While this may seem sub-optimal, we show that under a worst-case adversarial setup, it is information-theoretically impossible to design a system that obtains identical models to the adversary-free setup with less redundancy. Upon receiving the P gradient sums, the PS uses a "decoding" function to remove the effect of the adversarial nodes and reconstruct the original desired sum of the B gradients. With redundancy ratio r, we show that DRACO can tolerate up to (r − 1)/2 adversaries, which is information-theoretically tight. See <ref type="figure" target="#fig_3">Fig. 1</ref> for a toy example of DRACO's functionality.</p><p>We present two encoding and decoding techniques for DRACO. The encoding schemes are based on the fractional repetition code and cyclic repetition code presented in <ref type="bibr" target="#b38">Raviv et al., 2017)</ref>. In contrast to previous work on stragglers and gradient codes <ref type="bibr" target="#b38">Raviv et al., 2017;</ref><ref type="bibr" target="#b8">Charles et al., 2017)</ref>, our decoders are tailored to the adversarial setting and use different methods. Our decoding schemes utilize an efficient majority vote decoder and a novel Fourier decoding technique.</p><p>Compared to median-based techniques that can tolerate approximately a constant fraction of "average case" adversaries, DRACO's (r − 1)/2 bound on the number of "worstcase" adversaries may be significantly smaller. However, in realistic regimes where only a constant number of nodes are malicious, DRACO is significantly faster as we show in experiments in Section 4.</p><p>We implement DRACO in PyTorch and deploy it on distributed setups on Amazon EC2, where we compare against median-based training algorithms on several real world datasets and various ML models. We show that DRACO is up to orders of magnitude faster compared to GM-based approaches across a range of neural networks, e.g., <ref type="bibr">LeNet,</ref><ref type="bibr">AlexNet,</ref>, and always converges to the correct adversary-free model, while in some cases median-based approaches do not converge.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Related Work</head><p>The large-scale nature of modern machine learning has spurred a great deal of novel research on distributed and parallel training algorithms and systems <ref type="bibr" target="#b39">(Recht et al., 2011;</ref><ref type="bibr" target="#b15">Dean et al., 2012;</ref><ref type="bibr" target="#b2">Alistarh et al., 2017;</ref><ref type="bibr" target="#b19">Jaggi et al., 2014;</ref><ref type="bibr" target="#b32">Liu et al., 2014;</ref><ref type="bibr" target="#b33">Mania et al., 2015;</ref><ref type="bibr" target="#b9">Chen et al., 2016)</ref>. Much of this work focuses on developing and analyzing efficient distributed training algorithms. This work shares ideas with federated learning, in which training is distributed among a large number of compute nodes without centralized training data <ref type="bibr" target="#b22">(Konečnỳ et al., 2015;</ref><ref type="bibr" target="#b4">Bonawitz et al., 2016)</ref>.</p><p>Synchronous training can suffer from straggler nodes <ref type="bibr" target="#b46">(Zaharia et al., 2008)</ref>, where a few compute nodes are significantly slower than average. While early work on straggler mitigation used techniques such as job replication <ref type="bibr" target="#b41">(Shah et al., 2016)</ref>, more recent work has employed coding theory to speed up distributed machine learning systems <ref type="bibr" target="#b29">(Lee et al., 2017;</ref><ref type="bibr" target="#b31">Li et al., 2015;</ref><ref type="bibr" target="#b16">Dutta et al., 2016;</ref><ref type="bibr" target="#b40">Reisizadeh et al., 2017;</ref><ref type="bibr" target="#b45">Yang et al., 2017)</ref>. One notable technique is gradient coding, a straggler mitigation method proposed in , which uses codes to speed up synchronous distributed first-order methods <ref type="bibr" target="#b38">(Raviv et al., 2017;</ref><ref type="bibr" target="#b8">Charles et al., 2017;</ref><ref type="bibr" target="#b13">Cotter et al., 2011)</ref>. Our work builds on and extends this work to the adversarial setup. Mitigating adversaries can often be more difficult than mitigating stragglers since in the adversarial setup we have no knowledge as to which nodes are the adversaries.</p><p>The topic of byzantine fault tolerance has been extensively studied since the early 80s <ref type="bibr" target="#b27">(Lamport et al., 1982)</ref>. There has been substantial amounts of work recently on byzantine fault tolerance in distributed training which shows that while average-based gradient methods are susceptible to adversarial nodes <ref type="bibr" target="#b3">(Blanchard et al., 2017;</ref><ref type="bibr" target="#b11">Chen et al., 2017)</ref>, median-based update methods can achieve good convergence while being robust to adversarial nodes. Both <ref type="bibr" target="#b3">(Blanchard et al., 2017)</ref> and <ref type="bibr" target="#b11">(Chen et al., 2017)</ref> use variants of the geometric median to improve the tolerance of firstorder methods against adversarial nodes. Unfortunately, convergence analyses of median approaches often require restrictive assumptions and algorithm-specific proofs of convergence. Furthermore, the geometric median aggregation may dominate the training time in large-scale settings.</p><p>The idea of using redundancy to guard against failures in computational systems has existed for decades. Von Neumann used redundancy and majority vote operations in boolean circuits to achieve accurate computations in the presence of noise with high probability <ref type="bibr" target="#b44">(Von Neumann, 1956</ref>). These results were further extended in work such as <ref type="bibr" target="#b37">(Pippenger, 1988)</ref> to understand how susceptible a boolean circuit is to randomly occurring failures. Our work can be seen as an application of the aforementioned concepts to the context of distributed training in the face of adversity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Preliminaries</head><p>Notation In the following, we denote matrices and vectors in bold, and scalars and functions in standard script. We let 1 m denote the m × 1 all ones vector, while 1 n×m denotes the all ones n×m matrix. We define 0 m , 0 n×m analogously. Given a matrix A ∈ R n×m , we let A i,j denote its entry at location (i, j), A i,· ∈ R 1×m denote its ith row, and A ·,j ∈ R n×1 denote its jth column. Given S ⊆ {1, . . . , n}, T ⊆ {1, . . . , m}, we let A S,T denote the submatrix of A where we keep rows indexed by S and columns indexed by T . Given matrices A, B ∈ R n×m , their Hadamard product, denoted A B, is defined as the n × m matrix where</p><formula xml:id="formula_0">(A B) i,j = A i,j B i,j .</formula><p>Distributed Training The process of training a model from data can be cast as an optimization problem known as empirical risk minimization (ERM):</p><formula xml:id="formula_1">min w 1 n n i=1 (w; x i )</formula><p>where x i ∈ R m represents the ith data point, n is the total number of data points, w ∈ R d is a model, and (·; ·) is a loss function that measures the accuracy of the predictions made by the model on each data point.</p><p>One way to approximately solve the above ERM is through stochastic gradient descent (SGD), which operates as follows. We initialize the model at an initial point w 0 and then iteratively update it according to</p><formula xml:id="formula_2">w k = w k−1 − γ∇ (w k−1 ; x i k ),</formula><p>where i k is a random data-point index sampled from {1, . . . , n}, and γ &gt; 0 is the learning rate.</p><p>In order to take advantage of distributed systems and parallelism, we often use mini-batch SGD. At each iteration of mini-batch SGD, we select a random subset S k ⊆ {1, . . . , n} of the data and update our model according to</p><formula xml:id="formula_3">w k = w k−1 − γ |S k | i∈S k ∇ (w k−1 ; x i ).</formula><p>Many distributed versions of mini-batch SGD partition the gradient computations across the compute nodes. After computing and summing up their assigned gradients, each nodes sends their respective sum back to the PS. The PS aggregates these sums to update the model w k−1 according to the rule above.</p><p>In this work, we consider the question of how to perform this update method in a distributed and robust manner. Fix a batch (or set of points) S k , which after relabeling we assume equals {1, . . . , B}. We will denote ∇ (w k−1 ; x i ) by g i . The fundamental question we consider in this work is how to compute B i=1 g i in a distributed and adversaryresistant manner. We present DRACO, a framework that can compute this summation in a distributed manner, even under the presence of adversaries. Remark 1. In contrast to previous works, our analysis and framework are applicable to any distributed algorithm which requires the sum of multiple functions. Notably, our framework can be applied to any first-order methods, including gradient descent, SVRG <ref type="bibr" target="#b20">(Johnson &amp; Zhang, 2013)</ref>, coordinate descent, and projected or accelerated versions of these algorithms. For the sake of simplicity, our discussion in the rest of the text will focus on mini-batch SGD.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Adversarial Compute Node Model</head><p>We consider the setting where a subset of size s of the P compute nodes act adversarially against the training process. The goal of an adversary can either be to completely mislead the end model, or bias it towards specific areas of the parameter space. A compute node is considered to be an adversarial node, if it does not return the prescribed gradient update given its allocated samples. Such a node can ship back to the PS any arbitrary update of dimension equal to that of the true gradient. Mini-batch SGD fails to converge even if there is only a single adversarial node <ref type="bibr" target="#b3">(Blanchard et al., 2017)</ref>.</p><p>In this work, we consider the strongest possible adversaries. We assume that each adversarial node has access to infinite computational power, the entire data set, the training algorithm, and has knowledge of any defenses present in the system. Furthermore, all adversarial nodes may collaborate with each other.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">DRACO: Robust Distributed Training via Algorithmic Redundancy</head><p>In this section we present our main results for DRACO. Due to space constraints, all proofs are left to the supplement.</p><p>We generalize the scheme in <ref type="figure" target="#fig_3">Figure 1</ref> to P compute nodes and B data samples. At each iteration of our training process, we assign the B gradients to the P compute nodes using a P × B allocation matrix A. Here, A j,k is 1 if node j is assigned the kth gradient g k , and 0 otherwise. The support of A j,· , denoted supp (A j,· ), is the set of indices k of gradients evaluated by the jth compute node. For simplicity, we will assume B = P throughout the following.</p><p>DRACO utilizes redundant computations, so it is worth formally defining the amount of redundancy incurred. This is captured by the following definition.</p><p>Definition 3.1. r 1 P A 0 denotes the redundancy ratio. In other words, the redundancy ratio is the average number of gradients assigned to each compute node.</p><formula xml:id="formula_4">We define a d × P matrix G by G [g 1 , g 2 , · · · , g P ].</formula><p>Thus, G has all assigned gradients as its columns. The jth compute node first computes a d × P gradient matrix Y j (1 d A j,· ) G using its allocated gradients. In particular, if the kth gradient g k is allocated to the jth compute node, i.e., A j,k = 0, then the compute node computes g k as the kth column of Y j . Otherwise, it sets the k-th column of Y j to be 0 d .</p><p>The jth compute node is equipped with an encoding function E j that maps the d×P matrix Y j of its assigned gradients to a single d-dimensional vector. After computing its assigned gradients, the jth compute node sends z j E j (Y j ) to the PS. If the jth node is adversarial then it instead sends z j + n j to the PS, where n j is an arbitrary d-dimensional vector. We let E be the set of local encoding functions, i.e.,</p><formula xml:id="formula_5">E = {E 1 , E 2 , · · · , E P }. Let us define a d × P matrix Z A,E,G by Z A,E,G [z 1 , z 2 , · · · , z P ], and a d × P matrix N by N [n 1 , n 2 , · · · , n P ]</formula><p>. Note that at most s columns of N are non-zero. Under this notation, after all updates are finished the PS receives a d × P matrix R Z A,E,G + N. The PS then computes a d-dimensional update gradient vector u D(R) using a decoder function D.</p><p>The system in DRACO is determined by the tuple (A, E, D). We decide how to assign gradients by designing A, how each compute node should locally amalgamate its gradients by designing E, and how the PS should decode the output by designing D. The process of DRACO is illustrated in <ref type="figure" target="#fig_0">Figure 2</ref>. This framework of (A, E, D) encompasses both distributed SGD and the GM approach. In distributed mini-batch SGD, we assign 1 gradient to each compute node. After relabeling, we can assume that we assign g i to compute node i. Therefore, A is simply the identity matrix I P . The matrix Y j therefore contains g j in column j and 0 in all other columns. The local encoding function E j simply returns g j by computing E j (Y j ) = Y j 1 P = g j , which it then sends to the PS. The decoding function now depends on the algorithm. For vanilla mini-batch SGD, the PS takes the average of the gradients, while in the GM approach, it takes a geometric median of the gradients.</p><p>In order to guarantee convergence, we want DRACO to  <ref type="figure" target="#fig_0">Figure 2</ref>. In DRACO, each compute node is allocated a subset of the data set. Each compute node computes redundant gradients, encodes them via Ei, and sends the resulting vector to the PS. These received vectors then pass through a decoder that detects where the adversaries are and removes their effects from the updates. The output of the decoder is the true sum of the gradients. The PS applies the updates to the parameter model and we then continue to the next iteration.</p><note type="other">x 1 x 2 x 3 x 1 x 2 x 3 x 4 x 1 x</note><p>exactly recover the true sum of gradients, regardless of the behavior of the adversarial nodes. In other words, we want DRACO to protect against worst-case adversaries. Formally, we want the PS to always obtain the d-dimensional vector G1 P via DRACO with any s adversarial nodes. Below is the formal definition. </p><formula xml:id="formula_6">N = [n 1 , n 2 , · · · , n P ] such that |{j : n j = 0}| ≤ s, we have D(Z A,E,G + N) = G1 P .</formula><p>Remark 2. If we can successfully defend against s adversaries, then the model update after each iteration is identical to that in the adversary-free setup. This implies that any guarantees of convergence in the adversary-free case transfer to the adversarial case.</p><p>Redundancy Bound We first study how much redundancy is required if we want to exactly recover the correct sum of gradients per iteration in the presence of s adversaries.</p><p>Theorem 3.1. Suppose a selection of gradient allocation, encoding, and decoding mechanisms (A, E, D) can tolerate s adversarial nodes. Then its redundancy ratio r must satisfy r ≥ 2s + 1.</p><p>The above result is information-theoretic, meaning that regardless of how the compute node encodes and how the PS decodes, each data sample has to be replicated at least 2s + 1 times to defend against s adversarial nodes.</p><p>Remark 3. Suppose that a tuple (A, E, D) can tolerate any s adversarial nodes. By Theorem 3.1, this implies that on average, each compute node encodes at least (2s + 1) d-dimensional vectors. Therefore, if the encoding has linear complexity, then each encoder requires (2s + 1)d operations in the worst-case. If the decoder D has linear time complexity, then it requires at least P d operations in the worst case, as it needs to use the d-dimensional input from all P compute nodes. This gives a computational cost of O(P d) in general, which is significantly less than that of the median approach in <ref type="bibr" target="#b3">(Blanchard et al., 2017)</ref>, which requires O(P 2 (d + log P )) operations.</p><p>Optimal Coding Schemes A natural question is, can we achieve the optimal redundancy bound with linear-time encoding and decoding? More formally, can we design a tuple (A, E, D) that has redundancy ratio r = 2s + 1 and computation complexity O((2s + 1)d) at the compute node and O(P d) at the PS? We give a positive answer by presenting two coding approaches that match the above bounds. The encoding methods are based on the fractional repetition code and the cyclic repetition codes in <ref type="bibr" target="#b38">Raviv et al., 2017)</ref>.</p><p>Fractional Repetition Code Suppose 2s + 1 divides P . The fractional repetition code (derived from ) works as follows. We first partition the compute nodes into r = 2s + 1 groups. We assign the nodes in a group to compute the same sum of gradients. Letĝ be the desired sum of gradients per iteration. In order to decode the outputs returned by the compute nodes in the same group, the PS uses majority vote to select one value. This guarantees that as long as fewer than half of the nodes in a group are adversarial, the majority procedure will return the correctĝ. The decoder works by first finding the majority vote of the output of each compute node that was assigned the same gradients. For instance, since the first r compute nodes were assigned the same gradients, it finds the majority vote of [z 1 , . . . , z r ]. It does the same with each of the blocks of size r, and then takes the sum of the P/r majority votes. We note that our decoder here is different compared to the one used in the straggler mitigation setup of . Our decoder follows the concept of majority decoding similarly to <ref type="bibr" target="#b44">(Von Neumann, 1956;</ref><ref type="bibr" target="#b37">Pippenger, 1988)</ref>.</p><formula xml:id="formula_7">Formally, D Rep is given by D Rep (R) = P r =1 Maj R ·,( ·(r−1)+1):( ·r)</formula><p>, where Maj (·) denotes the majority vote function and R is the d × P matrix received from all compute nodes. While a naive implementation of majority vote scales quadratically with the number of compute nodes P , we instead use a streaming version of majority vote <ref type="bibr">(Boyer &amp; Moore, 1991)</ref>, the complexity of which is linear in P .</p><p>Theorem 3.2. Suppose 2s+1 divides P . Then the repetition code (A Rep , E Rep , D Rep ) with r = 2s+1 can tolerate any s adversaries, achieves the optimal redundancy ratio, and has linear-time encoding and decoding.</p><p>Cyclic Code Next we describe a cyclic code whose encoding method comes from  and is similar to that of <ref type="bibr" target="#b38">(Raviv et al., 2017)</ref>. We denote the cyclic code, with encoding and decoding functions, by</p><formula xml:id="formula_8">(A Cyc , E Cyc , D Cyc ).</formula><p>The cyclic code provides an alternative way to tolerate adversaries in distributed setups. We will show that the cyclic code also achieves the optimal redundancy ratio and has linear-time encoding and decoding. Another difference compared to the repetition code is that in the cyclic code, the compute nodes will compute and transmit complex vectors, and the decoding function will take as input these complex vectors.</p><p>To better understand the cyclic code, imagine that all P gradients we wish to compute are arranged in a circle. Since there are P starting positions, there are P possible ways to pick a sequence consisting of 2s + 1 clock-wise consecutive gradients in the circle. Assigning each sequence of gradients to each compute node leads to redundancy ratio r = 2s + 1. The allocation matrix for the cyclic code is A Cyc , where the i row contains r = 2s + 1 consecutive ones, between position (i − 1)r + 1 to i · r modulo B.</p><p>In the cyclic code, each compute node computes a linear combination of its assigned gradients. This can be viewed as a generalization of the repetition code's encoder. Formally, we construct some P × P matrix W such that ∀j, , A In order to decode, the PS needs to detect which com-pute nodes are adversarial and recover the correct gradient summation from the non-adversarial nodes. Methods to do the latter alone in the presence of straggler nodes was presented in  and <ref type="bibr" target="#b38">(Raviv et al., 2017)</ref>. Suppose there is a function φ(·) that can compute the adversarial node index set V . We will later construct φ explicitly. Let U be the index set of the non-adversarial nodes. Suppose that the span of W ·,U contains 1 P . Thus, we can obtain a vector b by solving W ·,U b = 1 P . Finally, since U is the index set of non-adversarial nodes, for any j ∈ U , we must have n j = 0. Thus, we can use</p><formula xml:id="formula_9">R Cyc ·,U b = (GW + N) ·,U b = GW ·,U b = G1 P .</formula><p>The decoder function is given formally in Algorithm 1. To make this approach work, we need to design a matrix W and the index location function φ(·) such that (i) For all j, k, A j,k = 0 =⇒ W j,k = 0 and the span of W ·,U contains 1 P , and (ii) φ(·) can locate the adversarial nodes.</p><p>Let us first construct W. Let C be a P × P inverse discrete Fourier transformation (IDFT) matrix, i.e.,</p><formula xml:id="formula_10">C jk = 1 √ P exp 2πi P (j − 1)(k − 1) , j, k = 1, 2, · · · , P.</formula><p>Let C L be the first P − 2s rows of C and C R be the last 2s rows. Let α j be the set of row indices of the zero entries in A Cyc ·,j , i.e., α j = {k : A Cyc j,k = 0}. Note that C L is a (P − 2s) × P Vandermonde matrix and thus any P − 2s columns of it are linearly independent. Since |α j | = P − 2s − 1, we can obtain a P − 2s − 1-dimensional vector q j uniquely by solving</p><formula xml:id="formula_11">0 = q j 1 · [C L ] ·,αj . Construct a P × (P − 2s − 1) matrix Q q 1 q 2 · · · q P and a P × P matrix W Q 1 P · C L .</formula><p>One can verify that (i) each row of W has the same support as the allocation matrix A Cyc and (ii) the span of any P − 2s + 1 columns of W contains 1 P , summarized as follows.</p><p>Lemma 3.3. For all j, k, A j,k = 0 ⇒ W j,k = 0. For any index set U such that |U | ≥ P − (2s + 1), the column span of W ·,U contains 1 P .</p><p>The φ(·) function works as follows. Given the d × P matrix R Cyc received from the compute nodes, we first generate a 1 × d random vector f ∼ N (1 1×d , I d ), and then compute</p><formula xml:id="formula_12">[h P −2s , h P −2s−1 , · · · , h P −1 ] fRC † R 1 .</formula><p>We then obtain a 1 † denotes transpose conjugate.</p><formula xml:id="formula_13">vector β = [β 0 , β 1 , · · · , β s−1 ] T by solving     hP −s−1 hP −s . . . hP −2 hP −s−2 hP −s−1 . . . hP −3 . . . . . . . . . . . . hP −2s hP −s+1 . . . hP −s+1         β0 β1 . . . βs−1     =     hP −1 hP −2 . . . hP −s     .</formula><p>We then compute h = s−1 u=0 β u h +u−s , where = 0, 1, · · · , P − 2s − 1 and h = h P + . Once the vector h [h 0 , h 1 , · · · , h P −1 ] is obtained, we can compute the IDFT of h, denoted by t [t 0 , t 1 , · · · , t P −1 ]. The returned index set V = {j : t j+1 = 0}. The following lemma shows the correctness of φ(·). Lemma 3.4. Suppose N = [n 1 , n 2 , · · · , n P ] satisfies |{j : n j 0 = 0}| ≤ s. Then φ(R Cyc ) = φ(GW + N) = {j : n j 0 = 0} with probability 1.</p><p>Finally we can show that the cyclic code can tolerate any s adversaries and also achieves redundancy ratio and has linear-time encoding and decoding. Theorem 3.5. The cyclic code (A Cyc , E Cyc , D Cyc ) can tolerate any s adversaries with probability 1 and achieves the redundancy ratio lower bound. For d P , its encoding and decoding achieve linear-time computational complexity.</p><p>Note that the cyclic code requires transmitting complex vectors GW which potentially doubles the bandwidth requirement. To handle this problem, one can transform the original real gradient G ∈ R d×P into a complex gradientĜ ∈ C d/2 ×P by letting its ith component have real part G i and complex part G d/2 +i . Then the compute nodes only need to sendĜW. Once the PS recoversû Cyc Ĝ 1 P , it can simply sum the real and imaginary parts to form the true gradient summation, i.e., u Cyc = Re(û Cyc ) + Im(û Cyc ) = G1 P .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>In this section we present an empirical study of DRACO and compare it to the median-based approach in <ref type="bibr" target="#b11">(Chen et al., 2017)</ref> under different adversarial models and real distributed environments. The main findings are as follows: 1) For the same training accuracy, DRACO is up to orders of magnitude faster compared to the GM-based approach; 2) In some instances, the GM approach <ref type="bibr" target="#b11">(Chen et al., 2017)</ref> does not converge, while DRACO converges in all of our experiments, regardless of which dataset, machine learning model, and adversary attack model we use; 3) Although DRACO is faster than GM-based approaches, its runtime can sometimes scale linearly with the number of adversaries due to the algorithmic redundancy needed to defend against adversaries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Implementation and Setup</head><p>We compare vanilla minibatch SGD to both DRACO-based mini-batch SGD and GMbased mini-batch SGD <ref type="bibr" target="#b11">(Chen et al., 2017)</ref>. In mini-batch SGD, there is no data replication and each compute node only computes gradients sampled from its partition of the data. The PS then averages all received gradients and updates the model. In GM-based mini-batch SGD, the PS uses the geometric median instead of average to update the model. We have implemented all of these in PyTorch <ref type="bibr" target="#b36">(Paszke et al., 2017b)</ref> with MPI4py <ref type="bibr" target="#b14">(Dalcin et al., 2011)</ref> deployed on the m4.2/4/10xlarge instances in Amazon EC2 2 . We conduct our experiments on various adversary attack models, datasets, learning problems and neural network models.</p><p>Adversarial Attack Models We consider two adversarial models. First is the "reversed gradient" adversary, where adversarial nodes that were supposed to send g to the PS instead send −cg, for some c &gt; 0. Next, we consider a "constant adversary" attack, where adversarial nodes always send a constant multiple κ of the all-ones vector to the PS with dimension equal to that of the true gradient. In our experiments, we set c = 100 for the reverse gradient adversary, and κ = −100 for the constant adversary. At each iteration, s nodes are randomly selected to act as adversaries.</p><p>End-to-end Convergence Performance We first evaluate the end-to-end convergence performance of DRACO, using both the repetition and cyclic codes, and compare it to ordinary mini-batch SGD as well as the GM approach. The datasets and their associated learning models are summarized in <ref type="table" target="#tab_2">Table 1</ref>. We use fully connected (FC) neural networks and LeNet <ref type="bibr" target="#b28">(LeCun et al., 1998)</ref> for MNIST, ResNet-18 <ref type="bibr" target="#b18">(He et al., 2016)</ref> for Cifar 10 <ref type="bibr">(Krizhevsky &amp; Hinton, 2009)</ref>, and CNN-rand-non-static (CRN) model in <ref type="bibr" target="#b21">(Kim, 2014)</ref> for Movie Review (MR) <ref type="bibr" target="#b34">(Pang &amp; Lee, 2005)</ref>.</p><p>The experiments were run on a cluster of 45 compute nodes instantiated on m4.2xlarge instances. At each iteration, we randomly select s = 1, 3, 5 (2.2%, 6.7%, 11.1% of all compute nodes) nodes as adversaries. All three methods are trained for 10,000 distributed iterations. <ref type="figure" target="#fig_5">Figure 3</ref> shows how the testing accuracy varies with training time. <ref type="table" target="#tab_3">Tables  2 and 3</ref> give a detailed account of the speedups of DRACO compared to the GM approach, where we run both systems until they achieve the same designated testing accuracy (the details for MNIST are given in supplement). As expected, ordinary mini-batch may not converge even if there is only one adversary. Second, under the reverse gradient adversary model, DRACO converges several times faster than the GM approach, using both the repetition and cyclic codes, achieving up to more than an order of magnitude speedup compared to the GM approach. We suspect that this is because the computation of the GM is more expensive than the encoding and decoding overhead of DRACO.  Under the constant adversary model, the GM approach sometimes failed to converge while DRACO still converged in all of our experiments. This reflects our theory, which shows that DRACO always returns a model identical to the model trained by the ordinary algorithm in an adversary-free environment. One reason why the GM approach may fail to converge is that by using the geometric median, it is actually losing information about a subset of the gradients. Under the constant adversary model, the PS effectively gains no information about the gradients computed by the adversarial nodes, and may not recover the desired optimal model.</p><p>Another reason might be that the GM often requires conditions such as convexity of the underlying loss function. Since neural networks are generally non-convex, we have no guarantees that GM converges in these settings. It is worth noting that GM may also not converge if we use L-BFGS or accelerated gradient descent to perform training, as the choice of algorithm is separate from the underlying geometry of the neural network. Nevertheless, DRACO still converges for such algorithms.</p><p>Per iteration cost of DRACO We provide empirical per iteration costs of applying DRACO to three large state-ofthe-art deep networks, ResNet-152, VGG-19, and AlexNet   ( <ref type="bibr" target="#b18">He et al., 2016;</ref><ref type="bibr" target="#b42">Simonyan &amp; Zisserman, 2014;</ref><ref type="bibr" target="#b26">Krizhevsky et al., 2012)</ref>. The experiments provided here are run on 46 real instances (45 compute nodes with 1 PS) on AWS EC2. For <ref type="bibr">m4</ref>.4xlarge (equipped with 16 cores with 64 GB memory) instances are used while AlexNet experiments are run on m4.10xlarge (40 cores with 160 GB memory) instances. We use a batch size of B = 180 and split the data among compute nodes. Therefore, each compute node is assigned B n = 4 data points per iteration. We use the CIFAR10 dataset for all the aforementioned networks. For networks not designed for small images (like AlexNet), we resize the CIFAR10 images to fit the network. As shown in <ref type="figure" target="#fig_6">Figure 4</ref>, with s = 5, the encoding and decoding time of DRACO can be several times larger than the computation time of ordinary SGD, though SGD may not converge in adversarial settings. Nevertheless, DRACO is still several times faster than GM. While the communication cost is high in both DRACO and the GM method, the decoding time of the GM approach, i.e., its geometric median update at the PS, is prohibitively higher. Meanwhile, the overhead of DRACO is relatively negligible.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion and Open Problems</head><p>In this work we presented DRACO, a framework for robust distributed training via algorithmic redundancy. DRACO is robust to arbitrarily malicious compute nodes, while being orders of magnitude faster than state-of-the-art robust distributed systems. We give information-theoretic lower bounds on how much redundancy is required to resist adversaries while maintaining the correct update rule, and show that DRACO achieves this lower bound. There are several interesting future directions.</p><p>First, DRACO is designed to output the same model with or without adversaries. However, slightly inexact model updates often do not decrease performance noticeably. Therefore, we might ask whether we can either (1) tolerate more stragglers or (2) reduce the computational cost of DRACO by only approximately recovering the desired gradient summation. Second, while we give two relatively efficient methods for encoding and decoding, there may be others that are more efficient for use in distributed setups.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Definition 3. 2 .</head><label>2</label><figDesc>DRACO with (A, E, D) can tolerate s ad- versarial nodes, if for any</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Formally</head><label></label><figDesc>, the repetition code (A Rep , E Rep , D Rep ) is de- fined as follows. The assignment matrix A Rep is given byThe jth compute node first computes all its allocated gradi-Its encoder function simply takes the summation of all the allocated gradients. That is,</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>GW ·,j . After performing this local encod- ing, the jth compute node then sends zThen one can verify from the definition of E Cyc j that Z A Cyc ,E Cyc ,G = GW. The received matrix at the PS now becomes R Cyc = Z A Cyc ,E Cyc ,G + N = GW + N.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Algorithm 1</head><label>1</label><figDesc>Decoder Function D Cyc . Input :Received d × P matrix R Cyc Output :Desired gradient summation u Cyc V = φ(R) // Locate the adversarial node indexes. U = {1, 2, · · · , P } − V . // Non-adversarial node indexes Find b by solving W·,U b = 1P Compute and return u Cyc = R·,U b</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Convergence rates of DRACO, GM, and vanilla mini-batch SGD, on (a) MNIST on FC, (b) MNIST on LeNet, (c) CIFAR10 on ResNet-18, and (d) MR on CRN, all with reverse gradient adversaries; (e) MNIST on FC, (f) MNIST on LeNet, (g) CIFAR10 on ResNet-18, and (h) MR on CRN, all with constant adversaries.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Empirical Per Iteration Time Cost on Large Models with 11.1% adversarial nodes. We consider reverse gradient adversary on (a) VGG-19 and (b) AlexNet, and constant adversary on (c) VGG-19 and (d) AlexNet. Results on ResNet-152 are in the supplement.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>g 1 + g2 + g3 + g4</figDesc><table>g 1 
++ 
+2 g 2 
+
++ 
+3 g 3 
+
+e 
+
+g 1 g3 + 2 g4 
+
+g 2 2 g 3 
+
++ g 4 
+
+x 1 
+x 2 
+x 3 
+
+x 3 
+
+x 1 
+
+x 2 
+x 3 
+x 4 
+x 4 
+
+x 4 
+x 1 
+x 2 
+
+PS 
+
+Adversary 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>2Compute nodes: Gradient Evaluations and Encoding</figDesc><table>Model Update 
+
+. . . 
+
+xP 1 
+xP 
+
+xP 
+
+E 2 
+E P 1 
+E P 
+E 1 
+
+At most adversarial 
+updates 
+
+s 
+
+D 
+
+Parameter Sever: Decoding and Model Update 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 1 .</head><label>1</label><figDesc>The</figDesc><table>datasets used, their associated learning models and 
+corresponding parameters. 
+Dataset 
+MNIST 
+CIFAR10 
+MR 
+
+# data points 
+70,000 
+60,000 
+10,662 
+
+Model 
+FC/LeNet 
+ResNet-18 
+CRN 
+
+# Classes 
+10 
+10 
+2 
+
+# Parameters 
+1,033k / 431k 
+1,1173k 
+154k 
+
+Optimizer 
+SGD 
+SGD 
+Adam 
+
+Learning Rate 
+0.01 / 0.01 
+0.1 
+0.001 
+
+Batch Size 
+720 / 720 
+180 
+180 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Speedups of DRACO with repetition and cyclic codes over GM when using ResNet-18 on CIFAR10. We run both methods until they reach the same specified testing accuracy. Here ∞ means that the GM approach failed to converge to the same accuracy as DRACO.</figDesc><table>Test Accuracy 
+80% 
+85% 
+88% 
+90% 
+
+2.2% rev grad 
+2.6/2.0 3.3/2.6 4.2/3.3 ∞/∞ 
+
+6.7% rev grad 
+2.8/2.2 3.4/2.7 4.3/3.4 ∞/∞ 
+
+11.1% rev grad 4.1/3.3 4.2/3.2 5.5/4.4 ∞/∞ 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 3 .</head><label>3</label><figDesc>Speedups of DRACOwith repetition and cyclic codes over GM when using CRM on MR. We run both methods until they reach the same specified testing accuracy.</figDesc><table>Test Accuracy 
+95% 
+96% 
+98% 
+98.5% 
+
+2.2% rev grad 
+5.4/4.2 5.6/4.3 9.7/7.4 12/9.0 
+
+6.7% rev grad 
+6.4/4.5 6.3/4.5 
+11/8.1 
+19/13 
+
+11.1% rev grad 7.5/4.7 7.4/4.6 
+12/8 
+19/12 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">https://github.com/hwang595/Draco</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>This work was supported in part by a gift from Google and AWS Cloud Credits for Research from Amazon. We thank Jeffrey Naughton and Remzi Arpaci-Dusseau for invaluable discussions and feedback on earlier drafts of this paper.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Tensorflow: A system for large-scale machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jianmin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhifeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matthieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanjay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Michael</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">OSDI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="page" from="265" to="283" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Distributed dual averaging in networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alekh</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Duchi</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">C</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="550" to="558" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Qsgd: Communication-efficient sgd via gradient quantization and encoding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dan</forename><surname>Alistarh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grubic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Demjan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jerry</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryota</forename><surname>Tomioka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Milan</forename><surname>Vojnovic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1707" to="1718" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Machine learning with adversaries: Byzantine tolerant gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peva</forename><surname>Blanchard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Guerraoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rachid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Stainer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Julien</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="118" to="128" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Practical secure aggregation for federated learning on user-held data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Keith</forename><surname>Bonawitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ivanov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vladimir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kreuter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ben</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Marcedone</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Antonio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mcmahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Brendan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Patel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sarvar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ramage</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Daniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Segal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Seth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karn</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.04482</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Mjrtya fast majority vote algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><forename type="middle">S</forename><surname>Boyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Strother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Automated Reasoning</title>
+		<imprint>
+			<biblScope unit="page" from="105" to="117" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Springer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1991" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Practical byzantine fault tolerance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Castro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liskov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barbara</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">OSDI</title>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">99</biblScope>
+			<biblScope unit="page" from="173" to="186" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Approximate gradient coding via sparse random graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zachary</forename><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Papailiopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename><surname>Ellenberg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.06771</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianmin</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xinghao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rajat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jozefowicz</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1604.00981</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Revisiting distributed synchronous sgd. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Mxnet: A flexible and efficient machine learning library for heterogeneous distributed systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tianqi</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yutian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Min</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Naiyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Minjie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tianjun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chiyuan</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zheng</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.01274</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Distributed statistical machine learning in adversarial settings: Byzantine gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yudong</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lili</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiaming</forename><surname>Xu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.05491</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Project adam: Building an efficient and scalable deep learning training system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trishul</forename><forename type="middle">M</forename><surname>Chilimbi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Suzue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yutaka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Johnson</forename><surname>Apacible</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karthik</forename><surname>Kalyanaraman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">OSDI</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="page" from="571" to="582" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Better mini-batch algorithms via accelerated gradient methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Cotter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ohad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nati</forename><surname>Srebro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karthik</forename><surname>Sridharan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="1647" to="1655" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Parallel distributed computing using python</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lisandro</forename><forename type="middle">D</forename><surname>Dalcin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rodrigo</forename><forename type="middle">R</forename><surname>Paz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pablo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alejandro</forename><surname>Cosimo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Advances in Water Resources</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1124" to="1139" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Large scale distributed deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Greg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rajat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matthieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Ke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1223" to="1231" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Short-dot: Computing large linear transforms distributedly using coded short dot products</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dutta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanghamitra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Viveck</forename><surname>Cadambe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pulkit</forename><surname>Grover</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2100" to="2108" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Coded convolution for parallel and distributed computing within a deadline</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dutta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanghamitra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Viveck</forename><surname>Cadambe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pulkit</forename><surname>Grover</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ISIT</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2403" to="2407" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Communication-efficient distributed dual coordinate ascent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Jaggi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Virginia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Takác</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Terhorst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanjay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">I</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="3068" to="3076" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Accelerating stochastic gradient descent using predictive variance reduction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rie</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tong</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="315" to="323" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Convolutional neural networks for sentence classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoon</forename><surname>Kim</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5882</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jakub</forename><surname>Konečnỳ</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brendan</forename><surname>Mcmahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Ramage</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.03575</idno>
+		<title level="m">Federated optimization: Distributed optimization beyond the datacenter</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Federated learning: Strategies for improving communication efficiency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jakub</forename><surname>Konečnỳ</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mcmahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Brendan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Felix</forename><forename type="middle">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Richtárik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ananda</forename><surname>Suresh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Theertha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dave</forename><surname>Bacon</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.05492</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Zyzzyva: speculative byzantine fault tolerance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kotla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ramakrishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Alvisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lorenzo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dahlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mike</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Allen</forename><surname>Clement</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edmund</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM SIGOPS Operating Systems Review</title>
+		<imprint>
+			<biblScope unit="volume">41</biblScope>
+			<biblScope unit="page" from="45" to="58" />
+			<date type="published" when="2007" />
+			<publisher>ACM</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">DRACO: Byzantine-resilient Distributed Training via Redundant Gradients Krizhevsky, Alex and Hinton, Geoffrey. Learning multiple layers of features from tiny images</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">The byzantine generals problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Leslie</forename><surname>Lamport</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Shostak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marshall</forename><surname>Pease</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Programming Languages and Systems (TOPLAS)</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="382" to="401" />
+			<date type="published" when="1982" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Léon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Speeding up distributed machine learning using codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kangwook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Maximilian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pedarsani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ramtin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Papailiopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kannan</forename><surname>Ramchandran</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Information Theory</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Scaling distributed machine learning with the parameter server</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mu</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">G</forename><surname>Andersen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Woo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ahmed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Amr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Josifovski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vanja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>James</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shekita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Eugene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Su</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">OSDI</title>
+		<meeting><address><addrLine>Bor-Yiing</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="page" from="583" to="598" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Coded mapreduce</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Songze</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mohammad</forename><surname>Maddah-Ali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Avestimehr</forename><surname>Ali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Salman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Communication, Control, and Computing (Allerton), 2015 53rd Annual Allerton Conference on</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="964" to="971" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">An asynchronous parallel stochastic coordinate descent algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ji</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Steve</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Re</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Victor</forename><surname>Bittorf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sridhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Srikrishna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="469" to="477" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Perturbed iterate analysis for asynchronous stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mania</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Horia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xinghao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Papailiopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dimitris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Recht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Benjamin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kannan</forename><surname>Ramchandran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">I</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>OPT</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bo</forename><surname>Pang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lillian</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="115" to="124" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Soumith</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gregory</forename><surname>Chanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pytorch</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Automatic differentiation in pytorch</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Soumith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Gregory</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Edward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Devito</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zachary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zeming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Desmaison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Alban</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luca</forename><surname>Antiga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Lerer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Reliable computation by formulas in the presence of noise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Pippenger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Information Theory</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="194" to="197" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Gradient coding from cyclic mds codes and expander graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Netanel</forename><surname>Raviv</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tamo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Itzhak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rashish</forename><surname>Tandon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandros</forename><forename type="middle">G</forename><surname>Dimakis</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.03858</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Hogwild: A lock-free approach to parallelizing stochastic gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benjamin</forename><surname>Recht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Re</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Wright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Feng</forename><surname>Niu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="693" to="701" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Coded computation over heterogeneous clusters</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amirhossein</forename><surname>Reisizadeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Prakash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Saurav</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ramtin</forename><surname>Pedarsani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Salman</forename><surname>Avestimehr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ISIT</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2408" to="2412" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">When do redundant requests reduce latency?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nihar</forename><forename type="middle">B</forename><surname>Shah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kangwook</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kannan</forename><surname>Ramchandran</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Communications</title>
+		<imprint>
+			<biblScope unit="volume">64</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="715" to="722" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Gradient coding: Avoiding stragglers in distributed learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rashish</forename><surname>Tandon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandros</forename><surname>Dimakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Karampatziakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikos</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="3368" to="3376" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Probabilistic logics and the synthesis of reliable organisms from unreliable components</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Von</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Automata studies</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="page" from="43" to="98" />
+			<date type="published" when="1956" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Coded distributed computing for inverse problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yaoqing</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pulkit</forename><surname>Grover</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Soummya</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="709" to="719" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Improving mapreduce performance in heterogeneous environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matei</forename><surname>Zaharia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Konwinski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joseph</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anthony</forename><forename type="middle">D</forename><surname>Katz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Randy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Stoica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ion</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In OSDI</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Deep learning with elastic averaging sgd</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sixin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anna</forename><forename type="middle">E</forename><surname>Choromanska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="685" to="693" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
