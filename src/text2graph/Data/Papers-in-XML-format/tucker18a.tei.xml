@@ -1,0 +1,1166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:33+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">The Mirage of Action-Dependent Baselines in Reinforcement Learning</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Tucker</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Surya</forename><surname>Bhupatiraju</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">E</forename><surname>Turner</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Levine</surname></persName>
+						</author>
+						<author>
+							<affiliation>
+								<orgName>1 6</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">The Mirage of Action-Dependent Baselines in Reinforcement Learning</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Policy gradient methods are a widely used class of model-free reinforcement learning algorithms where a state-dependent baseline is used to reduce gradient estimator variance. Several recent papers extend the baseline to depend on both the state and action and suggest that this significantly reduces variance and improves sample efficiency without introducing bias into the gradient estimates. To better understand this development, we decompose the variance of the policy gradient estimator and numerically show that learned state-actiondependent baselines do not in fact reduce variance over a state-dependent baseline in commonly tested benchmark domains. We confirm this unexpected result by reviewing the open-source code accompanying these prior papers, and show that subtle implementation decisions cause deviations from the methods presented in the papers and explain the source of the previously observed empirical gains. Furthermore, the variance decomposition highlights areas for improvement, which we demonstrate by illustrating a simple change to the typical value function parameterization that can significantly improve performance.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Model-free reinforcement learning (RL) with flexible function approximators, such as neural networks (i.e., deep reinforcement learning), has shown success in goal-directed sequential decision-making problems in high dimensional state spaces <ref type="bibr" target="#b17">(Mnih et al., 2015;</ref><ref type="bibr" target="#b27">Schulman et al., 2015b;</ref><ref type="bibr" target="#b13">Lillicrap et al., 2015;</ref><ref type="bibr" target="#b30">Silver et al., 2016)</ref>. Policy gradient methods <ref type="bibr" target="#b42">(Williams, 1992;</ref><ref type="bibr" target="#b34">Sutton et al., 2000;</ref><ref type="bibr" target="#b10">Kakade, 2002;</ref><ref type="bibr" target="#b23">Peters &amp; Schaal, 2006;</ref><ref type="bibr" target="#b29">Silver et al., 2014</ref>  <ref type="bibr">et al., 2015a; 2017)</ref> are a class of model-free RL algorithms that have found widespread adoption due to their stability and ease of use. Because these methods directly estimate the gradient of the expected reward RL objective, they exhibit stable convergence both in theory and practice <ref type="bibr" target="#b34">(Sutton et al., 2000;</ref><ref type="bibr" target="#b10">Kakade, 2002;</ref><ref type="bibr" target="#b26">Schulman et al., 2015a;</ref><ref type="bibr" target="#b7">Gu et al., 2017b)</ref>. In contrast, methods such as Q-learning lack convergence guarantees in the case of nonlinear function approximation <ref type="bibr" target="#b33">(Sutton &amp; Barto, 1998</ref>).</p><p>On-policy Monte-Carlo policy gradient estimates suffer from high variance, and therefore require large batch sizes to reliably estimate the gradient for stable iterative optimization <ref type="bibr" target="#b26">(Schulman et al., 2015a)</ref>. This limits their applicability to real-world problems, where sample efficiency is a critical constraint. Actor-critic methods <ref type="bibr" target="#b34">(Sutton et al., 2000;</ref><ref type="bibr" target="#b29">Silver et al., 2014)</ref> and λ-weighted return estimation <ref type="bibr" target="#b35">(Tesauro, 1995;</ref><ref type="bibr" target="#b27">Schulman et al., 2015b)</ref> replace the high variance Monte-Carlo return with an estimate based on the sampled return and a function approximator. This reduces variance at the expense of introducing bias from the function approximator, which can lead to instability and sensitivity to hyperparameters. In contrast, state-dependent baselines <ref type="bibr" target="#b42">(Williams, 1992;</ref><ref type="bibr" target="#b41">Weaver &amp; Tao, 2001</ref>) reduce variance without introducing bias. This is desirable because it does not compromise the stability of the original method. <ref type="bibr" target="#b6">Gu et al. (2017a)</ref>; <ref type="bibr" target="#b3">Grathwohl et al. (2018)</ref>; <ref type="bibr" target="#b15">Liu et al. (2018)</ref>; <ref type="bibr" target="#b43">Wu et al. (2018)</ref> present promising results extending the classic state-dependent baselines to state-action-dependent baselines. The standard explanation for the benefits of such approaches is that they achieve large reductions in variance <ref type="bibr" target="#b3">(Grathwohl et al., 2018;</ref><ref type="bibr" target="#b15">Liu et al., 2018)</ref>, which translates to improvements over methods that only condition the baseline on the state. This line of investigation is attractive, because by definition, baselines do not introduce bias and thus do not compromise the stability of the underlying policy gradient algorithm, but still provide improved sample efficiency. In other words, they retain the advantages of the underlying algorithms with no unintended side-effects.</p><p>In this paper, we aim to improve our understanding of stateaction-dependent baselines and to identify targets for further unbiased variance reduction. Toward this goal, we present a decomposition of the variance of the policy gradient esti-mator which isolates the potential variance reduction due to state-action-dependent baselines. We numerically evaluate the variance components on a synthetic linear-quadraticGaussian (LQG) task, where the variances are nearly analytically tractable, and on benchmark continuous control tasks and draw two conclusions: (1) on these tasks, a learned state-action-dependent baseline does not significantly reduce variance over a learned state-dependent baseline, and (2) the variance caused by using a function approximator for the value function or state-dependent baseline is much larger than the variance reduction from adding action dependence to the baseline.</p><p>To resolve the apparent contradiction arising from (1), we carefully reviewed the open-source implementations 1 accompanying Q-prop <ref type="bibr" target="#b6">(Gu et al., 2017a)</ref>, Stein control variates <ref type="bibr" target="#b15">(Liu et al., 2018)</ref>, and LAX <ref type="bibr" target="#b3">(Grathwohl et al., 2018)</ref> and show that subtle implementation decisions cause the code to diverge from the unbiased methods presented in the papers. We explain and empirically evaluate variants of these prior methods to demonstrate that these subtle implementation details, which trade variance for bias, are in fact crucial for their empirical success. These results motivate further study of these design decisions.</p><p>The second observation (2), that function approximators poorly estimate the value function, suggests that there is room for improvement. Although many common benchmark tasks are finite horizon problems, most value function parameterizations ignore this fact. We propose a horizonaware value function parameterization, and this improves performance compared with the state-action-dependent baseline without biasing the underlying method.</p><p>We emphasize that without the open-source code accompanying <ref type="bibr" target="#b6">(Gu et al., 2017a;</ref><ref type="bibr" target="#b15">Liu et al., 2018;</ref><ref type="bibr" target="#b3">Grathwohl et al., 2018)</ref>, this work would not be possible. Releasing the code has allowed us to present a new view on their work and to identify interesting implementation decisions for further study that the original authors may not have been aware of.</p><p>We have made our code and additional visualizations available at https://sites.google.com/view/ mirage-rl.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head><p>Reinforcement learning aims to learn a policy for an agent to maximize a sum of reward signals <ref type="bibr" target="#b33">(Sutton &amp; Barto, 1998)</ref>. The agent starts at an initial state s 0 ∼ P (s 0 ). Then, the agent repeatedly samples an action a t from a policy π θ (a t |s t ) with parameters θ, receives a reward r t ∼ P (r t |s t , a t ), and transitions to a subsequent state s t+1 according to the Markovian dynamics P (s t+1 |a t , s t ) of the environment. This generates a trajectory of states, actions, and rewards (s 0 , a 0 , r 0 , s 1 , a 1 , . . .). We abbreviate the trajectory after the initial state and action by τ .</p><p>The goal is to maximize the discounted sum of rewards along sampled trajectories</p><formula xml:id="formula_0">J(θ) = E s0,a0,τ ∞ t=0 γ t r t = E s∼ρ π (s),a,τ ∞ t=0 γ t r t ,</formula><p>where γ ∈ [0, 1) is a discount parameter and ρ</p><formula xml:id="formula_1">π (s) = ∞ t=0 γ t P π (s t = s)</formula><p>is the unnormalized discounted state visitation frequency.</p><p>Policy gradient methods differentiate the expected return objective with respect to the policy parameters and apply gradient-based optimization <ref type="bibr" target="#b33">(Sutton &amp; Barto, 1998)</ref>. The policy gradient can be written as an expectation amenable to Monte Carlo estimation</p><formula xml:id="formula_2">∇ θ J(θ) = E s∼ρ π (s),a,τ [Q π (s, a)∇ log π(a|s)] = E s∼ρ π (s),a,τ [A π (s, a)∇ log π(a|s)]</formula><p>where</p><formula xml:id="formula_3">Q π (s, a) = E τ [ ∞ t=0 γ t r t |s 0 = s, a 0 = a] is the state-action value function, V π (s) = E a [Q π (s, a)] is the value function, and A π (s, a) = Q π (s, a) − V π (s)</formula><p>is the advantage function. The equality in the last line follows from the fact that E a [∇ log π(a|s)] = 0 <ref type="bibr" target="#b42">(Williams, 1992)</ref>.</p><p>In practice, most policy gradient methods (including this paper) use the undiscounted state visitation frequencies (i.e., γ = 1 for ρ π (s)), which produces a biased estimator for ∇J(θ) and more closely aligns with maximizing average reward <ref type="bibr" target="#b36">(Thomas, 2014)</ref>.</p><p>We can estimate the gradient with a Monte-Carlo estimator</p><formula xml:id="formula_4">g(s, a, τ ) =Â(s, a, τ )∇ log π θ (a|s),<label>(1)</label></formula><p>whereÂ is an estimator of the advantage function up to a state-dependent constant (e.g., t γ t r t ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Advantage Function Estimation</head><p>Given a value function estimator,V (s), we can form a kstep advantage function estimator,</p><formula xml:id="formula_5">A (k) (s t , a t , τ t+1 ) = k−1 i=0 γ i r t+i + γ kV (s t+k ) −V (s t ),</formula><p>where k ∈ {1, 2, ..., ∞} and τ t+1 = (r t , s t+1 , a t+1 , . . .). A (∞) (s t , a t , τ t+1 ) produces an unbiased gradient estimator when used in Eq. 1 regardless of the choice ofV (s). However, the other estimators (k &lt; ∞) produce biased estimates unlessV (s) = V π (s). Advantage actor critic (A2C and A3C) methods  and generalized advantage estimators (GAE) <ref type="bibr" target="#b27">(Schulman et al., 2015b</ref>) use a single or linear combination ofÂ (k) estimators as the advantage estimator in Eq. 1. In practice, the value function estimator is never perfect, so these methods produce biased gradient estimates. As a result, the hyperparameters that control the combination ofÂ (k) must be carefully tuned to balance bias and variance <ref type="bibr" target="#b27">(Schulman et al., 2015b)</ref>, demonstrating the perils and sensitivity of biased gradient estimators. For the experiments in this paper, unless stated otherwise, we use the GAE estimator. Our focus will be on the additional bias introduced beyond that of GAE.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Baselines for Variance Reduction</head><p>The policy gradient estimator in Eq. 1 typically suffers from high variance. Control variates are a well-studied technique for reducing variance in Monte Carlo estimators without biasing the estimator <ref type="bibr">(Owen, 2013)</ref>. They require a correlated function whose expectation we can analytically evaluate or estimate with low variance. Because E a|s [∇ log π(a|s)] = 0, any function of the form φ(s)∇ log π(a|s) can serve as a control variate, where φ(s) is commonly referred to as a baseline <ref type="bibr" target="#b42">(Williams, 1992)</ref>. With a baseline, the policy gradient estimator becomeŝ</p><formula xml:id="formula_6">g(s, a, τ ) = Â (s, a, τ ) − φ(s) ∇ log π(a|s),</formula><p>which does not introduce bias. Several recent methods <ref type="bibr" target="#b6">(Gu et al., 2017a;</ref><ref type="bibr" target="#b38">Thomas &amp; Brunskill, 2017;</ref><ref type="bibr" target="#b3">Grathwohl et al., 2018;</ref><ref type="bibr" target="#b15">Liu et al., 2018;</ref><ref type="bibr" target="#b43">Wu et al., 2018)</ref> have extended the approach to state-action-dependent baselines (i.e., φ(s, a) is a function of the state and the action). With a state-action dependent baseline φ(s, a), the policy gradient estimator iŝ</p><formula xml:id="formula_7">g(s, a, τ ) = Â (s, a, τ ) − φ(s, a) ∇ log π(a|s) + ∇E a|s [φ(s, a)] ,<label>(2)</label></formula><p>Now, ∇E a|s [φ(s, a)] = 0 in general, so it must be analytically evaluated or estimated with low variance for the baseline to be effective.</p><p>When the action set is discrete and not large, it is straightforward to analytically evaluate the expectation in the second term <ref type="bibr" target="#b7">(Gu et al., 2017b;</ref><ref type="bibr" target="#b4">Gruslys et al., 2017)</ref>. In the continuous action case, <ref type="bibr" target="#b6">Gu et al. (2017a)</ref> set φ(s, a) to be the first order Taylor expansion of a learned advantage function approximator. Because φ(s, a) is linear in a, the expectation can be analytically computed. <ref type="bibr" target="#b7">Gu et al. (2017b)</ref>; <ref type="bibr" target="#b15">Liu et al. (2018)</ref>; <ref type="bibr" target="#b3">Grathwohl et al. (2018)</ref> set φ(s, a) to be a learned function approximator and leverage the reparameterization trick to estimate ∇E a|s [φ(s, a)] with low variance when π is reparameterizable <ref type="bibr" target="#b12">(Kingma &amp; Welling, 2013;</ref><ref type="bibr" target="#b25">Rezende et al., 2014)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Policy Gradient Variance Decomposition</head><p>Now, we analyze the variance of the policy gradient estimator with a state-action dependent baseline (Eq. 2). This is an unbiased estimator of E s,a,τ Â (s, a, τ )∇ log π(a|s) for any choice of φ. For theoretical analysis, we assume that we can analytically evaluate the expectation over a in the second term because it only depends on φ and π, which we can evaluate multiple times without querying the environment.</p><p>The variance of the policy gradient estimator in Eq. 2, Σ := Var s,a,τ (ĝ), can be decomposed using the law of total variance as</p><formula xml:id="formula_8">Σ = E s Var a,τ |s Â (s, a, τ ) − φ(s, a) ∇ log π(a|s) + Var s E a,τ |s Â (s, a, τ )∇ log π(a|s) ,</formula><p>where the simplification of the second term is because the baseline does not introduce bias. We can further decompose the first term,</p><formula xml:id="formula_9">E s Var a,τ |s Â (s, a, τ ) − φ(s, a) ∇ log π(a|s) = E s,a Var τ |s,a Â (s, a, τ )∇ log π(a|s) + E s Var a|s Â (s, a) − φ(s, a) ∇ log π(a|s) ,</formula><p>whereÂ(s, a) = E τ |s,a Â (s, a, τ ) . Putting the terms together, we arrive at the following:</p><formula xml:id="formula_10">Σ = E s,a Var τ |s,a Â (s, a, τ )∇ log π(a|s) Στ + E s Var a|s Â (s, a) − φ(s, a) ∇ log π(a|s) Σa + Var s E a|s Â (s, a)∇ log π(a|s) Σs .<label>(3)</label></formula><p>Notably, only Σ a involves φ, and it is clear that the variance minimizing choice of φ(s, a) isÂ(s, a). For example, ifÂ(s, a, τ ) = t γ t r t , the discounted return, then the</p><formula xml:id="formula_11">optimal choice of φ(s, a) isÂ(s, a) = E τ |s,a [ t γ t r t ] = Q π (s, a)</formula><p>, the state-action value function.</p><p>The variance in the on-policy gradient estimate arises from the fact that we only collect data from a limited number of states s, that we only take a single action a in each state, and that we only rollout a single path from there on τ . Intuitively, Σ τ describes the variance due to sampling a single τ , Σ a describes the variance due to sampling a single a, and lastly Σ s describes the variance coming from visiting a limited number of states. The magnitudes of these terms depends on task specific parameters and the policy. correspond to the Σa term without a baseline and using the value function as a state-dependent baseline, respectively. Importantly, an optimal state-action-dependent baseline reduces Σa to 0, so Σ φ(s) a upper bounds the variance reduction possible from using a state-action-dependent baseline over a state-dependent baseline. In this task, Σ φ(s) a is much smaller than Στ , so the reduction in overall variance from using a state-action-dependent baseline would be minimal. Σ</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>GAE(λ) τ</head><p>indicates the Στ term with GAE-based return estimates. We include animated GIF visualizations of the variance terms and policy as learning progresses in the Supplementary Materials.</p><p>The relative magnitudes of the variance terms will determine the effectiveness of the optimal state-action-dependent baseline. In particular, denoting the value of the second term when using a state-dependent baseline by Σ φ(s) a , the variance of the policy gradient estimator with a state-dependent baseline is Σ φ(s) a + Σ τ + Σ s . When φ(s, a) is optimal, Σ a vanishes, so the variance is Σ τ + Σ s . Thus, an optimal stateaction-dependent baseline will be beneficial when Σ φ(s) a is large relative to Σ τ + Σ s . We expect this to be the case when single actions have a large effect on the overall discounted return (e.g., in a Cliffworld domain, where a single action could cause the agent to fall of the cliff and suffer a large negative reward). Practical implementations of a stateaction-dependent baseline require learning φ(s, a), which will further restrict the potential benefits.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Variance in LQG Systems</head><p>Linear-quadratic-Gaussian (LQG) systems <ref type="bibr" target="#b31">(Stengel, 1986)</ref> are a family of widely studied continuous control problems with closed-form expressions for optimal controls, quadratic value functions, and Gaussian state marginals. We first analyze the variance decomposition in an LQG system because it allows nearly analytic measurement of the variance terms in Eq. 3 (See Appendix 9 for measurement details).  <ref type="figure" target="#fig_0">Figure 1</ref>). An optimal state-action-dependent baseline would reduce Σ φ(s) a to 0, however, for this task, such a baseline would not significantly reduce the total variance because Σ τ is already large relative to Σ φ(s) a <ref type="figure" target="#fig_0">(Figure 1</ref>).</p><p>We also plot the effect of using GAE 2 <ref type="bibr" target="#b27">(Schulman et al., 2015b)</ref> on Σ τ for λ = {0, 0.99}. Baselines and GAE reduce different components of the gradient variances, and this figure compares their effects throughout the learning process.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Empirical Variance Measurements</head><p>We estimate the magnitude of the three terms for benchmark continuous action tasks as training proceeds. Once we decide on the form of φ(s, a), approximating φ is a learning problem in itself. To understand the approximation error, we evaluate the situation where we have access to an oracle φ(s, a) and when we learn a function approximator for φ(s, a). Estimating the terms in Eq. 3 is nontrivial because the expectations and variances are not available in closed form. We construct unbiased estimators of the variance terms and repeatedly draw samples to drive down the measurement error (see Appendix 10 for details). We train a 0 1000 2000 3000 4000 5000</p><p>Steps (thousands) Steps (thousands) Humanoid-v1 (GAE) <ref type="figure">Figure 2</ref>. Evaluating the variance terms (Eq. 3) of the gradient estimator whenÂ(s, a, τ ) is the discounted return (left) and GAE (right) with various baselines on Humanoid (See Appendix <ref type="figure">Figure 9</ref> for results on HalfCheetah). The x-axis denotes the number of environment steps used for training. The policy is trained with TRPO. We set φ(s) = E a|s Â (s, a) and φ(s, a) =Â(s, a). The "learned" label in the legend indicates that a function approximator to φ was used instead of directly using φ. Note that when using φ(s, a) =Â(s, a), Σ φ(s,a) a is 0, so is not plotted. Since Σs is small, we plot an upper bound on Σs. The upper and lower bands indicate two standard errors of the mean. In the left plot, lines for Σφ  policy using TRPO 3 <ref type="bibr" target="#b26">(Schulman et al., 2015a)</ref> and as training proceeds, we plot each of the individual terms Σ τ , Σ a , and Σ s of the gradient estimator variance for Humanoid in <ref type="figure">Figure 2</ref> and for HalfCheetah in Appendix <ref type="figure">Figure 9</ref>. Additionally, we repeat the experiment with the horizon-aware value functions (described in Section 5) in <ref type="figure" target="#fig_0">Appendix Figures 10</ref> and 11.</p><note type="other">10</note><note type="other">10</note><formula xml:id="formula_12">Σ τ Σ 0 a Σφ (s) a (learned) Σφ (s,a) a (learned) Σ φ(s) a ≥ Σ s</formula><p>We plot the variance decomposition for two choices of A(s, a, τ ): the discounted return, t γ t r t , and GAE (Schulman et al., 2015b). In both cases, we set φ(s) = E a|s Â (s, a) and φ(s, a) =Â(s, a) (the optimal stateaction-dependent baseline). When using the discounted return, we found that Σ τ dominates Σ φ(s) a , suggesting that even an optimal state-action-dependent baseline (which would reduce Σ a to 0) would not improve over a statedependent baseline <ref type="figure">(Figure 2</ref>). In contrast, with GAE, Σ τ is reduced and now the optimal state-action-dependent baseline would reduce the overall variance compared to a statedependent baseline. However, when we used function approximators to φ, we found that the state-dependent and state-action-dependent function approximators produced similar variance and much higher variance than when using an oracle φ <ref type="figure">(Figure 2</ref>). This suggests that, in practice, we would not see improved learning performance using a state-action-dependent baseline over a state-dependent baseline on these tasks. We confirm this in later experiments in Sections 4 and 5.</p><p>Furthermore, we see that closing the function approximation gap of V (s) and φ(s) would produce much larger reductions in variance than from using the optimal state-actiondependent baseline over the state-dependent baseline. This suggests that improved function approximation of both V (s) and φ(s) should be a priority. Finally, Σ s is relatively small in both cases, suggesting that focusing on reducing variance from the first two terms of Eq. 3, Σ τ and Σ a , will be more fruitful.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Unveiling the Mirage</head><p>In the previous section, we decomposed the policy gradient variance into several sources, and we found that in practice, the source of variance reduced by the state-action-dependent baseline is not reduced when a function approximator for φ is used. However, this appears to be a paradox: if the state-action-dependent baseline does not reduce variance, how are prior methods that propose state-action-dependent baselines able to report significant improvements in learning performance? We analyze implementations accompanying these works, and show that they actually introduce bias into the policy gradient due to subtle implementation decisions 4 . <ref type="bibr">4</ref> The implementation of the state-action-dependent baselines for continuous control in <ref type="bibr" target="#b3">(Grathwohl et al., 2018)</ref> suffered from two critical issues (see Appendix 8.3 for details), so it was challenging to determine the source of their observed performance. After correcting these issues in their implementation, we do not observe an improvement over a state-dependent baseline, as shown in Appendix <ref type="figure" target="#fig_0">Figure 13</ref>. We emphasize that these observations are restricted to the continuous control experiments as the rest of the experiments in that paper use a separate codebase that is unaffected. Steps <ref type="formula">(</ref> Steps <ref type="formula">(</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Humanoid-v1</head><p>QProp (biased) QProp (unbiased) TRPO <ref type="figure">Figure 3</ref>. Evaluation of Q-Prop, an unbiased version of Q-Prop that applies the normalization to all terms, and TRPO (implementations based on the code accompanying <ref type="bibr" target="#b6">Gu et al. (2017a)</ref>). We plot mean episode reward with standard deviation intervals capped at the minimum and maximum across 10 random seeds. The batch size across all experiments was 5000. On the continuous control tasks (HalfCheetah and Humanoid), we found that that the unbiased Q-Prop performs similarly to TRPO, while the (biased) Q-Prop outperforms both. On the discrete task (CartPole), we found almost no difference between the three algorithms.</p><p>We find that these methods are effective not because of unbiased variance reduction, but instead because they introduce bias for variance reduction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Advantage Normalization</head><p>Although Q-Prop and IPG <ref type="bibr" target="#b7">(Gu et al., 2017b</ref>) (when ν = 0) claim to be unbiased, the implementations of Q-Prop and IPG apply an adaptive normalization to only some of the estimator terms, which introduces a bias. Practical implementations of policy gradient methods <ref type="bibr" target="#b16">(Mnih &amp; Gregor, 2014;</ref><ref type="bibr" target="#b27">Schulman et al., 2015b;</ref><ref type="bibr" target="#b1">Duan et al., 2016)</ref> often normalize the advantage estimateÂ, also commonly referred to as the learning signal, to unit variance with batch statistics. This effectively serves as an adaptive learning rate heuristic that bounds the gradient variance.</p><p>The implementations of Q-Prop and IPG normalize the learning signalÂ(s, a, τ ) − φ(s, a), but not the bias correction term ∇E a [φ(s, a)]. Explicitly, the estimator with such a normalization is,</p><formula xml:id="formula_13">g(s, a, τ ) = 1 σ Â (s, a, τ ) − φ(s, a) −μ ∇ log π(a|s) + ∇E a|s [φ(s, a)] ,</formula><p>whereμ andσ are batch-based estimates of the mean and standard deviation ofÂ(s, a, τ ) − φ(s, a). This deviates from the method presented in the paper and introduces bias. In fact, IPG <ref type="bibr" target="#b7">(Gu et al., 2017b)</ref> analyzes the bias in the implied objective that would be introduced when the first term has a different weight from the bias correction term, proposing such a weight as a means to trade off bias and variance. We analyze the bias and variance of the gradient estimator in Appendix 11. However, the weight actually used in the implementation is off by the factorσ, and never one (which corresponds to the unbiased case). This introduces an adaptive bias-variance trade-off that constrains the learning signal variance to 1 by automatically adding bias if necessary.</p><p>In <ref type="figure">Figure 3</ref>, we compare the implementation of Q-Prop from <ref type="bibr" target="#b6">(Gu et al., 2017a)</ref>, an unbiased implementation of QProp that applies the normalization to all terms, and TRPO. We found that the adaptive bias-variance trade-off induced by the asymmetric normalization is crucial for the gains observed in <ref type="bibr" target="#b6">(Gu et al., 2017a)</ref>. If implemented as unbiased, it does not outperform TRPO.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Poorly Fit Value Functions</head><p>In contrast to our results, <ref type="bibr" target="#b15">Liu et al. (2018)</ref> report that stateaction-dependent baselines significantly reduce variance over state-dependent baselines on continuous action benchmark tasks (in some cases by six orders of magnitude). We find that this conclusion was caused by a poorly fit value function.</p><p>The GAE advantage estimator has mean zero whenV (s) = V π (s), which suggests that a state-dependent baseline is unnecessary ifV (s) ≈ V π (s). As a result, a state-dependent baseline is typically omitted when the GAE advantage estimator is used. This is the case in <ref type="bibr" target="#b15">(Liu et al., 2018)</ref>. However, whenV (s) poorly approximates V π (s), the GAE advantage estimator has nonzero mean, and a state-dependent baseline can reduce variance. We show that is the case by taking the open-source code accompanying <ref type="bibr" target="#b15">(Liu et al., 2018)</ref>, and implementing a state-dependent baseline. It achieves comparable variance reduction to the state-action-dependent baseline (Appendix <ref type="figure" target="#fig_0">Figure 12</ref>). This situation can occur when the value function approximator is not trained sufficiently (e.g., if a small number of SGD steps are used to trainV (s)). Then, it can appear that adding a state-action-dependent baseline reduces variance where a state-dependent baseline would have the same effect.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Sample-Reuse in Baseline Fitting</head><p>Recent work on state-action-dependent baselines fits the baselines using on-policy samples <ref type="bibr" target="#b15">(Liu et al., 2018;</ref><ref type="bibr" target="#b3">Grathwohl et al., 2018)</ref> either by regressing to the Monte Carlo return or minimizing an approximation to the variance of the gradient estimator. This must be carefully implemented to avoid bias. Specifically, fitting the baseline to the current batch of data and then using the updated baseline to form the estimator results in a biased gradient <ref type="bibr" target="#b9">(Jie &amp; Abbeel, 2010)</ref>.</p><p>Although this can reduce the variance of the gradient estimator, it is challenging to analyze the bias introduced. The bias is controlled by the implicit or explicit regularization (e.g., early stopping, size of the network, etc.) of the function approximator used to fit φ. A powerful enough function approximator can trivially overfit the current batch of data and reduce the learning signal to 0. This is especially important when flexible neural networks are used as the function approximators. <ref type="bibr" target="#b15">Liu et al. (2018)</ref> fit the baseline using the current batch before computing the policy gradient estimator. Using the open-source code accompanying <ref type="bibr" target="#b15">(Liu et al., 2018)</ref>, we evaluate several variants: an unbiased version that fits the stateaction-dependent baseline after computing the policy step, an unbiased version that fits a state-dependent baseline after computing the policy step, and a version that estimates ∇E a|s <ref type="bibr">[φ(s, a)</ref>] with an extra sample of a ∼ π(a|s) instead of importance weighting samples from the current batch. Our results are summarized in Appendix <ref type="figure">Figure 8</ref>. Notably, we found that using an extra sample, which should reduce variance by avoiding importance sampling, decreases performance because the baseline is overfit to the current batch. The performance of the unbiased state-dependent baseline matched the performance of the unbiased state-actiondependent baseline. On Humanoid, the biased method implemented in <ref type="bibr" target="#b15">(Liu et al., 2018)</ref> performs best. However, on HalfCheetah, the biased methods suffer from instability.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Horizon-Aware Value Functions</head><p>The empirical variance decomposition illustrated in <ref type="figure">Figure 2</ref> and Appendix <ref type="figure">Figure 9</ref> reveals deficiencies in the commonly used value function approximator, and as we showed in Section 4.2, a poor value approximator can produce misleading results. To fix one deficiency with the value function approximator, we propose a new horizon-aware parameterization of the value function. As with the state-action-dependent baselines, such a modification is appealing because it does not introduce bias into the underlying method.</p><p>The standard continuous control benchmarks use a fixed time horizon <ref type="bibr" target="#b1">(Duan et al., 2016;</ref><ref type="bibr" target="#b0">Brockman et al., 2016)</ref>, yet most value function parameterizations are stationary, as though the task had infinite horizon. Near the end of an episode, the expected return will necessarily be small because there are few remaining steps to accumulate reward. To remedy this, our value function approximator outputs two values:r(s) andV (s) and then we combine them with the discounted time left to form a value function estimatê</p><formula xml:id="formula_14">V (s t ) = T i=t γ i−t r(s t ) +V (s t ),</formula><p>where T is the maximum length of the episode. Conceptually, we can think ofr(s) as predicting the average reward over future states andV (s) as a state-dependent offset. r(s) is a rate of return, so we multiply it be the remaining discounted time in the episode.</p><p>Including time as an input to the value function can also resolve this issue (e.g., <ref type="bibr" target="#b1">(Duan et al., 2016;</ref><ref type="bibr" target="#b22">Pardo et al., 2017)</ref>). We compare our horizon-aware parameterization against including time as an input to the value function and find that the horizon-aware value function performs favorably (Appendix <ref type="figure">Figures 6 and 7)</ref>.</p><p>In <ref type="figure">Figure 4</ref>, we compare TRPO with a horizon-aware value function against TRPO, TRPO with a state-dependent baseline, and TRPO with a state-action-dependent baseline. Across environments, the horizon-aware value function outperforms the other methods. By prioritizing the largest variance components for reduction, we can realize practical performance improvements without introducing bias.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Related Work</head><p>Baselines <ref type="bibr" target="#b42">(Williams, 1992;</ref><ref type="bibr" target="#b41">Weaver &amp; Tao, 2001)</ref> in RL fall under the umbrella of control variates, a general technique for reducing variance in Monte Carlo estimators without biasing the estimator <ref type="bibr">(Owen, 2013)</ref>. <ref type="bibr" target="#b41">Weaver &amp; Tao (2001)</ref> analyzes the optimal state-dependent baseline, and in this work, we extend the analysis to state-action-dependent baselines in addition to analyzing the variance of the GAE estimator <ref type="bibr" target="#b35">(Tesauro, 1995;</ref><ref type="bibr" target="#b26">Schulman et al., 2015a)</ref>. <ref type="bibr" target="#b2">Dudík et al. (2011)</ref> introduced the community to doublyrobust estimators, a specific form of control variate, for off-policy evaluation in bandit problems. The state-actiondependent baselines <ref type="bibr" target="#b6">(Gu et al., 2017a;</ref><ref type="bibr" target="#b43">Wu et al., 2018;</ref><ref type="bibr" target="#b15">Liu et al., 2018;</ref><ref type="bibr" target="#b3">Grathwohl et al., 2018;</ref><ref type="bibr" target="#b4">Gruslys et al., 2017)</ref> can be seen as the natural extension of the doubly robust estimator to the policy gradient setting. In fact, for the discrete action case, the policy gradient estimator with the 0 1000 2000 3000 4000 5000</p><p>Steps <ref type="formula">(</ref> Steps <ref type="formula">(</ref> Steps <ref type="formula">(</ref>  <ref type="figure">Figure 4</ref>. Evaluating the horizon-aware value function, TRPO with a state-dependent baseline, TRPO state-action-dependent baseline, and TRPO. We plot mean episode reward and standard deviation intervals capped at the minimum and maximum across 5 random seeds. The batch size across all experiments was 5000.</p><p>state-action-dependent baseline can be seen as the gradient of a doubly robust estimator.</p><p>Prior work has explored model-based <ref type="bibr" target="#b32">(Sutton, 1990;</ref><ref type="bibr" target="#b8">Heess et al., 2015;</ref><ref type="bibr" target="#b5">Gu et al., 2016)</ref> and off-policy critic-based gradient estimators . In off-policy evaluation, practitioners have long realized that constraining the estimator to be unbiased is too limiting. Instead, recent methods mix unbiased doubly-robust estimators with biased model-based estimates and minimize the mean squared error (MSE) of the combined estimator <ref type="bibr" target="#b37">(Thomas &amp; Brunskill, 2016;</ref><ref type="bibr" target="#b39">Wang et al., 2016a)</ref>. In this direction, several recent methods have successfully mixed high-variance, unbiased on-policy gradient estimates directly with low-variance, biased off-policy or model-based gradient estimates to improve performance <ref type="bibr" target="#b19">(O'Donoghue et al., 2016;</ref><ref type="bibr" target="#b40">Wang et al., 2016b;</ref><ref type="bibr" target="#b7">Gu et al., 2017b)</ref>. It would be interesting to see if the ideas from off-policy evaluation could be further adapted to the policy gradient setting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Discussion</head><p>State-action-dependent baselines promise variance reduction without introducing bias. In this work, we clarify the practical effect of state-action-dependent baselines in common continuous control benchmark tasks. Although an optimal state-action-dependent baseline is guaranteed not to increase variance and has the potential to reduce variance, in practice, currently used function approximators for the state-action-dependent baselines are unable to achieve significant variance reduction. Furthermore, we found that much larger gains could be achieved by instead improving the accuracy of the value function or the state-dependent baseline function approximators.</p><p>With these insights, we re-examined previous work on stateaction-dependent baselines and identified a number of pitfalls. We were also able to correctly attribute the previously observed results to implementation decisions that introduce bias in exchange for variance reduction. We intend to further explore the trade-off between bias and variance in future work.</p><p>Motivated by the gap between the value function approximator and the true value function, we propose a novel modification of the value function parameterization that makes it aware of the finite time horizon. This gave consistent improvements over TRPO, whereas the unbiased state-action-dependent baseline did not outperform TRPO.</p><p>Finally, we note that the relative contributions of each of the terms to the policy gradient variance are problem specific. A learned state-action-dependent baseline will be beneficial when Σφ (s) a is large relative to Σ τ + Σ s . In this paper, we focused on continuous control benchmarks where we found this not to be the case. We speculate that in environments where single actions have a strong influence on the discounted return (and hence Var a <ref type="figure">(A(s, a)</ref>) is large), Σ a may be large. For example, in a discrete task with a critical decision point such as a Cliffworld domain, where a single action could cause the agent to fall of the cliff and suffer a large negative reward. Future work will investigate the variance decomposition in additional domains.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Evaluating the variance terms (Eq. 3) of the policy gradient estimator on a 2D point mass task (an LQG system) with finite horizon T = 100. The total variance of the gradient estimator covariance is plotted against time in the task (t). Each plot from left to right corresponds to a different stage in learning (see Appendix 9 for policy visualizations), and its title indicates the number of policy updates completed. Σ 0 a and Σ φ(s) a</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1</head><label>1</label><figDesc>Figure 1 plots the variance terms for a simple 2D point mass task using discounted returns as the choice ofÂ(s, a, τ ) (See Appendix 9 for task details). As expected, without a baseline (φ = 0), the variance of Σ 0 a is much larger than Σ τ and Σ s . Further, using the value function as a state-dependent</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Correspondence to: George Tucker &lt;gjt@google.com&gt;.</figDesc><table>; Schulman 
+
+1 Google Brain, USA 
+2 Work was done during the Google AI Res-
+idency. 
+3 University of Cambridge, UK 
+4 Max Planck Institute for 
+Intelligent Systems, Germany 
+5 Uber AI Labs, USA 
+6 UC Berkeley, 
+USA. Proceedings of the 35 
+th International Conference on Machine 
+Learning, Stockholm, Sweden, PMLR 80, 2018. Copyright 2018 
+by the author(s). 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">At the time of submission, code for (Wu et al., 2018) was not available.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">For the LQG system, we use the oracle value function to compute the GAE estimator. In the rest of the experiments, GAE is computed using a learned value function.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">The relative magnitudes of the variance terms depend on the task, policy, and network structures. For evaluation, we use a well-tuned implementation of TRPO (Appendix 8.4).</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>We thank Jascha Sohl-Dickstein, Luke Metz, Gerry Che, Yuchen Lu, and Cathy Wu for helpful discussions. We thank Hao Liu and Qiang Liu for assisting our understanding of their code. SG acknowledges support from a Cambridge-Tübingen PhD Fellowship. RET acknowledges support from Google and EPSRC grants EP/M0269571 and The Mirage of Action-Dependent Baselines in Reinforcement Learning EP/L000776/1. ZG acknowledges support from EPSRC grant EP/J012300/1.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Brockman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pettersson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zaremba</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.01540</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">W. Openai gym. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Benchmarking deep reinforcement learning for continuous control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Houthooft</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abbeel</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1329" to="1338" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dudík</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Langford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1103.4601</idno>
+		<title level="m">Doubly robust policy evaluation and learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Backpropagation through the void: Optimizing control variates for black-box gradient estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Grathwohl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Roeder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Duvenaud</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">The reactor: A sample-efficient actor-critic architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gruslys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Azar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Munos</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.04651</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Continuous deep q-learning with model-based acceleration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2829" to="2838" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Turner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<title level="m">Sample-efficient policy gradient with an off-policy critic. International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Interpolated policy gradient: Merging on-policy and off-policy gradient estimation for deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Turner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="3849" to="3858" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Learning continuous control policies by stochastic value gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tassa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2944" to="2952" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">On a connection between importance sampling and the likelihood ratio policy gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Jie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1000" to="1008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">A natural policy gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Kakade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="1531" to="1538" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Auto-encoding variational bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">P</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Hunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tassa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.02971</idno>
+		<title level="m">Continuous control with deep reinforcement learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">On the limited memory bfgs method for large scale optimization. Mathematical programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1989" />
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="page" from="503" to="528" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Action-dependent control variates for policy optimization via stein identity</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Neural variational inference and learning in belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1402.0030</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Fidjeland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ostrovski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page">529</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Asynchronous methods for deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Badia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Harley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1928" to="1937" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>O&amp;apos;donoghue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pgq</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01626</idno>
+		<title level="m">Combining policy gradient and q-learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Monte carlo theory, methods and examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Owen</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Monte</forename><forename type="middle">Carlo</forename><surname>Theory</surname></persName>
+		</author>
+		<editor>Examples. Art Owen</editor>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Time limits in reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pardo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tavakoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Levdik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kormushev</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.00378</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Policy gradient methods for robotics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Peters</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Schaal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<title level="m">IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="2219" to="2225" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1401.4082</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Trust region policy optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moritz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1889" to="1897" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">High-dimensional continuous control using generalized advantage estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abbeel</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.02438</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wolski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dhariwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Klimov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.06347</idno>
+		<title level="m">Proximal policy optimization algorithms</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Deterministic policy gradient algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Degris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Mastering the game of go with deep neural networks and tree search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Guez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sifre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Van Den Driessche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schrittwieser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Antonoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Panneershelvam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lanctot</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">nature</title>
+		<imprint>
+			<biblScope unit="volume">529</biblScope>
+			<biblScope unit="issue">7587</biblScope>
+			<biblScope unit="page" from="484" to="489" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Optimal control and estimation. Courier Corporation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Stengel</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Integrated architectures for learning, planning, and reacting based on approximating dynamic programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning Proceedings</title>
+		<imprint>
+			<publisher>Elsevier</publisher>
+			<date type="published" when="1990" />
+			<biblScope unit="page" from="216" to="224" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Reinforcement Learning: An Introduction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Barto</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<publisher>MIT Press Cambridge</publisher>
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Policy gradient methods for reinforcement learning with function approximation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mansour</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="page" from="1057" to="1063" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Temporal difference learning and td-gammon</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tesauro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications of the ACM</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="58" to="68" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Bias in natural actor-critic algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Thomas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="441" to="448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Data-efficient off-policy policy evaluation for reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brunskill</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2139" to="2148" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Policy gradient methods for reinforcement learning with function approximation and action-dependent baselines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">S</forename><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brunskill</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.06643</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Optimal and adaptive off-policy evaluation in contextual bandits</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dudik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.01205</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Sample efficient actor-critic with experience replay</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Bapst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>De Freitas</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01224</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">The optimal reward baseline for gradient-based reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Weaver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Seventeenth conference on Uncertainty in artificial intelligence</title>
+		<meeting>the Seventeenth conference on Uncertainty in artificial intelligence</meeting>
+		<imprint>
+			<publisher>Morgan Kaufmann Publishers Inc</publisher>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="538" to="545" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Reinforcement Learning</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1992" />
+			<biblScope unit="page" from="5" to="32" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Variance reduction for policy gradient with action-dependent factorized baselines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rajeswaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Bayen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kakade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Mordatch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abbeel</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
