@@ -58,7 +58,7 @@ with open(input_path_and_file, encoding="utf8") as f:
 sentences, relations = prepare_dataset(train_file)
 
 # check how many relations exist in the dataset
-# n_relations = len(set(relations))
+n_relations = len(set(relations))
 # print("found {} relations \n ".format(n_relations))
 # print("relations: {}".format(list(set(relations))))
 
