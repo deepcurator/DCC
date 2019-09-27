@@ -4,6 +4,7 @@
 # text from each paper. This is required because these files will be used as input to the auto_annotate.py 
 # to genrate annotations that follow the Brat format.
 
+import yaml
 import time
 import os
 from bs4 import BeautifulSoup
@@ -11,6 +12,12 @@ import nltk
 from nltk import sent_tokenize
 
 MAX_NUM_SECTIONS = 2
+
+
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+file_path = config['PAPERS_IN_XML_PATH']
+output_dir = config['SENTENCE_ANNOTATED_TEXT_PATH']
+
 
 class TEIFile(object):
     def __init__(self, filename):
@@ -102,7 +109,7 @@ def read_tei(tei_file):
 
 start_time = time.time()
 
-file_path = 'C:/Home02/src02/DCCdev/grobid/'
+#file_path = 'C:/Home02/src02/DCCdev/grobid/'
 files_xml = [x for x in os.listdir(file_path) if os.path.splitext(x)[1]=='.xml']
 
 
@@ -123,7 +130,7 @@ for i, f in enumerate(files_xml):
     paper_body = paper_body.replace('et al.', 'et al')
     new_f = f.replace('.tei', '')
     new_f = new_f.replace('.xml', '')
-    new_f = 'Text_Files_In_Sentences_V3_Partial/' + new_f + '-'
+    new_f = new_f + '-'
 
     # split the title and the body of the paper into sentences
     sents_title = nltk.sent_tokenize(paper_title)
@@ -131,7 +138,7 @@ for i, f in enumerate(files_xml):
     sents = sents_title + sents_body
     for j, se in enumerate(sents):
         sent_cnt += 1
-        outfile = os.path.join(file_path, new_f + str(j) + '.txt')
+        outfile = os.path.join(output_dir, new_f + str(j) + '.txt')
         with open(outfile, 'w', encoding='utf8') as of:
             of.write(se)
 
