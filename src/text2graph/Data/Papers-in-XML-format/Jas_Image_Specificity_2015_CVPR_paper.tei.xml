@@ -1,0 +1,1414 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader>
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:25+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Image Specificity</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mainak</forename><surname>Jas</surname></persName>
+							<email>mainak.jas@aalto.fi</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Aalto University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devi</forename><surname>Parikh</surname></persName>
+							<email>parikh@vt.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Aalto University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Virginia</forename><surname>Tech</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Aalto University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Image Specificity</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract xml:lang="en">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>For some images, descriptions written by multiple people are consistent with each other. But for other images, descriptions across people vary considerably. In other words, some images are specific -they elicit consistent descriptions from different people -while other images are ambiguous. Applications involving images and text can benefit from an understanding of which images are specific and which ones are ambiguous. For instance, consider text-based image retrieval. If a query description is moderately similar to the caption (or reference description) of an ambiguous image, that query may be considered a decent match to the image. But if the image is very specific, a moderate similarity between the query and the reference description may not be sufficient to retrieve the image.</p><p>In this paper, we introduce the notion of image specificity. We present two mechanisms to measure specificity given multiple descriptions of an image: an automated measure and a measure that relies on human judgement. We analyze image specificity with respect to image content and properties to better understand what makes an image specific. We then train models to automatically predict the specificity of an image from image features alone without requiring textual descriptions of the image. Finally, we show that modeling image specificity leads to improvements in a text-based image retrieval application.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text>
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Consider the two photographs in <ref type="figure" target="#fig_0">Figure 1</ref>. How would you describe them? For the first, phrases like "people lined up in terminal", "people lined up at train station", "people waiting for train outside a station", etc. come to mind. It is clear what to focus on and describe. In fact, different people talk about similar aspects of the image -the train, people, station or terminal, lining or queuing up. But for the photograph on the right, it is less clear how it should be described. Some people talk about the the sunbeam shining through the skylight, while others talk about the alleyway, or the people selling products and walking. In other words, the photograph on the left is specific whereas the photograph on the right is ambiguous. The computer vision community has made tremendous progress on recognition problems such as object detection <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b15">16]</ref>, image classification <ref type="bibr" target="#b25">[26]</ref>, attribute classification <ref type="bibr" target="#b47">[48]</ref> and scene recognition <ref type="bibr" target="#b49">[50,</ref><ref type="bibr" target="#b51">52]</ref>. Various approaches are moving to higher-level semantic image understanding tasks. One such task that is receiving increased attention in recent years is that of automatically generating textual descriptions of images <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b46">47,</ref><ref type="bibr" target="#b50">51]</ref> and evaluating these descriptions <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b38">39]</ref>. However, these works have largely ignored the variance in descriptions produced by different people describing each image. In fact, early works that tackled the image description problem <ref type="bibr" target="#b13">[14]</ref> or reasoned about what image content is important and frequently described <ref type="bibr" target="#b2">[3]</ref> claimed that human descriptions are consistent. We show that there is in fact variance in how consistent multiple human-provided descriptions of the same image are. Instead of treating this variance as noise, we think of it as a useful signal that if modeled, can benefit applications involving images and text.</p><p>We introduce the notion of image specificity which measures the amount of variance in multiple viable descriptions of the same image. Modeling image specificity can benefit a variety of applications. For example, computergenerated image description and evaluation approaches can benefit from specificity. If an image is known to be am-biguous, several different descriptions can be generated and be considered to be plausible. But if an image is specific, a narrower range of descriptions may be appropriate. Photographers, editors, graphics designers, etc. may want to pick specific images -images that are likely to have a single (intended) interpretation across viewers.</p><p>Given multiple human-generated descriptions of an image, we measure specificity using two different mechanisms: one requiring human judgement of similarities between two descriptions, and the other using an automatic textual similarity measure. Images with a high average similarity between pairs of sentences describing the image are considered to be specific, while those with a low average similarity are considered to be ambiguous. We then analyze the correlation between image specificity and image content or properties to understand what makes certain images more specific than others. We find that images with people tend to be specific, while mundane images of generic buildings or blue skies do not tend to be specific. We then train models that can predict the specificity of an image just by using image features (without associated human-generated descriptions). Finally, we leverage image specificity to improve performance in a real-world application: text-based image retrieval.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Image properties: Several works study high-level image properties beyond those depicted in the image content itself. For instance, unusual photographs were found be interesting <ref type="bibr" target="#b16">[17]</ref> and images of indoor scenes with people were found to be memorable, while scenic, outdoor scenes were not <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b18">19]</ref>. Other properties of images such as aesthetics <ref type="bibr" target="#b6">[7]</ref>, attractiveness <ref type="bibr" target="#b29">[30]</ref>, popularity <ref type="bibr" target="#b23">[24]</ref>, and visual clutter <ref type="bibr" target="#b41">[42]</ref> have also been studied <ref type="bibr" target="#b0">1</ref> . In this paper, we study a novel property of images -specificity -that captures the degree to which multiple human-generated descriptions of an image vary. We study what image content and properties make images specific. We go a step further and leverage this new property to improve a text-based image retrieval application. Importance: Some works have looked at what is worth describing in an image. Bottom-up saliency models <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b21">22]</ref> study which image features predict eye fixations. Importance <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b43">44]</ref> characterizes the likelihood that an object in an image will be mentioned in its description. Attribute dominance <ref type="bibr" target="#b44">[45]</ref> models have been used to predict which attributes pop out and the order in which they are likely to be named. However, unlike most of these works, we look at the variance in human perception of what is worth mentioning in an image and how it is mentioned.</p><p>Image description: Several approaches have been proposed for automatically describing images. This paper does not address the task of generating descriptions. Instead, it studies a property of how humans describe images -some images elicit consistent descriptions from multiple people while others do not. This property can benefit image description approaches. Some image description approaches are data-driven. They retrieve images from a database that are similar to the input image, and leverage descriptions associated with the retrieved images to describe the input image <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b37">38]</ref>. In such approaches, knowledge of the specificity of the input image may help guide the range of the search for visually similar images. If the input image is specific, perhaps only highly similar images and their associated descriptions should be used to construct its description. Other approaches analyze the content of the image and then compose descriptive sentences using knowledge of sentence structures <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b36">37]</ref>. For images that are ambiguous, the model can predict multiple diverse high-scoring descriptions of the image that can all be leveraged for a downstream application. Finally, existing automatic image description evaluation metrics such as METEOR <ref type="bibr" target="#b0">[1]</ref>, ROUGE <ref type="bibr" target="#b31">[32]</ref>, BLEU <ref type="bibr" target="#b38">[39]</ref> and CIDEr <ref type="bibr" target="#b45">[46]</ref> compare a generated description with human-provided reference descriptions of the image. This evaluation protocol does not account for the fact that some images have multiple viable ways in which they can be described. Perhaps the penalty for not matching reference descriptions of ambiguous images should be less than for specific ones. Image retrieval: Query-or text-based image and video retrieval approaches evaluate how well a query matches the content of <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b42">43]</ref> or captions (descriptions) associated with <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b28">29]</ref> images in a database. However, the fact that each image may have a different match score or similarity that is sufficient to make it relevant to a query has not been studied. In this work, we use image specificity to fill this gap. While the role of lexical ambiguity in information retrieval has been studied before <ref type="bibr" target="#b26">[27]</ref>, reasoning about inherent ambiguity in images for retrieval tasks has not been explored.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Approach</head><p>We first describe the two ways in which we measure the specificity of an image. We then describe how we use specificity in a text-based image retrieval application.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Measuring Specificity</head><p>We define the specificity of an image as the average similarity between pairs of sentences describing the image. For each image i, we are given a set S i of N sentence descriptions {s    , on a scale of 1 (very different) to 10 (very similar). Note that subjects were not shown the corresponding image and were not informed that the sentences describe the same image. This ensured that subjects rated the similarity between sentences based solely on their textual content. We shift and scale the similarity scores to lie between 0 and 1. We denote this similarity, as assessed by the m-th subject to be sim</p><formula xml:id="formula_0">m hum (s i a , s i b )</formula><p>The average similarity score across all pairs of sentences and subjects gives us the specificity score spec i hum for image i based on human perception. For ease of notation, we drop the superscript i when it is clear from the context. <ref type="figure" target="#fig_2">Figure 2</ref> shows images with their human-annotated specificity scores. Note how the specificity score drops as the sentence descriptions become more varied.</p><formula xml:id="formula_1">spec hum = 1 M N 2 ∀{sa,s b }⊂S M m=1 sim m hum (s a , s b ) (1)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.2">Automated Specificity Measurement</head><p>To measure specificity automatically given the N descriptions for image i, we first tokenize the sentences and only retain words of length three or more. This ensured that semantically irrelevant words, such as 'a', 'of', etc., were not taken into account in the similarity computation (a standard stop word list could also be used instead). We identified the synsets (sets of synonyms that share a common meaning) to which each (tokenized) word belongs using the Natural Language Toolkit <ref type="bibr" target="#b3">[4]</ref>. Words with multiple meanings can belong to more than one synset. Let Y au = {y au } be the set of synsets associated with the u-th word from sentence s a .</p><p>Every word in both sentences contributes to the automatically computed similarity sim auto (s a , s b ) between a pair of sentences s a and s b . The contribution of the u-th word from sentence s a to the similarity is c au . This contribution is computed as the maximum similarity between this word, and all words in sentence s b (indexed by v). The similarity between two words is the maximum similarity between all pairs of synsets (or senses) to which the two words have been assigned. We take the maximum because a word is usually used in only one of its senses. Concretely,</p><formula xml:id="formula_2">c au = max v max yau∈Yau max y bv ∈Y bv sim sense (y au , y bv ) (2)</formula><p>The similarity between senses sim sense (y au , y bv ) is the shortest path similarity between the two senses on WordNet <ref type="bibr" target="#b35">[36]</ref>. We can similarly define c bv to be the contribution of v-th word from sentence s b to the similarity sim auto (s a , s b ) between sentences s a and s b .</p><p>The similarity between the two sentences is defined as the average contribution of all words in both sentences, weighted by the importance of each word. Let the importance of the u-th word from sentence s a be t au . This importance is computed using term frequency-inverse document frequency (TF-IDF) using the scikit-learn software package <ref type="bibr" target="#b39">[40]</ref>. Words that are rare in the corpus but occur frequently in a sentence contribute more to the similarity of that sentence with other sentences. So we have</p><formula xml:id="formula_3">sim auto (s a , s b ) = u t au c au + v t bv c bv u t au + v t bv (3)</formula><p>The denominator in Equation 3 ensures that the similarity between two sentences is independent of sentence-length and is always between 0 and 1. Finally, the automated specificity score spec auto of an image i is computed by averaging these similarity scores across all sentence pairs:</p><formula xml:id="formula_4">spec auto = 1 N 2 ∀{sa,s b }⊂S sim auto (s a , s b )<label>(4)</label></formula><p>The reader is directed to the supplementary material <ref type="bibr" target="#b20">[21]</ref> for a pictorial explanation of automated specificity computation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Application: Text-based image retrieval</head><p>We now describe how we use image specificity in a textbased image retrieval application.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.1">Setup</head><p>There is a particular image the user is looking for from a database of images. We call this the target image. The user inputs a query sentence q that describes the target image. Every image in the database is associated with a single reference description r i (not to be confused with the "training" pool of sentences S i described in Section 3.1 used to define the specificity of an image). This can be, for example, the caption in an online photo database such as Flickr. The goal is to sort the images in the database according to their relevance score rel i from most to least relevant, such that the target image has a low rank.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.2">Baseline Approach</head><p>The baseline approach automatically computes a similarity sim auto (q, r i ) between q and r i using Equation <ref type="bibr" target="#b2">3</ref>. All images in the database are sorted in descending order using this similarity score. That is,</p><formula xml:id="formula_5">rel i baseline = sim auto (q, r i ).<label>(5)</label></formula><p>The image whose reference sentence has the highest similarity to the query sentence gets ranked first while the image whose reference sentence has the lowest similarity to the query sentence gets ranked last.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.3">Proposed Approach</head><p>In the proposed approach, instead of ranking just by similarity between the query sentence and reference descriptions in the database, we take into consideration the specificity of each image. The rationale is the following: a specific image should be ranked high only if the query description matches the reference description of that image well, because we know that sentences that describe this image tend to be very similar. For ambiguous images, on the other hand, even mediocre similarities between query and reference descriptions may be good enough.</p><p>This suggests that instead of just sorting based on sim auto (q, r i ), the similarity between the query description q and the reference description r i of an image i (which is what the baseline approach does as seen in <ref type="formula" target="#formula_5">Equation 5</ref>), we should model P (match|sim auto (q, r i )) which captures the probability that the query sentence matches the reference sentence i.e., the query sentence describes the image. We use Logistic Regression (LR) to model this.</p><formula xml:id="formula_6">rel i gt−specificity = P (match|sim auto (q, r i )) = 1 1 + e −β i 0 −β i 1 simauto(q,ri)<label>(6)</label></formula><p>For each image in the database, we train the above LR model. Positives examples of this model are the similarity scores between pairs of sentences both describing the image i taken from the set S i described in Section 3.  , inherently capture the specificity of the image. Note that a separate LR model is trained for each image to model the specificity for that image. After these models have been trained, given a new query description q, the similarity sim auto (q, r i ) is computed with every reference description r i in the dataset. The trained LR for each image, i.e. the parameters β i 0 and β i 1 , can be used to compute P (match|sim auto (q, r i )) for that image. All images can then be sorted by their corresponding P (match|sim auto (q, r i )) values. In our experiments, unless mentioned otherwise, the query and reference descriptions being used at test time were not part of the training set used to train the LRs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.4">Predicting Specificity of Images</head><p>The above approach needs several sentences per image to obtain positive and negative examples to train the LR. But in realistic scenarios, it may not be viable to collect multiple sentences for every image in the database. Hence, we learn a mapping from the image features {x i } to the LR parameters estimated using sentence pairs. We call these parameters ground-truth LR parameters. We train two separate ν-Support Vector Regression (SVR) models (one for each β term) with Radial Basis Function (RBF) kernel. The learnt SVR model is then used to predict the LR parametersβ i 0 andβ i 1 of any previously unseen image. Finally, these predicted LR parameters are used to computê P (match|sim auto (q, r i )) and sort images in a database according to their relevance to a query description q. Of course, each image in the database still needs a (single) reference description r i (without which text-based image retrieval is not feasible).</p><formula xml:id="formula_7">rel i pred−specificity =P (match|sim auto (q, r i )) = 1 1 + e −β i 0 −β i 1 simauto(q,ri)<label>(7)</label></formula><p>Notice that the baseline approach ( <ref type="formula" target="#formula_5">Equation 5</ref>) is a special case of our proposed approaches (Equations 6 and 7) with β </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.5">Summary</head><p>Let's say we are given a new database of images and associated (single) reference descriptions that we want to search using query sentences. SVRs are used to predict each of the two LR parameters using image features for every image in the database. This is done offline. When a query is issued, its similarity is computed to each reference description in the image. Each of these similarities are substituted into Equation 7 to calculate the relevance of each image using the LR parameters predicted for that image. This querytime processing is computationally light. The images are then sorted by the probability outputs of their LR models. The quality of the retrieved results using this (proposed) approach is compared to the baseline approach that sorts all images based on the similarity between the query sentence and reference descriptions. Of course, in the scenario where multiple reference descriptions are available for each image in the database, we can directly estimate the (groundtruth) LR parameters using those descriptions (as described in Section 3.2.3) instead of using the SVR to predict the LR parameters. We will show results of both approaches (using ground-truth LR parameters and predicted LR parameters).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets and Image Features</head><p>We experiment with three datasets. The first is the MEM-5S dataset containing 888 images from the memorability dataset <ref type="bibr" target="#b18">[19]</ref>, which are uniformly spaced in terms of their memorability. For each of these images, we collected 5 sentence descriptions by asking unique subjects on AMT to describe them. <ref type="figure" target="#fig_2">Figure 2</ref> shows some example images and their descriptions taken from the MEM-5S dataset. Since specificity measures the variance between sentences, and more sentences would result in a better specificity estimate, we also experiment with two datasets with 50 sentences per image in each dataset. One of these is the ABSTRACT-50S dataset <ref type="bibr" target="#b45">[46]</ref> which is a subset of 500 images made of clip art objects from the Abstract Scene dataset <ref type="bibr" target="#b52">[53]</ref> containing 50 sentences/image (48 training, 2 test). We use only the training sentences from this dataset for our experiments. The second is the PASCAL-50S dataset <ref type="bibr" target="#b45">[46]</ref> containing 50 sentences/image for the 1000 images from the UIUC PAS-CAL dataset <ref type="bibr" target="#b40">[41]</ref>. These datasets allow us to study specificity in a wide range of settings, from real images to nonphotorealistic but semantically rich abstract scenes. All correlation analysis reported in the following sections was performed using Spearman's rank correlation coefficient.</p><p>For predicting specificity, we extract 4096D DECAF-6 <ref type="bibr" target="#b8">[9]</ref> features from the PASCAL-50S images. Images in the ABSTRACT-50S dataset are represented by the occurrence, location, depth, flip angle of objects, object co-occurrences and clip art category (451D) <ref type="bibr" target="#b52">[53]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Consistency analysis</head><p>In Section 3.1, we described two methods to measure specificity. In the first, humans are involved in annotating the similarity score between the sentences describing an image and in the second, this is done automatically. We first analyze if humans agree on their notions of specificity, and then study how well human annotation of specificity correlates with automatically-computed specificity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Do humans rate sentence pair similarities consistently?</head><p>The similarity of each pair of sentences in the MEM-5S dataset was rated by 3 subjects on AMT. This means that every image is annotated by 5 2 * 3 = 30 similarity ratings. The average of the similarity ratings gives us the specificity scores. These ratings were split thrice into two parts such that the ratings from one subject was in one part and ratings from the other two subjects were in the other part. The specificity score computed from the first part was correlated with the specificity score of the other part. This gave an average correlation coefficient of 0.72, indicating high consistency in specificity measured across subjects.</p><p>Is specificity consistent for a new set of descriptions? Additionally, 5 more sentences were collected for a subset of 222 images in the memorability dataset. With these additional sentences, specificity was computed using human annotations and the correlation with the specificity from the previous set of sentences was found to be 0.54. Inter-human agreement on the same set of 5 descriptions for 222 images was 0.76. We see that specificity measured across two sets of five descriptions each is not highly consistent. Hence, we hypothesize that measuring specificity using more sentences would be desirable (thus our use of the PASCAL-50S and ABSTRACT-50S datasets) <ref type="bibr" target="#b1">2</ref> .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>How do human and automated specificity compare?</head><p>We find that the rank correlation between human-annotated and automatically measured specificity (on the same set of 5 sentences for 888 images in MEM-5S) is 0.69 which is very close to the inter-human correlation of 0.72. Note that this automated method still requires textual descriptions by humans. In a later section, we will consider the problem of predicting specificity just from image features if textual descriptions are also not available. Note that in most realistic applications (e.g. image search, that we explore later), it is practical to measure specificity by comparing descriptions automatically. Hence, the automated specificity measurement may be the more relevant one.</p><p>Are some images more specific than others? Now that we know specificity is well-defined, we study whether some images are in fact more specific than others. <ref type="figure" target="#fig_2">Figure 2</ref> shows some examples of images whose specificity values range from low to very high values. Note how the descriptions become more varied as the specificity value drops. <ref type="figure" target="#fig_6">Figure 3</ref> shows a histogram of specificity values on all three datasets. In the MEM-5S dataset, the specificity values range from 0.11 to 0.93 <ref type="bibr" target="#b2">3</ref> . This indicates that indeed, some images are specific and some images are ambiguous. We can exploit this fact to improve applications such as text-based image retrieval (Section 4.4). </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">What makes an image specific?</head><p>We now study what makes an image specific. The first question we want to answer is whether longer sentence descriptions lead to more variability and hence less specific images. We correlated the average length of a sentence (measured as the number of words in the sentence) with specificity, and surprisingly, found that the length of a sentence had no effect on specificity (ρ=-0.02, p-value=0.64). However, we did find that the more specific an image was, the less was the variation in length of sentences describing it (ρ=-0.16, p-value&lt;0.01).</p><p>Next, we looked at image content to unearth possibly consistent patterns that make an image specific. We correlated publicly available attribute, object and scene annotations <ref type="bibr" target="#b17">[18]</ref> for the MEM-5S dataset with our specificity scores. We then sorted the annotations by their correlation with specificity and showed the top 10 and bottom 10 correlations as a bar plot in <ref type="figure" target="#fig_8">Figure 4</ref>. We find that images with people tend to be specific, while mundane images of generic buildings or blue skies tend to not be specific. Note that if a category (e.g. person) and its subcategory (e.g. caucasian person) both appeared in the top 10 or bottom 10 list and had very similar correlations, the subcategory was excluded in favour of the main category since the subcategory is redundant.</p><p>Next, we hypothesized that images with larger objects in them may be more specific, since different people may all talk about those objects. Confirming this hypothesis, we found a correlation of 0.16 with median object area and 0.14 with mean object area.</p><p>We then investigated how importance <ref type="bibr" target="#b2">[3]</ref> relates to speci-  ficity. Since important objects in images are those that tend to be mentioned often, perhaps an image containing an important object will be more specific because most people will talk about the object. We consider all sentences corresponding to all images containing a certain object category. In each sentence, we identify the word (e.g. vehicle) that best matches the category (e.g. car) using the shortest-path similarity of the words taken from the WordNet database <ref type="bibr" target="#b35">[36]</ref>. We average the similarity between this best matching word in each sentence to the category name across all sentences of all images containing that category. This is a proxy for how frequently that category is mentioned in descriptions of images containing the category. A similar average was found for randomly chosen sentences from other categories as a proxy for how often a category gets mentioned in sentences a priori. These two averages were subtracted to obtain an importance value for each category. Now, the specificity scores of all images containing an object category was averaged and this score was found to be significantly correlated (ρ=0.31, p-value=0.05) with the importance score. This analysis was done only for categories that were present in more than 10 images in the MEM-5S dataset. This shows that images containing important objects do tend to be more specific. In another study, Isola et al. <ref type="bibr" target="#b18">[19]</ref> measured image memorability. Images were flashed in front of subjects who were asked to press a button each time they saw the same image again. Interestingly, repeats of some images are more reliably detected across subjects than other images. That is, some images are more memorable than others. We tested if memorability and specificity are related by correlating them and found a high correlation (ρ=0.33, p-value&lt;0.01) between the two. Thus, specificity can explain memorability to some extent. However, the two concepts are distinct. For instance, peaceful, picture-perfect scenes that may appear on a postcard or in a painting were found to be negatively correlated with memorability <ref type="bibr" target="#b17">[18]</ref>  0.02, ρ postcard =-0.05). In the supplementary material <ref type="bibr" target="#b20">[21]</ref>, we include examples of images that are memorable but not specific and vice-versa. Additional scatter plots for a subset of the computed correlations are also included in the supplementary material <ref type="bibr" target="#b20">[21]</ref>. Finally, correlation of mean color of the image with specificity was ρ red =0.01, ρ green =0.02 and ρ blue =0.01.</p><note type="other">u i l d i n g m y s t e r i o u s s k y g r o u n d i s s t r a n g e e m p t y s p a c e w i n d o w p l a n t f a m o u s a i r p o r t t e r m i n a l r e c o g n i z e p l a c e f a c e v i s i b l e p l e a s a n t s p o r t s a r t h o l d i n g m o v i n g w o r k i n g e n g a g i n g m o o d h a</note><p>Overall, specificity is correlated with image content to quite an extent. In fact, if we train a regressor to predict automated specificity directly from DECAF-6 features in the PASCAL-50S and MEM-5S dataset, we get a correlation of 0.2 and 0.25. The correlation using semantic features in the ABSTRACT-50S dataset was 0.35. More details in supplementary material <ref type="bibr" target="#b20">[21]</ref>. The reader is encouraged to browse our datasets through the websites on the authors' webpages.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Image search 4.4.1 Ground truth Specificity</head><p>Given a database of images with multiple descriptions each, Section 3.2.3 describes how we estimate parameters of a Logistic Regression (LR) model, and use the model for image search. In our experiments, the query sentence corresponds to a known target image (known for evaluation, not to the search algorithm). The evaluation metric is the rank of the target images, averaged across multiple queries.</p><p>We investigate the effect of number of training sentences per image used to train the LR model on the average rank of target images. <ref type="figure" target="#fig_9">Figure 5</ref> shows that the mean rank of the target image decreases with increasing number of training sentences. The baseline approach (Section 3. baseline (BL), specificity using ground truth (GT-Spec) LR parameters, and specificity (P-Spec) using predicted LR parameters.</p><p>The column with header Mean rank gives the rank of the target image averaged across all images in the database. The final column indicates the percentage of queries where the method does better than or as good as baseline.</p><p>sentence and all reference sentences in the database (one per image). For the PASCAL-50S dataset, 17 training sentences per image were required to estimate an LR model that can beat this baseline while for ABSTRACT-50S dataset, 8 training sentences per image were enough. The improvement obtained over the baseline by training on all 50 sentences was 1.0% of the total dataset size for PASCAL-50S and 2.5% for the ABSTRACT-50S dataset <ref type="bibr" target="#b3">4</ref> . With this improvement, we bridge 20.5% of the gap between baseline and perfect result (target rank of 1) for PASCAL-50S and 17.5% for ABSTRACT-50S.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.2">Predicted Specificity</head><p>We noted in the previous section that as many as 17 training sentences per image are needed to estimate specificity accurately enough to beat baseline on the PASCAL-50S dataset. In a real application, it is not feasible to expect these many sentences per image. This leads us to explore if it is possible to predict specificity directly from images accurately enough to beat the baseline approach.</p><p>As described in Section 3.2.4, we train regressors that map image features to the LR parameters. These regressors are then used to predict the LR parameters that are used for ranking the database of test images in an image search application. We do this with leave-one-out cross-validation (ensuring that none of the textual descriptions of the predicted image were included in the training set) so that we have predicted LR parameters on our entire dataset. <ref type="table">Table 1</ref> shows how often our approach does better than or matches the baseline. It can be seen that specificity using the LR parameters predicted directly using image features does better than or matches the baseline for 73.2% of the queries. This is especially noteworthy since no sentence descriptions were used to estimate the specificity of the images. Specificity is predicted using purely image features. % queries baseline is beaten by at least K GT-Spec (PASCAL-50S) GT-Spec (ABSTRACT-50S) P-Spec (PASCAL-50S) P-Spec (ABSTRACT-50S) <ref type="figure">Figure 6</ref>. Image search results: On the x-axis is plotted K, the margin in rank of target image by which baseline is beaten, and on the y-axis is the percentage of queries where baseline is beaten by at least K.</p><p>From <ref type="table">Table 1</ref>, we note that predicted specificity (P-Spec) loses less often to baseline as compared to ground-truth specificity (GT-Spec), but GT-Spec still has a better average rank of target images compared to P-Spec. The reason is that GT-Spec does much better than P-Spec on queries where it wins against baseline. Therefore, we would like to know that when an approach beats baseline, how often does it beat baseline by a low or high margin? <ref type="figure">Figure 6</ref> shows the percentage of queries which beat baseline by different margins. The x-axis is the margin by at least which the baseline is beaten and on the y-axis is the percentage of queries. As expected, ground-truth specificity performs the best amongst the three methods. But even predicted specificity often beats the baseline by large margins.</p><p>Many approaches <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b48">49]</ref> retrieve images based on textbased matches between the query and reference sentences, and then re-rank the results based on image content. This content-based re-ranking step can be performed on top of our retrieved results as well. Note that in our approach, the image features are used to modulate the similarity between the query and reference sentences -and not to better assess the match between the query sentence and image content. These are two orthogonal sources of information.</p><p>Finally, <ref type="figure">Figure 7</ref> shows a qualitative example from the ABSTRACT-50S dataset. In the first image, the query and the reference sentence for the target image do not match very closely. However, since the image has a low automated specificity, this mediocre similarity is sufficient to lower the rank of the target image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussion and Conclusion</head><p>We introduce the notion of specificity. We present evidence that the variance in textual descriptions of an image, which we call specificity, is a well-defined phenomenon. We find that even abstract scenes which are not photorealistic capture this variation in textual descriptions. We study <ref type="bibr">Figure 7</ref>. Qualitative image search results from the ABSTRACT-50S dataset. The images are the target images. Query sentences are shown in the blue box below each image (along with their automated similarity to the reference sentence). The reference sentence of the image is shown on the image. The automated specificity value is indicated at the top-left corner of the images. Green border (left) indicates that both predicted and ground-truth specificity performed better than baseline, and red border (right) indicates that baseline did better than both P-Spec and GT-Spec. The rank of the target image using baseline, GT-Spec and P-Spec is shown above the image. various object and attribute-level properties that influence specificity. More importantly, modeling specificity can benefit various applications. We demonstrate this empirically on a text-based image retrieval task. We use image features to predict the parameters of a classifier (Logistic Regression) that modulates the similarity between the query and reference sentence differently for each image. Future work involves exploring robust measures of specificity that consider only representative sentences (not outliers), investigating other similarity measures such as Lin's similarity <ref type="bibr" target="#b32">[33]</ref> or word2vec <ref type="bibr" target="#b4">5</ref> when measuring specificity, exploring the potential of low-level saliency and objectness maps in predicting specificity, studying specificity in more controlled settings involving a closed set of visual concepts and using image specificity in various applications such as image tagging to determine how many tags to associate with an image (few for specific images and many for ambiguous images), image captioning, etc. Our data and code are publicly available on the authors' webpages.</p><p>Glossary automated specificity Specificity computed from image textual descriptions by averaging automatically computed sentence similarities (Section 3.1.2) <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">[5]</ref><ref type="bibr" target="#b5">[6]</ref><ref type="bibr" target="#b6">[7]</ref><ref type="bibr" target="#b7">[8]</ref> ground-truth LR/specificity Specificity computed using Logistic Regression parameters estimated from image textual descriptions (Section 3.2.3) <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8]</ref> human specificity Specificity measured from image textual descriptions by averaging human-annotated sentence similarities (Section 3.1.1) <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b5">6</ref>] predicted LR/specificity Specificity computed using Logistic Regression parameters predicted from image features (Section 3.2.4) <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8]</ref> </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Some images are specific -they elicit consistent descriptions from different people (left). Other images (right) are ambiguous.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>i 1 , . . . , s i N }. We measure the similarity between all possible N 2 pairs of sentences and average the scores. The similarity between two sentences can either be judged by humans or computed automatically.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Example images with very low to very high human-annotated specificity scores.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>Measurement M different subjects on Amazon Mechanical Turk (AMT) were asked to rate the similarity between a pair of sentences s</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>of N sentences). We generate a similar number of negative examples by pairing each of the N descriptions with N −1 2 descriptions from other images. . is the ceiling function. The parameters of this LR model,</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head></head><label></label><figDesc>constant 1 ∀i, where the parameters for each image are the same.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. A histogram of human-annotated specificity values for the MEM-5S dataset (top left) and automated specificity values for all three datasets (rest).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Spearman's rank correlation of human specificity with attributes, objects and scene annotations for the MEM-5S dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Image search results: Increasing the number of training sentences per image improves the mean target rank obtained with ground truth LR parameters (specificity). As expected, there is a sharp improvement when the reference sentence (green fill) or both the reference and query sentences (black fill) are included when estimating the LR parameters. The results are averaged across 25 random repeats and the error intervals are shown in shaded colors. Annotations indicate the number of sentences required to beat baseline and the maximum improvement possible over baseline using all available sentences. Lower mean rank of target means better performance.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>1. Negative examples are similarity scores between pairs of sentences where one sentence describes the image i but the other does not. If there are N descriptions available for each image during training, we have</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Our work is complementary to visual metamers [15]. In visual metamers, different images are perceived similarly but in specificity, we study how the same image can be perceived differently, and how this variance in perception differs across images.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">It was prohibitively expensive to measure human specificity for all pairs of 50 sentences to verify this hypothesis 3 Specificity values can fall between 0 and 1.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Our approach is general and can be applied to different automatic text similarity metrics. For instance, cosine similarity (dot product of the TF-IDF vectors) also works quite well with a 3.5% improvement using groundtruth specificity for ABSTRACT-50S.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">http://code.google.com/p/word2vec/</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements: This work was supported in part by The Paul G. Allen Family Foundation Allen Distinguished Investigator award to D.P.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">METEOR: An automatic metric for MT evaluation with improved correlation with human judgments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Banerjee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lavie</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Learning the semantics of words and pictures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="408" to="415" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Understanding and predicting importance in images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Daume</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dodge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mensch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Stratos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="3562" to="3569" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">NLTK: the natural language toolkit</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bird</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the COLING/ACL on Interactive presentation sessions</title>
+		<meeting>the COLING/ACL on Interactive presentation sessions</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="69" to="72" />
+		</imprint>
+	</monogr>
+	<note>Association for Computational Linguistics</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning a Recurrent Visual Representation for Image Caption Generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Real time google and live image search re-ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 16th ACM international conference on Multimedia</title>
+		<meeting>the 16th ACM international conference on Multimedia</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="729" to="732" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">High level describable attributes for predicting aesthetics and interestingness</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="1657" to="1664" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Long-term recurrent convolutional networks for visual recognition and description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Hendricks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Venugopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.4389</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1310.1531</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Combining attributes and fisher vectors for efficient image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ramisa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="745" to="752" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Comparing Automatic Evaluation Measures for Image Description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Elliott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Keller</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">The Pascal Visual Object Classes Challenge-a Retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">From captions to visual concepts and back</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Platt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Every picture tells a story: Generating sentences from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hejrati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Sadeghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rashtchian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2010</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="15" to="29" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Metamers of the ventral stream</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Neuroscience</title>
+		<imprint>
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1195" to="1201" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1311.2524</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">The interestingness of images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gygli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Grabner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Riemenschneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Nater</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1633" to="1640" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Understanding the intrinsic memorability of images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">What makes an image memorable</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">A model of saliency-based visual attention for rapid scene analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Itti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Koch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Niebur</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1254" to="1259" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.04569</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">Image Specificity. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning to Predict Where Humans Look</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Judd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Durand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deep visual-semantic alignments for generating image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">What makes an image popular?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Das</forename><surname>Sarma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hamid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 23rd international conference on World wide web</title>
+		<meeting>the 23rd international conference on World wide web</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="867" to="876" />
+		</imprint>
+	</monogr>
+	<note>International World Wide Web Conferences Steering Committee</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Unifying visual-semantic embeddings with multimodal neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Transactions of the Association for Computational Linguistics (TACL)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Lexical ambiguity and information retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Krovetz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">B</forename><surname>Croft</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Information Systems (TOIS)</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="115" to="141" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Baby talk: Understanding and generating simple image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Premraj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="1601" to="1608" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Next-generation web searches for visual content</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Lew</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="46" to="53" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Datadriven enhancement of facial attractiveness</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leyvand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cohen-Or</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dror</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lischinski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">38</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Composing simple image descriptions using web-scale ngrams</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Fifteenth Conference on Computational Natural Language Learning</title>
+		<meeting>the Fifteenth Conference on Computational Natural Language Learning</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="220" to="228" />
+		</imprint>
+	</monogr>
+	<note>Association for Computational Linguistics</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Rouge: A package for automatic evaluation of summaries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y.</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Text Summarization Branches Out: Proceedings of the ACL-04 Workshop</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="74" to="81" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">An information-theoretic definition of similarity</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Visual semantic search: Retrieving videos via complex textual queries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2657" to="2664" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.1090</idno>
+		<title level="m">Explain images with multimodal recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">WordNet: a lexical database for English</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">A</forename><surname>Miller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Communications of the ACM</title>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Midge: Generating image descriptions from computer vision detections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dodge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mensch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Stratos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Daumé</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 13th Conference of the European Chapter of the Association for Computational Linguistics</title>
+		<meeting>the 13th Conference of the European Chapter of the Association for Computational Linguistics</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="747" to="756" />
+		</imprint>
+	</monogr>
+	<note>Association for Computational Linguistics</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Im2text: Describing images using 1 million captioned photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="1143" to="1151" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">BLEU: a method for automatic evaluation of machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Papineni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roukos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-J</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 40th annual meeting on association for computational linguistics</title>
+		<meeting>the 40th annual meeting on association for computational linguistics</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="311" to="318" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Scikit-learn: Machine learning in Python</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pedregosa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Varoquaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gramfort</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Thirion</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Grisel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blondel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Prettenhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Dubourg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="2825" to="2830" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Collecting image annotations using Amazon&apos;s Mechanical Turk</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rashtchian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the NAACL HLT 2010 Workshop on Creating Speech and Language Data with Amazon&apos;s Mechanical Turk</title>
+		<meeting>the NAACL HLT 2010 Workshop on Creating Speech and Language Data with Amazon&apos;s Mechanical Turk</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="139" to="147" />
+		</imprint>
+	</monogr>
+	<note>Association for Computational Linguistics</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Measuring visual clutter</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rosenholtz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Nakano</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of vision</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">17</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Image ranking and retrieval based on multi-attribute queries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Siddiquie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Feris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="801" to="808" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title level="m" type="main">Measuring and predicting importance of objects in our visual world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Spain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Attribute dominance: What pops out</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Turakhia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1225" to="1232" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">CIDEr: Consensus-based Image Description Evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vedantam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Show and tell: A neural image caption generator</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Joint learning of visual attributes, object classes and visual saliency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE 12th International Conference on</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="537" to="544" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision</note>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Query-specific visual semantic spaces for web image re-ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="857" to="864" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Sun database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="3485" to="3492" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">I2t: Image parsing to text description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">Z</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">98</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1485" to="1508" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Learning Deep Features for Scene Recognition using Places Database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Bringing semantics into focus using visual abstraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3009" to="3016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
