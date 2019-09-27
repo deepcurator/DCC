@@ -1,0 +1,1089 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader>
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:24+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Show and Tell: A Neural Image Caption Generator</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinyals</forename><surname>Oriol</surname></persName>
+							<email>vinyals@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Google</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">Toshev</forename><surname>Google</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><forename type="middle">Bengio</forename><surname>Google</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><forename type="middle">Erhan</forename><surname>Google</surname></persName>
+							<email>dumitru@google.com</email>
+						</author>
+						<title level="a" type="main">Show and Tell: A Neural Image Caption Generator</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract xml:lang="en">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Automatically describing the content of an image is a fundamental problem in artificial intelligence that connects computer vision and natural language processing. In this paper, we present a generative model based on a deep recurrent architecture that combines recent advances in computer vision and machine translation and that can be used to generate natural sentences describing an image. The model is trained to maximize the likelihood of the target description sentence given the training image. Experiments on several datasets show the accuracy of the model and the fluency of the language it learns solely from image descriptions. Our model is often quite accurate, which we verify both qualitatively and quantitatively. For instance, while the current state-of-the-art BLEU-1 score (the higher the better) on the Pascal dataset is 25, our approach yields 59, to be compared to human performance around 69. We also show BLEU-1 score improvements on Flickr30k, from 56 to 66, and on SBU, from 19 to 28. Lastly, on the newly released COCO dataset, we achieve a BLEU-4 of 27.7, which is the current state-of-the-art.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text>
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Being able to automatically describe the content of an image using properly formed English sentences is a very challenging task, but it could have great impact, for instance by helping visually impaired people better understand the content of images on the web. This task is significantly harder, for example, than the well-studied image classification or object recognition tasks, which have been a main focus in the computer vision community <ref type="bibr" target="#b27">[27]</ref>. Indeed, a description must capture not only the objects contained in an image, but it also must express how these objects relate to each other as well as their attributes and the activities they are involved in. Moreover, the above semantic knowledge has to be expressed in a natural language like English, which means that a language model is needed in addition to visual understanding.</p><p>Most previous attempts have proposed to stitch together A group of people shopping at an outdoor market.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>!</head><p>There are many vegetables at the fruit stand.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Vision! Deep CNN</head><p>Language ! Generating! RNN <ref type="figure">Figure 1</ref>. NIC, our model, is based end-to-end on a neural network consisting of a vision CNN followed by a language generating RNN. It generates complete sentences in natural language from an input image, as shown on the example above.</p><p>existing solutions of the above sub-problems, in order to go from an image to its description <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b15">16]</ref>. In contrast, we would like to present in this work a single joint model that takes an image I as input, and is trained to maximize the likelihood p(S|I) of producing a target sequence of words S = {S 1 , S 2 , . . .} where each word S t comes from a given dictionary, that describes the image adequately. The main inspiration of our work comes from recent advances in machine translation, where the task is to transform a sentence S written in a source language, into its translation T in the target language, by maximizing p(T |S). For many years, machine translation was also achieved by a series of separate tasks (translating words individually, aligning words, reordering, etc), but recent work has shown that translation can be done in a much simpler way using Recurrent Neural Networks (RNNs) <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b30">30]</ref> and still reach state-of-the-art performance. An "encoder" RNN reads the source sentence and transforms it into a rich fixed-length vector representation, which in turn in used as the initial hidden state of a "decoder" RNN that generates the target sentence.</p><p>Here, we propose to follow this elegant recipe, replacing the encoder RNN by a deep convolution neural network (CNN). Over the last few years it has been convincingly shown that CNNs can produce a rich representation of the input image by embedding it to a fixed-length vector, such that this representation can be used for a variety of vision tasks <ref type="bibr" target="#b28">[28]</ref>. Hence, it is natural to use a CNN as an image "encoder", by first pre-training it for an image classification task and using the last hidden layer as an input to the RNN decoder that generates sentences (see <ref type="figure">Fig. 1</ref>). We call this model the Neural Image Caption, or NIC.</p><p>Our contributions are as follows. First, we present an end-to-end system for the problem. It is a neural net which is fully trainable using stochastic gradient descent. Second, our model combines state-of-art sub-networks for vision and language models. These can be pre-trained on larger corpora and thus can take advantage of additional data. Finally, it yields significantly better performance compared to state-of-the-art approaches; for instance, on the Pascal dataset, NIC yielded a BLEU score of 59, to be compared to the current state-of-the-art of 25, while human performance reaches 69. On Flickr30k, we improve from 56 to 66, and on SBU, from 19 to 28.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>The problem of generating natural language descriptions from visual data has long been studied in computer vision, but mainly for video <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b32">32]</ref>. This has led to complex systems composed of visual primitive recognizers combined with a structured formal language, e.g. And-Or Graphs or logic systems, which are further converted to natural language via rule-based systems. Such systems are heavily hand-designed, relatively brittle and have been demonstrated only on limited domains, e.g. traffic scenes or sports.</p><p>The problem of still image description with natural text has gained interest more recently. Leveraging recent advances in recognition of objects, their attributes and locations, allows us to drive natural language generation systems, though these are limited in their expressivity. Farhadi et al. <ref type="bibr" target="#b5">[6]</ref> use detections to infer a triplet of scene elements which is converted to text using templates. Similarly, Li et al. <ref type="bibr" target="#b18">[19]</ref> start off with detections and piece together a final description using phrases containing detected objects and relationships. A more complex graph of detections beyond triplets is used by Kulkani et al. <ref type="bibr" target="#b15">[16]</ref>, but with template-based text generation. More powerful language models based on language parsing have been used as well <ref type="bibr" target="#b23">[23,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b4">5]</ref>. The above approaches have been able to describe images "in the wild", but they are heavily handdesigned and rigid when it comes to text generation.</p><p>A large body of work has addressed the problem of ranking descriptions for a given image <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b24">24]</ref>. Such approaches are based on the idea of co-embedding of images and text in the same vector space. For an image query, descriptions are retrieved which lie close to the image in the embedding space. Most closely, neural networks are used to co-embed images and sentences together <ref type="bibr" target="#b29">[29]</ref> or even image crops and subsentences <ref type="bibr" target="#b12">[13]</ref> but do not attempt to generate novel descriptions. In general, the above approaches cannot describe previously unseen compositions of objects, even though the individual objects might have been observed in the training data. Moreover, they avoid addressing the problem of evaluating how good a generated description is.</p><p>In this work we combine deep convolutional nets for image classification <ref type="bibr" target="#b11">[12]</ref> with recurrent networks for sequence modeling <ref type="bibr" target="#b9">[10]</ref>, to create a single network that generates descriptions of images. The RNN is trained in the context of this single "end-to-end" network. The model is inspired by recent successes of sequence generation in machine translation <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b30">30]</ref>, with the difference that instead of starting with a sentence, we provide an image processed by a convolutional net. The closest works are by Kiros et al. <ref type="bibr" target="#b14">[15]</ref> who use a neural net, but a feedforward one, to predict the next word given the image and previous words. A recent work by Mao et al. <ref type="bibr" target="#b21">[21]</ref> uses a recurrent NN for the same prediction task. This is very similar to the present proposal but there are a number of important differences: we use a more powerful RNN model, and provide the visual input to the RNN model directly, which makes it possible for the RNN to keep track of the objects that have been explained by the text. As a result of these seemingly insignificant differences, our system achieves substantially better results on the established benchmarks. Lastly, Kiros et al. <ref type="bibr" target="#b13">[14]</ref> propose to construct a joint multimodal embedding space by using a powerful computer vision model and an LSTM that encodes text. In contrast to our approach, they use two separate pathways (one for images, one for text) to define a joint embedding, and, even though they can generate text, their approach is highly tuned for ranking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Model</head><p>In this paper, we propose a neural and probabilistic framework to generate descriptions from images. Recent advances in statistical machine translation have shown that, given a powerful sequence model, it is possible to achieve state-of-the-art results by directly maximizing the probability of the correct translation given an input sentence in an "end-to-end" fashion -both for training and inference. These models make use of a recurrent neural network which encodes the variable length input into a fixed dimensional vector, and uses this representation to "decode" it to the desired output sentence. Thus, it is natural to use the same approach where, given an image (instead of an input sentence in the source language), one applies the same principle of "translating" it into its description.</p><p>Thus, we propose to directly maximize the probability of the correct description given the image by using the following formulation:</p><formula xml:id="formula_0">θ = arg max θ (I,S) log p(S|I; θ)<label>(1)</label></formula><p>where θ are the parameters of our model, I is an image, and S its correct transcription. Since S represents any sentence, its length is unbounded. Thus, it is common to apply the chain rule to model the joint probability over S 0 , . . . , S N , where N is the length of this particular example as</p><formula xml:id="formula_1">log p(S|I) = N t=0 log p(S t |I, S 0 , . . . , S t−1 )<label>(2)</label></formula><p>where we dropped the dependency on θ for convenience. At training time, (S, I) is a training example pair, and we optimize the sum of the log probabilities as described in <ref type="formula" target="#formula_1">(2)</ref> over the whole training set using stochastic gradient descent (further training details are given in Section 4).</p><p>It is natural to model p(S t |I, S 0 , . . . , S t−1 ) with a Recurrent Neural Network (RNN), where the variable number of words we condition upon up to t − 1 is expressed by a fixed length hidden state or memory h t . This memory is updated after seeing a new input x t by using a non-linear function f :</p><formula xml:id="formula_2">h t+1 = f (h t , x t ) .<label>(3)</label></formula><p>To make the above RNN more concrete two crucial design choices are to be made: what is the exact form of f and how are the images and words fed as inputs x t . For f we use a Long-Short Term Memory (LSTM) net, which has shown state-of-the art performance on sequence tasks such as translation. This model is outlined in the next section. For the representation of images, we use a Convolutional Neural Network (CNN). They have been widely used and studied for image tasks, and are currently state-of-the art for object recognition and detection. Our particular choice of CNN uses a novel approach to batch normalization and yields the current best performance on the ILSVRC 2014 classification competition <ref type="bibr" target="#b11">[12]</ref>. Furthermore, they have been shown to generalize to other tasks such as scene classification by means of transfer learning <ref type="bibr" target="#b3">[4]</ref>. The words are represented with an embedding model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">LSTM-based Sentence Generator</head><p>The choice of f in <ref type="formula" target="#formula_2">(3)</ref> is governed by its ability to deal with vanishing and exploding gradients <ref type="bibr" target="#b9">[10]</ref>, the most common challenge in designing and training RNNs. To address this challenge, a particular form of recurrent nets, called LSTM, was introduced <ref type="bibr" target="#b9">[10]</ref> and applied with great success to translation <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b30">30]</ref> and sequence generation <ref type="bibr" target="#b8">[9]</ref>.</p><p>The core of the LSTM model is a memory cell c encoding knowledge at every time step of what inputs have been observed up to this step (see <ref type="figure" target="#fig_0">Figure 2</ref>) . The behavior of the cell is controlled by "gates" -layers which are applied multiplicatively and thus can either keep a value from the gated layer if the gate is 1 or zero this value if the gate is 0. In particular, three gates are being used which control whether to forget the current cell value (forget gate f ), if it should . LSTM: the memory block contains a cell c which is controlled by three gates. In blue we show the recurrent connections -the output m at time t − 1 is fed back to the memory at time t via the three gates; the cell value is fed back via the forget gate; the predicted word at time t − 1 is fed back in addition to the memory output m at time t into the Softmax for word prediction.</p><p>read its input (input gate i) and whether to output the new cell value (output gate o). The definition of the gates and cell update and output are as follows:</p><formula xml:id="formula_3">i t = σ(W ix x t + W im m t−1 ) (4) f t = σ(W f x x t + W f m m t−1 ) (5) o t = σ(W ox x t + W om m t−1 ) (6) c t = f t c t−1 + i t h(W cx x t + W cm m t−1 )(7) m t = o t c t (8) p t+1 = Softmax(m t )<label>(9)</label></formula><p>where represents the product with a gate value, and the various W matrices are trained parameters. Such multiplicative gates make it possible to train the LSTM robustly as these gates deal well with exploding and vanishing gradients <ref type="bibr" target="#b9">[10]</ref>. The nonlinearities are sigmoid σ(·) and hyperbolic tangent h(·). The last equation m t is what is used to feed to a Softmax, which will produce a probability distribution p t over all words.</p><p>Training The LSTM model is trained to predict each word of the sentence after it has seen the image as well as all preceding words as defined by p(S t |I, S 0 , . . . , S t−1 ). For this purpose, it is instructive to think of the LSTM in unrolled form -a copy of the LSTM memory is created for the  <ref type="figure">Figure 3</ref>. LSTM model combined with a CNN image embedder (as defined in <ref type="bibr" target="#b11">[12]</ref>) and word embeddings. The unrolled connections between the LSTM memories are in blue and they correspond to the recurrent connections in <ref type="figure" target="#fig_0">Figure 2</ref>. All LSTMs share the same parameters.</p><p>image and each sentence word such that all LSTMs share the same parameters and the output m t−1 of the LSTM at time t − 1 is fed to the LSTM at time t (see <ref type="figure">Figure 3</ref>). All recurrent connections are transformed to feed-forward connections in the unrolled version. In more detail, if we denote by I the input image and by S = (S 0 , . . . , S N ) a true sentence describing this image, the unrolling procedure reads:</p><formula xml:id="formula_4">x −1 = CNN(I) (10) x t = W e S t , t ∈ {0 . . . N − 1} (11) p t+1 = LSTM(x t ), t ∈ {0 . . . N − 1}<label>(12)</label></formula><p>where we represent each word as a one-hot vector S t of dimension equal to the size of the dictionary. Note that we denote by S 0 a special start word and by S N a special stop word which designates the start and end of the sentence. In particular by emitting the stop word the LSTM signals that a complete sentence has been generated. Both the image and the words are mapped to the same space, the image by using a vision CNN, the words by using word embedding W e . The image I is only input once, at t = −1, to inform the LSTM about the image contents. We empirically verified that feeding the image at each time step as an extra input yields inferior results, as the network can explicitly exploit noise in the image and overfits more easily. Our loss is the sum of the negative log likelihood of the correct word at each step as follows:</p><formula xml:id="formula_5">L(I, S) = − N t=1 log p t (S t ) .<label>(13)</label></formula><p>The above loss is minimized w.r.t. all the parameters of the LSTM, the top layer of the image embedder CNN and word embeddings W e .</p><p>Inference There are multiple approaches that can be used to generate a sentence given an image, with NIC. The first one is Sampling where we just sample the first word according to p 1 , then provide the corresponding embedding as input and sample p 2 , continuing like this until we sample the special end-of-sentence token or some maximum length. The second one is BeamSearch: iteratively consider the set of the k best sentences up to time t as candidates to generate sentences of size t + 1, and keep only the resulting best k of them. This better approximates S = arg max S p(S |I).</p><p>We used the BeamSearch approach in the following experiments, with a beam of size 20. Using a beam size of 1 (i.e., greedy search) did degrade our results by 2 BLEU points on average.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We performed an extensive set of experiments to assess the effectiveness of our model using several metrics, data sources, and model architectures, in order to compare to prior art.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Evaluation Metrics</head><p>Although it is sometimes not clear whether a description should be deemed successful or not given an image, prior art has proposed several evaluation metrics. The most reliable (but time consuming) is to ask for raters to give a subjective score on the usefulness of each description given the image. In this paper, we used this to reinforce that some of the automatic metrics indeed correlate with this subjective score, following the guidelines proposed in <ref type="bibr" target="#b10">[11]</ref>, which asks the graders to evaluate each generated sentence with a scale from 1 to 4</p><p>1 . For this metric, we set up an Amazon Mechanical Turk experiment. Each image was rated by 2 workers. The typical level of agreement between workers is 65%. In case of disagreement we simply average the scores and record the average as the score. For variance analysis, we perform bootstrapping (re-sampling the results with replacement and computing means/standard deviation over the resampled results). Like <ref type="bibr" target="#b10">[11]</ref> we report the fraction of scores which are larger or equal than a set of predefined thresholds.</p><p>The rest of the metrics can be computed automatically assuming one has access to groundtruth, i.e. human generated descriptions. The most commonly used metric so far in the image description literature has been the BLEU score <ref type="bibr" target="#b25">[25]</ref>, which is a form of precision of word n-grams between generated and reference sentences 2 . Even though this metric has some obvious drawbacks, it has been shown to correlate well with human evaluations. In this work, we corroborate this as well, as we show in Section 4.3. An extensive evaluation protocol, as well as the generated outputs of our system, can be found at http://nic. droppages.com/.</p><p>Besides BLEU, one can use the perplexity of the model for a given transcription (which is closely related to our objective function in (1)). The perplexity is the geometric mean of the inverse probability for each predicted word. We used this metric to perform choices regarding model selection and hyperparameter tuning in our held-out set, but we do not report it since BLEU is always preferred <ref type="bibr" target="#b2">3</ref> . A much more detailed discussion regarding metrics can be found in <ref type="bibr" target="#b31">[31]</ref>, and research groups working on this topic have been reporting other metrics which are deemed more appropriate for evaluating caption. We report two such metrics -ME-TEOR and Cider -hoping for much more discussion and research to arise regarding the choice of metric.</p><p>Lastly, the current literature on image description has also been using the proxy task of ranking a set of available descriptions with respect to a given image (see for instance <ref type="bibr" target="#b13">[14]</ref>). Doing so has the advantage that one can use known ranking metrics like recall@k. On the other hand, transforming the description generation task into a ranking task is unsatisfactory: as the complexity of images to describe grows, together with its dictionary, the number of possible sentences grows exponentially with the size of the dictionary, and the likelihood that a predefined sentence will fit a new image will go down unless the number of such sentences also grows exponentially, which is not realistic; not to mention the underlying computational complexity of evaluating efficiently such a large corpus of stored sentences for each image. The same argument has been used in speech recognition, where one has to produce the sentence corresponding to a given acoustic sequence; while early attempts concentrated on classification of isolated phonemes or words, state-of-the-art approaches for this task are now generative and can produce sentences from a large dictionary.</p><p>Now that our models can generate descriptions of reasonable quality, and despite the ambiguities of evaluating an image description (where there could be multiple valid descriptions not in the groundtruth) we believe we should concentrate on evaluation metrics for the generation task rather than for ranking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Datasets</head><p>For evaluation we use a number of datasets which consist of images and sentences in English describing these images.  <ref type="bibr" target="#b5">[6]</ref> --1000 Flickr8k <ref type="bibr" target="#b26">[26]</ref> 6000 1000 1000 Flickr30k <ref type="bibr" target="#b33">[33]</ref> 28000 1000 1000 MSCOCO <ref type="bibr" target="#b20">[20]</ref> 82783 40504 40775 SBU <ref type="bibr" target="#b24">[24]</ref> 1M --With the exception of SBU, each image has been annotated by labelers with 5 sentences that are relatively visual and unbiased. SBU consists of descriptions given by image owners when they uploaded them to Flickr. As such they are not guaranteed to be visual or unbiased and thus this dataset has more noise. The Pascal dataset is customary used for testing only after a system has been trained on different data such as any of the other four dataset. In the case of SBU, we hold out 1000 images for testing and train on the rest as used by <ref type="bibr" target="#b17">[18]</ref>. Similarly, we reserve 4K random images from the MSCOCO validation set as test, called COCO-4k, and use it to report results in the following section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Results</head><p>Since our model is data driven and trained end-to-end, and given the abundance of datasets, we wanted to answer questions such as "how dataset size affects generalization", "what kinds of transfer learning it would be able to achieve", and "how it would deal with weakly labeled examples". As a result, we performed experiments on five different datasets, explained in Section 4.2, which enabled us to understand our model in depth.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.1">Training Details</head><p>Many of the challenges that we faced when training our models had to do with overfitting. Indeed, purely supervised approaches require large amounts of data, but the datasets that are of high quality have less than 100000 images. The task of assigning a description is strictly harder than object classification and data driven approaches have only recently become dominant thanks to datasets as large as ImageNet (with ten times more data than the datasets we described in this paper, with the exception of SBU). As a result, we believe that, even with the results we obtained which are quite good, the advantage of our method versus most current human-engineered approaches will only increase in the next few years as training set sizes will grow.</p><p>Nonetheless, we explored several techniques to deal with overfitting. The most obvious way to not overfit is to initialize the weights of the CNN component of our system to a pretrained model (e.g., on ImageNet). We did this in all the experiments (similar to <ref type="bibr" target="#b7">[8]</ref>), and it did help quite a lot in terms of generalization. Another set of weights that could be sensibly initialized are W e , the word embeddings. We tried initializing them from a large news corpus <ref type="bibr" target="#b22">[22]</ref>, but no significant gains were observed, and we decided to just leave them uninitialized for simplicity. Lastly, we did some model level overfitting-avoiding techniques. We tried dropout <ref type="bibr" target="#b34">[34]</ref> and ensembling models, as well as exploring the size (i.e., capacity) of the model by trading off number of hidden units versus depth. Dropout and ensembling gave a few BLEU points improvement, and that is what we report throughout the paper.</p><p>We trained all sets of weights using stochastic gradient descent with fixed learning rate and no momentum. All weights were randomly initialized except for the CNN weights, which we left unchanged because changing them had a negative impact. We used 512 dimensions for the embeddings and the size of the LSTM memory.</p><p>Descriptions were preprocessed with basic tokenization, keeping all words that appeared at least 5 times in the training set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.2">Generation Results</head><p>We report our main results on all the relevant datasets in Tables 1 and 2. Since PASCAL does not have a training set, we used the system trained using MSCOCO (arguably the largest and highest quality dataset for this task). The stateof-the-art results for PASCAL and SBU did not use image features based on deep learning, so arguably a big improvement on those scores comes from that change alone. The Flickr datasets have been used recently <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b21">21,</ref><ref type="bibr" target="#b13">14]</ref>, but mostly evaluated in a retrieval framework. A notable exception is <ref type="bibr" target="#b21">[21]</ref>, where they did both retrieval and generation, and which yields the best performance on the Flickr datasets up to now.</p><p>Human scores in <ref type="table">Table 2</ref> were computed by comparing one of the human captions against the other four. We do this for each of the five raters, and average their BLEU scores. Since this gives a slight advantage to our system, given the BLEU score is computed against five reference sentences and not four, we add back to the human scores the average difference of having five references instead of four.</p><p>Given that the field has seen significant advances in the last years, we do think it is more meaningful to report BLEU-4, which is the standard in machine translation moving forward. Additionally, we report metrics shown to correlate better with human evaluations in <ref type="table">Table 1</ref> 4 . Despite recent efforts on better evaluation metrics <ref type="bibr" target="#b31">[31]</ref>, our model fares strongly versus human raters. However, when evaluating our captions using human raters (see Section 4.3.6), our model fares much more poorly, suggesting more work is needed towards better metrics. On the official test set for which labels are only available through the official website, our model had a 27.2 BLEU-4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.3">Transfer Learning, Data Size and Label Quality</head><p>Since we have trained many models and we have several testing sets, we wanted to study whether we could transfer a model to a different dataset, and how much the mismatch in domain would be compensated with e.g. higher quality labels or more training data.</p><p>The most obvious case for transfer learning and data size is between Flickr30k and Flickr8k. The two datasets are similarly labeled as they were created by the same group. Indeed, when training on Flickr30k (with about 4 times more training data), the results obtained are 4 BLEU points better. It is clear that in this case, we see gains by adding more training data since the whole process is data-driven and overfitting prone. MSCOCO is even bigger (5 times more training data than Flickr30k), but since the collection process was done differently, there are likely more differences in vocabulary and a larger mismatch. Indeed, all the BLEU scores degrade by 10 points. Nonetheless, the descriptions are still reasonable.</p><p>Since PASCAL has no official training set and was collected independently of Flickr and MSCOCO, we report transfer learning from MSCOCO (in <ref type="table">Table 2</ref>). Doing transfer learning from Flickr30k yielded worse results with BLEU-1 at 53 (cf. 59).</p><p>Lastly, even though SBU has weak labeling (i.e., the labels were captions and not human generated descriptions), the task is much harder with a much larger and noisier vocabulary. However, much more data is available for training. When running the MSCOCO model on SBU, our performance degrades from 28 down to 16.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.4">Generation Diversity Discussion</head><p>Having trained a generative model that gives p(S|I), an obvious question is whether the model generates novel captions, and whether the generated captions are both diverse and high quality. <ref type="table" target="#tab_3">Table 3</ref> shows some samples when returning the N-best list from our beam search decoder instead of the best hypothesis. Notice how the samples are diverse and may show different aspects from the same image. The agreement in BLEU score between the top 15 generated sentences is 58, which is similar to that of humans among them. This indicates the amount of diversity our model generates. In bold are the sentences that are not present in the training set. If we take the best candidate, the sentence is present in the training set 80% of the times. This is not too surprising given that the amount of training data is quite small, so it is relatively easy for the model to pick "exemplar" sentences and use them to generate descriptions. If we instead analyze the top 15 generated sentences, about half of the times we see a completely novel description, but still with a similar BLEU score, indicating that they are of enough quality, yet they provide a healthy diversity.</p><p>A man throwing a frisbee in a park. A man holding a frisbee in his hand. A man standing in the grass with a frisbee. A close up of a sandwich on a plate. A close up of a plate of food with french fries. A white plate topped with a cut in half sandwich. A display case filled with lots of donuts. A display case filled with lots of cakes. A bakery display case filled with lots of donuts. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.5">Ranking Results</head><p>While we think ranking is an unsatisfactory way to evaluate description generation from images, many papers report ranking scores, using the set of testing captions as candidates to rank given a test image. The approach that works best on these metrics (MNLM), specifically implemented a ranking-aware loss. Nevertheless, NIC is doing surprisingly well on both ranking tasks (ranking descriptions given images, and ranking images given descriptions), as can be seen in <ref type="table">Tables 4 and 5</ref>   <ref type="bibr" target="#b10">[11]</ref> on Flickr8k rated using the same protocol, as a baseline (average score: 2.08); Flickr-8k: GT: we rated the groundtruth labels from Flickr8k using the same protocol. This provides us with a "calibration" of the scores (average score: 3.89) <ref type="figure" target="#fig_1">Figure 4</ref> shows the result of the human evaluations of the descriptions provided by NIC, as well as a reference system and groundtruth on various datasets. We can see that NIC is better than the reference system, but clearly worse than the groundtruth, as expected. This shows that BLEU is not a perfect metric, as it does not capture well the difference between NIC and human descriptions assessed by raters. Examples of rated images can be seen in <ref type="figure" target="#fig_2">Figure 5</ref>. It is interesting to see, for instance in the second image of the first column, how the model was able to notice the frisbee given its size. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.6">Human Evaluation</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.7">Analysis of Embeddings</head><p>In order to represent the previous word S t−1 as input to the decoding LSTM producing S t , we use word embedding vectors <ref type="bibr" target="#b22">[22]</ref>, which have the advantage of being independent of the size of the dictionary (contrary to a simpler onehot-encoding approach). Furthermore, these word embeddings can be jointly trained with the rest of the model. It is remarkable to see how the learned representations have captured some semantic from the statistics of the language. <ref type="table">Table 4</ref>.3.7 shows, for a few example words, the nearest other words found in the learned embedding space.</p><p>Note how some of the relationships learned by the model will help the vision component. Indeed, having "horse", "pony", and "donkey" close to each other will encourage the CNN to extract features that are relevant to horse-looking animals. We hypothesize that, in the extreme case where we see very few examples of a class (e.g., "unicorn"), its proximity to other word embeddings (e.g., "horse") should provide a lot more information that would be completely lost with more traditional bag-of-words based approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have presented NIC, an end-to-end neural network system that can automatically view an image and generate</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Word</head><p>Neighbors car van, cab, suv, vehicule, jeep boy toddler, gentleman, daughter, son street road, streets, highway, freeway horse pony, donkey, pig, goat, mule computer computers, pc, crt, chip, compute <ref type="table">Table 6</ref>. Nearest neighbors of a few example words a reasonable description in plain English. NIC is based on a convolution neural network that encodes an image into a compact representation, followed by a recurrent neural network that generates a corresponding sentence. The model is trained to maximize the likelihood of the sentence given the image. Experiments on several datasets show the robustness of NIC in terms of qualitative results (the generated sentences are very reasonable) and quantitative evaluations, using either ranking metrics or BLEU, a metric used in machine translation to evaluate the quality of generated sentences. It is clear from these experiments that, as the size of the available datasets for image description increases, so will the performance of approaches like NIC. Furthermore, it will be interesting to see how one can use unsupervised data, both from images alone and text alone, to improve image description approaches.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2</head><label>2</label><figDesc>Figure 2. LSTM: the memory block contains a cell c which is controlled by three gates. In blue we show the recurrent connections -the output m at time t − 1 is fed back to the memory at time t via the three gates; the cell value is fed back via the forget gate; the predicted word at time t − 1 is fed back in addition to the memory output m at time t into the Softmax for word prediction.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Flickr-8k: NIC: predictions produced by NIC on the Flickr8k test set (average score: 2.37); Pascal: NIC: (average score: 2.45); COCO-1k: NIC: A subset of 1000 images from the MSCOCO test set with descriptions produced by NIC (average score: 2.72); Flickr-8k: ref: these are results from [11] on Flickr8k rated using the same protocol, as a baseline (average score: 2.08); Flickr-8k: GT: we rated the groundtruth labels from Flickr8k using the same protocol. This provides us with a "calibration" of the scores (average score: 3.89)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. A selection of evaluation results, grouped by human rating.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>The statistics of the datasets are as follows:</figDesc><table>Dataset name 
+size 
+train 
+valid. 
+test 
+Pascal VOC 2008 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>Scores on the MSCOCO development set.BLEU-1 scores. We only report previous work results when available. SOTA stands for the current state-of-the-art.</figDesc><table>Metric 
+BLEU-4 METEOR CIDER 
+NIC 
+27.7 
+23.7 
+85.5 
+Random 
+4.6 
+9.0 
+5.1 
+Nearest Neighbor 
+9.9 
+15.7 
+36.5 
+Human 
+21.7 
+25.2 
+85.4 
+Table 1. Approach 
+PASCAL Flickr Flickr SBU 
+(xfer) 
+30k 
+8k 
+Im2Text [24] 
+11 
+TreeTalk [18] 
+19 
+BabyTalk [16] 
+25 
+Tri5Sem [11] 
+48 
+m-RNN [21] 
+55 
+58 
+MNLM [14] 
+
+5 
+
+56 
+51 
+SOTA 
+25 
+56 
+58 
+19 
+NIC 
+59 
+66 
+63 
+28 
+Human 
+69 
+68 
+70 
+Table 2. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 .</head><label>3</label><figDesc>N-best examples from the MSCOCO test set. Bold lines indicate a novel sentence not present in the training set.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>. Note that for the Image Annotation task, we normalized our scores similar to what [21] used.Table 4. Recall@k and median rank on Flickr8k.Table 5. Recall@k and median rank on Flickr30k.</figDesc><table>Approach 
+Image Annotation 
+Image Search 
+R@1 R@10 Med r R@1 R@10 Med r 
+DeFrag [13] 13 
+44 
+14 
+10 
+43 
+15 
+m-RNN [21] 15 
+49 
+11 
+12 
+42 
+15 
+MNLM [14] 18 
+55 
+8 
+13 
+52 
+10 
+NIC 
+20 
+61 
+6 
+19 
+64 
+5 
+Approach 
+Image Annotation 
+Image Search 
+R@1 R@10 Med r R@1 R@10 Med r 
+DeFrag [13] 16 
+55 
+8 
+10 
+45 
+13 
+m-RNN [21] 18 
+51 
+10 
+13 
+42 
+16 
+MNLM [14] 23 
+63 
+5 
+17 
+57 
+8 
+NIC 
+17 
+56 
+7 
+17 
+57 
+7 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The raters are asked whether the image is described without any errors, described with minor errors, with a somewhat related description, or with an unrelated description, with a score of 4 being the best and 1 being the worst. 2 In this literature, most previous work report BLEU-1, i.e., they only compute precision at the unigram level, whereas BLEU-n is a geometric average of precision over 1-to n-grams.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Even though it would be more desirable, optimizing for BLEU score yields a discrete optimization problem. In general, perplexity and BLEU scores are fairly correlated.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">We used the implementation of these metrics kindly provided in http://www.mscoco.org.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">We computed these BLEU scores with the outputs that the authors of [14] kindly provided for their OxfordNet system.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Generating image descriptions using dependency relational patterns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Aker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gaizauskas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Neural machine translation by jointly learning to align and translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.0473</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning phrase representations using RNN encoder-decoder for statistical machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Van Merrienboer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bougares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Image description using visual dependency representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Elliott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Every picture tells a story: Generating sentences from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hejrati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Sadeghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rashtchian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Knowledge representation for the generation of quantified natural language descriptions of vehicle traffic in image sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gerber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-H</forename><surname>Nagel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Improving image-sentence embeddings using large weakly annotated photo collections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Generating sequences with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1308.0850</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Framing image description as a ranking task: Data, models and evaluation metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JAIR</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Deep fragment embeddings for bidirectional image sentence mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Unifying visual-semantic embeddings with multimodal neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.2539</idno>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Multimodal neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">Z R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Deep Learning Workshop</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Baby talk: Understanding and generating simple image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Premraj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Collective generation of natural image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kuznetsova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Treetalk: Composition and compression of trees for image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kuznetsova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACL</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+		<title level="m">Composing simple image descriptions using web-scale n-grams</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<title level="m">Conference on Computational Natural Language Learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1405.0312</idno>
+		<title level="m">Microsoft coco: Common objects in context</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Explain images with multimodal recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.1090</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Efficient estimation of word representations in vector space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Midge: Generating image descriptions from computer vision detections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dodge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mensch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Stratos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">D</forename><surname>Iii</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EACL</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Im2text: Describing images using 1 million captioned photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">BLEU: A method for automatic evaluation of machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Papineni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roukos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Collecting image annotations using amazon&apos;s mechanical turk</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rashtchian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NAACL HLT Workshop on Creating Speech and Language Data with Amazon&apos;s Mechanical Turk</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="139" to="147" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>ImageNet Large Scale Visual Recognition Challenge</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Overfeat: Integrated recognition, localization and detection using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6229</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Grounded compositional semantics for finding and describing images with sentences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Sequence to sequence learning with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">CIDEr: Consensus-based image description evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vedantam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.5726</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">I2t: Image parsing to text description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">Z</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">98</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Recurrent neural network regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.2329</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
