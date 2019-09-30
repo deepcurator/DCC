@@ -65,6 +65,7 @@ if __name__ == '__main__':
                             if "fig." not in head and "Fig." not in head and "figure" not in head and "Figure" not in head:
                                 count += 1
                             else:
+                                count_fig += 1
                                 cap_fp.write(figure_uid+'\thasHead\t'+head+'\n')
                                 figDesc = getFigDesc(fig)
                                 # output caption text
@@ -73,17 +74,17 @@ if __name__ == '__main__':
                                     txt_fp.write(figDesc)
                                 # output caption annotations
                                 ann_triples=annotator.match_terms(figDesc)    
-                                if len(ann_triples)>0:
-                                    ann_fn=os.path.join('../../Data/extracted_captions/',paper_name+'.'+fid+'.ann')
-                                    with open(ann_fn,'w',encoding='utf8') as ann_fp: 
-                                        for ann in ann_triples:
-                                            # note entities: (ignore relations for now?)
-                                            if len(ann)==3:
-                                                cap_fp.write(figure_uid+'\tcaptionContains\t'+ann[2]+'\n')
-                                            ann_fp.write('\t'.join(ann)+'\n')
-                                        cap_fp.write('\n')
-                                        ann_fp.write('\n')
-                                count_fig += 1
+                                # want to generate a file even if empty:
+                                #if len(ann_triples)>0:
+                                ann_fn=os.path.join('../../Data/extracted_captions/',paper_name+'.'+fid+'.ann')
+                                with open(ann_fn,'w',encoding='utf8') as ann_fp: 
+                                    for ann in ann_triples:
+                                        # note entities: (ignore relations for now?)
+                                        if len(ann)==3:
+                                            cap_fp.write(figure_uid+'\tcaptionContains\t'+ann[2]+'\n')
+                                        ann_fp.write('\t'.join(ann)+'\n')
+                                    cap_fp.write('\n')
+                                    ann_fp.write('\n')
     print(count)
     print(count_fig)       
        
