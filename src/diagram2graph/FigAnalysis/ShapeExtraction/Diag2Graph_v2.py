@@ -6,8 +6,8 @@ from ArrowDetect import ArrowDetect as ad
 import re
 import difflib
 
-from text_detect.rectangle import Rectangle
-from text_detect.rectangle_merger import RectangleMerger as Merger
+from rectangle import Rectangle
+from rectangle_merger import RectangleMerger as Merger
 
 class Diag2Graph:
     
