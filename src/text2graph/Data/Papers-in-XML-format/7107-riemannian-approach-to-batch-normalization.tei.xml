@@ -1,0 +1,930 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Riemannian approach to batch normalization</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minhyung</forename><surname>Cho</surname></persName>
+							<email>mhyung.cho@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Applied Research Korea</orgName>
+								<orgName type="institution">Gracenote Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jaehyung</forename><surname>Lee</surname></persName>
+							<email>jaehyung.lee@kaist.ac.kr</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Applied Research Korea</orgName>
+								<orgName type="institution">Gracenote Inc</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Riemannian approach to batch normalization</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Batch Normalization (BN) has proven to be an effective algorithm for deep neural network training by normalizing the input to each neuron and reducing the internal covariate shift. The space of weight vectors in the BN layer can be naturally interpreted as a Riemannian manifold, which is invariant to linear scaling of weights. Following the intrinsic geometry of this manifold provides a new learning rule that is more efficient and easier to analyze. We also propose intuitive and effective gradient clipping and regularization methods for the proposed algorithm by utilizing the geometry of the manifold. The resulting algorithm consistently outperforms the original BN on various types of network architectures and datasets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Batch Normalization (BN) <ref type="bibr" target="#b0">[1]</ref> has become an essential component for breaking performance records in image recognition tasks <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3]</ref>. It speeds up training deep neural networks by normalizing the distribution of the input to each neuron in the network by the mean and standard deviation of the input computed over a mini-batch of training data, potentially reducing internal covariate shift <ref type="bibr" target="#b0">[1]</ref>, the change in the distributions of internal nodes of a deep network during the training.</p><p>The authors of BN demonstrated that applying BN to a layer makes its forward pass invariant to linear scaling of its weight parameters <ref type="bibr" target="#b0">[1]</ref>. They argued that this property prevents model explosion with higher learning rates by making the gradient propagation invariant to linear scaling. Moreover, the gradient becomes inversely proportional to the scale factor of each weight parameter. While this property could stabilize the parameter growth by reducing the gradients for larger weights, it could also have an adverse effect in terms of optimization since there can be an infinite number of networks, with the same forward pass but different scaling, which may converge to different local optima owing to different gradients. In practice, networks may become sensitive to the parameters of regularization methods such as weight decay.</p><p>This ambiguity in the optimization process can be removed by interpreting the space of weight vectors as a Riemannian manifold on which all the scaled versions of a weight vector correspond to a single point on the manifold. A properly selected metric tensor makes it possible to perform a gradient descent on this manifold <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5]</ref>, following the gradient direction while staying on the manifold. This approach fundamentally removes the aforementioned ambiguity while keeping the invariance property intact, thus ensuring stable weight updates.</p><p>In this paper, we first focus on selecting a proper manifold along with the corresponding Riemannian metric for the scale invariant weight vectors used in BN (and potentially in other normalization techniques <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8]</ref>). Mapping scale invariant weight vectors to two well-known matrix manifolds yields the same metric tensor, leading to a natural choice of the manifold and metric. Then, we derive the necessary operators to perform a gradient descent on this manifold, which can be understood as a constrained optimization on the unit sphere. Next, we present two optimization algorithmscorresponding to the Stochastic Gradient Descent (SGD) with momentum and Adam <ref type="bibr" target="#b8">[9]</ref> algorithms. An intuitive gradient clipping method is also proposed utilizing the geometry of this space. Finally, we illustrate the application of these algorithms to networks with BN layers, together with an effective regularization method based on variational inference on the manifold. Experiments show that the resulting algorithm consistently outperforms the original BN algorithm on various types of network architectures and datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Background</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Batch normalization</head><p>We briefly revisit the BN transform and its properties. While it can be applied to any single activation in the network, in practice it is usually inserted right before the nonlinearity, taking the pre-activation z = w x as its input. In this case, the BN transform is written as</p><formula xml:id="formula_0">BN(z) = z − E[z] Var[z] = w (x − E[x]) w R xx w = u (x − E[x]) u R xx u (1)</formula><p>where w is a weight vector, x is a vector of activations in the previous layer, u = w/|w|, and R xx is the covariance matrix of x. Note that BN(w x) = BN(u x). It was shown in <ref type="bibr" target="#b0">[1]</ref> that</p><formula xml:id="formula_1">∂BN(w x) ∂x = ∂BN(u x) ∂x and ∂BN(z) ∂w = 1 |w| ∂BN(z) ∂u<label>(2)</label></formula><p>illustrating the properties discussed in Sec. 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Optimization on Riemannian manifold</head><p>Recent studies have shown that various constrained optimization problems in Euclidian space can be expressed as unconstrained optimization problems on submanifolds embedded in Euclidian space <ref type="bibr" target="#b4">[5]</ref>. For applications to neural networks, we are interested in Stiefel and Grassmann manifolds <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b9">10]</ref>. We briefly review them here. The Stiefel manifold V(p, n) is the set of p ordered orthonormal vectors in R n (p ≤ n). A point on the manifold is represented by an n-by-p orthonormal matrix Y , where Y Y = I p . The Grassmann manifold G(p, n) is the set of p-dimensional subspaces of R n (p ≤ n). It follows that span(A), where A ∈ R n×p , is understood to be a point on the Grassmann manifold G(p, n) (note that two matrices A and B are equivalent if and only if span(A) = span(B)). A point on this manifold can be specified by an arbitrary n-by-p matrix, but for computational efficiency, an orthonormal matrix is commonly chosen to represent a point. Note that the representation is not unique <ref type="bibr" target="#b4">[5]</ref>.</p><p>To perform gradient descent on those manifolds, it is essential to equip them with a Riemannian metric tensor and derive geometric concepts such as geodesics, exponential map, and parallel translation. Given a tangent vector v ∈ T x M on a Riemannian manifold M with its tangent space T x M at a point x, let us denote γ v (t) as a unique geodesic on M, with initial velocity v. The exponential map is defined as exp x (v) = γ v (1), which maps v to the point that is reached in a unit time along the geodesic starting at x. The parallel translation of a tangent vector on a Riemannian manifold can be obtained by transporting the vector along the geodesic by an infinitesimally small amount, and removing the vertical component of the tangent space <ref type="bibr" target="#b10">[11]</ref>. In this way, the transported vector stays in the tangent space of the manifold at a new point.</p><p>Using the concepts above, a gradient descent algorithm for an abstract Riemannian manifold is given in Algorithm 1 for reference. This reduces to the familiar gradient descent algorithm when M = R n , since exp yt−1 (−η · h) is given as y t−1 − η · ∇f (y t−1 ) in R n .</p><p>Algorithm 1 Gradient descent of a function f on an abstract Riemannian manifold M Require: Stepsize η</p><formula xml:id="formula_2">Initialize y 0 ∈ M for t = 1, · · · , T h ← gradf (y t−1 ) ∈ T yt−1 M where gradf (y) is the gradient of f at y ∈ M y t ← exp yt−1 (−η · h)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Geometry of scale invariant vectors</head><p>As discussed in Sec. 2.1, inserting the BN transform makes the weight vectors w, used to calculate the pre-activation w x, invariant to linear scaling. Assuming that there are no additional constraints on the weight vectors, we can focus on the manifolds on which the scaled versions of a vector collapse to a point. A natural choice for this would be the Grassmann manifold since the space of the scaled versions of a vector is essentially a one-dimensional subspace of R n . On the other hand, the Stiefel manifold can also represent the same space if we set p = 1, in which case V(1, n) reduces to the unit sphere. We can map each of the weight vectors w to its normalized version, i.e., w/|w|, on V(1, n). We show that popular choices of metrics on those manifolds lead to the same geometry.</p><p>Tangent vectors to the Stiefel manifold V(p, n) at Z are all the n-by-p matrices ∆ such that Z ∆ + ∆ Z = 0 <ref type="bibr" target="#b3">[4]</ref>. The canonical metric on the Stiefel manifold is derived based on the geometry of quotient spaces of the orthogonal group <ref type="bibr" target="#b3">[4]</ref> and is given by</p><formula xml:id="formula_3">g s (∆ 1 , ∆ 2 ) = tr(∆ 1 (I − ZZ /2)∆ 2 ) (3) where ∆ 1 , ∆ 2 are tangent vectors to V(p, n) at Z. If p = 1, the condition Z ∆ + ∆ Z = 0 is reduced to Z ∆ = 0, leading to g s (∆ 1 , ∆ 2 ) = tr(∆ 1 ∆ 2 ).</formula><p>Now, let an n-by-p matrix Y be a representation of a point on the Grassmann manifold G(p, n). Tangent vectors to the manifold at span(Y ) with the representation Y are all the n-by-p matrices ∆ such that Y ∆ = 0. Since Y is not a unique representation, the tangent vector ∆ changes with the choice of Y . For example, given a representation Y 1 and its tangent vector ∆ 1 , if a different representation is selected by performing right multiplication, i.e., Y 2 = Y 1 R, then the tangent vector must be moved in the same way, that is ∆ 2 = ∆ 1 R. The canonical metric, which is invariant under the action of the orthogonal group and scaling <ref type="bibr" target="#b9">[10]</ref>, is given by</p><formula xml:id="formula_4">g g (∆ 1 , ∆ 2 ) = tr (Y Y ) −1 ∆ 1 ∆ 2<label>(4)</label></formula><p>where Y ∆ 1 = 0 and Y ∆ 2 = 0. For G(1, n) with a representation y, the metric is given by</p><formula xml:id="formula_5">g g (∆ 1 , ∆ 2 ) = ∆ 1 ∆ 2 /y y.</formula><p>The metric is invariant to the scaling of y as shown below</p><formula xml:id="formula_6">∆ 1 ∆ 2 /y y = (k∆ 1 ) (k∆ 2 )/(ky) (ky).</formula><p>(5) Without loss of generality, we can choose a representation with y y = 1 to obtain g g (∆ 1 , ∆ 2 ) = tr(∆ 1 ∆ 2 ), which coincides with the canonical metric for V(1, n). Hereafter, we will focus on the geometry of G(1, n) with the metric and representation chosen above, derived from the general formula in <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b9">10]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Gradient of a function</head><p>The gradient of a function f (y) defined on G(1, n) is given by</p><formula xml:id="formula_7">gradf = g − (y T g)y (6) where g i = ∂f /∂y i .</formula><p>Exponential map Let h be a tangent vector to G(1, n) at y. The exponential map on G(1, n) emanating from y with initial velocity h is given by</p><formula xml:id="formula_8">exp y (h) = y cos |h| + h |h| sin |h|.<label>(7)</label></formula><p>It can be easily shown that exp y (h) = exp y ((1 + 2π/|h|)h).</p><p>Parallel translation Let ∆ and h be tangent vectors to G(1, n) at y. The parallel translation of ∆ along the geodesic with the initial velocity h in a unit time is given by</p><formula xml:id="formula_9">pt y (∆; h) = ∆ − u(1 − cos |h|) + y sin |h| u ∆,<label>(8)</label></formula><p>where u = h/|h|. Note that |∆| = |pt y (∆; h)|. If ∆ = h, it can be further simplified as pt y (h) = h cos |h| − y|h| sin |h|.</p><p>Note that BN(z) is not invariant to scaling with negative numbers. That is, BN(−z) = −BN(z). To be precise, there is an one-to-one mapping between the set of weights on which BN(z) is invariant and a point on V(1, n), but not on G(1, n). However, the proposed method interprets each weight vector as a point on the manifold only when the weight update is performed. As long as the weight vector stays in the domain where V(1, n) and G(1, n) have the same invariance property, the weight update remains equivalent. We prefer G(1, n) since the operators can easily be extended to G(p, n), opening up further applications. </p><formula xml:id="formula_11">T y G(1, 2). (b) y 1 = exp y (h). (c) h 1 = pt y (h), | h| = | h 1 |.</formula><p>4 Optimization algorithms on G(1, n)</p><p>In this section, we derive optimization algorithms on the Grassmann manifold G(1, n). The algorithms given below are iterative algorithms to solve the following unconstrained optimization:</p><formula xml:id="formula_12">min y∈G(1,n) f (y).<label>(10)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Stochastic gradient descent with momentum</head><p>The application of Algorithm 1 to the Grassmann manifold G(1, n) is straightforward. We extend this algorithm to the one with momentum to speed up the training <ref type="bibr" target="#b11">[12]</ref>. Algorithm 2 presents the pseudo-code of the SGD with momentum on G(1, n). This algorithm differs from conventional SGD in three ways. First, it projects the gradient onto the tangent space at the point y, as shown in <ref type="figure" target="#fig_0">Fig. 1 (a)</ref>. Second, it moves the position by the exponential map in <ref type="figure" target="#fig_0">Fig. 1 (b)</ref>. Third, it moves the momentum by the parallel translation of the Grassmann manifold in <ref type="figure" target="#fig_0">Fig. 1 (c)</ref>. Note that if the weight is initialized with a unit vector, it remains a unit vector after the update.</p><p>Algorithm 2 has an advantage over conventional SGD in that the amount of movement is intuitive, i.e., it can be measured by the angle between the original point and the new point. As it returns to the original point after moving by 2π (radian), it is natural to restrict the maximum movement induced by a gradient to 2π. For first order methods like gradient descent, it would be beneficial to restrict the maximum movement even more so that it stays in the range where linear approximation is valid. Let h be the gradient calculated at t = 0. The amount of the first step by the gradient of h is δ 0 = η · |h| and the contributions to later steps are recursively calculated by δ t = γ · δ t−1 . The overall contribution of h is ∞ t=0 δ t = η · |h|/(1 − γ). In practice, we found it beneficial to restrict this amount to less than 0.2 (rad) ∼ = 11.46</p><p>• by clipping the norm of h at ν. For example, with initial learning rate η = 0.2, setting γ = 0.9 and ν = 0.1 guarantees this condition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 2 Stochastic gradient descent with momentum on G(1, n)</head><p>Require: learning rate η, momentum coefficient γ, norm_threshold ν Initialize y 0 ∈ R n×1 with a random unit vector Initialize τ 0 ∈ R n×1 with a zero vector for t = 1, · · · , T g ← ∂f (y t−1 )/∂y Run a backward pass to obtain g h ← g − (y t−1 g)y t−1 Project g onto the tangent space at y t−1 h ← norm_clip(h, ν) † Clip the norm of the gradient at ν d ← γτ t−1 − ηĥ Update delta with momentum</p><formula xml:id="formula_13">y t ← exp yt−1 (d)</formula><p>Move to the new position by the exponential map in Eq. (7)</p><formula xml:id="formula_14">τ t ← pt yt−1 (d)</formula><p>Move the momentum by the parallel translation in Eq. (9) Note that h,ĥ, d ⊥ y t−1 and τ t ⊥ y t where h,ĥ, d, y t−1 , y t ∈ R n×1 † norm_clip(h, ν) = ν · h/|h| if |h| &gt; ν, else h</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Adam</head><p>Adam <ref type="bibr" target="#b8">[9]</ref> is a recently developed first-order optimization algorithm based on adaptive estimates of lower-order moments that has been successfully applied to training deep neural networks. In this section, we derive Adam on the Grassmann manifold G <ref type="figure" target="#fig_0">(1, n)</ref>. Adam computes the individual adaptive learning rate for each parameter. In contrast, we assign one adaptive learning rate to each weight vector that corresponds to a point on the manifold. In this way, the direction of the gradient is not corrupted, and the size of the step is adaptively controlled. The pseudo-code of Adam on G(1, n) is presented in Algorithm 3.</p><p>It was shown in <ref type="bibr" target="#b8">[9]</ref> that the effective step size of Adam (|d| in Algorithm 3) has two upper bounds. The first occurs in the most severe case of sparsity, and the upper bound is given as η</p><note type="other">1−β1 √ 1−β2 since the previous momentum terms are negligible. The second case occurs if the gradient remains stationary across time steps, and the upper bound is given as η. For the common selection of hyperparameters β 1 = 0.9, β 2 = 0.99, two upper bounds coincide. In our experiments, η was chosen to be 0.05 and the upper bound was |d| ≤ 0.05 (rad). Algorithm 3 Adam on G(1, n) Require: learning rate η, momentum coefficients β 1 , β 2 , norm_threshold ν, scalar = 10 −8 Initialize y 0 ∈ R n×1 with a random unit vector Initialize τ 0 ∈ R n×1 with a zero vector Initialize a scalar v 0 = 0 for</note><formula xml:id="formula_15">t = 1, · · · , T η t ← η 1 − β t 2 /(1 − β t 1 )</formula><p>Calculate the bias correction factor g ← ∂f (y t−1 )/∂y Run a backward pass to obtain g h ← g − (y t−1 g)y t−1</p><p>Project g onto the tangent space at</p><formula xml:id="formula_16">y t−1 h ← norm_clip(h, ν)</formula><p>Clip the norm of the gradient at ν</p><formula xml:id="formula_17">m t ← β 1 · τ t−1 + (1 − β 1 ) ·ĥ v t ← β 2 · v t−1 + (1 − β 2 ) ·ĥ ĥ (v t is a scalar) d ← −η t · m t / √ v t + Calculate delta y t ← exp yt−1 (d)</formula><p>Move to the new point by exponential map in Eq. (7)</p><formula xml:id="formula_18">τ t ← pt yt−1 (m t ; d)</formula><p>Move the momentum by parallel translation in Eq. (8) Note that h,ĥ, m t , d ⊥ y t−1 and τ t ⊥ y t where h,ĥ, m t , d, τ t , y t−1 , y t ∈ R n×1 5 Batch normalization on the product manifold of G(1, ·)</p><p>In Sec. 3, we have shown that a weight vector used to compute the pre-activation that serves as an input to the BN transform can be naturally interpreted as a point on G(1, n). For deep networks with multiple layers and multiple units per layer, there can be multiple weight vectors that the BN transform is applied to. In this case, the training of neural networks is converted into an optimization problem with respect to a set of points on Grassmann manifolds and the remaining set of parameters. It is formalized as min</p><formula xml:id="formula_19">X ∈M L(X ) where M = G(1, n 1 ) × · · · × G(1, n m ) × R l<label>(11)</label></formula><p>where n 1 . . . n m are the dimensions of weight vectors, m is the number of the weight vectors on G(1, ·) which will be optimized using Algorithm 2 or 3, and l is the number of remaining parameters which include biases, learnable scaling and offset parameters in BN layers, and other weight matrices.</p><p>Algorithm 4 presents the whole process of training deep neural networks. The forward pass and backward pass remain unchanged. The only change made is updating the weights by Algorithm 2 or Algorithm 3. Note that we apply the proposed algorithm only when the input layer to BN is under-complete, that is, the number of output units is smaller than the number of input units, because the regularization algorithm we will derive in Sec. 5.1 is only valid in this case. There should be ways to expand the regularization to over-complete layers. However, we do not elaborate on this topic since 1) the ratio of over-complete layers is very low (under 0.07% for wide resnets and under 5.5% for VGG networks) and 2) we believe that over-complete layers are suboptimal in neural networks, which should be avoided by proper selection of network architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 4 Batch normalization on product manifolds of G(1, ·)</head><p>Define the neural network model with BN layers m ← 0 for W = {weight matrices in the network such that W x is an input to a BN layer} Let W be an n × p matrix if n &gt; p </p><formula xml:id="formula_20">for i = 1, · · · , p m ← m + 1 Assign a column vector w i in W to y m ∈ G(1, n) Assign remaining parameters to v ∈ R l min L(y 1 , · · · , y m , v) † w.r.t y i ∈ G(1, n i ) for i = 1, · · · ,</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Regularization using variational inference</head><p>In conventional neural networks, L 2 regularization is normally adopted to regularize the networks. However, it does not work on Grassmann manifolds because the gradient vector of the L 2 regularization is perpendicular to the tangent space of the Grassmann manifold. In <ref type="bibr" target="#b12">[13]</ref>, the L 2 regularization was derived based on the Gaussian prior and delta posterior in the framework of variational inference. We extend this theory to Grassmann manifolds in order to derive a proper regularization method in this space.</p><p>Consider the complexity loss, which accounts for the cost of describing the network weights. It is given by the Kullback-Leibler divergence between the posterior distribution Q(w|β) and the prior distribution P (w|α) <ref type="bibr" target="#b12">[13]</ref>:</p><formula xml:id="formula_21">L C (α, β) = D KL (Q(w|β) P (w|α)).<label>(12)</label></formula><p>Factor analysis (FA) <ref type="bibr" target="#b13">[14]</ref> establishes the link between the Grassmann manifold and the space of probabilistic distributions <ref type="bibr" target="#b14">[15]</ref>. The factor analyzer is given by</p><formula xml:id="formula_22">p(x) = N (u, C), C = ZZ + σ 2 I (13)</formula><p>where Z is a full-rank n-by-p matrix (n &gt; p) and N denotes a normal distribution. Under the condition that u = 0 and σ → 0, the samples from the analyzer lie in the linear subspace span(Z). In this way, a linear subspace can be considered as an FA distribution.</p><p>Suppose that n-dimensional p weight vectors y 1 , · · · , y p for n &gt; p are in the same layer, which are assumed as p points on G(1, n). Let y i be a representation of a point such that y i y i = 1. With the choice of delta posterior and β = [y 1 , · · · , y p ], the corresponding FA distribution can be given by</p><formula xml:id="formula_23">q(x|Y ) = N (0, Y Y + σ 2 I), where Y = [y 1 , · · · , y p ]</formula><p>with the subspace condition σ → 0. The FA distribution for the prior is set to p(x|α) = N (0, αI) that depends on the hyperparameter α. Substituting the FA distribution of the prior and posterior into Eq. <ref type="formula" target="#formula_1">(12)</ref> gives the complexity loss</p><formula xml:id="formula_24">L C (α, Y ) = D KL q(x|Y ) p(x|α) .<label>(14)</label></formula><p>Eq. <ref type="formula" target="#formula_4">(14)</ref> is minimized when the column vectors of Y are orthogonal to each other (refer to Appendix A for details). That is, minimizing L C (α, Y ) will maximally scatter the points away from each other on G <ref type="figure" target="#fig_0">(1, n)</ref>. However, it is difficult to estimate its gradient. Alternatively, we minimize</p><formula xml:id="formula_25">L O (α, Y ) = α 2 Y Y − I 2 F<label>(15)</label></formula><p>where · F is the Frobenius norm. It has the same minimum as the original complexity loss and the negative of its gradient is a descent direction of the original loss (refer to Appendix B).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Experiments</head><p>We evaluated the proposed learning algorithm for image classification tasks using three benchmark datasets: CIFAR-10 <ref type="bibr" target="#b15">[16]</ref>, CIFAR-100 <ref type="bibr" target="#b15">[16]</ref>, and SVHN (Street View House Number) <ref type="bibr" target="#b16">[17]</ref>. We used the VGG network <ref type="bibr" target="#b17">[18]</ref> and wide residual network <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b19">20]</ref> for experiments. The VGG network is a widely used baseline for image classification tasks, while the wide residual network <ref type="bibr" target="#b1">[2]</ref> has shown state-of-the-art performance on the benchmark datasets. We followed the experimental setups described in <ref type="bibr" target="#b1">[2]</ref> so that the performance of algorithms can be directly compared. Source code is publicly available at https://github.com/MinhyungCho/riemannian-batch-normalization.</p><p>CIFAR-10 is a database of 60,000 color images in 10 classes, which consists of 50,000 training images and 10,000 test images. CIFAR-100 is similar to CIFAR-10, except that it has 100 classes and contains fewer images per class. For preprocessing, we normalized the data using the mean and variance calculated from the training set. During training, the images were randomly flipped horizontally, padded by four pixels on each side with the reflection, and a 32×32 crop was randomly sampled. SVHN <ref type="bibr" target="#b16">[17]</ref> is a digit classification benchmark dataset that contains 73,257 images in the training set, 26,032 images in the test set, and 531,131 images in the extra set. We merged the extra set and the training set in our experiment, following the step in <ref type="bibr" target="#b1">[2]</ref>. The only preprocessing done was to divide the intensity by 255.</p><p>Detailed architectures for various VGG networks are described in <ref type="bibr" target="#b17">[18]</ref>. We used 512 neurons in fully connected layers rather than 4096 neurons, and the BN layer was placed before every ReLU activation layer. The learnable scaling parameter in the BN layer was set to one because it does not reduce the expressive power of the ReLU layer <ref type="bibr" target="#b20">[21]</ref>. For SVHN experiments using VGG networks, the dropout was applied after the pooling layer with dropout rate 0.4. For wide residual networks, we adopted exactly the same model architectures in <ref type="bibr" target="#b1">[2]</ref>, including the BN and dropout layers. In all cases, the biases were removed except the final layer.</p><p>For the baseline, the networks were trained by SGD with Nesterov momentum <ref type="bibr" target="#b21">[22]</ref>. The weight decay was set to 0.0005, momentum to 0.9, and minibatch size to 128. For CIFAR experiments, the initial learning rate was set to 0.1 and multiplied by 0.2 at 60, 120, and 160 epochs. It was trained for a total of 200 epochs. For SVHN, the initial learning rate was set to 0.01 and multiplied by 0.1 at 60 and 120 epochs. It was trained for a total of 160 epochs.</p><p>For the proposed method, we used different learning rates for the weights in Euclidean space and on Grassmann manifolds. Let us denote the learning rates for Euclidean space and Grassmann manifolds as η e and η g , respectively. The selected initial learning rates were η e = 0.01, η g = 0.2 for Algorithm 2 and η e = 0.01, η g = 0.05 for Algorithm 3. The same initial learning rates were used for all CIFAR experiments. For SVHN, they were scaled by 1/10, following the same ratio as the baseline <ref type="bibr" target="#b1">[2]</ref>. The training algorithm for Euclidean parameters was identical to the one used in the baseline with one exception. We did not apply weight decay to scaling and offset parameters of BN, whereas the baseline did as in <ref type="bibr" target="#b1">[2]</ref>. To clarify, applying weight decay to mean and variance parameters of BN was essential for reproducing the performance of baseline. The learning rate schedule was also identical to the baseline, both for η e and η g . The threshold for clipping the gradient ν was set to 0.1. The regularization strength α in Eq. <ref type="formula" target="#formula_25">(15)</ref>   The red dotted line denotes the learning rate (η g , y-axis on the right). VGG-11 was trained by SGD-G on CIFAR-10. <ref type="table" target="#tab_0">Tables 1 and 2</ref> compare the performance of the baseline SGD and two proposed algorithms described in Sec. 4 and 5, on CIFAR-10, CIFAR-100, and SVHN datasets. All the numbers reported are the median of five independent runs. In most cases, the networks trained using the proposed algorithms outperformed the baseline across various datasets and network configurations, especially for the ones with more parameters. The best performance was 3.72% (SGD and SGD-G) and 17.85% (ADAM-G) on CIFAR-10 and CIFAR-100, respectively, with WRN-40-10; and 1.55% (ADAM-G) on SVHN with WRN-22-8.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1">Results</head><p>Training curves of the baseline and proposed methods are presented in <ref type="figure" target="#fig_4">Figure 3</ref>. The training curves for SGD suffer from instability or experience a plateau after each learning rate drop, compared to the proposed methods. We believe that this comes from the inverse proportionality of the gradient to the norm of BN weight parameters (as in Eq. <ref type="formula" target="#formula_1">(2)</ref>). During the training process, this norm is affected by weight decay, hence the magnitude of the gradient. It is effectively equivalent to disturbing the learning rate by weight decay. The authors of wide resnet also observed that applying weight decay caused this phenomena, but weight decay was indispensable for achieving the reported performance <ref type="bibr" target="#b1">[2]</ref>. Proposed methods resolve this issue in a principled way. <ref type="table" target="#tab_2">Table 3</ref> summarizes the performance of recently published algorithms on the same datasets. We present the best performance of five independent runs in this table. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Conclusion and discussion</head><p>We presented new optimization algorithms for scale-invariant vectors by representing them on G(1, n) and following the intrinsic geometry. Specifically, we derived SGD with momentum and Adam algorithms on G(1, n). An efficient regularization algorithm in this space has also been proposed. Applying them in the context of BN showed consistent performance improvements over the baseline BN algorithm with SGD on CIFAR-10, CIFAR-100, and SVHN datasets.  Our work interprets each scale invariant piece of the weight matrix as a separate manifold, whereas natural gradient based algorithms <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b28">29]</ref> interpret the whole parameter space as a manifold and constrain the shape of the cost function (i.e. to the KL divergence) to obtain a cost efficient metric. There are similar approaches to ours such as Path-SGD <ref type="bibr" target="#b29">[30]</ref> and the one based on symmetry-invariant updates <ref type="bibr" target="#b30">[31]</ref>, but the comparison remains to be done.</p><p>Proposed algorithms are computationally as efficient as their non-manifold versions since they do not affect the forward and backward propagation steps, where majority of the computation takes place. The weight update step is 2.5-3.5 times more expensive, but still O(n).</p><p>We did not explore the full range of possibilities offered by the proposed algorithm. For example, techniques similar to BN, such as weight normalization <ref type="bibr" target="#b5">[6]</ref> and normalization propagation <ref type="bibr" target="#b6">[7]</ref>, have scale invariant weight vectors and can benefit from the proposed algorithm in the same way. Layer normalization <ref type="bibr" target="#b7">[8]</ref> is invariant to weight matrix rescaling, and simple vectorization of the weight matrix enables the application of the proposed algorithm.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: An illustration of the operators on the Grassmann manifold G(1, 2). A 2-by-1 matrix y is an orthonormal representation on G(1, 2). (a) A gradient calculated in Euclidean coordinate is projected onto the tangent space T y G(1, 2). (b) y 1 = exp y (h). (c) h 1 = pt y (h), | h| = | h 1 |.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>m and v ∈ R l for t = 1, · · · , T Run a forward pass to calculate L Run a backward pass to obtain ∂L ∂yi for i = 1, · · · , m and ∂L ∂v for i = 1, · · · , m Update the point y i by Algorithm 2 or Algorithm 3 Update v by conventional optimization algorithms (such as SGD) † For orthogonality regularization as in Sec. 5.1, L is replaced with L + W L O (α, W )</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>was set to 0.1, which gradually achieved near zero L O during the course of the training, as shown in Fig. 2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Changes in L O in Eq. (15) during training for various α values (y-axis on the left). The red dotted line denotes the learning rate (η g , y-axis on the right). VGG-11 was trained by SGD-G on CIFAR-10.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Training curves of the baseline and proposed optimization methods. (a) WRN-28-10 on CIFAR-10. (b) WRN-28-10 on CIFAR-100. (c) WRN-22-8 on SVHN.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Classification error rate of various networks on CIFAR-10 and CIFAR-100 (median of five runs). VGG-l denotes a VGG network with l layers. WRN-d-k denotes a wide residual network that has d convolutional layers and a widening factor k. SGD-G and Adam-G denote Algorithm 2 and Algorithm 3, respectively. The results in parenthesis show those reported in [2].This model was trained on two GPUs. The gradients were summed from two minibatches of size 64, and BN statistics were calculated from each minibatch.</figDesc><table>Dataset 
+CIFAR-10 
+CIFAR-100 
+Model 
+SGD 
+SGD-G Adam-G 
+SGD 
+SGD-G 
+Adam-G 
+VGG-11 
+7.43 
+7.14 
+7.59 
+29.25 
+28.02 
+28.05 
+VGG-13 
+5.88 
+5.87 
+6.05 
+26.17 
+25.29 
+24.89 
+VGG-16 
+6.32 
+5.88 
+5.98 
+26.84 
+25.64 
+25.29 
+VGG-19 
+6.49 
+5.92 
+6.02 
+27.62 
+25.79 
+25.59 
+WRN-52-1 
+6.23 (6.28) 
+6.56 
+6.58 
+27.44 (29.78) 
+28.13 
+28.16 
+WRN-16-4 
+4.96 (5.24) 
+5.35 
+5.28 
+23.41 (23.91) 
+24.51 
+24.24 
+WRN-28-10 
+3.89 (3.89) 
+3.85 
+3.78 
+18.66 (18.85) 
+18.19 
+18.30 
+WRN-40-10 
+
+ † 
+
+3.72 (3.8) 
+3.72 
+3.80 
+18.39 (18.3) 
+18.04 
+17.85 
+ † </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Classification error rate of various networks on SVHN (median of five runs).</figDesc><table>Model 
+SGD 
+SGD-G Adam-G 
+VGG-11 
+2.11 
+2.10 
+2.14 
+VGG-13 
+1.78 
+1.74 
+1.72 
+VGG-16 
+1.85 
+1.76 
+1.76 
+VGG-19 
+1.94 
+1.81 
+1.77 
+WRN-52-1 1.68 (1.70) 
+1.72 
+1.67 
+WRN-16-4 1.64 (1.64) 
+1.67 
+1.61 
+WRN-16-8 1.60 (1.54) 
+1.69 
+1.68 
+WRN-22-8 
+1.64 
+1.63 
+1.55 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Performance comparison with previously published results.</figDesc><table>Method 
+CIFAR-10 CIFAR-100 SVHN 
+NormProp [7] 
+7.47 
+29.24 
+1.88 
+ELU [23] 
+6.55 
+24.28 
+-
+Scalable Bayesian optimization [24] 
+6.37 
+27.4 
+-
+Generalizing pooling [25] 
+6.05 
+-
+1.69 
+Stochastic depth [26] 
+4.91 
+24.98 
+1.75 
+ResNet-1001 [20] 
+4.62 
+22.71 
+-
+Wide residual network [2] 
+3.8 
+18.3 
+1.54 
+Proposed (best of five runs) 
+3.49 
+
+1 
+
+17.59 
+
+2 
+
+1.49 
+
+3 
+
+1 WRN-40-10+SGD-G 
+2 WRN-40-10+Adam-G 
+3 WRN-22-8+Adam-G 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="31">st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 32nd International Conference on Machine Learning</title>
+		<meeting>The 32nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="448" to="456" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Wide residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Zagoruyko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikos</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Rethinking the inception architecture for computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zbigniew</forename><surname>Wojna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2818" to="2826" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The geometry of algorithms with orthogonality constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><surname>Edelman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tomás</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Steven T</forename><surname>Arias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM journal on Matrix Analysis and Applications</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="303" to="353" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Optimization algorithms on matrix manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P-A</forename><surname>Absil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Mahony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rodolphe</forename><surname>Sepulchre</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>Princeton University Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Weight normalization: A simple reparameterization to accelerate training of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kingma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="901" to="909" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Normalization propagation: A parametric technique for removing internal covariate shift in deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devansh</forename><surname>Arpit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yingbo</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bhargava</forename><surname>Kota</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Venu</forename><surname>Govindaraju</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 33rd International Conference on Machine Learning</title>
+		<meeting>The 33rd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1168" to="1176" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><forename type="middle">Lei</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jamie</forename><forename type="middle">Ryan</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.06450</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Layer normalization. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Riemannian geometry of grassmann manifolds with a view on algorithmic computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P-A</forename><surname>Absil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Mahony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rodolphe</forename><surname>Sepulchre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Acta Applicandae Mathematicae</title>
+		<imprint>
+			<biblScope unit="volume">80</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="199" to="220" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Differential Geometry of Curves and Surfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Carmo</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1976" />
+			<publisher>Prentice-Hall</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Learning representations by backpropagating errors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">E</forename><surname>Rumelhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">323</biblScope>
+			<biblScope unit="issue">6088</biblScope>
+			<biblScope unit="page" from="533" to="536" />
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Practical variational inference for neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="page" from="2348" to="2356" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">The EM algorithm for mixtures of factor analyzers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<idno>CRG-TR-96-1</idno>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+		<respStmt>
+			<orgName>University of Toronto</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Extended grassmann kernels for subspace-based learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jihun</forename><surname>Hamm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Daniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 21</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="601" to="608" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+		<respStmt>
+			<orgName>Department of Computer Science, University of Toronto</orgName>
+		</respStmt>
+	</monogr>
+	<note>Master&apos;s thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Reading digits in natural images with unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Netzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tao</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Bissacco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bo</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS workshop on deep learning and unsupervised feature learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Identity mappings in deep residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="630" to="645" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.03275</idno>
+		<title level="m">Batch renormalization: Towards reducing minibatch dependence in batch-normalized models</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">On the importance of initialization and momentum in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 30th International Conference on Machine Learning</title>
+		<meeting>the 30th International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1139" to="1147" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Fast and accurate deep network learning by exponential linear units (ELUs)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Djork-Arné</forename><surname>Clevert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Unterthiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.07289</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Scalable bayesian optimization using deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jasper</forename><surname>Snoek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oren</forename><surname>Rippel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nadathur</forename><surname>Satish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Narayanan</forename><surname>Sundaram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mostofa</forename><surname>Patwary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mr</forename><surname>Prabhat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2171" to="2180" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Generalizing pooling functions in convolutional neural networks: Mixed, gated, and tree</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chen-Yu</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Patrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhuowen</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on artificial intelligence and statistics</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Deep networks with stochastic depth</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gao</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhuang</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Sedra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kilian Q</forename><surname>Weinberger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="646" to="661" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Natural gradient works efficiently in learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shun-Ichi Amari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="251" to="276" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Revisiting natural gradient for deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Optimizing neural networks with kronecker-factored approximate curvature</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Roger B Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 32nd International Conference on Machine Learning</title>
+		<meeting>The 32nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2408" to="2417" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Path-SGD: Path-normalized optimization in deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Behnam Neyshabur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ruslan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nati</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Srebro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2422" to="2430" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Understanding symmetries in deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vijay</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bamdev</forename><surname>Mishra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roberto</forename><surname>Cipolla</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.01029</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

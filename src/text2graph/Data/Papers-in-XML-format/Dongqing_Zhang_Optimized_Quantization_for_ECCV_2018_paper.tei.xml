@@ -1,0 +1,1855 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:18+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">LQ-Nets: Learned Quantization for Highly Accurate and Compact Deep Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dongqing</forename><surname>Zhang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiaolong</forename><surname>Yang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dongqiangzi</forename><surname>Ye</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gang</forename><surname>Hua</surname></persName>
+							<email>ganghua@microsoft.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">LQ-Nets: Learned Quantization for Highly Accurate and Compact Deep Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>Deep Neural Networks · Quantization · Compression</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. Although weight and activation quantization is an effective approach for Deep Neural Network (DNN) compression and has a lot of potentials to increase inference speed leveraging bit-operations, there is still a noticeable gap in terms of prediction accuracy between the quantized model and the full-precision model. To address this gap, we propose to jointly train a quantized, bit-operation-compatible DNN and its associated quantizers, as opposed to using fixed, handcrafted quantization schemes such as uniform or logarithmic quantization. Our method for learning the quantizers applies to both network weights and activations with arbitrary-bit precision, and our quantizers are easy to train. The comprehensive experiments on CIFAR-10 and ImageNet datasets show that our method works consistently well for various network structures such as AlexNet, VGG-Net, GoogLeNet, ResNet, and DenseNet, surpassing previous quantization methods in terms of accuracy by an appreciable margin. Code available at https://github.com/Microsoft/LQ-Nets</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Deep neural networks, especially the deep convolutional neural networks, have achieved tremendous success in computer vision and the broader artificial intelligence field. However, the large model size and high computation cost remain great hurdles for many applications, especially on some constrained devices with limited memory and computational resources.</p><p>To address this issue, there has been a surge of interests recently in reducing the model complexity of DNNs. Representative techniques include quantization <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b53">54,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b54">55,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b17">18]</ref>, pruning <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b35">36]</ref>, low-rank decomposition <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b50">51,</ref><ref type="bibr" target="#b48">49]</ref>, hashing <ref type="bibr" target="#b3">[4]</ref>, and deliberate architecture design <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b49">50]</ref>. Among these approaches, quantization based methods represent the network weights with very low precision, thus yielding highly compact DNN models compared to their floating-point counterparts. Moreover, it has been shown that if both the network weights and activations are properly quantized, the convolution operations can be efficiently computed via bitwise operations <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b20">21]</ref>, enabling fast inference without GPU.</p><p>Notwithstanding the promising results achieved by the existing quantizationbased methods <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b53">54,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b54">55,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b17">18]</ref>, there is still a sizeable accuracy gap between the quantized DNNs and their full-precision counterparts, especially when quantized with extremely low bit-widths such as 1 bit or 2 bits. For example, using the state-of-the-art method of <ref type="bibr" target="#b2">[3]</ref>, a 50-layer ResNet model <ref type="bibr" target="#b14">[15]</ref> with 1-bit weights and 2-bit activations can achieve 64.6% top-1 image classification accuracy on ImageNet validation set <ref type="bibr" target="#b39">[40]</ref>. However, the fullprecision reference is 75.3% <ref type="bibr" target="#b14">[15]</ref>, i.e., the absolute accuracy drop induced by quantization is as large as 10.7%.</p><p>This work is devoted to pushing the limit of network quantization algorithms to achieve better accuracy with low precision weights and activations. We found that existing methods often use simple, hand-crafted quantizers (e.g., uniform or logarithmic quantization) <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b51">52]</ref> or otherwise pre-computed quantizers fixed during network training <ref type="bibr" target="#b2">[3]</ref>. However, one can never be sure that the simple quantizers are the best choices for network quantization. Moreover, the distributions of weights and activations in different networks and even different network layers may differ a lot. We believe a better quantizer should be made adaptive to the weights and activations to gain more flexibility.</p><p>To this end, we propose to jointly train a quantized DNN and its associated quantizers. The proposed method not only makes the quantizers learnable, but also renders them compatible with bitwise operations so as to keep the fast inference merit of properly-quantized neural networks. Our quantizer can be optimized via backpropagation in a standard network training pipeline, and we further propose an algorithm based on quantization error minimization which yields better performance. The proposed quantization can be applied to both network weights and activations, and arbitrary bit-width can be achieved. Moreover, layer-wise quantizers with unshared parameters can be applied to gain further flexibility. We call the networks quantized by our method the "LQ-Nets".</p><p>We evaluate our LQ-Nets with image classification tasks on the CIFAR-10 <ref type="bibr" target="#b24">[25]</ref> and ImageNet <ref type="bibr" target="#b39">[40]</ref> datasets. The experimental results show that they perform remarkably well across various network structures such as AlexNet <ref type="bibr" target="#b25">[26]</ref>, VGG-Net <ref type="bibr" target="#b40">[41]</ref>, GoogLeNet <ref type="bibr" target="#b41">[42]</ref>, ResNet <ref type="bibr" target="#b14">[15]</ref> and DenseNet <ref type="bibr" target="#b19">[20]</ref>, surpassing previous quantization methods by a wide margin.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>A large number of works have been devoted to reducing DNN model size and improving inference efficiency for practical applications. We briefly review the existing approaches as follows.</p><p>Compact network design: To achieve fast inference, one strategy is to carefully design a compact network architecture <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b41">42,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b49">50]</ref>. For example, Network in Network <ref type="bibr" target="#b31">[32]</ref> enhanced the local modeling via the micro networks and replaced the costly fully-connected layer by global average pooling. GoogLeNet <ref type="bibr" target="#b41">[42]</ref> and SqueezeNet <ref type="bibr" target="#b22">[23]</ref> utilized 1×1 convolution layers to compute reductions before the expensive 3×3 or 5×5 convolutions. Similarly, ResNet <ref type="bibr" target="#b14">[15]</ref> applied "bottleneck" structures with 1×1 convolutions when training deeper nets with enormous parameters. The recently proposed computation-efficient network structures MobileNet <ref type="bibr" target="#b18">[19]</ref> and ShuffleNet <ref type="bibr" target="#b49">[50]</ref> employed depth-wise convolution or group convolution advocated in <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b47">48]</ref> to reduce the computation cost.</p><p>Network parameter reduction: Considerable efforts have been devoted to reducing the number of parameters in an existing network <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b50">51,</ref><ref type="bibr" target="#b48">49,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b45">46]</ref>. For example, by exploiting the redundancy of the filters weights, some methods substitute the pre-trained weights using their low-rank approximations <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b50">51,</ref><ref type="bibr" target="#b48">49]</ref>. Connection pruning was investigated in <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b11">12]</ref> to reduce the parameters of AlexNet and VGG-Net, where significant reduction was achieved on fully-connected layers. Promising results on modern network architectures such as ResNet were achieved recently by <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b35">36]</ref>. Another similar technique is to regularize the network by structured sparsity to obtain a hardware-friendly DNN model <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b44">45]</ref>. Some other approaches such as hashing and vector quantization <ref type="bibr" target="#b43">[44]</ref> have also been explored to reduce DNN model complexity <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b45">46]</ref>.</p><p>Network quantization: Another category of existing methods, which our method also belongs to, train low-precision DNNs via quantization. These methods can be further divided into two subcategories: those performing quantization on weights only versus both weights and activations.</p><p>For weight-only quantization methods, Courbariaux et al. <ref type="bibr" target="#b5">[6]</ref> constrained the weights to only two possible values of −1 and 1 (i.e., binarization or one-bit quantization). They obtained promising results on small datasets using stochastic binarization. Rastegari et al. <ref type="bibr" target="#b38">[39]</ref> later demonstrated that deterministic binarization with optimized scale factors to approximate the full-precision weights work better on deeper network structures and larger datasets. To obtain better accuracy, ternary and other multi-bit quantization schemes were explored in <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b53">54,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b17">18]</ref>. It was shown in <ref type="bibr" target="#b51">[52]</ref> that quantizing a network with five bits can achieve similar accuracy to its 32-bit floating-point counterpart by incremental group-wise quantization and re-training.</p><p>In the latter regard, Hubara et al. <ref type="bibr" target="#b20">[21]</ref> and Rastegari et al. <ref type="bibr" target="#b38">[39]</ref> proposed to binarize both weights and activations to −1 and +1. This way, the convolution operations can be implemented by efficient bit-wise operations for substantial speed-up. To address the significant accuracy drop, multi-bit quantization was further studied in <ref type="bibr" target="#b52">[53,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b42">43,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b32">33]</ref>. A popular choice of the quantization function is the uniform quantization <ref type="bibr" target="#b52">[53,</ref><ref type="bibr" target="#b21">22]</ref>. Miyashita et al. <ref type="bibr" target="#b36">[37]</ref> used logarithmic quantization and improve the inference efficiency via the bitshift operation. Cai et al. <ref type="bibr" target="#b2">[3]</ref> proposed to binarize the network weights while quantize the activations using multiple bits. A single activation quantizer computed by fitting the probability density function of a half-wave Gaussian distribution is applied to all network layers and fixed during training. In the multi-bit quantization methods of Tang et al. <ref type="bibr" target="#b42">[43]</ref> and Li et al. <ref type="bibr" target="#b29">[30]</ref>, each bit is used to binarize the residue approximation error from previous bits.</p><p>Our proposed method can quantize both the weights and the activations with arbitrary bit-widths. Different from most of the previous methods, our quantizer is adaptively learned during network training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">LQ-Nets: Networks with Learned Quantization</head><p>In this section, we first briefly introduce the goal of neural network quantization. Then we present the details of our quantization method and how to train a quantized DNN model with it in a standard network training pipeline.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Preliminaries: Network Quantization</head><p>The main operations in deep neural networks are interleaved linear and nonlinear transformations, expressed as</p><formula xml:id="formula_0">z = σ(w T a),<label>(1)</label></formula><p>where w ∈ R N is the weight vector, a ∈ R N is the input activation vector computed by the previous network layer, σ( · ) is a non-linear function, and z is the output activation.</p><p>1 The convolutional layers are composed by multiple convolution filters w i ∈ R C·H·W , where C, H and W are the number of convolution filter channels, kernel height, and kernel width, respectively. Fullyconnected layers can be viewed as a special type of convolutional layer. Modern deep neural networks often have millions of weight parameters, which incur large memory footprints. Meanwhile, the large numbers of inner product operations between the weights and feature vectors lead to high computation cost. The memory and computation costs are great hurdles for many applications on resource-constrained devices such as mobile phones.</p><p>The goal of network quantization is to represent the floating-point weights w and/or activations a with few bits. In general, a quantization function is a piecewise-constant function which can be written as</p><formula xml:id="formula_1">Q(x) = q l , if x ∈ (t l , t l+1 ],<label>(2)</label></formula><p>where q l , l = 1, ..., L are the quantization levels and (t l , t l+1 ] are quantization intervals. The quantization function maps all the input values within a quantization interval to the corresponding quantization level, and a quantized value can be encoded by only log 2 L bits. Perhaps the simplest quantizer is the sign function used for binary quantization <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b38">39]</ref>: Q(x) = +1 if x ≥ 0 or −1 otherwise. For quantization with 2 or more bits, the most commonly used quantizer is the uniform quantization function where all the quantization steps q l+1 − q l are equal <ref type="bibr" target="#b52">[53,</ref><ref type="bibr" target="#b21">22]</ref>. Some methods use logarithmic quantization which uniformly quantizes the data in the log-domain <ref type="bibr" target="#b36">[37]</ref>. Quantizing the network weights can generate highly compact and memoryefficient DNN models: using n-bit encoding, the compression rate is compared to the 32-bit or 64-bit floating point representation. Moreover, if both weights and activations are quantized properly, the inner product in Eq. <ref type="formula" target="#formula_0">(1)</ref> can be computed by bitwise operations such as xnor and popcnt, where xnor is the exclusive-not-or logical operation and popcnt counts the number of 1's in a bit string. Both the two operations can process at least 64 bits in one or few clock cycle on most general computing platforms such as CPU and GPU, which potentially leads to 64× speedup. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Learnable Quantizers</head><p>An optimal quantizer should yield minimal quantization error for the input data distribution:</p><formula xml:id="formula_2">Q * (x) = arg min Q p(x)(Q(x) − x) 2 dx,<label>(3)</label></formula><p>where p(x) is the probability density function of x. We can never be sure if the popular quantizers such as a uniform quantizer are the optimal selections for the network weights and activations. In <ref type="figure" target="#fig_0">Fig. 1</ref> we present the statistical distributions of the weights and activations (after batch normalization (BN) and Rectified Linear Unit (ReLU) layers) in a trained floating-point network. It can be seen that the distributions can be complex and differ across layers, and a uniform quantizer is not optimal for them. Of course, if we train a quantized network the weight and activation distributions may change. But again we can never be sure if any pre-defined quantizer is optimal for our task, and an improper quantizer can easily jeopardize the final accuracy.</p><p>To get better network quantizers and improve the accuracy of a quantized network, we propose to jointly train the network and its quantizers. The insight behind is that if the optimizers are learnable and optimized through network training, they can not only minimize the quantization error, but also adapt to the training goal thus improving the final accuracy. A naive way to train the quantizers would be directly optimizing the quantization levels {q l } in network training. However, such a naive strategy would render the quantization functions not compatible with bitwise operations, which is undesired as we want to keep the fast inference merit of quantized neural networks.</p><formula xml:id="formula_3">2 bits: basis v = [v 1 , v 2 ] T 3 bits: basis v = [v 1 , v 2 , v 3 ] T Bit- - - Bit- -v 1 -v 2 v 1 -v 2 -v 1 +v 2 v 1 +v 2 -v 1 -v 2 - - - -v 1 -v 2 -v 3 v 1 -v 2 -v 3 -v 1 +v 2 -v 3 v 1 +v 2 -v 3 Bit- Bit- …… … … … … … … v 1 -v 2 -v 1 +v 2 v 1 +v 2 v 1 +v 2 +v 3 … -v 1 -v 2 -v 3 v 1 -v 2 -v 3 -v 1 +v 2 +v 3</formula><p>To resolve this issue, we need to confine our quantization functions into a subspace which is compatible with bitwise operations. But how to confine the quantizers into such a space during training? Our solution is inspired by the uniform quantization which is bit-op compatible (see <ref type="bibr" target="#b52">[53]</ref>). The uniform quantization essentially maps floating-point numbers to their nearest fixed-point integers with a normalization factor, and the key property for it to be bit-op-compatible is that the quantized values can be decomposed by a linear combination of the bits. Specifically, an integer q represented by a K-bit binary encoding is actually the inner product between a basis vector and the binary coding vector</p><formula xml:id="formula_4">b = [b 1 , b 2 , ..., b K ] T where b i ∈ {0, 1}, i.e., q =     1 2 ... 2 K−1     ,     b 1 b 2 ... b K     .<label>(4)</label></formula><p>In order to learn the quantizers while keeping them compatible with bitwise operations, we can simply learn the basis vector which consists of K scalars.</p><p>Concretely, our learnable quantization function is simply in the form of</p><formula xml:id="formula_5">Q ours (x, v) = v T e l , if x ∈ (t l , t l+1 ],<label>(5)</label></formula><p>where v ∈ R K is the learnable floating-point basis and e l ∈ {−1,</p><formula xml:id="formula_6">1} K for l = 1, . . . , 2 K enumerates all the K-bit binary encodings from [−1, . . . , −1] to [1, . . . , 1].</formula><p>3 For a K-bit quantization, the 2 K quantization levels are generated by q l = v T e l for l = 1, . . . , 2 K . Given {q l } and assuming q 1 &lt; q 2 &lt; ... &lt; q 2 K , it can be easily derived that for any x, the optimal {t l } minimizing the error in Eq. (3) are simply t l = (q l−1 + q l )/2 for l = 2, ..., 2 K (note t 1 = −∞ and t 2 K +1 = +∞). <ref type="figure" target="#fig_2">Figure 2</ref> illustrates our quantizer with the 2-bit and 3-bit cases.</p><p>We now show how the inner products between our quantized weights and activations can be computed by bitwise operations. Let a weight vector w ∈ R N be encoded by the vectors b</p><formula xml:id="formula_7">w i ∈ {−1, 1} N , i = 1, . . . , K w</formula><note type="other">where K w is the bitwidth for weights and b w i consists of the encoding of the i-th bit for all the values in w. Similarly, for activation vector a ∈ R N we have b a j</note><formula xml:id="formula_8">∈ {−1, 1} N , j = 1, . . . , K a . It can be readily derived that Q ours (w, v w ) T Q ours (a, v a ) = Kw i=1 Ka j=1 v w i v a j (b w i ⊙ b a j )<label>(6)</label></formula><p>where v w ∈ R Kw and v a ∈ R Ka are the learned basis vectors for the weight and activation quantizers respectively, and ⊙ denotes the inner product with bitwise operations xnor and popcnt.</p><p>In practice, we apply layer-wise quantizers for activations (i.e., one quantizer per layer) and channel-wise quantizers for weights (one quantizer for each conv filter). The number of extra parameters introduced by the quantizers is negligible compared to the large volume of network weights.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Training Algorithm</head><p>To train the LQ-Nets, we use floating-point network weights which are quantized before convolution and optimized with error back-propagation (BP) and gradient descent. After training, they can be discarded and their binary codes and quantizer bases are kept. We now present how we optimize the quantizers.</p><p>Quantizer optimization: A simple and straightforward way to optimize our quantizers is through BP similar to weight optimization. Here we present an algorithm based on quantization error minimization which optimizes our quantizers in the forward passes during training. This algorithm leads to much better performance as we will show later in the experiments.</p><p>Let x = [x 1 , ..., x N ] T ∈ R N be the full-precision data (weights or activations) and K be the specified bit number for quantization. Our goal is to find an optimal quantizer basis v ∈ R K as well as an encoding</p><formula xml:id="formula_9">B = [b 1 , ..., b N ] ∈ {−1, 1}</formula><p>K×N that minimize the quantization error:</p><formula xml:id="formula_10">v * , B * = arg min v,B B T v − x 2 2 , s.t. B ∈ {−1, 1} K×N .<label>(7)</label></formula><p>Eq. <ref type="formula" target="#formula_10">(7)</ref> is complex and to provably solve for the optimal solution via brute-force search is exponential in the size of B. For efficiency purposes, we alternately solve for v and B in a block coordinate descent fashion:</p><p>-Fix v and update B. Given v, the optimal encoding B * can be simply found by looking up the quantization intervals t 1 , ..., t 2 K +1 . for t = 1 → T do 8:</p><p>Compute </p><formula xml:id="formula_11">v * = (BB T ) −1 Bx .<label>(8)</label></formula><p>We iterate the alternation T times. For brevity, we will refer to the above procedure as the QEM (Quantization Error Minimization) algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Network training:</head><p>We use the standard mini-batch based approach to train the LQ-Nets, and our quantizer learning is conducted in the forward passes with the QEM algorithm. Since, for activation quantization, only part of the input data is visible in one iteration due to mini-batch sampling, we apply moving average for the optimized quantizer parameters (i.e., basis vectors). We also apply the moving average strategy for the weight quantizers to gain more stability. The operations in our quantizers are summarized in Algorithm 1. In a backward pass, direct error back-propagation would be problematic as the gradient of the quantization function is 0 at almost everywhere. To tackle this issue, we use the Straight-Through Estimator (STE) proposed in <ref type="bibr" target="#b1">[2]</ref> to compute the gradients. Specifically, for activations we set the gradient of the quantization function to 1 for values between q 1 and q 2 K defined in Eq. (5) and 0 elsewhere; for weights, the gradient is set to 1 everywhere <ref type="bibr" target="#b2">[3]</ref>. The QEM algorithm is unrelated to the backward pass so the quantizers will remain unchanged (unless BP is used to train them instead).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section, we evaluate the proposed method on two image classification datasets: CIFAR-10 <ref type="bibr" target="#b24">[25]</ref> and ImageNet (ILSVRC12) <ref type="bibr" target="#b39">[40]</ref>. The CIFAR-10 dataset consists of 60,000 color images of size 32 × 32 belonging to 10 classes (6,000 images per class). There are 50,000 training and 10,000 test images. ImageNet ILSVRC12 contains about 1.2 million training and 50K validation images of 1,000 object categories.</p><p>Although our method is designed to quantize both weights and activations to facilitate fast inference through bitwise operations, we also conduct experiments of weight-only quantization and compare with the prior art.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Implementation Details</head><p>Our LQ-Nets are implemented with TensorFlow <ref type="bibr" target="#b0">[1]</ref> and trained with the aid of the Tensorpack library <ref type="bibr" target="#b46">[47]</ref>. <ref type="bibr" target="#b3">4</ref> We present our implementation details as follows.</p><p>Quantizer implementation: We apply layer re-ordering to the networks similar to <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b2">3]</ref>: the typical Conv→BN→ReLU operations is re-organized as BN→ ReLU (→Quant.)→Conv. Following previous methods <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b53">54,</ref><ref type="bibr" target="#b2">3]</ref>, we quantize all the convolution and fully-connected layers but the first and last layers, for which the speedup benefited by bitwise operations is low due to their small channel number or filter size <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b29">30]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Network structures:</head><p>We conduct experiments on AlexNet <ref type="bibr" target="#b25">[26]</ref>, ResNet <ref type="bibr" target="#b14">[15]</ref>, DenseNet <ref type="bibr" target="#b19">[20]</ref>, two variants of the VGG-Net <ref type="bibr" target="#b40">[41]</ref> "VGG-Small" and "VGGVariant" from <ref type="bibr" target="#b2">[3]</ref>, and a variant of GoogLeNet <ref type="bibr" target="#b41">[42]</ref> also from <ref type="bibr" target="#b2">[3]</ref>. VGG-Small is a simplified VGG-Net similar to that of <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b38">39]</ref> but with only one fully-connected layer. VGG-Variant is a smaller version of the model-A in <ref type="bibr" target="#b13">[14]</ref>. The GoogLeNet structure in <ref type="bibr" target="#b2">[3]</ref> contains some modifications of the original GoogLeNet (e.g., more filters in some 1 × 1 conv layers) and we denote it as "GoogleNet-Variant" in this paper. Detailed structures of these network variants can be found in <ref type="bibr" target="#b2">[3]</ref>'s publicly-available implementation. <ref type="bibr" target="#b4">5</ref> For ResNet-50, the parameter-free type-A shortcut <ref type="bibr" target="#b14">[15]</ref> is adopted in this paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Initialization:</head><p>In all the experiments, our LQ-Nets are trained from scratch (random initialization) without leveraging any pre-trained model. Our quantizers are initialized with uniform quantization (we also tried random initialization and initializing them via pre-computing the quantization levels using <ref type="bibr" target="#b2">[3]</ref>, however no noticeable difference on the results was observed).</p><p>Hyper-parameters and other setup: To train on various network architectures, we mostly follow the hyper-parameter settings (learning rate, batch size, training epoch, weight decay, etc.) of their original papers <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b19">20]</ref>. For fair comparisons with the method of <ref type="bibr" target="#b2">[3]</ref>, we use the hyper-parameters described in <ref type="bibr" target="#b2">[3]</ref> to train all the networks with 1-bit weights and 2-bit activations. The iteration number T in our QEM algorithm is fixed as 1 (no significant benefit was observed with larger values; see Section 4.2). The moving average factor for quantizer learning is fixed as 0.9. Details of all our hyper-parameter settings can be found in the supplementary material as well as our released source code.  In the remaining text, we used "W/A" to denote the number of bits used for weights/activations. A bit-width of 32 indicates using 32-bit floating-point values without quantization (thus "w/32" with w &lt; 32 indicates weight-only quantization and "32/32" are "full-precision" (FP) models). For the experiments on CIFAR-10, we run our method 5 times and report the mean accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Performance Analysis</head><p>Effectiveness of the QEM algorithm: Our quantizer can be trained by either the proposed QEM algorithm or a naive BP procedure. In this experiment, we evaluate the effectiveness of the QEM algorithm and compare it against BP. <ref type="table" target="#tab_1">Table 1</ref> shows the performance of the quantized ResNet-20 models on CIFAR-10 test set, and <ref type="figure" target="#fig_4">Fig. 3</ref> presents the corresponding training and testing curves. The quantized network trained using QEM is clearly better than BP for weight-only quantization as well as weight-and-activation quantization. In all the following experiments, we use the QEM algorithm to optimize our quantizers.  <ref type="table" target="#tab_2">Table 2</ref> shows the accuracy of quantized ResNet-20 models with different QEM solver iteration T . As can be seen, using T = 2, 3 or 4 did not show significant benefit compared to T = 1. Note that each time the solver starts from the result of the last training iteration (see Line 6 in Algorithm 1) which is a good starting point especially when the gradients become small after a few epochs. The good performance with T = 1 suggests that the iterations of the alternately-directional optimization can be effectively substituted by the training iterations. In this paper, we use T = 1 in all the experiments.</p><p>Effectiveness of the learnable quantizers: The key idea of our method is to apply flexible quantizers and optimize them jointly with the network. <ref type="table" target="#tab_3">Table 3</ref> compares the results of our method and two previous methods: DoReFa-Net <ref type="bibr" target="#b52">[53]</ref> and HWGQ <ref type="bibr" target="#b2">[3]</ref>, the former of which is based on fixed uniform quantizers and  latter pre-computes the quantizer by fitting a half-wave Gaussian distribution. It can be seen that using 1-bit weights and 2-bit activations, the ResNet-18 model with our learnable quantizers outperformed HWGQ under the same setting and also outperformed DoReFa-Net with 4-bit activations on ImageNet. More result comparisons on various network structures can be found in Section 4.3. <ref type="figure" target="#fig_5">Figure 4</ref> presents the weight and activation statistics in two layers of a trained ResNet-20 model before (i.e., the floating-point values) and after quantization using our method. The network is quantized with "2/2" bits and the floatingpoint weights are obtained from the last iteration of training (these values can be discarded after training and only quantized values are used in the inference time). The floating-point activations are obtained using all the test images of CIFAR-10. It can be seen that our learned quantizers are not uniform ones and they differ at different layers. Statistical results with more bits can be found in the supplementary material.</p><p>Performance w.r.t. Bit-width: We now study the impact of bit-width on the performance of our LQ-Nets. <ref type="table" target="#tab_4">Table 4</ref> shows the results of three network structures: ResNet-20, VGG-Small and ResNet-18. On the CIFAR-10 dataset, high accuracy can be achieved by our low-precision networks. The accuracy from "3/32" quantization has roughly reached our fullprecision result for both ResNet-20 and VGG-Small. The accuracy decreases gracefully with lower bits for weights, and the absolution drops are low even with 1-bit weights: 2.0% for ResNet-20 and 0.3% for VGG-Small. The accuracy drops are more appreciable when quantizing both weights and activations, though the largest absolute drop is only 3.7% for the "1/2" ResNet-20 model. Very minor accuracy drops (maximum 0.4%) are observed for VGG-Small which has many more parameters than ResNet-20.</p><p>On the ImageNet dataset which is more challenging, the accuracy drops of the ResNet-18 model after quantization are relatively larger especially with very low precision: the largest absolute drop is 7.7% (70.3%→62.6%) with bit-widths of "1/2". Nevertheless, our learnable quantizer is particularly beneficial when using 2 or more bits due to its high flexibility. The accuracy of the quantized ResNet-18 quickly increases with 2 or more bits as shown in <ref type="table" target="#tab_4">Table 4</ref>. The accuracy gap is almost closed with "4/32" bits (0.3% absolute difference only), and the accuracy drop with the "4/4" case is as low as 1%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Comparison with Previous Methods</head><p>In this section, we compare the performance of our quantization method with existing methods including TWN <ref type="bibr" target="#b28">[29]</ref>, TTQ <ref type="bibr" target="#b53">[54]</ref>, BNN <ref type="bibr" target="#b20">[21]</ref>, BWN <ref type="bibr" target="#b38">[39]</ref>, XNORNet <ref type="bibr" target="#b38">[39]</ref>, DoReFa-Net <ref type="bibr" target="#b52">[53]</ref>, HWQG <ref type="bibr" target="#b2">[3]</ref> and ABC-Net <ref type="bibr" target="#b32">[33]</ref>, with various network architectures tested on CIFAR-10 and ImageNet classification tasks. Comparison on CIFAR-10: <ref type="table" target="#tab_5">Table 5</ref> presents the results of the VGG-Small model quantized using different methods. All these methods quantize (or binarize) both weights and activations to achieve extremely low precision. With 1-bit weights and 2-bit activations, the accuracy using our method is significantly better than the state-of-the-art method HWGQ (93.4% vs. 92.5%). Comparison on ImageNet: The results on ImageNet validation set are presented in <ref type="table" target="#tab_6">Table 6</ref>. For weight-only quantization, our LQ-Nets outperformed BWN, TWN, TTQ and DoReFa-Net by large margins. As for quantizing both weights and activations, our results are significantly better than DoReFa-Net and HWGQ when using very low bit-widths (1 bit for weights and few for activations). Our method is even more advantageous when using larger bit-widths. <ref type="table" target="#tab_6">Table 6</ref> shows that with more bits <ref type="figure" target="#fig_2">(2, 3, or 4)</ref>, the accuracy can be dramatically improved by our method. For example, with "4/4" bits, the top-1 accuracy of ResNet-50 is boosted from 68.7% (with "1/2" bits) to 75.1%. The absolute accuracy increase is as high as 6.4%, and the gap to its FP counterpart is reduced to 1.3%. According to <ref type="table" target="#tab_6">Table 6</ref>, the accuracy of our LQ-Nets comprehensively surpassed the other competing methods under the same bit-width settings. Compared to training floating-point networks, our extra cost lies in quantizer optimization. In the QEM algorithm, the cost of solving B is negligible. For N input scalars, the time complexity of solving v of length K is O(K 2 N ), which is a relatively small compared to the conv operations in theory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4">Training time</head><p>6 <ref type="table" target="#tab_7">Table 7</ref> shows the total training time comparison based on our current unoptimized implementation. The network is ResNet-18 and no bitwise operation is used in all cases. Our training time increases gracefully with larger bit-widths.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusions</head><p>We have presented a novel DNN quantization method that led to state-of-theart accuracy for various network structures. The key idea is to apply learnable quantizers which can be jointly trained with the network parameters to gain more flexibility. Our quantizers can be applied to both weights and activations, and they are made compatible with bitwise operations facilitating fast inference. In future, we plan to deploy our LQ-Nets on some resource-constrained devices such as mobile phones and test their performance. Acknowledgment This work is partially supported by the National Natural Science Foundation of China under Grant 61629301. <ref type="bibr" target="#b5">6</ref> To solve for v in Eq. (8), we need O(K 2 N ) for matrix multiplication BB T , O(K 3 ) for matrix inverse, and O(KN ) for matrix-vector multiplications. Note K ≪ N . Let the input and output activation map sizes be (H, W, Cin) and (H, W, Cout). The input activation number is Na = CinHW . The time complexity of an S × S conv operation with stride 1 is O(S 2 CoutCinHW ) = O(S 2 CoutNa), whereas that of the quantizer optimization is O(K 2 a Na) for activations and O(K 2 w Nw) for weights.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: Distributions of weights (left two columns) and activations (right two columns) at different layers of the ResNet-20 network trained on CIFAR-10. All the test-set images are used to get the activation statistics.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 2 :</head><label>2</label><figDesc>Fig. 2: Illustration of our learnable quantizer on the 2-bit (left) and 3-bit (right) cases. For each case, the left figure shows how quantization levels are generated by the basis vector, and the right figure illustrates the corresponding quantization function.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Algorithm 1</head><label>1</label><figDesc>Training and testing the quantizers in LQ-Nets 1: Parameters: v -the current basis vector of the quantizer 2: Input: x = [x1, x2, ..., xN ] -the full-precision data (weights or activations) 3: Output: B = [b1, ..., bN ] -the binary encodings for the input data 4: Procedure: 5: if in the training stage then {//quantizer optimization with QEM in forward</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: Error curves with the two optimization methods</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Statistics of the weights (top row) and activations (bottom row) before (i.e., the floating-point values) and after quantization. A ResNet-20 model trained on CIFAR-10 with "2/2" quantization is used. The orange diamonds indicate the four quantization levels of our learned quantizers. Note that in the left figures for the floating-point values, the histogram bins are of equal step size, whereas in the right figures each of the four bins contains all the values quantized to its corresponding quantization levels.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>-Fix B and update v. Given B, Eq. (7) reduces to a linear regression problem with a closed form solution as</figDesc><table>B 
+(t) with v 
+(t−1) per Eq. (5) 
+9: 
+Compute v 
+(t) with B 
+(t) per Eq. (8) 
+10: 
+end for 
+11: 
+Output B = B 
+(T ) ; Update current v with v 
+(T ) via moving average 
+12: else {//simple quantization operation in the test stage} 
+13: 
+Compute B with v per Eq. (5) 
+14: end if 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Optimization method comparison on the ResNet-20 model.</figDesc><table>Bit-width Optim. Accuracy 
+(W/A) method 
+(%) 
+2/32 
+BP 
+90.0 
+2/32 
+QEM 
+91.8 
+2/2 
+BP 
+88.2 
+2/2 
+QEM 
+90.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Accuracy w.r.t. QEM iteration number T</figDesc><table>Bit-width 
+Accuracy (%; "mean±std" of 5 runs) 
+(W/A) 
+T = 1 
+T = 2 
+T = 3 
+T = 4 
+1/2 
+88.37±0.26 88.38±0.11 88.45±0.12 88.51±0.20 
+2/2 
+90.16±0.08 90.35±0.12 90.33±0.20 90.25±0.14 
+3/3 
+91.58±0.16 91.55±0.23 91.62±0.15 91.44±0.14 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Comparison of different quantization methods (ResNet-18 on ImageNet)</figDesc><table>Method 
+Bit-width Accuracy (%) 
+(W/A) Top-1 Top-5 
+Uniform-DoReFa-Net [53] 
+1/4 
+59.2 
+-
+Half-wave Gaussian-HWGQ [3] 
+1/2 
+59.6 82.2 
+Ours 
+1/2 
+62.6 84.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 4 :</head><label>4</label><figDesc>Impact of bit-width on our LQ-Nets</figDesc><table>ResNet-20 
+VGG-Small 
+ResNet-18 
+(CIFAR-10) 
+(CIFAR-10) 
+(ImageNet) 
+
+Bit-width Acc. Bit-width Acc. Bit-width Acc. 
+(W/A) (%) (W/A) (%) (W/A) (%) 
+32/32 92.1 32/32 93.8 
+32/32 
+70.3 
+1/32 
+90.1 
+1/32 
+93.5 
+2/32 
+68.0 
+2/32 
+91.8 
+2/32 
+93.8 
+3/32 
+69.3 
+3/32 
+92.0 
+3/32 
+93.8 
+4/32 
+70.0 
+1/2 
+88.4 
+1/2 
+93.4 
+1/2 
+62.6 
+2/2 
+90.2 
+2/2 
+93.5 
+2/2 
+64.9 
+2/3 
+91.1 
+2/3 
+93.8 
+3/3 
+68.2 
+3/3 
+91.6 
+3/3 
+93.8 
+4/4 
+69.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 5 :</head><label>5</label><figDesc>Comparison of quantized VGG-Small networks on CIFAR-10</figDesc><table>Model 
+Methods 
+Bit-width Acc. 
+(W/A) (%) 
+
+VGG-Small 
+
+FP-HWGQ [3] 
+32/32 93.2 
+FP-ours 
+32/32 93.8 
+BNN [21] 
+1/1 
+89.9 
+XNOR-Net [39] 1/1 
+89.8 
+HWGQ [3] 
+1/2 
+92.5 
+Ours 
+1/2 93.4 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="true"><head>Table 6 :</head><label>6</label><figDesc>Comparison with state-of-the-art quantization methods on ImageNet. "FP" denotes "Full Precision"; the "W/A" values are the bit-widths of weights/activations.</figDesc><table>Methods 
+Bit-width Accuracy(%) 
+(W/A) Top-1 Top-5 
+
+ResNet-18 
+FP 
+ *  [15] 
+32/32 
+69.6 89.2 
+FP-ours 
+32/32 
+70.3 89.5 
+BWN [39] 
+1/32 
+60.8 83.0 
+TWN [29] 
+2/32 
+61.8 84.2 
+TWN 
+ † [29] 
+2/32 
+65.3 86.2 
+TTQ 
+ † [54] 
+2/32 
+66.6 87.2 
+Ours 
+2/32 
+68.0 88.0 
+Ours 
+3/32 
+69.3 88.8 
+Ours 
+4/32 
+70.0 89.1 
+XNOR-Net [39] 
+1/1 
+51.2 73.2 
+DoReFa-Net 
+ ‡ [53] 
+1/2 
+53.4 
+-
+DoReFa-Net 
+ ‡ [53] 
+1/4 
+59.2 
+-
+HWGQ [3] 
+1/2 
+59.6 82.2 
+ABC-Net [33] 
+3/3 
+61.0 83.2 
+ABC-Net [33] 
+5/5 
+65.0 85.9 
+Ours 
+1/2 
+62.6 84.3 
+Ours 
+2/2 
+64.9 85.9 
+Ours 
+3/3 
+68.2 87.9 
+Ours 
+4/4 
+69.3 88.8 
+ResNet-34 
+FP 
+ *  [15] 
+32/32 
+73.3 91.3 
+FP-ours 
+32/32 
+73.8 91.4 
+HWGQ [3] 
+1/2 
+64.3 85.7 
+ABC-Net [33] 
+3/3 
+66.7 87.4 
+ABC-Net [33] 
+5/5 
+68.4 88.2 
+Ours 
+1/2 
+66.6 86.9 
+Ours 
+2/2 
+69.8 89.1 
+Ours 
+3/3 
+71.9 90.2 
+ResNet-50 
+FP 
+ *  [15] 
+32/32 
+76.0 93.0 
+FP-ours 
+32/32 
+76.4 93.2 
+Ours 
+2/32 
+75.1 92.3 
+Ours 
+4/32 
+76.4 93.1 
+HWGQ [3] 
+1/2 
+64.6 85.9 
+ABC-Net [33] 
+5/5 
+70.1 89.7 
+Ours 
+1/2 
+68.7 88.4 
+Ours 
+2/2 
+71.5 90.3 
+Ours 
+3/3 
+74.2 91.6 
+Ours 
+4/4 
+75.1 92.4 
+
+Methods 
+Bit-width Accuracy(%) 
+(W/A) Top-1 Top-5 
+
+AlexNet 
+FP [26] 
+32/32 
+57.1 80.2 
+FP-ours 
+32/32 
+61.8 83.5 
+BWN [39] 
+1/32 
+56.8 79.4 
+DoReFa-Net 
+ § [53] 1/32 
+53.9 76.3 
+TWN 
+ § [29] 
+2/32 
+54.5 76.8 
+TTQ [54] 
+2/32 
+57.5 79.7 
+Ours 
+2/32 
+60.5 82.7 
+BNN 
+ § [21] 
+1/1 
+41.8 67.1 
+XNOR-Net [39] 
+1/1 
+44.2 69.2 
+DoReFa-Net [53] 
+1/1 
+43.6 
+-
+DoReFa-Net [53] 
+1/2 
+49.8 
+-
+DoReFa-Net [53] 
+1/4 
+53.0 
+-
+HWGQ [3] 
+1/2 
+52.7 76.3 
+Ours 
+1/2 
+55.7 78.8 
+Ours 
+2/2 
+57.4 80.1 
+DenseNet-121 
+FP [20] 
+32/32 
+75.0 92.3 
+FP-ours 
+32/32 
+75.3 92.5 
+DoReFa-Net 
+⋆ [53] 
+2/2 
+67.7 88.4 
+Ours 
+2/2 
+69.6 89.1 
+VGG-Variant 
+FP-HWGQ [3] 
+32/32 
+69.8 89.3 
+FP-ours 
+32/32 
+72.0 90.5 
+HWGQ [3] 
+1/2 
+64.1 85.6 
+Ours 
+1/2 
+67.1 87.6 
+Ours 
+2/2 
+68.8 88.6 
+GoogLeNet-Variant 
+FP-HWGQ [3] 
+32/32 
+71.4 90.5 
+FP-ours 
+32/32 
+72.9 91.3 
+HWGQ [3] 
+1/2 
+63.0 84.9 
+Ours 
+1/2 
+65.6 86.4 
+Ours 
+2/2 
+68.2 88.1 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 7 :</head><label>7</label><figDesc>Train. time</figDesc><table>Bit-width Training 
+(W/A) 
+time 
+32/32 
+1.0× 
+2/32 
+1.4× 
+3/32 
+1.7× 
+1/2 
+2.1× 
+2/2 
+2.3× 
+3/3 
+3.7× 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">For brevity, we omit the bias term in Eq. (1).</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">We refer the readers to [21, 39] for more details regarding the bitwise operations and speed-up analysis on different hardware platforms.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Note that ei can be either {0, 1} encodings or {−1, 1} encodings, both of which can yield quantizers compatible with bitwise operations. In our implementation, we adopt the {−1, 1} encoding for weights and {0, 1} encoding for activations. For convenience we will use the {−1, 1} encoding in the remaining text as the example.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Our source code is available at https://github.com/Microsoft/LQ-Nets/ 5 https://github.com/zhaoweicai/hwgq (accessed July 10, 2018)</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">TensorFlow: Large-scale machine learning on heterogeneous systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abadi</surname></persName>
+		</author>
+		<ptr target="https://www.tensorflow.org/" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Estimating or propagating gradients through stochastic neurons for conditional computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Léonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1308.3432</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Deep learning with low precision by halfwave gaussian quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5918" to="5926" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Compressing neural networks with the hashing trick</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Wilson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tyree</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2285" to="2294" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Xception: Deep learning with depthwise separable convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chollet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1251" to="1258" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Binaryconnect: Training deep neural networks with binary weights during propagations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>David</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3123" to="3131" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Predicting parameters in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Shakibi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>De Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2148" to="2156" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Exploiting linear structure within convolutional networks for efficient evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Denton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1269" to="1277" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Learning accurate low-bit deep neural networks with stochastic quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6115</idno>
+		<title level="m">Compressing deep convolutional networks using vector quantization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Deep learning with limited numerical precision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gopalakrishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Narayanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1737" to="1746" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Deep compression: Compressing deep neural networks with pruning, trained quantization and huffman coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learning both weights and connections for efficient neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1135" to="1143" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Delving deep into rectifiers: Surpassing humanlevel performance on ImageNet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1026" to="1034" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Identity mappings in deep residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<editor>Leibe, B., Matas, J., Sebe, N., Welling, M.</editor>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="630" to="645" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Channel pruning for accelerating very deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1389" to="1397" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Loss-aware weight quantization of deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Kwok</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalenichenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weyand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andreetto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.04861</idno>
+		<title level="m">Mobilenets: Efficient convolutional neural networks for mobile vision applications</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Densely connected convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2261" to="2269" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Binarized neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Hubara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Soudry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>El-Yaniv</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4107" to="4115" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Hubara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Soudry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>El-Yaniv</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.07061</idno>
+		<title level="m">Quantized neural networks: Training neural networks with low precision weights and activations</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">N</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Moskewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ashraf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Keutzer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.07360</idno>
+		<title level="m">SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and &lt;0.5MB model size</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Speeding up convolutional neural networks with low rank expansions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Speedingup convolutional neural networks using fine-tuned CP-decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lebedev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ganin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rakhuba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Oseledets</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fast convnets using group-wise brain damage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lebedev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2554" to="2564" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Ternary weight networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Workshop on Efficient Methods for Deep Neural Networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Performance guaranteed network acceleration via high-order residual quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Gao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2584" to="2592" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Fixed point quantization of deep convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Talathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Annapureddy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2849" to="2858" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Network in network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Towards accurate binary convolutional neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Pan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="345" to="353" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Neural networks with few multiplications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Memisevic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Foroosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tappen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Penksy</surname></persName>
+		</author>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="806" to="814" />
+		</imprint>
+	</monogr>
+	<note>Sparse convolutional neural networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Thinet: A filter level pruning method for deep neural network compression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5058" to="5066" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Miyashita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Murmann</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.01025</idno>
+		<title level="m">Convolutional neural networks using logarithmic data representation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Tensorizing neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Novikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Podoprikhin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Osokin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vetrov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="442" to="450" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">XNOR-Net: ImageNet classification using binary convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rastegari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<editor>Leibe, B., Matas, J., Sebe, N., Welling, M.</editor>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="525" to="542" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">ImageNet large scale visual recognition challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vis. (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">115</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="211" to="252" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hill</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Arbor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">How to train a compact binary neural network with high accuracy?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI Conference on Artificial Intelligence (AAAI)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2625" to="2631" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">A survey on learning to hash</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sebe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell. (TPAMI)</title>
+		<imprint>
+			<biblScope unit="volume">40</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="769" to="790" />
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Learning structured sparsity in deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2074" to="2082" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Quantized convolutional neural networks for mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Leng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4820" to="4828" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<ptr target="https://github.com/tensorpack/" />
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Aggregated residual transformations for deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1492" to="1500" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">On compressing deep models by low rank and sparse decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="7370" to="7379" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">ShuffleNet: An extremely efficient convolutional neural network for mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="6848" to="6856" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Accelerating very deep convolutional networks for classification and detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell. (TPAMI)</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1943" to="1955" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Incremental network quantization: Towards lossless CNNs with low-precision weights</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zou</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.06160</idno>
+		<title level="m">DoReFa-Net: Training low bitwidth convolutional neural networks with low bitwidth gradients</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Trained ternary quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Towards effective low-bitwidth convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+			<biblScope unit="page" from="7920" to="7928" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

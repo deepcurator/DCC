@@ -1,0 +1,867 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:38+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">One-Sided Unsupervised Domain Mapping</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sagie</forename><surname>Benaim</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">The Blavatnik School of Computer Science</orgName>
+								<orgName type="institution">Tel Aviv University</orgName>
+								<address>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lior</forename><surname>Wolf</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">The Blavatnik School of Computer Science</orgName>
+								<orgName type="institution">Tel Aviv University</orgName>
+								<address>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Facebook AI Research</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">One-Sided Unsupervised Domain Mapping</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>In unsupervised domain mapping, the learner is given two unmatched datasets A and B. The goal is to learn a mapping G AB that translates a sample in A to the analog sample in B. Recent approaches have shown that when learning simultaneously both G AB and the inverse mapping G BA , convincing mappings are obtained. In this work, we present a method of learning G AB without learning G BA . This is done by learning a mapping that maintains the distance between a pair of samples. Moreover, good mappings are obtained, even by maintaining the distance between different parts of the same sample before and after mapping. We present experimental results that the new method not only allows for one sided mapping learning, but also leads to preferable numerical results over the existing circularity-based constraint. Our entire code is made publicly available at https://github.com/sagiebenaim/DistanceGAN.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>The advent of the Generative Adversarial Network (GAN) <ref type="bibr" target="#b5">[6]</ref> technology has allowed for the generation of realistic images that mimic a given training set by accurately capturing what is inside the given class and what is "fake". Out of the many tasks made possible by GANs, the task of mapping an image in a source domain to the analog image in a target domain is of a particular interest.</p><p>The solutions proposed for this problem can be generally separated by the amount of required supervision. On the one extreme, fully supervised methods employ pairs of matched samples, one in each domain, in order to learn the mapping <ref type="bibr" target="#b8">[9]</ref>. Less direct supervision was demonstrated by employing a mapping into a semantic space and requiring that the original sample and the analog sample in the target domain share the same semantic representation <ref type="bibr" target="#b21">[22]</ref>.</p><p>If the two domains are highly related, it was demonstrated that just by sharing weights between the networks working on the two domains, and without any further supervision, one can map samples between the two domains <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b12">13]</ref>. For more distant domains, it was demonstrated recently that by symmetrically leaning mappings in both directions, meaningful analogs are obtained <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b26">27]</ref>. This is done by requiring circularity, i.e., that mapping a sample from one domain to the other and then back, produces the original sample.</p><p>In this work, we go a step further and show that it is possible to learn the mapping between the source domain and the target domain in a one-sided unsupervised way, by enforcing high crossdomain correlation between the matching pairwise distances computed in each domain. The new constraint allows one-sided mapping and also provides, in our experiments, better numerical results than circularity. Combining both of these constraints together often leads to further improvements.</p><p>Learning the new constraint requires comparing pairs of samples. While there is no real practical reason not to do so, since training batches contain multiple samples, we demonstrate that similar constraints can even be applied per image by computing the distance between, e.g., the top part of the image and the bottom part.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1">Related work</head><p>Style transfer These methods <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b9">10]</ref> typically receive as input a style image and a content image and create a new image that has the style of the first and the content of the second. The problem of image translation between domains differs since when mapping between domains, part of the content is replaced with new content that matches the target domain and not just the style. However, the distinction is not sharp, and many of the cross-domain mapping examples in the literature can almost be viewed as style transfers. For example, while a zebra is not a horse in another style, the horse to zebra mapping, performed in <ref type="bibr" target="#b27">[28]</ref> seems to change horse skin to zebra skin. This is evident from the stripped Putin example obtained when mapping the image of shirtless Putin riding a horse.</p><p>Generative Adversarial Networks GAN <ref type="bibr" target="#b5">[6]</ref> methods train a generator network G that synthesizes samples from a target distribution, given noise vectors, by jointly training a second network D. The specific generative architecture we and others employ is based on the architecture of <ref type="bibr" target="#b17">[18]</ref>. In image mapping, the created image is based on an input image and not on random noise <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b8">9]</ref>.</p><p>Unsupervised Mapping The work that is most related to ours, employs no supervision except for sample images from the two domains. This was done very recently <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b26">27]</ref> in image to image translation and slightly earlier for translating between natural languages <ref type="bibr" target="#b23">[24]</ref>. Note that <ref type="bibr" target="#b10">[11]</ref> proposes the "GAN with reconstruction loss" method, which applies the cycle constraint in one side and trains only one GAN. However, unlike our method, this method requires the recovery of both mappings and is outperformed by the full two-way method.</p><p>The CoGAN method <ref type="bibr" target="#b12">[13]</ref>, learns a mapping from a random input vector to matching samples from the two domains. It was shown in <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b27">28]</ref> that the method can be modified in order to perform domain translation. In CoGAN, the two domains are assumed to be similar and their generators (and GAN discriminators) share many of the layers weights, similar to <ref type="bibr" target="#b20">[21]</ref>. As was demonstrated in <ref type="bibr" target="#b27">[28]</ref>, the method is not competitive in the field of image to image translation.</p><p>Weakly Supervised Mapping In <ref type="bibr" target="#b21">[22]</ref>, the matching between the source domain and the target domain is performed by incorporating a fixed pre-trained feature map f and requiring f -constancy, i.e, that the activations of f are the same for the input samples and for mapped samples.</p><p>Supervised Mapping When provided with matching pairs of (input image, output image) the supervision can be performed directly. An example of such method that also uses GANs is <ref type="bibr" target="#b8">[9]</ref>, where the discriminator D receives a pair of images where one image is the source image and the other is either the matching target image ("real" pair) or a generated image ("fake" pair); The linking between the source and the target image is further strengthened by employing the U-net architecture <ref type="bibr" target="#b18">[19]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Domain Adaptation</head><p>In this setting, we typically are given two domains, one having supervision in the form of matching labels, while the second has little or no supervision. The goal is to learn to label samples from the second domain. In <ref type="bibr" target="#b2">[3]</ref>, what is common to both domains and what is distinct is separated thus improving on existing models. In <ref type="bibr" target="#b1">[2]</ref>, a transformation is learned, on the pixel level, from one domain to another, using GANs. In <ref type="bibr" target="#b6">[7]</ref>, an unsupervised adversarial approach to semantic segmentation, which uses both global and category specific domain adaptation techniques, is proposed.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Preliminaries</head><p>In the problem of unsupervised mapping, the learning algorithm is provided with unlabeled datasets from two domains, A and B. The first dataset includes i.i.d samples from the distribution p A and the second dataset includes i.i.d samples from the distribution p B . Formally, given</p><formula xml:id="formula_0">{x i } m i=1 such that x i i.i.d ∼ p A and {x j } n j=1 such that x j i.i.d ∼ p B ,</formula><p>our goal is to learn a function G AB , which maps samples in domain A to analog samples in domain B, see examples below. In previous work <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b26">27]</ref>, it is necessary to simultaneously recover a second function G BA , which similarly maps samples in domain B to analog samples in domain A.</p><p>Justification In order to allow unsupervised learning of one directional mapping, we introduce the constraint that pairs of inputs x, x , which are at a certain distance from each other, are mapped to pairs of outputs G AB (x), G AB (x ) with a similar distance, i.e., that the distances x − x and G AB (x) − G AB (x ) are highly correlated. As we show below, it is reasonable to assume that this constraint approximately holds in many of the scenarios demonstrated by previous work on domain translation. Although approximate, it is sufficient, since as was shown in <ref type="bibr" target="#b20">[21]</ref>, mapping between domains requires only little supervision on top of requiring that the output distribution of the mapper matches that of the target distribution.</p><p>Consider, for example, the case of mapping shoes to edges, as presented in <ref type="figure">Fig. 4</ref>. In this case, the edge points are simply a subset of the image coordinates, selected by local image criterion. If image x is visually similar to image x , it is likely that their edge maps are similar. In fact, this similarity underlies the usage of gradient information in the classical computer vision literature. Therefore, while the distances are expected to differ in the two domains, one can expect a high correlation.</p><p>Next, consider the case of handbag to shoe mapping <ref type="figure">(Fig. 4)</ref>. Analogs tend to have the same distribution of image colors in different image formations. Assuming that the spatial pixel locations of handbags follow a tight distribution (i.e., the set of handbag images share the same shapes) and the same holds for shoes, then there exists a set of canonical displacement fields that transform a handbag to a shoe. If there was one displacement, which would happen to be a fixed permutation of pixel locations, distances would be preserved. In practice, the image transformations are more complex.</p><p>To study whether the image displacement model is a valid approximation, we learned a nonnegative linear transformation T ∈ R</p><formula xml:id="formula_1">64 2 ×64 2 +</formula><p>that maps, one channel at a time, handbag images of size 64 × 64 × 3 to the output shoe images of the same size given by the CycleGAN method. T 's columns can be interpreted as weights that determine the spread of mass in the output image for each pixel location in the input image. It was estimated by minimizing the squared error of mapping every channel (R, G, or B) of a handbag image to the same channel in the matching shoe. Optimization was done by gradient descent with a projection to the space of nonnegative matrices, i.e., zeroing the negative elements of T at each iteration.</p><p>Sample mappings by the matrix T are shown in <ref type="figure" target="#fig_0">Fig. 1</ref>. As can be seen, the nonnegative linear transformation approximates CycleGAN's multilayer CNN G AB to some degree. Examining the elements of T , they share some properties with permutations: the mean sum of the rows is 1.06 (SD 0.08) and 99.5% of the elements are below 0.01.</p><p>In the case of adding glasses or changing gender or hair color <ref type="figure">(Fig 3)</ref>, a relatively minor image modification, which does not significantly change the majority of the image information, suffices in order to create the desired visual effect. Such a change is likely to largely maintain the pairwise image distance before and after the transformation.</p><p>In the case of computer generated heads at different angles vs. rotated cars, presented in <ref type="bibr" target="#b10">[11]</ref>, distances are highly correlated partly because the area that is captured by the foreground object is a good indicator of the object's yaw. When mapping between horses to zebras <ref type="bibr" target="#b27">[28]</ref>, the texture of a horse's skin is transformed to that of the zebra. In this case, most of the image information is untouched and the part that is changed is modified by a uniform texture, again approximately maintaining pairwise distances. <ref type="figure" target="#fig_1">In Fig 2(a)</ref>, we compare the L1 distance in RGB space of pairs of horse images to the distance of the samples after mapping by the CycleGAN Network <ref type="bibr" target="#b27">[28]</ref> is performed, using the public implementation. It is evident that the cross-domain correlation between pairwise distances is high. We also looked at Cityscapes image and ground truth label pairs in <ref type="figure" target="#fig_1">Fig 2(c)</ref>, and found that there is high correlation between the distances. This is the also the case in many other literature-based mappings between datasets we have tested and ground truth pairs.</p><p>While there is little downside to working with pairs of training images in comparison to working with single images, in order to further study the amount of information needed for successful alignment, we also consider distances between the two halves of the same image. We compare the L 1 distance  <ref type="bibr" target="#b27">[28]</ref>, we map horses to zebras and vice versa. Green circles are used for the distance between two random horse images and the two corresponding translated zebra images. Blue crosses are for the reverse direction translating zebra to horse images. The Pearson correlation for horse to zebra translation is 0.77 (p-value 1.7e−113) and for zebra to horse it is 0.73 (p-value 8.0e−96). (b) As in (a) but using the distance between two halves of the same image that is either a horse image translated to a zebra or vice-versa. The Pearson correlation for horse to zebra translation is 0.91 (p-value 9.5e−23) and for zebra to horse it is 0.87 (p-value 9.7e−19). (c) Cityscapes images and associated labels. Green circles are used for distance between two cityscapes images and the two corresponding ground truth images The Pearson correlation is 0.65 (p-value 6.0e−16). between the left and right halves as computed on the input image to that which is obtained on the generated image or the corresponding ground truth image. <ref type="figure" target="#fig_1">Fig. 2(b)</ref> and <ref type="figure" target="#fig_1">Fig. 2(d)</ref> presents the results for horses to zebras translation and for Cityscapes image and label pairs, respectively. As can be seen, the correlation is also very significant in this case.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>From Correlations to Sum of Absolute Differences</head><p>We have provided justification and empirical evidence that for many semantic mappings, there is a high degree of correlations between the pairwise distances in the two domains. In other words, let d k be a vector of centered and unit-variance normalized pairwise distances in one domain and let d k be the vector of normalized distances obtained in the other domain by translating each image out of each pair between the domains, then d k d k should be high. When training the mapper G AB , the mean and variance used for normalization in each domain are precomputed based on the training samples in each domain, which assumes that the post mapping distribution of samples is similar to the training distribution.</p><p>The pairwise distances in the source domain d k are fixed and maximizing d k d k causes pairwise distances d k with large absolute value to dominate the optimization. Instead, we propose to minimize the sum of absolute differences k |d k − d k |, which spreads the error in distances uniformly. The two losses − d k d k and k |d k − d k | are highly related and the negative correlation between them was explicitly computed for simple distributions and shown to be very strong <ref type="bibr" target="#b0">[1]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Unsupervised Constraints on the Learned Mapping</head><p>There are a few types of constraints suggested in the literature, which do not require paired samples. First, one can enforce the distribution of G AB (x) : x ∼ p A , which we denote as G AB (p A ), to be indistinguishable from that of p B . In addition, one can require that mapping from A to B and back would lead to an identity mapping. Another constraint suggested, is that for every x ∈ B G AB (x) = x. We review these constraints and then present the new constraints we propose.</p><p>Adversarial constraints Our training sets are viewed as two discrete distributionsp A andp B that are sampled from the source and target domain distributions p A and p B , respectively. For the learned network G AB , the similarity between the distributions G AB (p A ) and p B is modeled by a GAN. This involves the training of a discriminator network D B : B → {0, 1}. The loss is given by:</p><formula xml:id="formula_2">L GAN (G AB , D B ,p A ,p B ) =E x B ∼p B [log D B (x B )] + E x A ∼p A [log(1 − D B (G AB (x A ))]</formula><p>This loss is minimized over G AB and maximized over D B . When both G AB and G BA are learned simultaneously, there is an analog expression L GAN (G <ref type="figure">BA , D A ,p B ,p A )</ref>, in which the domains A and B switch roles and the two losses (and four networks) are optimized jointly.</p><p>Circularity constraints In three recent reports <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b26">27]</ref>, circularity loss was introduced for image translation. The rationale is that given a sample from domain A, translating it to domain B and then back to domain A should result in the identical sample. Formally, the following loss is added:</p><formula xml:id="formula_3">L cycle (G AB , G BA ,p A ) = E x∼p A G BA (G AB (x)) − x 1</formula><p>The L1 norm employed above was found to be mostly preferable, although L2 gives similar results. Since the circularity loss requires the recovery of the mappings in both directions, it is usually employed symmetrically, by considering</p><formula xml:id="formula_4">L cycle (G AB , G BA ,p A ) + L cycle (G BA , G AB ,p B ).</formula><p>The circularity constraint is often viewed as a definite requirement for admissible functions G AB and G BA . However, just like distance-based constraints, it is an approximate one. To see this, consider the zebra to horse mapping example. Mapping a zebra to a horse means losing the stripes. The inverse mapping, therefore, cannot be expected to recover the exact input stripes.</p><p>Target Domain Identity A constraint that has been used in <ref type="bibr" target="#b21">[22]</ref> and in some of the experiments in <ref type="bibr" target="#b27">[28]</ref> states that G AB applied to samples from the domain B performs the identity mapping. We did not experiment with this constraint and it is given here for completeness:</p><formula xml:id="formula_5">L T-ID (G AB ,p B ) = E x∼p B x − G AB (x) 2</formula><p>Distance Constraints The adversarial loss ensures that samples from the distribution of A are translated to samples in the distribution of B. However, there are many such possible mappings. Given a mapping for n samples of A to n samples of B, one can consider any permutation of the samples in B as a valid mapping and, therefore, the space of functions mapping from A to B is very large. Adding the circularity constraint, enforces the mapping from B to A to be the inverse of the permutation that occurs from A to B, which reduces the amount of admissible permutations.</p><p>To further reduce this space, we propose a distance preserving map, that is, the distance between two samples in A should be preserved in the mapping to B. We therefore consider the following loss, which is the expectation of the absolute differences between the distances in each domain up to scale:</p><formula xml:id="formula_6">L distance (G AB ,p A ) = E xi,xj ∼p A | 1 σ A ( x i − x j 1 − µ A ) − 1 σ B ( G AB (x i ) − G AB (x j ) 1 − µ B )|</formula><p>where µ A , µ B (σ A , σ B ) are the means (standard deviations) of pairwise distances in the training sets from A and B, respectively, and are precomputed.</p><p>In practice, we compute the loss over pairs of samples that belong to the same minibatch during training. Even for minibatches with 64 samples, as in DiscoGAN <ref type="bibr" target="#b10">[11]</ref>, considering all pairs is feasible. If needed, for even larger mini-batches, one can subsample the pairs.</p><p>When the two mappings are simultaneously learned, L distance (G BA ,p B ) is similarly defined. In both cases, the absolute difference of the L1 distances between the pairs in the two domains is considered.</p><p>In comparison to circularity, the distance-based constraint does not suffer from the model collapse problem that is described in <ref type="bibr" target="#b10">[11]</ref>. In this phenomenon, two different samples from domain A are mapped to the same sample in domain B. The mapping in the reverse direction then generates an average of the two original samples, since the sample in domain B should be mapped back to both the first and second original samples in A. Pairwise distance constraints prevents this from happening.</p><p>Self-distance Constraints Whether or not the distance constraint is more effective than the circularity constraint in recovering the alignment, the distance based constraint has the advantage of being one sided. However, it requires that pairs of samples are transfered at once, which, while having little implications on the training process as it is currently done, might effect the ability to perform on-line learning. Furthermore, the official CycleGAN <ref type="bibr" target="#b27">[28]</ref> implementation employs minibatches of size one. We, therefore, suggest an additional constraint, which employs one sample at a time and compares the distances between two parts of the same sample.</p><p>Let L, R : R h×w → R h×w/2 be the operators that given an input image return the left or right part of it. We define the following loss:</p><formula xml:id="formula_7">L self- distance (G AB ,p A ) = E x∼p A | 1 σ A ( L(x) − R(x) 1 − µ A ) − 1 σ B ( L(G AB (x)) − R(G AB (x)) 1 − µ B )| (1)</formula><p>where µ A and σ A are the mean and standard deviation of the pairwise distances between the two halves of the image in the training set from domain A, and similarly for µ B and σ B , e.g., given the training set {x j } n j=1 ⊂ B, µ B is precomputed as</p><formula xml:id="formula_8">1 n j L(x j ) − R(x j ) 1 .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Network Architecture and Training</head><p>When training the networks G AB , G BA , D B and D A , we employ the following loss, which is minimized over G AB and G BA and maximized over D B and D A :</p><formula xml:id="formula_9">α 1A L GAN (G AB , D B ,p A ,p B ) + α 1B L GAN (G BA , D A ,p B ,p A ) + α 2A L cycle (G AB , G BA ,p A )+ α 2B L cycle (G BA , G AB ,p B ) + α 3A L distance (G AB ,p A ) + α 3B L distance (G BA ,p B )+ α 4A L self-distance (G AB ,p A ) + α 4B L self-distance (G BA ,p B )</formula><p>where α iA , α iB are trade-off parameters. We did not test the distance constraint and the self-distance constraint jointly, so in every experiment, either α 3A = α 3B = 0 or α 4A = α 4A = 0. When performing one sided mapping from A to B, only α 1A and either α 3A or α 4A are non-zero.</p><p>We consider A and B to be a subset of R 3×s×s of images where s is either 64, 128 or 256, depending on the image resolution. In order to directly compare our results with previous work and to employ the strongest baseline in each dataset, we employ the generator and discriminator architectures of both DiscoGAN <ref type="bibr" target="#b10">[11]</ref> and CycleGAN <ref type="bibr" target="#b27">[28]</ref>.</p><p>In DiscoGAN, the generator is build of an encoder-decoder unit. The encoder consists of convolutional layers with 4 × 4 filters followed by Leaky ReLU activation units. The decoder consists of deconvolutional layers with 4 × 4 filters followed by a ReLU activation units. Sigmoid is used for the output layer and batch normalization <ref type="bibr" target="#b7">[8]</ref> is used before the ReLU or Leaky ReLU activations. Between 4 to 5 convolutional/deconvolutional layers are used, depending on the domains used in A and B (we match the published code architecture per dataset). The discriminator is similar to the encoder, but has an additional convolutional layer as the first layer and a sigmoid output unit.</p><p>The CycleGAN architecture for the generator is based on <ref type="bibr" target="#b9">[10]</ref>. The generators consist of two 2-stride convolutional layers, between 6 to 9 residual blocks depending on the image resolution and two fractionally strided convolutions with stride 1/2. Instance normalization is used as in <ref type="bibr" target="#b9">[10]</ref>. The discriminator uses 70 × 70 PatchGANs <ref type="bibr" target="#b8">[9]</ref>. For training, CycleGAN employs two additional techniques. The first is to replace the negative log-likelihood by a least square loss <ref type="bibr" target="#b24">[25]</ref> and the second is to use a history of images for the discriminators, rather then only the last image generated <ref type="bibr" target="#b19">[20]</ref>.     </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We compare multiple methods: the DiscoGAN or the CycleGAN baselines; the one sided mapping using L distance (A → B or B → A); the combination of the baseline method with L distance ; the self distance method. For DiscoGAN, we use a fixed weight configuration for all experiments, as shown in Tab. 1. For CycleGAN, there is more sensitivity to parameters and while the general pattern is preserved, we used different weight for the distance constraint depending on the experiment, digits or horses to zebra.</p><p>Models based on DiscoGAN Datasets that were tested by DiscoGAN are evaluated here using this architecture. In initial tests, CycleGAN is not competitive on these out of the box. The first set of experiments maps rotated images of cars to either cars or heads. The 3D car dataset <ref type="bibr" target="#b3">[4]</ref> consists of rendered images of 3D cars whose degree varies at 15 • intervals. Similarly, the head dataset, <ref type="bibr" target="#b16">[17]</ref>, consists of 3D images of rotated heads which vary from −70</p><p>• to 70</p><p>• . For the car2car experiment, the car dataset is split into two parts, one of which is used for A and one for B (It is further split into train and test set). Since the rotation angle presents the largest source of variability, and since the rotation operation is shared between the datasets, we expect it to be the major invariant that the network learns, i.e., a semantic mapping would preserve angles.</p><p>A regressor was trained to calculate the angle of a given car image based on the training data. Tab. 2 shows the Root Mean Square Error (RMSE) between the angle of source image and translated image. As can be seen, the pairwise distance based mapping results in lower error than the DiscoGAN one, combining both further improves results, and the self distance outperforms both DiscoGAN and pairwise distance. The original DiscoGAN implementation was used, but due to differences in evaluation (different regressors) these numbers are not compatible with the graph shown in DiscoGAN.</p><p>For car2head, DiscoGAN's solution produces mirror images and combination of DiscoGAN's circularity constraint with the distance constraint produces a solution that is rotated by 90</p><p>• . We consider these biases as ambiguities in the mapping and not as mistakes and, therefore, remove the mean error prior to computing the RMSE. In this experiment, distance outperforms all other methods. The combination of both methods is less competitive than both, perhaps since each method pulls toward a different solution. Self distance, is worse than circularity in this dataset.</p><p>Another set of experiments arises from considering face images with and without a certain property. CelebA <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b13">14]</ref> was annotated for multiple attributes including the person's gender, hair color, and the existence of glasses in the image. Following <ref type="bibr" target="#b10">[11]</ref> we perform mapping between two values of each of these three properties. The results are shown in the supplementary material with some examples in <ref type="figure">Fig. 3</ref>. It is evident that the DiscoGAN method (using the unmodified authors' implementation) presents many more failure cases than our pair based method. The self-distance method was implemented with the top and bottom image halves, instead of left to right distances, since faces are symmetric. This method also seems to outperform DiscoGAN.</p><p>In order to evaluate how well the face translation was performed, we use the representation layer of VGG faces <ref type="bibr" target="#b15">[16]</ref> on the image in A and its output in B. One can assume that two images that match will have many similar features and so the VGG representation will be similar. The cosine similarities, as evaluated between input images and their mapped versions, are shown in Tab. <ref type="bibr" target="#b3">4</ref>. In all cases, the pair-distance produces more similar input-output faces. Self-distance performs slightly worse than pairs, but generally better than DiscoGAN. Applying circularity together with pair-distance, provides the best results but requires, unlike the distance, learning both sides simultaneously.</p><p>While we create images that better match in the face descriptor metric, our ability to create images that are faithful to the second distribution is not impaired. This is demonstrated by learning a linear classifier between the two domains based on the training samples and then applying it to a set of test image before and after mapping. The separation accuracy between the input test image and the mapped version is also shown in Tab. 4. As can be seen, the separation ability of our method is similar to that of DiscoGAN (it arises from the shared GAN terms).</p><p>We additionally perform a user study to asses the quality of our results. The user is first presented with a set of real images from the dataset. Then, 50 random pairs of images are presented to a user for a second, one trained using DiscoGAN and one using our method. The user is asked to decide which image looks more realistic. The test was performed on 22 users. On shoes to handbags translation, our translation performed better on 65% of the cases. For handbags to shoes, the score was 87%. For male to female, both methods showed a similar realness score (51% to 49% of DiscoGAN's). We, therefore, asked a second question: given the face of a male, which of the two generated female variants is a better fit to the original face. Our method wins 88% of the time.</p><p>In addition, in the supplementary material we compare the losses of the GAN discriminator for the various methods and show that these values are almost identical. We also measure the losses of the various methods during test, even if these were not directly optimized. For example, despite this constraints not being enforced, the distance based methods seem to present a low circularity loss, while DiscoGAN presents a relatively higher distance losses.</p><p>Sample results of mapping shoes to handbags and edges to shoes and vice versa using the DiscoGAN baseline architecture are shown in <ref type="figure">Fig. 3</ref>. More results are shown in the supplementary. Visually, the results of the distance-based approach seem better then DiscoGAN while the results of self-distance are somewhat worse. The combination of DiscoGAN and distance usually works best.</p><p>Models based on CycleGAN Using the CycleGAN architecture we map horses to zebras, see <ref type="figure">Fig. 4</ref> and supplementary material for examples. Note that on the zebra to horse mapping, all methods fail albeit in different ways. Subjectively, it seems that the distance + cycle method shows the most promise in this translation.</p><p>In order to obtain numerical results, we use the baseline CycleGAN method as well as our methods in order to translate from Street View House Numbers (SVHN) <ref type="bibr" target="#b14">[15]</ref> to MNIST <ref type="bibr" target="#b11">[12]</ref>. Accuracy is then measured in the MNIST space by using a neural net trained for this task. Results are shown in Tab. 3 and visually in the Supplementary. While the pairwise distance based method improves upon the baseline method, there is still a large gap between the unsupervised and semi-supervised setting presented in <ref type="bibr" target="#b21">[22]</ref>, which achieves much higher results. This can be explained by the large amount of irrelevant information in the SVHN images (examples are shown in the supplementary). Combining the distance based constraint with the circularity one does not work well on this dataset.</p><p>We additionally performed a qualitative evaluation using FCN score as in <ref type="bibr" target="#b27">[28]</ref>. The FCN metric evaluates the interoperability images by taking a generated cityscape image and generating a label using semantic segmentation algorithm. The generated label can then be compared to the ground truth label. FCN results are given as three measures: per-pixel accuracy, per-class accuracy and Class IOU. Our distance GAN method is preferable on all three scores (0.53 vs. 0.52, 0.19 vs. 0.17, and 0.11 vs 0.11, respectively). The paired t-test p-values are 0.29, 0.002 and 0.42 respectively. In a user study similar to the one for DiscoGAN above, our cityscapes translation scores 71% for realness when comparing to CycleGAN's. When looking at similarity to the ground truth image we score 68%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>We have proposed an unsupervised distance-based loss for learning a single mapping (without its inverse), which empirically outperforms the circularity loss. It is interesting to note that the new loss is applied to raw RGB image values. This is in contrast to all of the work we are aware of that computes image similarity. Clearly, image descriptors or low-layer network activations can be used. However, by considering only RGB values, we not only show the general utility of our method, but also further demonstrate that a minimal amount of information is needed in order to form analogies between two related domains.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Each triplet shows the source handbag image, the target shoe as produced by Cycle-GAN's [28] mapper G AB and the results of approximating G AB by a fixed nonnegative linear transformation T , which obtains each output pixel as a linear combination of input pixels. The linear transformation captures the essence of G AB showing that much of the mapping is achieved by a fixed spatial transformation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Justifying the high correlation between distances in different domains. (a) Using the CycleGAN model</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>(d) As in (c) but using the distance between two halves of the same image. The Pearson correlation is 0.65 (p-value 1.4e−12).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :Figure 4 :</head><label>34</label><figDesc>Translations using various methods on the celebA dataset: (a,b) Male to and from Female. (c,d) Blond to and from black hair. (e,f) With eyeglasses to from without eyeglasses.(a,b) Handbags to and from shoes. (c,d) Edges to/from shoes. (e,f) Horse to/from zebra.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Tradeoff weights for each experiment.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2</head><label>2</label><figDesc></figDesc><table>: 
+Normalized 
+RMSE between the angles 
+of source and translated 
+images. 
+
+Method 
+car2car car2head 
+
+DiscoGAN 0.306 0.137 
+Distance 
+0.135 0.097 
+Dist.+Cycle 0.098 0.273 
+Self Dist. 
+0.117 0.197 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc></figDesc><table>MNIST clas-
+sification on mapped 
+SHVN images. 
+
+Method 
+Accuracy 
+
+CycleGAN 26.1% 
+Distance 
+26.8% 
+Dist.+Cycle 18.0% 
+Self Dist. 
+25.2% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 :</head><label>4</label><figDesc>CelebA mapping results using the VGG face descriptor.</figDesc><table>Male → Female 
+Blond → Black 
+Glasses → Without 
+
+Method 
+Cosine 
+Separation Cosine 
+Separation Cosine 
+Separation 
+Similarity Accuracy 
+Similarity Accuracy 
+Similarity Accuracy 
+
+DiscoGAN 
+0.23 
+0.87 
+0.15 
+0.89 
+0.13 
+0.84 
+Distance 
+0.32 
+0.88 
+0.24 
+0.92 
+0.42 
+0.79 
+Distance+Cycle 0.35 
+0.87 
+0.24 
+0.91 
+0.41 
+0.82 
+Self Distance 
+0.24 
+0.86 
+0.24 
+0.91 
+0.34 
+0.80 
+----Other direction ----
+DiscoGAN 
+0.22 
+0.86 
+0.14 
+0.91 
+0.10 
+0.90 
+Distance 
+0.26 
+0.87 
+0.22 
+0.96 
+0.30 
+0.89 
+Distance+Cycle 0.31 
+0.89 
+0.22 
+0.95 
+0.30 
+0.85 
+Self Distance 
+0.24 
+0.91 
+0.19 
+0.94 
+0.30 
+0.81 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This project has received funding from the European Research Council (ERC) under the European Union's Horizon 2020 research and innovation programme (grant ERC CoG 725974). The authors would like to thank Laurens van der Maaten and Ross Girshick for insightful discussions.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Correlation between the inproduct and the sum of absolute differences is -0.8485 for uniform sampled signals on</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Werner</forename><surname>Van Belle</surname></persName>
+		</author>
+		<ptr target="http://werner.yellowcouch.org/Papers/sadvssip/index.html" />
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Unsupervised pixel-level domain adaptation with generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Konstantinos</forename><surname>Bousmalis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Dohan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dilip</forename><surname>Krishnan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Domain separation networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Konstantinos</forename><surname>Bousmalis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Trigeorgis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dilip</forename><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><surname>Erhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<editor>D. D. Lee, M. Sugiyama, U. V. Luxburg, I. Guyon, and R. Garnett</editor>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="343" to="351" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">3d object detection and viewpoint estimation with a deformable 3d cuboid model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sanja</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sven</forename><surname>Dickinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Image style transfer using convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Leon</forename><forename type="middle">A</forename><surname>Gatys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">S</forename><surname>Ecker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Bethge</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jean</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mehdi</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bing</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sherjil</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Fcns in the wild: Pixel-level adversarial and constraint-based adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Judy</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dequan</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fisher</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Image-to-image translation with conditional adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phillip</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun-Yan</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tinghui</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexei</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Perceptual losses for real-time style transfer and super-resolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandre</forename><surname>Alahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Learning to discover cross-domain relations with generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taeksoo</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moonsu</forename><surname>Cha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hyunsoo</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jungkwon</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiwon</forename><surname>Kim</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.05192</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">MNIST handwritten digit database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Corinna</forename><surname>Cortes</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Coupled generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ming-</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oncel</forename><surname>Tuzel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="469" to="477" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep learning face attributes in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziwei</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ping</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaogang</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoou</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of International Conference on Computer Vision (ICCV)</title>
+		<meeting>International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Reading digits in natural images with unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Netzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tao</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Bissacco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bo</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Workshop on Deep Learning and Unsupervised Feature Learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Deep face recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">M</forename><surname>Parkhi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">A 3d face model for pose and illumination invariant face recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Paysan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Reinhard</forename><surname>Knothe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Amberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sami</forename><surname>Romdhani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Vetter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AVSS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alec</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luke</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Soumith</forename><surname>Chintala</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06434</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">U-net: Convolutional networks for biomedical image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olaf</forename><surname>Ronneberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Philipp</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">MICCAI</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Learning from simulated and unsupervised images through adversarial training</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Pfister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oncel</forename><surname>Tuzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josh</forename><surname>Susskind</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wenda</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Russ</forename><surname>Webb</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.07828</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Towards principled unsupervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rafal</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR workshop</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Unsupervised cross-domain image generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yaniv</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Polyak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lior</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Texture networks: Feed-forward synthesis of textures and stylized images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ulyanov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lebedev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yingce</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Di</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tao</forename><surname>Qin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liwei</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nenghai</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tie-Yan</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wei-Ying</forename><surname>Ma</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.00179</idno>
+		<title level="m">Dual learning for machine translation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">Y</forename><surname>Lau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.04076</idno>
+		<title level="m">Multi-class generative adversarial networks with the l2 loss function</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">From facial parts responses to face detection: A deep learning approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuo</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ping</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chen</forename><forename type="middle">Change</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoou</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3676" to="3684" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Unsupervised dual learning for image-toimage translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zili</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hao</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ping</forename><forename type="middle">Tan</forename><surname>Gong</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.02510</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Unpaired image-to-image translation using cycle-consistent adversarial networkss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun-Yan</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taesung</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phillip</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexei</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.10593</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

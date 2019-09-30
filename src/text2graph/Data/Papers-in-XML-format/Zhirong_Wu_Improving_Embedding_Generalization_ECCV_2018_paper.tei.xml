@@ -1,0 +1,1340 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Improving Generalization via Scalable Neighborhood Component Analysis</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhirong</forename><surname>Wu</surname></persName>
+							<affiliation key="aff0">
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>ICSI</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">Microsoft Research Asia</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexei</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+							<affiliation key="aff0">
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>ICSI</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stella</forename><forename type="middle">X</forename><surname>Yu</surname></persName>
+							<affiliation key="aff0">
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>ICSI</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Improving Generalization via Scalable Neighborhood Component Analysis</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>k-nearest neighbors · large-scale object recognition · neigh- borhood component analysis · transfer learning · few-shot learning</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. Current major approaches to visual recognition follow an end-to-end formulation that classifies an input image into one of the predetermined set of semantic categories. Parametric softmax classifiers are a common choice for such a closed world with fixed categories, especially when big labeled data is available during training. However, this becomes problematic for open-set scenarios where new categories are encountered with very few examples for learning a generalizable parametric classifier. We adopt a non-parametric approach for visual recognition by optimizing feature embeddings instead of parametric classifiers. We use a deep neural network to learn the visual feature that preserves the neighborhood structure in the semantic space, based on the Neighborhood Component Analysis (NCA) criterion. Limited by its computational bottlenecks, we devise a mechanism to use augmented memory to scale NCA for large datasets and very deep networks. Our experiments deliver not only remarkable performance on ImageNet classification for such a simple nonparametric method, but most importantly a more generalizable feature representation for sub-category discovery and few-shot recognition.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Deep learning with end-to-end problem formulations has reshaped visual recognition methods over the past few years. The core problems of high-level vision, e.g. recognition, detection and segmentation, are commonly formulated as classification tasks. Classifiers are applied image-wise for recognition <ref type="bibr" target="#b18">[19]</ref>, region-wise for detection <ref type="bibr" target="#b29">[30]</ref>, and pixel-wise for segmentation <ref type="bibr" target="#b21">[22]</ref>. Classification in deep neural network is usually implemented as multi-way parametric softmax and assumes that the categories are fixed between learning and evaluation.</p><p>However, such a "closed-world" assumption does not hold for the open world, where new categories could appear, often with very few training examples. For example, for face recognition <ref type="bibr" target="#b40">[41,</ref><ref type="bibr" target="#b39">40]</ref>, new identities should be recognized after just one-time occurrence. Due to the open-set nature, one may want to generalize the feature embedding instead of learning another parametric classifier. A common practice for embedding is to simply chop off the softmax classification layer from a pretrained network and take the last layer features. However, such a transfer learning scheme is not optimal because these features only make sense for a linear classification boundary in the training space, most likely not for the new testing space. Instead of learning parametric classifiers, we can learn an embedding to directly optimize a feature representation which preserves distance metrics in a non-parametric fashion. Numerous works have investigated various loss functions (e.g. contrastive loss <ref type="bibr" target="#b9">[10]</ref>, triplet loss <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b25">26]</ref>) and data sampling strategies <ref type="bibr" target="#b46">[47]</ref> for improving the embedding performance.</p><p>Non-parametric embedding approaches have also been applied to computer vision tasks other than face recognition. Exemplar-based models have shown to be effective for learning object classes <ref type="bibr" target="#b1">[2]</ref> and object detection <ref type="bibr" target="#b24">[25]</ref>. These nonparametric approaches build associations between data instances <ref type="bibr" target="#b22">[23]</ref>, and turn out to be useful for meta-knowledge transfer <ref type="bibr" target="#b24">[25]</ref> which would not be readily possible for parametric models. So far, none of these non-parametric methods have become competitive in the state-of-the-art image recognition benchmarks such as ImageNet classification <ref type="bibr" target="#b30">[31]</ref> and MSCOCO object detection <ref type="bibr" target="#b20">[21]</ref>. However, we argue that time might be right to revisit non-parametric methods to see if they could provide the generalization capabilities lacking in current approaches.</p><p>We investigate a neighborhood approach for image classification by learning a feature embedding through deep neural networks. The core of our approach is a metric learning model based on Neighborhood Component Analysis (NCA) <ref type="bibr" target="#b7">[8]</ref>. For each training image, NCA computes its distance to all the other images in the embedding space. The distances can then be used to define a classification distribution according to the class labels. Batch training with all the images is computationally expensive, thereby making the original NCA algorithm difficult to scale to large datasets. Inspired by prior works <ref type="bibr" target="#b47">[48,</ref><ref type="bibr" target="#b48">49]</ref>, we propose to store the embedding of images in the entire dataset in an augmented non-parametric memory. The non-parametric memory is not learned by stochastic gradient descent, but simply updated after each training image is visited. During testing, we build a k-nearest-neighbor (kNN) classifier based on the learned metrics.</p><p>Our work makes three main contributions. 1) We scale up NCA to handle large-scale datasets and deep neural networks by using an augmented memory to store non-parametric embeddings. 2) We demonstrate that a nearest neighbor classifier can achieve remarkable performance on the challenging ImageNet classification benchmark, nearly on par with parametric methods. 3) Our learned feature, trained with the same embedding method, delivers improved generalization ability for new categories, which is desirable for sub-category discovery and few-shot recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Works</head><p>Object Recognition. Object recognition is one of the holy grail problems in computer vision. Most prior works cast recognition either as a category naming problem <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b3">4]</ref> or as a data association problem <ref type="bibr" target="#b22">[23]</ref>. Category naming assumes that all instances belonging to the same category are similar and that category membership is binary (either all-in, or all-out). Most of the research in this area is focused on designing better invariant category representations (e.g. bag-of-words <ref type="bibr" target="#b44">[45]</ref>, pictorial models <ref type="bibr" target="#b4">[5]</ref>). On the other hand, data association approaches <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b49">50,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b23">24]</ref> regard categories as data-driven entities emergent from connections between individual instances. Such non-parametric paradigms are informative and powerful for transferring knowledge which may not be explicitly present in the labels. In the era of deep learning, however, the performance of exemplar-based approaches hardly reaches the state-of-the-art for standard benchmarks on classification. Our work revisits the direction of data association models, learning an embedding representation that is tailored for nearest neighbor classifiers.</p><p>Learning with Augmented Memory. Since the formulation of LSTM <ref type="bibr" target="#b12">[13]</ref>, the idea of using memory for neural networks has been widely adopted for various tasks <ref type="bibr" target="#b11">[12]</ref>. Recent approaches on augmented memory fall into two camps. One camp incorporates memory into neural networks as an end-to-end differentiable module <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b45">46]</ref>, with automatic attention mechanism <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b42">43]</ref> for reading and writing. These models are usually applied in knowledge-based reasoning <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b42">43]</ref> and sequential prediction tasks <ref type="bibr" target="#b37">[38]</ref>. The other camp treats memory as a non-parametric representation <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b47">48,</ref><ref type="bibr" target="#b48">49]</ref>, where the memory size grows with the data set size. Matching networks <ref type="bibr" target="#b41">[42]</ref> explore few-shot recognition using augmented memory, but their memory only holds the representations in current mini-batches of 5 − 25 images. Our memory is also non-parametric, in a similar manner as storing instances for unsupervised learning <ref type="bibr" target="#b47">[48]</ref>. The key distinction is that our approach learns the memory representation with millions of entries for supervised large-scale recognition.</p><p>Metric Learning. There are many metric learning approaches <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b7">8]</ref>, some achieving the state-of-the-art performance in image retrieval <ref type="bibr" target="#b46">[47]</ref>, face recognition <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b43">44]</ref>, and person re-identification <ref type="bibr" target="#b48">[49]</ref>. In such problems, since the classes during testing are disjoint from those encountered during training, one can only make inference based on its feature representation, not on the subsequent linear classifier. Metric learning learning encourages the minimization of intra-class variations and the maximization inter-class variations, such as contrastive loss <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b36">37]</ref>, triplet loss <ref type="bibr" target="#b13">[14]</ref>. Recent works on few-shot learning <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b35">36]</ref> also show the utility of metric learning, since it is difficult to optimize a parametric classifier with very few examples.</p><p>NCA. Our work is built upon the original proposal of Neighborhood Component Analysis (NCA) <ref type="bibr" target="#b7">[8]</ref> and its non-linear extension <ref type="bibr" target="#b31">[32]</ref>. In the original version <ref type="bibr" target="#b31">[32]</ref>, the features for the entire dataset needs to be computed at every step of the optimization, making it computationally expensive and not scalable for large datasets. Consequently, it has been mainly applied to small datasets such as MNIST or for dimensionality reduction <ref type="bibr" target="#b31">[32]</ref>. Our work is the first to demonstrate that NCA can be applied successfully to large-scale datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Approach</head><p>We adopt a feature embedding framework for image recognition. Given a query image x, we embed it into the feature space by v = f θ (x). The function f θ (·) here is formulated as a deep neural network parameterized by parameter θ learned from data D. The embedding v is then queried against a set of images in the search database D ′ , according to a similarity metric. Images with the highest similarity scores are retrieved and information from these retrieved images can be transferred to the image x.</p><p>Since the classification process does not rely on extra model parameters, the non-parametric framework can naturally extend to images in novel categories without any model fine-tuning. Consider three settings of D ′ .</p><p>1. When D ′ = D, i.e., the search database is the same as the training set, we have closed-set recognition such as the ImageNet challenge. 2. When D ′ is annotated with labels different from D, we have open-set recognition such as sub-category discovery and few-shot recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Even when D</head><p>′ is completely unannotated, the metric can be useful for general content-based image retrieval.</p><p>The key is how to learn such an embedding function f θ (·). Our approach builds upon NCA <ref type="bibr" target="#b7">[8]</ref> with some of our modifications.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Neighborhood Component Analysis</head><p>Non-parametric formulation of classification. Suppose we are given a labeled dataset of n examples x 1 , x 2 , ..., x n with corresponding labels y 1 , y 2 , ..., y n . Each example x i is embedded into a feature vector v i = f θ (x i ). We first define similarity s ij between instances i and j in the embedded space as cosine similarity. We further assume that the feature v i is ℓ 2 normalized. Then,</p><formula xml:id="formula_0">s ij = cos(φ) = v T i v i v j = v T i v j ,<label>(1)</label></formula><p>where φ is the angle between vector v i , v j . Each example x i selects example x j as its neighbor with probability p ij defined as,</p><formula xml:id="formula_1">p ij = exp(s ij /σ) k =i exp(s ik /σ) , p ii = 0.<label>(2)</label></formula><p>Note that each example cannot select itself as neighbors, i.e. p ii = 0. The probability thus is called leave-one-out distribution on the training set. Since the range of the cosine similarity is in [−1, 1], we add an extra parameter σ to control the scale of the neighborhood.</p><p>Let Ω i = {j|y j = y i } denote the indices of training images which share the same label with example x i . Then the probability of example x i being correctly classified is,</p><formula xml:id="formula_2">p i = j∈Ωi p ij .<label>(3)</label></formula><p>The overall objective is to minimize the expected negative log likelihood over the dataset,</p><formula xml:id="formula_3">J = 1 n i J i = − 1 n i log(p i ).<label>(4)</label></formula><p>Learning proceeds by directly optimizing the embedding without introducing additional model parameters. It turns out that each training example depends on all the other exemplars in the dataset. The gradients of the objective J i with respect to v i is,</p><formula xml:id="formula_4">∂J i ∂v i = 1 σ k p ik v k − 1 σ k∈Ωip ik v k ,<label>(5)</label></formula><p>and v j where j = i is,</p><formula xml:id="formula_5">∂J i ∂v j = 1 σ (p ij −p ij )v i , j ∈ Ω i 1 σ p ij v i , j / ∈ Ω i<label>(6)</label></formula><p>wherep ik = p ik / j∈Ωi p ij is the normalized distribution within the groundtruth category.</p><p>Differences from parametric softmax. The traditional parametric softmax distribution is formulated as</p><formula xml:id="formula_6">p c = exp(w T c v i ) j exp(w T j v i ) ,<label>(7)</label></formula><p>where each category c ∈ {1, 2, ..., C} has a parametrized prototype w c to represent itself. The maximum likelihood learning is to align all examples in the same category with the category prototype. However, in the above NCA formulation, the optimal solution is reached when the probability p ik of negative examples (k / ∈ Ω i ) vanishes. The learning signal does not enforce all the examples in the same category to align with the current training example. The probability of some positive examples (k ∈ Ω i ) can also vanish so long as some other positives align well enough to i-th example. In other words, the non-parametric formulation does not assume a single prototype for each category, and such a flexibility allows learning to discover inherent structures when there are significant intraclass variations in the data. Eqn 5 explains how each example contributes to the learning gradients.</p><p>Computational challenges for learning. Learning NCA even for a single objective term J i would require obtaining the embedding as well as gradients (Eqn 5 and Eqn 6) in the entire dataset. This computational demand quickly becomes impossible to meet for large-scale dataset, with a deep neural network learned via stochastic gradient descent. Sampling-based methods such as triplet loss <ref type="bibr" target="#b39">[40]</ref> can drastically reduce the computation by selecting a few neighbors. The original NCA needs to compute the feature embeddings for the entire dataset for each optimization step. This is not scalable for large datasets and deep neural networks optimized with stochastic gradient descent. We overcome this issue by using an augmented memory to store offline embeddings forwarded from previous optimization steps. The online embedding is learned by backpropagation, while the offline memory is not.</p><p>However, hard-negative mining turns out to be crucial and typical batch size with 1800 examples <ref type="bibr" target="#b39">[40]</ref> could still be impractical. We take an alternative approach to reduce the amount of computation. We introduce two crude approximations.</p><p>1. We only perform gradient descent on ∂J i /∂v i as in Eqn 5, but not on ∂J i /∂v j , j = i as in Eqn 6. This simplification disentangles learning a single instance from learning among all the training instances, making mini-batch stochastic gradient descent possible. 2. Computing the gradient for ∂J i /∂v i still requires the embedding of the entire dataset, which would be prohibitively expensive for each mini-batch update. We introduce augmented memory to store the embeddings for approximation. More details follow.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Learning with Augmented Memory</head><p>We store the feature representation of the entire dataset as augmented nonparametric memory. We learn our feature embedding network through stochastic gradient descent. At the beginning of the t+1-th iteration, suppose the network parameter has the state θ (t) , and the non-parametric memory is in the form of</p><formula xml:id="formula_7">M (t) = {v (t) 1 , v (t) 2 , ..., v (t)</formula><p>n }. Suppose that the memory is roughly up-to-date with the parameter θ (t) at iteration t. This means the non-parametric memory is close to the features extracted from the data using parameter θ (t) ,</p><formula xml:id="formula_8">v (t) i ≈ f θ (t) (x i ), i = 1, 2, ..., n.<label>(8)</label></formula><p>During the t+1-th optimization, for training instance x i , we forward it through the embedding network v i = f θ (t) (x i ), and calculate its gradient as in Eqn 5 but using the approximated embedding in the memory as,</p><formula xml:id="formula_9">∂J i ∂v i = 1 σ k p ik v (t) k − 1 σ k∈Ωip ik v (t) k .<label>(9)</label></formula><p>Then the gradients of the parameter can be back-propagated,</p><formula xml:id="formula_10">∂J i ∂θ = ∂J i ∂v i · ∂v i ∂θ .<label>(10)</label></formula><p>Since we have forwarded the x i to get the feature v i , we update the memory for the training instance x i by the empirical weighted average <ref type="bibr" target="#b48">[49]</ref>,</p><formula xml:id="formula_11">v (t+1) i ← m · v (t) i + (1 − m) · v i .<label>(11)</label></formula><p>Finally, network parameter θ is updated and learned through stochastic gradient descent. If the learning rate is small enough, the memory can always be up-to-date with the change of parameters. The non-parametric memory slot for each training image is only updated once per learning epoch. Though the embedding is approximately estimated, we have found it to work well in practice.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Discussion on Complexity</head><p>In our model, the non-parametric memory M (t) , similarity metric s ij , and probability density p ij may potentially require a large storage and pose computation bottlenecks. We give an analysis of model complexity below.</p><p>Suppose our final embedding is of size d = 128, and we train our model on a typical large-scale dataset using n = 10 6 images with a batch size of b = 256. Non-parametric memory M requires 0.5 GB (O(dn)) of memory. Similarity metric and probability density each requires 2 GB (O(bn)) of memory for storing the value and the gradient. In our current implementation, other intermediate variables used for computing the intra-class distribution require another 2 GB (O(bn)). In total, we would need 6.5 GB for the NCA module.</p><p>In terms of time complexity, the summation in Eqn 2 and Eqn 3 across the whole dataset becomes the bottleneck in NCA. However, in practice with a GPU implementation, the NCA module takes a reasonable 30% amount of extra time with respect to the backbone network. During testing, exhaustive nearest neighbor search with one million entries is also reasonably fast. The time it takes is negligible with respect to the forward passing through the backbone network.</p><p>The complexity of our model scales linearly with the training size set. Our current implementation can deal with datasets at the ImageNet scale, but cannot scale up to 10 times more data based on the above calculations. A possible strategy to handle bigger data is to subsample a few neighbors instead of the entire training set. Sampling would help reduce the linear time complexity to a constant. For nearest neighbor search at the run time, computation complexity can be mitigated with proper data structures such as ball-trees <ref type="bibr" target="#b6">[7]</ref> and quantization methods <ref type="bibr" target="#b15">[16]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We conduct experiments to investigate whether our non-parametric feature embedding can perform well in the closed-world setting, and more importantly whether it can improve generalization in the open-world setting.</p><p>First, we evaluate the learned metric on the large-scale ImageNet ILSVRC challenge <ref type="bibr" target="#b30">[31]</ref>. Our embedding achieves competitive recognition accuracy with k-nearest neighbor classifiers using the same ResNet architecture. Secondly, we study an important property of our representation for sub-category discovery, when the model trained with only coarse annotations is transferred for finegrained label prediction. Lastly, we study how our learned metric can be transferred and applied to unseen object categories for few-shot recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Image Classification</head><p>We study the effectiveness of our non-parametric representation for visual recognition on ImageNet ILSVRC dataset. We use the parametric softmax classification networks as our baselines. Network Configuration. We use the ConvNet architecture ResNet <ref type="bibr" target="#b10">[11]</ref> as the backbone for the feature embedding network. We remove the last linear classification layer of the original ResNet and append another linear layer which projects the feature to a low dimensional 128 space. The 128 feature vector is then ℓ 2 normalized and fed to NCA learning. Our approach does not induce extra parameters for the embedding network. Learning Details. During training, we use an initial learning rate of 0.1 and drops 10 times smaller every 40 epochs for a total of 130 epochs. Our network converges a bit slower than the baseline network, in part due to the approximated updates for the non-parametric memory. We set the momentum for updating the memory with m = 0.5 at the start of learning, and gradually increase to m = 0.9 at the end of learning. We use a temperature parameter σ = 0.05 in the main results. All the other optimization details and hyper-parameters remain the same with the baseline approach. We refer the reader to the PyTorch implementation <ref type="bibr" target="#b27">[28]</ref> of ResNet for details. During testing, we use a weighted k nearest neighbor classifier for classification. Our results are insensitive to parameter k; generally any k in the range of 5 − 50 gives very similar results. We report the accuracy with k = 1 and k = 30 using single center crops.   Main Results. <ref type="table" target="#tab_0">Table 1 and Table 2</ref> summarize our results in comparison with the features learned by parametric softmax. For baseline networks, we extract the last layer feature and evaluate it with the same k nearest neighbor classifiers. The similarity between features is measured by cosine similarity. Classification evaluated with nearest neighbors leads to a decrease of 6% − 7% accuracy with k = 1, and 1% − 2% accuracy with k = 30. We also project the baseline feature to 128 dimension with PCA for evaluation. This reduction leads to a further 2% decrease in performance, suggesting that the features learned by parametric classifiers do not work equally well with nearest neighbor classifiers. With our model, we achieve a 3% improvement over the baseline using k = 1. At k = 30, we have even slightly better results than the parametric classifier: Ours are 1.1% higher on ResNet34, and 0.7% higher on ResNet50. We also find that predictions from our model disagree with the baseline on 15% of the validation set, indicating a significantly different representation has been learned. <ref type="figure" target="#fig_1">Figure 2</ref> shows nearest neighbor retrieval comparisons. The upper four examples are our successful retrievals and the lower four are failure retrievals. For the failure cases, our model has trouble either when there are multiple objects in the same scene, or when the task becomes too difficult with fine-grained categorization. For the four failure cases, our model predictions are "paddle boat", "tennis ball", "angora rabbit", "appenzeller" respectively. Ablation study on model parameters. We investigate the effect of the feature size and the temperature parameter in <ref type="table" target="#tab_2">Table 3</ref>. For the feature size, 128 features and 256 features produce very similar results. We start to see performance degradation as the size is dropped lower than 64. For the temperature parameter, a lower temperature which induces smaller neighborhoods generally produces better results. However, the network does not converge if the temperature is too low, e.g., σ = 0.02. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Discovering Sub-Categories</head><p>Our non-parametric formulation of classification does not assume a single prototype for each category. Each training image i only has to look for a few supporting neighbors <ref type="bibr" target="#b33">[34]</ref> to embed the features. We refer nearest neighbors whose probability density j p ij sum over a given threshold as a support set for i. In <ref type="figure" target="#fig_2">Figure 3</ref>, we plot the histograms over the size of the support set for support density thresholds 0.5, 0.7 and 0.9. We can see most of the images only depend on around 100 − 500 neighbors, which are a lot less than 1,000 images per category in ImageNet. These statistics suggest that our learned representation allows sub-categories to develop automatically. The ability to discover sub-categories is of great importance for feature learning, as there are always intra-class variations no matter how we define categories. For example, even for the finest level of object species, we can further define object pose as sub-categories.</p><p>To quantitatively measure the performance of sub-category discovery, we consider the experiment of learning the feature embedding using coarse-grained object labels, and evaluating the embedding using fine-grained object labels. We can then measure how well feature learning discovers variations within categories. We refer this classification performance as induction accuracy as in <ref type="bibr" target="#b14">[15]</ref>. We train  the network with the baseline parametric softmax and with our non-parametric NCA using the same network architecture. To be fair with the baseline, we evaluate the feature from the penultimate layer from both networks. We conduct the experiments on CIFAR and ImageNet, and their results are summarized in <ref type="table" target="#tab_3">Table 4</ref>. CIFAR Results. CIFAR100 <ref type="bibr" target="#b17">[18]</ref> images have both fine-grained annotations in 100 categories and coarse-grained annotations in 20 categories. It is a proper testing scenario for evaluating sub-category discovery. We study sub-category discovery by transferring representations learned from 20 categories to 100 categories. The two approaches exhibit similar classification performances on the 20 category setting. However, when transferred to CIFAR100 using k nearest neighbors, baseline features suffer a big loss, with 54.17% top-1 accuracy on 100 classes. Fitting a linear classifier for the baseline features gives an improved 58.66% top-1 accuracy. Using k nearest neighbor classifiers, our features are 8% better than the baselines, achieving a 62.32% recognition accuracy. ImageNet Results. As in <ref type="bibr" target="#b14">[15]</ref>, we use 127 coarse categories by clustering the 1000 categories in a top-down fashion by fixing the distances of the nodes from the root node in the WordNet tree. There are 65 of the 127 classes present in the original 1000 classes. The other 62 classes are parental nodes in the ImageNet hierarchical word tree. The two models achieve similar classification performance (81% − 82%) on the original 127 categories. When evaluated with 1000 class annotations, our representation is about 5% better than the baseline features. The baseline performance can be improved to 52.0% by fitting another linear classifier on the 1000 classes. Discussions. Our approach is able to preserve visual structures which are not explicitly presented in the supervisory signal. In <ref type="figure" target="#fig_3">Figure 4</ref>, we show nearest neighbor examples compared with the baseline features. For all the examples shown here, the ground-truth fine-grained category does not exist in the training categories. Thus the model has to discover sub-categories in order to recognize the objects. We can see our representation preserves apparent visual similarity (such as color and pose information) better, and is able to associate the query with correct exemplars for accurate recognition. For example, our model finds similar birds hovering above water in the third row, and finds butterflies of the same color in the last row. In <ref type="figure" target="#fig_4">Figure 5</ref> we further show the prediction gains for each class. Our model is particularly stronger for main sub-categories with rich intra-class variations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Few-shot Recognition</head><p>Our feature embedding method learns a meaningful metric among images. Such a metric can be directly applied to new image categories which have not been seen during training. We study the generalization ability of our method for few-shot object recognition. Evaluation Protocol. We use the mini-Imagenet dataset <ref type="bibr" target="#b41">[42]</ref>, which consists of 60,000 colour images and 100 classes (600 examples per class). We follow the split introduced previously <ref type="bibr" target="#b28">[29]</ref>, with 64, 16, and 20 classes for training, validation and testing. We only use the validation set for tuning model parameters. During testing, we create the testing episodes by randomly sampling a set of observation and query pairs.  episode provides the task to predict the class of query image given c × s few shot observations. We create 3, 000 episodes for testing and report the average results. Network Architecture. We conduct experiments on two network architectures. One is a shallow network which receives small 84 × 84 input images. It has 4 convolutional blocks, each with a 3×3×64 convolutional layer, a batch normalization layer, a ReLU layer, and a max pooling layer. A final fully connected layer maps the feature for classification. This architecture is widely used in previous works <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b41">42]</ref> for evaluating few-shot recognition. The other is a deeper version with ResNet18 and larger 224 × 224 image inputs. Two previous works <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b38">39]</ref> have reported their performance with similar ResNet18 architectures.</p><p>Results. We summarize our results in <ref type="table" target="#tab_4">Table 5</ref>. We train our embedding on the training set, and apply the representation from the penultimate layer for evaluation. Our current experiment does not fine-tune a local metric per episode, though such adaptation would potentially bring additional improvement. As with the previous experiments, we use k nearest neighbors for classification. We use k = 1 neighbor for the 1-shot scenario, and k = 5 for the 5-shot scenario.</p><p>For the shallow network setting, while our model is on par with the prototypical network <ref type="bibr" target="#b35">[36]</ref>, and RelationNet <ref type="bibr" target="#b38">[39]</ref>, our method is far more generic.</p><p>For the deeper network setting, we achieve the state-of-the-art results for this task. MAML <ref type="bibr" target="#b5">[6]</ref> suggests going deeper does not necessarily bring better results for meta learning. Our approach provides a counter-example: Deeper network architectures can in fact bring significant gains with proper metric learning. <ref type="figure" target="#fig_5">Figure 6</ref> shows visual examples of our predictions compared with the baseline trained with softmax classifiers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Summary</head><p>We present a non-parametric neighborhood approach for visual recognition. We learn a CNN to embed images into a low-dimensional feature space, where the distance metric between images preserves the semantic structure of categorical labels according to the NCA criterion. We address NCA's computation demand by learning with an external augmented memory, thereby making NCA scalable for large datasets and deep neural networks. Our experiments deliver not only remarkable performance on ImageNet classification for such a simple nonparametric method, but most importantly a more generalizable feature representation for sub-category discovery and few-shot recognition. In the future, it's worthwhile to re-investigate non-parametric methods for other visual recognition problems such as detection and segmentation.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>Fig. 1: The original NCA needs to compute the feature embeddings for the entire dataset for each optimization step. This is not scalable for large datasets and deep neural networks optimized with stochastic gradient descent. We overcome this issue by using an augmented memory to store offline embeddings forwarded from previous optimization steps. The online embedding is learned by backpropagation, while the offline memory is not.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 2 :</head><label>2</label><figDesc>Fig. 2: Given a query, the figure shows 5 nearest neighbors from our model (1st row) and from the baseline model (2nd row). Top four examples show the successful cases and bottom four show the failure cases.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: Histogram of the size of support set in the ImageNet validation set given various support density thresholds.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Nearest neighbors from the models trained with ImageNet 127 classes and evaluated on the fine-grained 1000 classes. Correct retrievals are boxed with green outlines and wrong retrievals are with orange.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 5 :</head><label>5</label><figDesc>Fig. 5: Results for sub-category discovery on ImageNet. x axis scans through the fine-grained 1000 ImageNet categories. Each recycled color represents a coarse category. All coarse categories are sorted with decreasing order in terms of the number of sub-categories. y axis indicates the prediction gains of our model against the baseline model. Within each coarse category, the prediction gains for sub-categories are also sorted in a decreasing order.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 6 :</head><label>6</label><figDesc>Fig. 6: Few shot learning examples in mini-Imagenet test set. Given one shot for each five categories, the model predicts the category for the new query image. Our prediction is boxed with green and the baseline prediction is with orange.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Top-1 classification rate on ImageNet validation set using k-nearest neighbor classifiers.</figDesc><table>ResNet18 
+Feature d k=1 k=30 
+Baseline 512 62.91 68.41 
++PCA 128 60.43 66.26 
+Ours 128 67.39 70.58 
+
+ResNet34 
+Feature d k=1 k=30 
+Baseline 512 67.73 72.32 
++PCA 128 65.58 70.67 
+Ours 128 71.81 74.43 
+
+ResNet50 
+Feature d 
+k=1 k=30 
+Baseline 2048 71.35 75.09 
++PCA 128 69.72 73.69 
+Ours 
+128 74.34 76.67 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Performance comparison of our method with parametric softmax.</figDesc><table>Feature 
+baseline 
+ours 
+top-1 top-5 top-1 top-5 
+ResNet18 69.64 88.98 70.58 89.38 
+ResNet34 73.27 91.43 74.43 91.35 
+ResNet50 76.01 92.93 76.67 92.84 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Ablation study on the feature size and the temperature parameter.</figDesc><table>d k=1 k=30 
+256 67.54 70.71 
+128 67.39 70.59 
+64 65.32 69.54 
+32 64.83 68.01 
+
+σ 
+k=1 k=30 
+0.1 63.87 67.93 
+0.05 67.39 70.59 
+0.03 66.98 70.33 
+0.02 N/A N/A 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 :</head><label>4</label><figDesc>Top-1 induction accuracy on CIFAR100 and ImageNet1000 using model pretrained on CIFAR20 and ImageNet127. Numbers are reported with k nearest neighbor classifiers.</figDesc><table>CIFAR 
+Task 
+20 classes 100 classes 
+Baseline 
+81.53 
+54.17 
+Ours 
+81.42 
+62.32 
+
+ImageNet 
+Task 
+127 classes 1000 classes 
+Baseline 
+81.48 
+48.07 
+Ours 
+81.62 
+52.75 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 5 :</head><label>5</label><figDesc>Few-shot recognition on Mini-ImageNet dataset.4±0.8 60.1±0.7 16.7±0.2 26.1±0.3 MAML [6] Small Yes 48.7±0.7 63.2±0.9 16.5±0.6 19.3±0.3 Meta-SGD [20] Small No 50.5±1.9 64.0±0.9 17.6±0.6 28.9±0.4</figDesc><table>Method 
+Network FineTune 
+5-way Setting 
+20-way Setting 
+1-shot 
+5-shot 
+1-shot 
+5-shot 
+NN Baseline [42] 
+Small 
+No 
+41.1±0.7 51.0±0.7 
+-
+-
+Meta-LSTM [29] 
+Small 
+No 
+43.Matching Net [42] Small 
+Yes 
+46.6±0.8 60.0±0.7 
+-
+-
+Prototypical [36] 
+Small 
+No 
+49.4±0.8 68.2±0.7 
+-
+-
+RelationNet [39] 
+Small 
+No 
+51.4±0.8 61.1±0.7 
+-
+-
+Ours 
+Small 
+No 
+50.3±0.7 64.1±0.8 23.7±0.4 36.0±0.5 
+SNAIL [27] 
+Large 
+No 
+55.7±1.0 68.9±0.9 
+-
+-
+RelationNet [39] 
+Large 
+No 
+57.0±0.9 71.1±0.7 
+-
+-
+Ours 
+Large 
+No 
+57.8±0.8 72.8±0.7 30.5±0.5 44.8±0.5 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">code &amp; models available: https://github.com/zhirongw/snca.pytorch</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This work was supported in part by Berkeley DeepDrive. ZW would like to thank Yuanjun Xiong for helpful discussions.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Signature verification using a&quot; siamese&quot; time delay neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bromley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Guyon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Säckinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Shah</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+	<note>In: NIPS</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">An exemplar model for learning object classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">The pascal visual object classes (voc) challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+	<note>IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Pictorial structures for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Huttenlocher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Model-agnostic meta-learning for fast adaptation of deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Finn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.03400</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">An algorithm for finding best matches in logarithmic expected time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Friedman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Bentley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Finkel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Mathematical Software (TOMS</title>
+		<imprint>
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Neighbourhood components analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Goldberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Roweis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.5401</idno>
+		<title level="m">Neural turing machines</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Dimensionality reduction by learning an invariant mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hadsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Deep neural networks for acoustic modeling in speech recognition: The shared views of four research groups</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">N</forename><surname>Sainath</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Signal Processing Magazine</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep metric learning using triplet network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hoffer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ailon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Workshop on Similarity-Based Pattern Recognition</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Huh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.08614</idno>
+		<title level="m">What makes imagenet good for transfer learning? arXiv preprint</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Product quantization for nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jegou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Large scale metric learning from equivalence constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Koestinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hirzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<title level="m">Imagenet classification with deep convolutional neural networks. In: NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.09835</idno>
+		<title level="m">Meta-sgd: Learning to learn quickly for few shot learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Microsoft coco: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<editor>ECCV. Springer</editor>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Recognition by association via learning per-exemplar distances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Beyond categories: The visual memex model for reasoning about object relationships</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Ensemble of exemplar-svms for object detection and beyond</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<editor>ICCV. IEEE</editor>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Distance-based image classification: Generalizing to new classes at near-zero cost</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Csurka</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mishra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohaninejad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.03141</idno>
+		<title level="m">Meta-learning with temporal convolutions</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Farabet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Melvin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mariethoz</surname></persName>
+		</author>
+		<title level="m">Pytorch: Tensors and dynamic neural networks in python with strong gpu acceleration</title>
+		<imprint>
+			<date type="published" when="2017-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Optimization as a model for few-shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ravi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<title level="m">Imagenet large scale visual recognition challenge. IJCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning a nonlinear embedding by preserving class neighbourhood structure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Meta-learning with memory-augmented neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Santoro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bartunov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Botvinick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on machine learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Estimating the support of a high-dimensional distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Platt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shawe-Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Williamson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Facenet: A unified embedding for face recognition and clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schroff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalenichenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Prototypical networks for few-shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Snell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Improved deep metric learning with multi-class n-pair loss objective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sohn</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">End-to-end memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Learning to compare: Relation network for few-shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Sung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">M</forename><surname>Hospedales</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.06025</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Deepface: Closing the gap to humanlevel performance in face verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Face recognition using eigenfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Turk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Pentland</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="1991" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Matching networks for one shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fortunato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jaitly</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1801.09414</idno>
+		<title level="m">Cosface: Large margin cosine loss for deep face recognition</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of models for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Weber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<editor>ECCV. Springer</editor>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bordes</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.3916</idno>
+		<title level="m">Memory networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Manmatha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.07567</idno>
+		<title level="m">Sampling matters in deep embedding learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<monogr>
+		<title level="m" type="main">Unsupervised feature learning via nonparametric instance discrimination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><forename type="middle">Y</forename><surname>Stella</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Joint detection and identification feature learning for person search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<monogr>
+		<title level="m" type="main">Svm-knn: Discriminative nearest neighbor classification for visual category recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<editor>CVPR. IEEE</editor>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

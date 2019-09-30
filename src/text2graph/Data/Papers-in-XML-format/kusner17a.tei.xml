@@ -1,0 +1,1489 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:19+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Grammar Variational Autoencoder</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matt</forename><forename type="middle">J</forename><surname>Kusner</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brooks</forename><surname>Paige</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José</forename><surname>Miguel Hernández-Lobato</surname></persName>
+						</author>
+						<title level="a" type="main">Grammar Variational Autoencoder</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Deep generative models have been wildly successful at learning coherent latent representations for continuous data such as natural images, artwork, and audio. However, generative modeling of discrete data such as arithmetic expressions and molecular structures still poses significant challenges. Crucially, state-of-the-art methods often produce outputs that are not valid. We make the key observation that frequently, discrete data can be represented as a parse tree from a context-free grammar. We propose a variational autoencoder which directly encodes from and decodes to these parse trees, ensuring the generated outputs are always syntactically valid. Surprisingly, we show that not only does our model more often generate valid outputs, it also learns a more coherent latent space in which nearby points decode to similar discrete outputs. We demonstrate the effectiveness of our learned models by showing their improved performance in Bayesian optimization for symbolic regression and molecule generation.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generative machine learning models have been used recently to produce extraordinary results, from realistic musical improvisation <ref type="bibr" target="#b17">(Jaques et al., 2016)</ref>, to changing facial expressions in images <ref type="bibr" target="#b28">(Radford et al., 2015;</ref><ref type="bibr" target="#b39">Upchurch et al., 2016)</ref>, to creating realistic looking artwork <ref type="bibr" target="#b8">(Gatys et al., 2015)</ref>. In large part, these generative models have been successful at representing data in continuous domains. Recently there is increased interest in training generative models to construct more complex, discrete data types such as arithmetic expressions <ref type="bibr" target="#b23">(Kusner &amp; Hernández-Lobato, 2016)</ref>, source code <ref type="bibr" target="#b9">(Gaunt et al., 2016;</ref><ref type="bibr" target="#b30">Riedel et al., 2016)</ref> and molecules <ref type="bibr" target="#b11">(Gómez-Bombarelli et al., 2016b)</ref>.</p><p>To train generative models for these tasks, these objects are often first represented as strings. This is in large part due to the fact that there exist powerful models for text sequence modeling such as Long Short Term Memory networks (LSTMs) <ref type="bibr" target="#b13">(Hochreiter &amp; Schmidhuber, 1997)</ref>, Gated Recurrent Units (GRUs) <ref type="bibr" target="#b4">(Cho et al., 2014)</ref>, and Dynamic Convolutional Neural Networks (DCNNs) <ref type="bibr" target="#b20">(Kalchbrenner et al., 2014)</ref>. For instance, molecules can be represented by so-called SMILES strings <ref type="bibr" target="#b41">(Weininger, 1988)</ref> and <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> has recently developed a generative model for molecules based on SMILES strings that uses GRUs and DCNNs. This model is able to encode and decode molecules to and from a continuous latent space, allowing one to search this space for new molecules with desirable properties <ref type="bibr" target="#b11">(Gómez-Bombarelli et al., 2016b)</ref>.</p><p>However, one immediate difficulty in using strings to represent discrete objects is that the representation is very brittle: small changes in the string can lead to completely different objects, or often do not correspond to valid objects at all. Specifically, <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> described that while searching for new molecules, the probabilistic decoder -the distribution which maps from the continuous latent space into the space of molecular structures -would sometimes accidentally put high probability on strings which are not valid SMILES strings or do not encode plausible molecules.</p><p>To address this issue, we propose to directly incorporate knowledge about the structure of discrete data using a grammar. Grammars exist for a wide variety of discrete domains such as symbolic expressions <ref type="bibr" target="#b0">(Allamanis et al., 2016)</ref>, standard programming languages such as C <ref type="bibr" target="#b21">(Kernighan et al., 1988)</ref>, and chemical structures <ref type="bibr" target="#b16">(James et al., 2015)</ref>. For instance the set of syntactically valid SMILES strings is described using a context free grammar, which can be used for parsing and validation 1 .</p><p>Given a grammar, every valid discrete object can be described as a parse tree from the grammar. Thus, we propose the grammar variational autoencoder (GVAE) which encodes and decodes directly from and to these parse trees.</p><p>Generating parse trees as opposed to strings ensures that all outputs are valid based on the grammar. This frees the GVAE from learning syntactic rules and allows it to wholly focus on learning other 'semantic' properties.</p><p>We demonstrate the GVAE on two tasks for generating discrete data: 1) generating simple arithmetic expressions and 2) generating valid molecules. We show not only does our model produce a higher proportion of valid outputs than a character based autoencoder, it also produces smoother latent representations. We also show that this learned latent space is effective for searching for arithmetic expressions that fit data, for finding better drug-like molecules, and for making accurate predictions about target properties.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Variational autoencoder</head><p>We wish to learn both an encoder and a decoder for mapping data x to and from values z in a continuous space. The variational autoencoder <ref type="bibr" target="#b22">(Kingma &amp; Welling, 2014;</ref><ref type="bibr" target="#b29">Rezende et al., 2014)</ref> provides a formulation in which the encoding z is interpreted as a latent variable in a probabilistic generative model; a probabilistic decoder is defined by a likelihood function p ✓ (x|z) and parameterized by ✓. Alongside a prior distribution p(z) over the latent variables, the posterior distribution p ✓ (z|x) / p(z)p ✓ (x|z) can then be interpreted as a probabilistic encoder.</p><p>To admit efficient inference, the variational Bayes approach simultaneously learns both the parameters of p ✓ (x|z) as well as those of a posterior approximation q (z|x). This is achieved by maximizing the evidence lower bound (ELBO)</p><formula xml:id="formula_0">L( , ✓; x) = E q (z|x) [log p ✓ (x, z) log q (z|x)] , (1) with L( , ✓; x)  log p ✓ (x)</formula><p>. So long as p ✓ (x|z) and q (z|x) can be computed pointwise, and are differentiable with respect to their parameters, the ELBO can be maximized via gradient descent; this allows wide flexibility in choice of encoder and decoder models. Typically these will take the form of exponential family distributions whose parameters are the weights of a multi-layer neural network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Context-free grammars</head><p>A context-free grammar (CFG) is traditionally defined as a 4-tuple G = (V, ⌃, R, S): V is a finite set of non-terminal symbols; the alphabet ⌃ is a finite set of terminal symbols, disjoint from V ; R is a finite set of production rules; and S is a distinct non-terminal known as the start symbol. The rules R are formally described as ↵ ! for ↵ 2 V and 2 (V [ ⌃) ⇤ , with ⇤ denoting the Kleene closure. In practice, these rules are defined as a set of mappings from a single left-hand side non-terminal in V to a sequence of terminal and/or non-terminal symbols, and can be interpreted as 'replacement' instructions.</p><p>Repeatedly applying production rules beginning with a non-terminal symbol defines a tree, with symbols on the right-hand side of the production rule becoming child nodes for the left-hand side parent. The grammar G thus defines a set of possible trees extending from each nonterminal symbol in V , produced by recursively applying rules in R to leaf nodes until all leaf nodes are terminal symbols in ⌃. The language of G is the set of all terminal symbol sequences that can be generated as leaf nodes in a tree. Given a string in the language (i.e., a sequence of terminals), a parse tree is a tree rooted at S which has this sequence of terminal symbols as its leaf nodes. The ubiquity of context-free languages in computer science is due in part to the presence of efficient parsing algorithms to generate parse trees. For more background on CFGs and automata theory, see e.g. <ref type="bibr" target="#b14">Hopcroft et al. (2006)</ref>.</p><p>Our work builds off the work of probabilistic context-free grammars (PCFGs). A PCFG assigns probabilities to each production rule in the grammar, and thus defines a probability distribution over parse trees <ref type="bibr" target="#b1">(Baker, 1979;</ref><ref type="bibr" target="#b2">Booth &amp; Thompson, 1973)</ref>. A string can be generated by repeatedly sampling and applying production rules, beginning at the start symbol, until no non-terminals remain. Modern approaches allow the probabilities used at each stage to depend on the state of the parse tree <ref type="bibr" target="#b18">(Johnson et al., 2007)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Methods</head><p>In this section we describe how a grammar can improve variational autoencoders (VAE) for discrete data. It will do so by drastically reducing the number of invalid outputs generated from the VAE. We illustrate our approach on molecular data, however it will extend to any descrete data that can be described by a grammar.</p><p>One glaring issue with a character-based VAE is that it may frequently map latent points to sequences that are not valid, hoping the VAE will infer from training data what constitutes a valid sequence. Instead of implicitly encouraging the VAE to produce valid sequences, we propose to give the VAE explicit knowledge about how to produce valid sequences. We do this by using a grammar for the sequences: given a grammar we can take any valid sequence and parse it into a parse tree. A pre-order traversal on this parse tree yields a sequence of production rules. Applying these rules in order will yield the original sequence. Our approach then will be to learn a VAE that produces sequences of grammar production rules. The benefit is that it is trivial to generate valid sequences of production rules, as the grammar describes the valid set of rules that can be selected at any point during the generation process. Thus, our model is able to focus on learning semantic properties of sequence data without also having to learn syntactic constraints.  <ref type="figure">Figure 1</ref>. The encoder of the GVAE. We denote the start rule in blue and all rules that decode to terminal in green. See text for details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">An illustrative example</head><p>We propose a grammar variational autoencoder (GVAE) that encodes/decodes in the space of grammar production rules. We describe how it works with a simple example.</p><p>Encoding. Consider a subset of the SMILES grammar as shown in <ref type="figure">Figure 1</ref>, box 1 . These are the possible production rules that can be used for constructing a molecule. Imagine we are given as input the SMILES string for benzene: 'c1ccccc1'. <ref type="figure">Figure 1</ref>, box 3 shows this molecule.</p><p>To encode this molecule into a continuous latent representation we begin by using the SMILES grammar to parse this string into a parse tree (partially shown in box 2 ). This tree describes how 'c1ccccc1' is generated by the grammar. We decompose this tree into a sequence of production rules by performing a pre-order traversal on the branches of the parse tree from left-to-right, shown in box 4 . We convert these rules into 1-hot indicator vectors, where each dimension corresponds to a rule in the SMILES grammar, box 5 . These 1-hot vectors are concatenated into the rows of a matrix X of dimension T (X) ⇥ K, where K is the number of production rules in the SMILES grammar, and T (X) is the number of production rules used to generate X.</p><p>We use a deep convolutional neural network to map the collection of 1-hot vectors X to a continuous latent vector z. The architecture of the encoding network is described in the supplementary material.</p><p>Decoding. We now describe how we map continuous vectors back to a sequence of production rules (and thus SMILES strings). Crucially we construct the decoder so that, at any time while we are decoding a sequence, the decoder will only be allowed to select a subset of production rules that are 'valid'. This will cause the decoder to only produce valid parse sequences from the grammar.</p><p>We begin by passing the continuous vector z through a recurrent neural network which produces a set of unnormalized log probability vectors (or 'logits'), shown in <ref type="figure">Figure 2</ref>, box 1 and 2 . Exactly like the 1-hot vectors produced by the encoder, each dimension of the logit vectors corresponds to a production rule in the grammar. We can again write these collection of logit vectors as a matrix F 2 R Tmax⇥K , where T max is the maximum number of timesteps (production rules) allowed by the decoder. During the rest of the decoding operations, we will use the rows of F to select a sequence of valid production rules.</p><p>To ensure that any sequence of production rules generated from the decoder is valid, we keep track of the state of the parsing using a last-in first-out (LIFO) stack. This is shown in <ref type="figure">Figure 2</ref>, box 3 . At the beginning, every valid parse from the grammar must start with the start symbol: smiles, which is placed on the stack. Next we pop off whatever non-terminal symbol that was placed last on the stack (in this case smiles), and we use it to mask out the invalid dimensions of the current logit vector. Formally, for every non-terminal ↵ we define a fixed binary mask vector</p><formula xml:id="formula_1">m ↵ 2 [0, 1] K .</formula><p>This takes the value '1' for all indices in 1, . . . , K corresponding to production rules that have ↵ on their left-hand-side.</p><p>In the previous example, the only production rule in the grammar beginning with smiles is the first so we maskout every dimension except the first, shown in <ref type="figure">Figure 2</ref>, box 4 . We then sample from the remaining unmasked rules, using their values in the logit vector. To sample from this masked logit at any timestep t we form the following masked distribution:</p><formula xml:id="formula_2">p(x t = k|↵, z) = m ↵,k exp(f tk ) P K j=1 m ↵,k exp(f tj ) ,<label>(2)</label></formula><p>where f tk is the (t, k)-element of the logit matrix F. As only the first rule is unmasked we will select this rule smiles ! chain as the first rule in our sequence, box 5 . Now the next rule must begin with chain, so we push it onto the stack ( <ref type="figure">Figure 2</ref>, box 3 ). We sample this nonterminal and, as before, use it to mask out all of the rules that cannot be applied in the current logit vector. We then sample a valid rule from this logit vector: chain ! chain, branched atom. Just as before we push the non-terminals on the right-hand side of this rule onto the stack, adding the individual non-terminals in from right to left, such that the leftmost non-terminal is on the top of the stack. For the map from latent space Algorithm 1 Sampling from the decoder Input: Deterministic decoder output F 2 R Tmax⇥K , masks m ↵ for each production rule ↵ Output: Sampled productions X from p(X|z) 1: Initialize empty stack S, and push the start symbol S onto the top; set t = 0 2: while S is nonempty do for non-terminal in RHS(R) do</p><formula xml:id="formula_3">8:</formula><p>Push on to the stack S 9:</p><p>end for 10:</p><formula xml:id="formula_4">Set X [X &gt; , x t ] &gt; 11:</formula><p>Set t t + 1 12: end while next state we again pop the last rule placed on the stack and mask the current logit, etc. This process continues until the stack is empty or we reach the maximum number of logit vectors T max . We describe this decoding procedure formally in Algorithm 1. In practice, because sampling from the decoder often finishes before t reaches T max , we introduce an additional 'no-op' rule to the grammar that we use to pad X until the number of rows equals T max . We note the explicit connection between the process in Algorithm 1 and parsing algorithms for pushdown automata. A pushdown automaton is a finite state machine which has access to a single stack for long-term storage, and are equivalent to context-free grammars in the sense that every CFG can be converted into a pushdown automaton, and vice-versa <ref type="bibr" target="#b14">(Hopcroft et al., 2006)</ref>. The decoding algorithm performs the sequence of actions taken by a nondeterministic pushdown automaton at each stage of a parsing algorithm; the nondeterminism is resolved by sampling according to the probabilities in the emitted logit vector.</p><p>Contrasting the character VAE. Notice that the key difference between this grammar VAE decoder and a character-based VAE decoder is that at every point in the generated sequence, the character VAE can sample any possible character. There is no stack or masking operation. The grammar VAE however is constrained to select syntactically-valid sequences.</p><p>Syntactic vs. semantic validity. It is important to note that the grammar encodes syntactically valid molecules but not necessarily semantically valid molecules. This is mainly because of three reasons. First, certain molecules produced by the grammar may be very unstable molecules or not chemically-valid (for instance an oxygen atom cannot bond to 3 other atoms as it only has 2 free electrons for bonding, although it would be possible to generate this in a molecule from the grammar). Second, the SMILES language has non-context free aspects, e.g. a ringbond must be opened and closed by the same digit, starting with '1' (as is the case for benzene 'c1ccccc1'). The particular challenge for matching digits, in contrast to matching grouping symbols such as parentheses, is that they do not compose in a nested manner; for example, 'C12(CCCCC1)CCCCC2' is a valid molecule. Keeping track of which digit to use for each ringbond is not context-free. Third, we note that the GVAE can output an undetermined sequence if there are still non-terminal symbols on the stack after processing all T max logit vectors. While this could be fixed by a procedure that converts these non-terminals to terminals, for simplicity we mark these sequences as invalid.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Training</head><p>During training, each input SMILES encoded as a sequence of 1-hot vectors X 2 {0, 1} Tmax⇥K , also defines a sequence of T max mask vectors. Each mask at timestep t = 1, . . . , T max is selected by the left-hand side of the production rule indicated in the 1-hot vector x t . Given these masks we can compute the decoder's mapping</p><formula xml:id="formula_5">p(X|z) = T (X) Y t=1 p(x t |z, x 1:(t 1) ),<label>(3)</label></formula><p>with the individual probabilities at each timestep defined as in Eq. (2). We pad any remaining timesteps after T (X) up Algorithm 2 Training the Grammar VAE</p><formula xml:id="formula_6">Input: Dataset {X (i) } N i=1</formula><p>Output: Trained VAE model p ✓ (X|z), q (z|X) 1: while VAE not converged do 2:</p><formula xml:id="formula_7">Select element: X 2 {X (i) } N i=1 (or minibatch) 3:</formula><p>Encode: z ⇠ q (z|X) Update ✓, using estimates p ✓ (X|z), q (z|X), via gradient descent on the ELBO in Eq. (4) 9: end while to T max with a 'no-op' rule, a one-hot vector indicating the parse tree is complete and no actions are to be taken.</p><p>In all our experiments, q(z|X) is a Gaussian distribution whose mean and variance parameters are the output of the encoder network, with an isotropic Gaussian prior p(z) = N (0, I). At training time, we sample a value of z from q(z|X) to compute the ELBO</p><formula xml:id="formula_8">L( , ✓; X) = E q (z|X) [log p ✓ (X, z) log q (z|X)] .<label>(4)</label></formula><p>Following <ref type="bibr" target="#b22">Kingma &amp; Welling (2014)</ref>, we apply a noncentered parameterization on the encoding Gaussian distribution and optimize Eq. (4) using gradient descent, learning encoder and decoder neural network parameters and ✓. Algorithm 2 summarizes the training procedure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We show the usefulness of our proposed grammar variational autoencoder (GVAE) 2 on two sequence optimization problems: 1) searching for an arithmetic expression that best fits a dataset and 2) finding new drug molecules. We begin by showing the latent space of the GVAE and a character variational autoencoder (CVAE), similar to that of <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> 3 , on each of the problems. We demonstrate that the GVAE learns a smooth, meaningful latent space for arithmetic equations and molecules. Given this we perform optimization in this latent space using Bayesian optimization, inspired by the technique of <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref>. We demonstrate that the GVAE improves upon a previous character variational autoencoder, by selecting an arithmetic expression that matches the data nearly perfectly, and by finding novel molecules with better drug properties. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Problems</head><p>We describe in detail the two sequence optimization problems we seek to solve. The first consists in optimizing the fit of an arithmetic expression. We are given a set of 100,000 randomly generated univariate arithmetic expressions from the following grammar:</p><formula xml:id="formula_9">S ! S '+' T | S '⇤ ' T | S '/ ' T | T T ! ' ( ' S ' ) ' | ' s i n ( ' S ' ) ' | ' exp ( ' S ' ) ' T ! ' x ' | '1 ' | '2 ' | '3 '</formula><p>where S and T are non-terminals and the symbol | separates the possible production rules generated from each non-terminal. By parsing this grammar we can randomly generate strings of univariate arithmetic equations (functions of x) such as the following: sin(2), x/(3 + 1), 2 + x + sin(1/2), and x/2 ⇤ exp(x)/exp(2 ⇤ x). We limit the length of every selected string to have at most 15 production rules. Given this dataset we train both the CVAE and GVAE to learn a latent space of arithmetic expressions. We propose to perform optimization in this latent space of expressions to find an expression that best fits a fixed dataset. A common measure of best fit is the test MSE between the predictions made by a selected expression and the true data. In the generated expressions, the presence of exponential functions can result in very large MSE values. For this reason, we use as target variable log(1 + MSE) instead of MSE.</p><p>For the second optimization problem, we follow (Gómez-Bombarelli et al., 2016b) and optimize the drug properties of molecules. Our goal is to maximize the water-octanol partition coefficient (logP), an important metric in drug design that characterizes the drug-likeness of a molecule. As in <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> we consider a penalized logP score that takes into account other molecular properties such as ring size and synthetic accessibility <ref type="bibr" target="#b7">(Ertl &amp; Schuffenhauer, 2009</ref>). The training data for the CVAE and GVAE models are 250,000 SMILES strings <ref type="bibr" target="#b41">(Weininger, 1988)</ref> extracted at random from the ZINC database by <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref>. We describe the context-free grammar for SMILES strings that we use to train our GVAE in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Visualizing the latent space</head><p>Arithmetic expressions. To qualitatively evaluate the smoothness of the VAE embeddings for arithmetic expressions, we attempt interpolating between two arithmetic expressions, as in <ref type="bibr" target="#b3">Bowman et al. (2016)</ref>. This is done by encoding two equations and then performing linear interpolation in the latent space. Results comparing the character and grammar VAEs are shown in <ref type="table" target="#tab_3">Table 1</ref>. Although the character VAE smoothly interpolates between the text representation of equations, it passes through intermediate points which do not decode to valid equations. In contrast, the grammar VAE also provides smooth interpolation and produces valid equations for any location in the latent space. A further exploration of a 2-dimensional latent space is shown in the appendix.</p><p>Molecules. We are interested if the GVAE produces a coherent latent space of molecules. To assess this we begin by encoding a molecule. We then generate 2 random orthogonal unit vectors in latent space (scaled down to only search the neighborhood of the molecules). Moving in combinations of these directions defines a grid and at each point in the grid we decode the latent vector 1000 times. We select the molecule that appears most often as the representative molecule. <ref type="figure" target="#fig_1">Figure 3</ref> shows this latent space search surrounding two different molecules. Compare this to <ref type="figure" target="#fig_1">Figures  13-15</ref> in <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref>. We note that in each plot of the GVAE the latent space is very smooth, in many cases moving from one grid point to another will only change a single atom in a molecule. In the CVAE (Gómez-Bombarelli et al., 2016b) we do not observe such fine-grained smoothness.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Bayesian optimization</head><p>We now perform a series of experiments using the autoencoders to produce novel sequences with improved properties. For this, we follow the approach proposed by <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> and after training the GVAE, we train an additional model to predict properties of sequences from their latent representation. To propose promising new sequences, we can start from the latent vector of an encoded sequence and then use the output of this predictor (including its gradient) to move in the latent space direction most likely to improve the property. The resulting new latent points can then be decoded into corresponding sequences.</p><p>In practice, measuring the property of each new sequence could be an expensive process. For example, the sequence could represent an organic photovoltaic molecule and the property could be the result of an expensive quantum mechanical simulation used to estimate the molecule's powerconversion efficiency <ref type="bibr" target="#b12">(Hachmann et al., 2011)</ref>. The sequence could also represent a program or expression which may be computationally expensive to evaluate. Therefore, ideally, we would like the optimization process to perform only a reduced number of property evaluations. For this, we use Bayesian optimization methods, which choose the next point to evaluate by maximizing an acquisition function that quantifies the benefit of evaluating the property at a particular location <ref type="bibr" target="#b34">(Shahriari et al., 2016)</ref>.</p><p>After training the GVAE, we obtain a latent feature vector for each sequence in the training data, given by the mean of the variational encoding distributions. We use these vectors and their corresponding property estimates to train a sparse Gaussian process (SGP) model with 500 inducing points <ref type="bibr" target="#b35">(Snelson &amp; Ghahramani, 2005)</ref>, which is used to make predictions for the properties of new points in latent space. After training the SGP, we then perform 5 iterations of batch Bayesian optimization using the expected improvement (EI) heuristic <ref type="bibr" target="#b19">(Jones et al., 1998)</ref>. On each iteration, we select a batch of 50 latent vectors by sequentially maximizing the EI acquisition function. We use the Kriging Believer Algorithm to account for pending evaluations in the batch selection process <ref type="bibr" target="#b5">(Cressie, 1990)</ref>. That is, after selecting each new data point in the batch, we add that data point as a new inducing point in the sparse GP model with associated target variable equal to the mean of the GP predictive distribution at that point. Once a new batch of 50 latent vectors is selected, each point in the batch is transformed into its corresponding sequence using the decoder network in the GVAE. The properties of the newly generated sequences are then computed and the resulting data is added to the training set before retraining the SGP and starting the next BO iteration. Note that some of the new sequences will be invalid and consequently, it will not be possible to obtain their corresponding property estimate. In this case we fix the property to be equal to the worst value observed in the original training data.</p><p>Arithmetic expressions. Our goal is to see if we can find an arithmetic expression that best fits a fixed dataset. Specifically, we generate this dataset by selecting 1000    Method # Expression Score</p><formula xml:id="formula_10">GVAE 1 x/1 + sin(3) + sin(x ⇤ x) 0.04 2 1/2 + (x) + sin(x ⇤ x) 0.10 3 x/x + (x) + sin(x ⇤ x)</formula><p>0.37</p><formula xml:id="formula_11">CVAE 1 x ⇤ 1 + sin(3) + sin(3/1) 0.39 2 x ⇤ 1 + sin(1) + sin(2 ⇤ 3)</formula><p>0.40 3 x + 1 + sin(3) + sin(3 + 1) 0.40 the decoder upon reaching the maximum number of timesteps T max , however this is rare. Additionally, the GVAE finds squences with better scores on average when compared with the CVAE. <ref type="table" target="#tab_5">Table 3</ref> shows the top 3 expressions found by GVAE and CVAE during the BO search, together with their associated score values. <ref type="figure" target="#fig_2">Figure 4</ref> shows how the best expression found by GVAE and CVAE compare to the true function. We note that the CVAE has failed to find the sinusoidal portion of the true expression, while the difference between the GVAE expression and the true function is negligible.</p><p>Molecules. We now consider the problem of finding new drug-like molecules. We perform 5 iterations of BO, and average results across 10 trials. <ref type="table" target="#tab_4">Table 2 (rows 3 &amp; 4)</ref> shows the overall BO results. In this problem, the GVAE produces about twice more valid sequences than the CVAE. The valid sequences produced by the GVAE also result in higher scores on average. The best found SMILES strings by each method and their scores are shown in <ref type="table" target="#tab_6">Table 4</ref>; the molecules themselves are plotted in <ref type="figure" target="#fig_3">Figure 5</ref>.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Predictive performance of latent representation</head><p>We now perform a series of experiments to evaluate the predictive performance of the latent representations found by each autoencoder. For this, we use the sparse GP model used in the previous Bayesian optimization experiments and look at its predictive performance on a left-out test set with 10% of the data, where the data is formed by the latent representation of the available sequences (these are the inputs to the sparse GP model) and the associated properties of those sequences (these are the outputs in the sparse GP model). <ref type="table" target="#tab_7">Table 5</ref> show the average test RMSE and test loglikelihood for the GVAE and the CVAE across 10 different splits of the data for the expressions and for the molecules. This table shows that the GVAE produces latent features that yield much better predictive performance than those produced by the CVAE.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Related Work</head><p>Parse trees have been used to learn continuous representations of text in recursive neural network models <ref type="bibr" target="#b38">(Socher et al., 2013;</ref><ref type="bibr" target="#b15">Irsoy &amp; Cardie, 2014;</ref><ref type="bibr" target="#b25">Paulus et al., 2014)</ref>. These models learn a vector at every non-terminal in the parse tree by recursively combining the vectors of child nodes. Recursive autoencoders learn these representations by minimizing the reconstruction error between true child vectors and those predicted by the parent <ref type="bibr" target="#b36">(Socher et al., 2011a;</ref><ref type="bibr">b)</ref>. Recently, <ref type="bibr" target="#b0">Allamanis et al. (2016)</ref> learn representations for symbolic expressions from their parse trees. Importantly, all of these methods are discriminative and do not learn a generative latent space. Like our decoder, re-  <ref type="bibr" target="#b6">(Dyer et al., 2016)</ref> produce sequences through a linear traversal of the parse tree, but focus on the case where the underlying grammar is unknown and not context-free. <ref type="bibr" target="#b24">Maddison &amp; Tarlow (2014)</ref> describe generative models of natural source code based on probabilistic context free grammars and neuro-probabilistic language models. However, these works are not geared towards learning a latent representation of the data.</p><p>Learning arithmetic expressions to fit data, often called symbolic regression, are generally based on genetic programming <ref type="bibr" target="#b42">(Willis et al., 1997)</ref> or other computationally demanding evolutionary algorithms to propose candidate expressions <ref type="bibr" target="#b32">(Schmidt &amp; Lipson, 2009</ref>). Alternatives include running particle MCMC inference to estimate a Bayesian posterior over parse trees <ref type="bibr" target="#b26">(Perov &amp; Wood, 2016)</ref>.</p><p>In molecular design, searching for new molecules is traditionally done by sifting through large databases of potential molecules and then subjecting them to a virtual screening process <ref type="bibr" target="#b27">(Pyzer-Knapp et al., 2015;</ref><ref type="bibr" target="#b10">Gómez-Bombarelli et al., 2016a)</ref>. These databases are too large to search via exhaustive enumeration, and require novel stochastic search algorithms tailored to the domain <ref type="bibr" target="#b40">(Virshup et al., 2013;</ref><ref type="bibr" target="#b31">Rupakheti et al., 2015)</ref>. <ref type="bibr" target="#b33">Segler et al. (2017)</ref> fit a recurrent neural network to chemicals represented by SMILES strings, however their goal is more akin to density estimation; they learn a simulator which can sample proposals for novel molecules, but it is not otherwise used as part of an optimization or inference process itself. Our work most closely resembles <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> for novel molecule synthesis, in that we also learn a latent variable model which admits a continuous representation of the domain. However, both <ref type="bibr" target="#b33">Segler et al. (2017)</ref> and <ref type="bibr" target="#b11">Gómez-Bombarelli et al. (2016b)</ref> use character-level models for molecules.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Discussion</head><p>Empirically, it is clear that representing molecules and equations by way of their parse tree generated from a grammar outperforms text-based representations. We believe this approach will be broadly useful for representation learning, inference, and optimization in any domain which can be represented as text in a context-free language.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>(R) denote all non-terminals on the right- hand side of rule R, ordered from right to left 7:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Searching the 56-dimensional latent space of the GVAE, starting at the molecule in the center.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Plot of best expressions found by each method</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Plot of best molecules found by each method.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Figure 2. The decoder of the GVAE. See text for details.</figDesc><table>1 
+2 
+
+... 
+
+convert to logits 
+
+max length 
+
+smiles 
+
+chain 
+
+chain, 
+branched 
+atom 
+
+branched 
+atom 
+
+branched 
+atom, 
+
+atom, 
+branched 
+atom 
+ringbond, 
+
+aromatic 
+organic, 
+
+branched 
+atom 
+ringbond, 
+
+branched 
+atom 
+
+ringbond, 
+
+stack 
+mask out invalid rules 
+
+pop first 
+non-terminal 
+
+sample rule &amp; 
+push non-terminals 
+onto stack 
+
+chain 
+smiles 
+
+chain 
+branched 
+atom 
+chain, 
+
+chain 
+branched 
+atom 
+
+chain 
+
+smiles 
+
+chain 
+
+branched 
+atom 
+atom, ringbond 
+branched 
+atom 
+
+atom 
+
+aromatic 
+organic 
+
+ringbond 
+
+digit 
+
+branched 
+atom 
+
+atom 
+aromatic 
+organic 
+
+'c' 
+aromatic 
+organic 
+
+ringbond 
+digit 
+
+digit 
+'1' 
+digit, 
+
+... 
+
+... 
+... 
+
+3 
+4 
+5 
+
+concatenate 
+terminals 
+
+6 
+'c1ccccc1' 
+
+7 
+
+translate 
+molecule 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Linear interpolation between two equations (in bold, at top and bottom of each cell). The character VAE often passes through intermediate strings which do not decode to a valid equa- tion (shown in red). The grammar VAE makes more fine-grained perturbations at each stage.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Results finding best expression and moleculeinput values, x, that are linearly-spaced between 10 and 10. We then pass these through our true function 1/3 + x + sin(x ⇤ x) to generate the true target observa- tions. We use Bayesian optimization (BO) as described above search for this equation. We run BO for 5 itera- tions and average across 10 repetitions of the process. Ta- ble 2 (rows 1 &amp; 2) shows the results obtained. The third column in the table reports the fraction of arithmetic se- quences found by BO that are valid. The GVAE nearly always finds valid sequences. The only cases in which it does not is when there are still non-terminals on the stack of</figDesc><table>Problem 
+Method Frac. valid 
+Avg. score 
+
+Expressions 
+GVAE 
+0.99±0.01 
+3.47 ±0.24 
+CVAE 
+0.86±0.06 
+4.75±0.25 
+
+Molecules 
+GVAE 
+0.31±0.07 
+-9.57 ±1.77 
+CVAE 
+0.17±0.05 
+-27.42±8.12 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Best expressions found by each method</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="true"><head>Table 4 .</head><label>4</label><figDesc>Best molecules found by each method Method # SMILE Score</figDesc><table>GVAE 
+
+1 CCCc1ccc(I)cc1C1CCC-c1 
+2.94 
+2 CC(C)CCCCCc1ccc(Cl)nc1 
+2.89 
+3 CCCc1ccc(Cl)cc1CCCCOC 
+2.80 
+
+CVAE 
+
+1 Cc1ccccc1CCCC1CCC1CCc1nncs1 
+1.98 
+2 Cc1ccccc1CCCC1(COC1)CCc1nnn1 1.42 
+3 CCCCCCCCC(CCCC212CCCnC1COC)c122csss1 
+1.19 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="true"><head>Table 5 .</head><label>5</label><figDesc>Test Log-likelihood (LL) and RMSE for the sparse GP predictions of penalized LogP score from the latent space</figDesc><table>Objective Method 
+Expressions 
+Molecules 
+
+LL 
+GVAE 
+-1.320±0.001 -1.739 ±0.004 
+CVAE 
+-1.397±0.003 
+-1.812±0.004 
+
+RMSE 
+GVAE 
+0.884 ±0.002 
+1.404 ±0.006 
+CVAE 
+0.975±0.004 
+1.504±0.006 
+
+current neural network grammars </table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">http://opensmiles.org/spec/open-smiles-2-grammar.html</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This work was supported by The Alan Turing Institute under the EPSRC grant EP/N510129/1.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Learning continuous semantic representations of symbolic expressions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miltiadis</forename><surname>Allamanis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chanthirasegaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pankajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pushmeet</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charles</forename><surname>Sutton</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01423</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Trainable grammars for speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">K</forename><surname>Baker</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of the Acoustical Society of America</title>
+		<imprint>
+			<biblScope unit="volume">65</biblScope>
+			<biblScope unit="issue">S1</biblScope>
+			<biblScope unit="page" from="132" to="132" />
+			<date type="published" when="1979" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Applying probability measures to abstract languages</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taylor</forename><forename type="middle">L</forename><surname>Booth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">A</forename><surname>Thompson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE transactions on Computers</title>
+		<imprint>
+			<biblScope unit="volume">100</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="442" to="450" />
+			<date type="published" when="1973" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Generating sentences from a continuous space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samuel</forename><forename type="middle">R</forename><surname>Bowman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vilnis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Luke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">M</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rafal</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">10</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Learning phrase representations using rnn encoder-decoder for statistical machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Van</forename><surname>Merriënboer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Caglar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dzmitry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bougares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fethi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Holger</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.1078</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The origins of kriging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noel</forename><surname>Cressie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Math. Geol</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="239" to="252" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Recurrent neural network grammars</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kuncoro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adhiguna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Noah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of NAACL-HLT</title>
+		<meeting>NAACL-HLT</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="199" to="209" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Estimation of synthetic accessibility score of drug-like molecules based on molecular complexity and fragment contributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Ertl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ansgar</forename><surname>Schuffenhauer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of cheminformatics</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Leon</forename><forename type="middle">A</forename><surname>Gatys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Ecker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bethge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1508.06576</idno>
+		<title level="m">A neural algorithm of artistic style</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Terpret: A probabilistic programming language for program induction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">L</forename><surname>Gaunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Brockschmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Marc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rishabh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kushman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nate</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pushmeet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Tarlow</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.04428</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Design of efficient molecular organic light-emitting diodes by a high-throughput virtual screening and experimental approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gómez-Bombarelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rafael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Aguilera-Iparraguirre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">D</forename><surname>Hirzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Maclaurin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dougal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><forename type="middle">A</forename><surname>Blood-Forsythe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chae</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hyun</forename><surname>Sik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Materials</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1120" to="1127" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Automatic chemical design using a data-driven continuous representation of molecules</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gómez-Bombarelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rafael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Miguel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Aguilera-Iparraguirre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">D</forename><surname>Hirzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aspuru-Guzik</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alán</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.02415</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">The Harvard Clean Energy Project: LargeScale Computational Screening and Design of Organic Photovoltaics on the World Community Grid</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hachmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Olivares-Amaya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Atahan-Evrenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Amador-Bedolla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sanchez-Carrera</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Goldparker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Vogt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Brockway</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aspuruguzik</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Phys. Chem. Lett</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">17</biblScope>
+			<biblScope unit="page" from="2241" to="2251" />
+			<date type="published" when="2011-09" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Long shortterm memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Introduction to Automata theory, languages, and computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">E</forename><surname>Hopcroft</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rajeev</forename><surname>Motwani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><forename type="middle">D</forename><surname>Ullman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Deep recursive neural networks for compositionality in language</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ozan</forename><surname>Irsoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Claire</forename><surname>Cardie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2096" to="2104" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Opensmiles specification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Craig</forename><forename type="middle">A</forename><surname>James</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Vandermeersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dalke</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Natasha</forename><surname>Jaques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shixiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Turner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Douglas</forename><surname>Eck</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.02796</idno>
+		<title level="m">Tuning recurrent neural networks with reinforcement learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Adaptor grammars: A framework for specifying compositional nonparametric bayesian models. Advances in neural information processing systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><forename type="middle">L</forename><surname>Griffiths</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Goldwater</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sharon</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="page">641</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Efficient global optimization of expensive black-box functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Donald</forename><forename type="middle">R</forename><surname>Jones</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Schonlau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><forename type="middle">J</forename><surname>Welch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Global optimization</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="455" to="492" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">A convolutional neural network for modelling sentences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nal</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">The C programming language</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><forename type="middle">W</forename><surname>Kernighan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ritchie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dennis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ejeklint</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Per</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1988" />
+			<publisher>Prentice-Hall</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<pubPlace>Englewood Cliffs</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Auto-encoding variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Learning Representations (ICLR)</title>
+		<meeting>the International Conference on Learning Representations (ICLR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Gans for sequences of discrete elements with the gumbelsoftmax distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matt</forename><forename type="middle">J</forename><surname>Kusner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Miguel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.04051</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Structured generative models of natural source code</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Tarlow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 31st International Conference on Machine Learning (ICML)</title>
+		<meeting>the 31st International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="649" to="657" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Romain</forename><surname>Paulus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Christopher</surname></persName>
+		</author>
+		<title level="m">Global belief recursive neural networks. In Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2888" to="2896" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Automatic sampler discovery via probabilistic programming and approximate bayesian computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yura</forename><surname>Perov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><surname>Wood</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial General Intelligence</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="262" to="273" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">What is high-throughput virtual screening? a perspective from organic materials discovery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><forename type="middle">O</forename><surname>Pyzer-Knapp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Suh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Changwon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gómez-Bombarelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rafael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Aguilera-Iparraguirre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alán</forename><surname>Aspuru-Guzik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Annual Review of Materials Research</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="page" from="195" to="216" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alec</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luke</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Soumith</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06434</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1401.4082</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Programming with a differentiable forth interpreter</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sebastian</forename><surname>Riedel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matko</forename><surname>Bosnjak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Rocktäschel</surname></persName>
+		</author>
+		<idno>abs/1605.06640</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Strategy to discover diverse optimal molecules in the small molecule universe</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chetan</forename><surname>Rupakheti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Virshup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Aaron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Weitao</forename><surname>Beratan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">N</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of chemical information and modeling</title>
+		<imprint>
+			<biblScope unit="volume">55</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="529" to="537" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Distilling free-form natural laws from experimental data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hod</forename><surname>Lipson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">324</biblScope>
+			<biblScope unit="issue">5923</biblScope>
+			<biblScope unit="page" from="81" to="85" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Generating focussed molecule libraries for drug discovery with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marwin</forename><forename type="middle">Hs</forename><surname>Segler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kogej</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Thierry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Tyrchan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Waller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mark</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.01329</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Taking the human out of the loop: A review of bayesian optimization. Proceedings of the IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shahriari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bobak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kevin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adams</forename><surname>Ziyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">De</forename><surname>Freitas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nando</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">104</biblScope>
+			<biblScope unit="page" from="148" to="175" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Sparse Gaussian processes using pseudo-inputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Snelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="1257" to="1264" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Dynamic pooling and unfolding recursive autoencoders for paraphrase detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">H</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pennington</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Christopher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="page" from="801" to="809" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Semisupervised recursive autoencoders for predicting sentiment distributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pennington</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">H</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Christopher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the conference on empirical methods in natural language processing</title>
+		<meeting>the conference on empirical methods in natural language processing</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="151" to="161" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Recursive deep models for semantic compositionality over a sentiment treebank</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Perelygin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jean</forename><forename type="middle">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Chuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Potts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Christopher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the conference on empirical methods in natural language processing</title>
+		<meeting>the conference on empirical methods in natural language processing</meeting>
+		<imprint>
+			<publisher>Citeseer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1631</biblScope>
+			<biblScope unit="page">1642</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Deep feature interpolation for image content changes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Upchurch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gardner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jacob</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Robert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kilian</forename><surname>Weinberger</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.05507</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Stochastic voyages into uncharted chemical space produce a representative library of all possible drug-like compounds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><forename type="middle">M</forename><surname>Virshup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julia</forename><surname>Contreras-García</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wipf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Weitao</forename><surname>Beratan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">N</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>American Chemical Society</publisher>
+			<biblScope unit="volume">135</biblScope>
+			<biblScope unit="page" from="7296" to="7303" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Smiles, a chemical language and information system. 1. introduction to methodology and encoding rules</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Weininger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Chem. Inf. Comput. Sci</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="31" to="36" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Genetic programming: An introduction and survey of applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M-J</forename><surname>Willis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hugo</forename><forename type="middle">G</forename><surname>Hiden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Marenbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Mckay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Montague</forename><surname>Gary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Genetic Algorithms in Engineering Systems</title>
+		<imprint>
+			<publisher>IET</publisher>
+			<date type="published" when="1997" />
+			<biblScope unit="page" from="314" to="319" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shengjia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiaming</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefano</forename><surname>Ermon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Infovae</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.02262</idno>
+		<title level="m">Information maximizing variational autoencoders</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

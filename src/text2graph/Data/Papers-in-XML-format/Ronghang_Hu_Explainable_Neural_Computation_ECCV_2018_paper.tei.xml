@@ -1,0 +1,1177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Explainable Neural Computation via Stack Neural Module Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronghang</forename><surname>Hu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">Boston University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Explainable Neural Computation via Stack Neural Module Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract/>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Deep neural networks have achieved impressive results on many vision and language tasks. Yet the predictive power of generic deep architectures comes at a cost of lost interpretability, as these architectures are essentially black boxes with respect to human understanding of their predictions. This can impair human users' trust in learning systems and make them harder to refine <ref type="bibr" target="#b7">[8]</ref>.</p><p>These issues have led to recent efforts in explaining neural models, ranging from building in attention layers to post-hoc extraction of implicit model attention, e.g. by gradient propagation <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b27">28]</ref>, post-hoc natural language explanations <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b1">2]</ref> and network dissection <ref type="bibr" target="#b6">[7]</ref>. Such approaches can highlight the image regions that are most important for predicting a particular label or provide a textual interpretation of the network output. However, explainable models of more complex problems involving multiple sub-tasks, such as Visual Question Answering (VQA) <ref type="bibr" target="#b5">[6]</ref> and Referential Expression Grounding (REF) <ref type="bibr" target="#b29">[30]</ref>, are less studied in comparison. Complex problems may require several reasoning steps to solve. For example in <ref type="figure">Figure 1</ref>, the question "There is a small gray block; are there any spheres to the left of it?" might require solving the following subtasks: find the "small gray block", look for "spheres to the left of it" and decide whether such object exists in the image. Therefore, a single heat-map highlighting important spatial regions such as <ref type="bibr" target="#b27">[28]</ref> may not tell the full story of how a model performs.</p><p>In this paper, we present a new model that makes use of an explicit, modular reasoning process, but which allows fully differentiable training with backpropagation and without expert supervision of reasoning steps. Existing modular networks first analyze the question and then predict a sequence of pre-defined modules (each implemented as a neural net) that chain together to predict the answer. However, they need an "expert layout", or supervised module layouts for training the layout policy in order to obtain good accuracy. Our proposed approach, the Stack Neural Module Network or Stack-NMN, can be trained without layout supervision, and replaces the layout graph of <ref type="bibr" target="#b15">[16]</ref> with a stack-based data structure. Instead of making discrete choices on module layout, in this work we make the layout soft and continuous, so that our model can be optimized in a fully differentiable way using gradient descent. We show that this improves both the accuracy and interpretability compared to existing modular approaches. We also show that this model can be extended to handle both Visual Question Answering (VQA) <ref type="bibr" target="#b5">[6]</ref> and Referential Expression Grounding (REF) <ref type="bibr" target="#b29">[30]</ref> seamlessly in a single model by sharing knowledge across related tasks through common routines as in <ref type="figure">Figure 1</ref>.</p><p>A variety of different model architectures have been proposed for complex reasoning and question answering. Our evaluation in this paper focuses on both the accuracy and interpretability of these models. In particular, we ask: does explicit modular structure make models more interpretable? We use the CLEVR dataset <ref type="bibr" target="#b17">[18]</ref> as a testbed, as it poses a task of high complexity. State-of-the-art models for this task vary in the degree to which they provide "explanations". Relation Networks <ref type="bibr" target="#b30">[31]</ref> and FiLM <ref type="bibr" target="#b25">[26]</ref> achieve high performance but do not expose their internal decision process. Other state-of-the-art models on CLEVR use recurrent layers to compute the answer over multiple steps and output different image and/or text attention at each step. These include modular networks <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b20">21]</ref>, and non-modular recurrent attention models <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b16">17]</ref>. It has been suggested by the authors that the attention and/or module layouts inferred by these methods can be regarded as explanations of the networks' internal reasoning process. Yet, to the best of our knowledge, their meaningfulness to humans has never been explicitly evaluated; we provide a more rigorous assessment of the interpretability of multi-step attentional VQA models here.</p><p>We categorize existing multi-step models in terms of whether they have a discrete library of structured modules for each step (e.g., NMN and related approaches <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b20">21]</ref>), vs. homogeneous subtask computational elements (e.g., multi-hop attention networks <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b34">35]</ref>, MAC <ref type="bibr" target="#b16">[17]</ref>, etc.). We assess these models below and identify tradeoffs between accuracy and interpretability of these existing model classes. We find that our proposed Stack-NMN model has comparable performance to existing modular approaches even without expert su- pervision, while achieving the greatest interpretability among evaluated models with respect to both subjective and objective measures of human understanding.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related work</head><p>Visual question answering (VQA). The task of visual question answering is to infer the answer based on the input question and image. Existing methods on VQA can be mainly categorized into holistic approaches (e.g., <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b16">17]</ref>), and neural module approaches <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b20">21]</ref>. The major difference between these two lines of work is that neural module approaches explicitly decompose the reasoning procedure into a sequence of sub-tasks, and have specialized modules to handle the sub-tasks, while holistic approaches do not have explicit sub-task structure, and different kinds of reasoning routines are all handled homogeneously. Some holistic models perform sequential interactions between the image and the question. For example, SAN <ref type="bibr" target="#b35">[36]</ref> uses multi-hop attention to extract information from the image. FiLM <ref type="bibr" target="#b25">[26]</ref> uses multiple conditional batch normalization layers to fuse the image representation and question representation. Among these methods, MAC <ref type="bibr" target="#b16">[17]</ref> performs multiple steps of reading and writing operations to extract information from the image and update its memory. Although these models have sequential interactions between the input image and the question, they do not explicitly decompose the reasoning procedure into semanticallytyped sub-tasks. In our model, we adopt a similar textual attention mechanism as in <ref type="bibr" target="#b16">[17]</ref> in Sec. 3.1, while also predicting module weights from the input text.</p><p>Neural module networks (NMNs). In NMN <ref type="bibr" target="#b4">[5]</ref>, N2NMN <ref type="bibr" target="#b15">[16]</ref>, PG+EE <ref type="bibr" target="#b18">[19]</ref> and TbD <ref type="bibr" target="#b20">[21]</ref>, the inference procedure is performed by analyzing the question and decomposing the reasoning procedure into a sequence of sub-tasks. In <ref type="bibr" target="#b15">[16]</ref>, <ref type="bibr" target="#b18">[19]</ref> and <ref type="bibr" target="#b20">[21]</ref>, a layout policy is used to turn the question into a module layout. Then the module layout is executed with a neural module network. Here, given an input question, the layout policy learns what sub-tasks to perform, and the neural modules learn how to perform each individual sub-tasks.</p><p>However, it is shown in these previous work that "expert layouts" (i.e. human annotations of the desired layout) are needed to pretrain or supervise the layout policy in order to get compositional behavior and good accuracy. Without expert guidance, existing models suffer from significant performance drops or fail to converge. This indicates that it is challenging to simultaneously learn "what" and "how" in these models. In this work, we address this problem with soft and continuous module layout, making our model fully differentiable and trainable with using gradient descent without resorting to expert layouts.</p><p>Interpretable reasoning and explainable neural networks. Recent years have seen increased interest in various aspects of interpretability in learned models <ref type="bibr" target="#b23">[24]</ref>, particularly in neural networks <ref type="bibr" target="#b22">[23]</ref>. This includes work aimed at both explaining the decision rules implemented by learned models, and the mechanisms by which these rules are derived from data <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b19">20]</ref>. In the present work we are primarily interested in the former. One line of research in this direction attempts to generate post-hoc explanations of decisions from generic model architectures, either by finding interpretable local surrogates in the form of linear models <ref type="bibr" target="#b28">[29]</ref>, logical rules <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b37">38]</ref> or natural language descriptions <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b38">39]</ref>, or by visualizing salient features <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28]</ref>.</p><p>An alternative line of work investigates the extent to which models can be explicitly designed from the outset to provide enhanced interpretability, where main focus of study has been visual attention <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b24">25]</ref>. While the various modular approaches described above are sometimes described as "interpretable" <ref type="bibr" target="#b15">[16]</ref>, we are not aware of any research evaluating this in practice. In the present work, our goal is to evaluate whether this kind of explicit modular structure, and not just iterated attention, improves interpretability in concrete evaluation scenarios.</p><p>Multi-task learning. Different from existing multi-task approaches such as sharing common features (e.g., <ref type="bibr" target="#b12">[13]</ref>), our model simultaneously handles both Visual Question Answering (VQA) <ref type="bibr" target="#b5">[6]</ref> and Referential Expression Grounding (REF) <ref type="bibr" target="#b29">[30]</ref> by exploiting the intuition that related tasks should have common sub-routines, and addressing them with a common set of neural modules.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Approach</head><p>In this paper, we analyze and design interpretable neural networks for highcomplexity VQA and REF tasks. We evaluate the interpretability of multi-step VQA networks to humans, and in particular compare modular networks to nonmodular networks in terms of how well humans can understand the internal computation process. We describe our proposed evaluation strategy and results in Section 4.2. We also improve modular networks by proposing a new formulation, which we describe in this section. Specifically, we describe Stack Neural Module Networks (Stack-NMNs) with the following components. 1) A layout controller that decomposes the reasoning task into a sequence of sub-tasks, and translates the input question into a soft layout, specified via a soft distribution over module weights w (t) at each timestep t. The controller also supplies each module with a textual parameter c t at every time-step using textual attention. 2) A set of neural modules M to handle the sub-tasks specified by the controller. Each neural module is a differentiable parameterized function that performs a specific sub-task, and can be executed dynamically on-the-fly according to the soft layout. 3) A differentiable memory stack to store and retrieve intermediate outputs from each module during execution. <ref type="figure" target="#fig_0">Figure 2</ref> shows an overview of our model. The overall architecture of our model is conceptually similar to N2NMN <ref type="bibr" target="#b15">[16]</ref>, where layout controller in our model resembles the previous layout policy. The major difference between our model and this prior work lies in whether the layout selection is continuous or discrete. N2NMN makes discrete choices of module layout in a graph structure and can only be end-to-end optimized with reinforcement learning approaches. On the other hand, our model makes soft layout selection with a differentiable stack structure, by giving each module a continuous-valued weight parameter and averaging the outputs of all modules according to their weights. This makes the execution procedure fully differentiable so that our model is trainable with back-propagation like other neural networks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Module layout controller</head><p>The layout controller in our model decides what subtask to perform at each execution time step t by selecting a module m t for that time step, and also supplying it with a textual parameter c t to give specific instruction to the module m t ∈ M . For example, the controller may decide to look for red things at t = 0, by running a Find module with a textual parameter c t that contains the information for the word "red".</p><p>The structure of our layout controller is similar to the control unit in <ref type="bibr" target="#b16">[17]</ref>. Suppose there are S words in the input question. The layout controller first encodes the input question</p><formula xml:id="formula_0">q into a d-dimensional sequence [h 1 , · · · , h S ] of length S using a bi-directional LSTM as [h 1 , · · · , h S ] = BiLSTM(q; θ BiLSTM )</formula><p>, where each h s is the concatenation of the forward LSTM output and the backward LSTM output at the s-th input word. Next, the controller runs in a recurrent manner from time-step t = 0 to time-step t = T − 1. At each time-step t, it applies a time-step dependent linear transform to the question q, and linearly combines it with the previous d-dimensional textual parameter c t−1 as u = is not shared across different time steps. To select the module to execute at the current time-step t, a small multilayer perceptron (MLP) is applied to u to predict a |M |-dimensional vector w</p><formula xml:id="formula_1">W 2 W (t) 1 q + b 1 ; c t−1 + b 2 ,</formula><formula xml:id="formula_2">(t)</formula><p>as w (t) = softmax(MLP(u; θ MLP )). The module weight w (t) contains the weight distribution over each module m ∈ M and sums up to one (i.e.</p><formula xml:id="formula_3">M m∈M w (t) m = 1)</formula><p>, which resembles a probability distribution or soft attention over the modules. It is used to select modules in each time-step t in a continuous manner.</p><p>Finally, the controller predicts a textual parameter c t with a textual attention over the encoded question words as cv t,s = softmax(W 3 (u ⊙ h s )) and c t = S s=1 cv t,s · h s , where ⊙ is element-wise multiplication, W 3 is a 1 × d matrix, cv t,s is the word attention score (scalar) on the s-th question word. Finally, c t is the textual parameter supplied to the modules at time-step t, containing question information needed for a sub-task.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Neural modules with a memory stack</head><p>Module implementation. Following the terminology in N2NMN, a neural module is a differentiable function with some internal trainable parameters, and can be used to perform a specific sub-task. For example, the question "how many objects are right of the blue object?" can be possibly answered by the layout Answer['how many'](Transform['right'](Find['blue']())), where the modules such as Transform are selected with module weight w (t) and the textual information such as 'blue' is contained in the textual parameter c t .</p><p>The module implementation basically follows <ref type="bibr" target="#b15">[16]</ref>. We also simplify the implementation in <ref type="bibr" target="#b15">[16]</ref> by merging unary answering modules (Count, Exist, Describe) into a single Answer module, and pairwise comparison (More, Less, Equal, Compare) into a single Compare module. Finally, we introduce a NoOp module that does nothing, which can be used to pad arbitrary module layouts to a maximum length T . Our module implementation is summarized in <ref type="table">Table 1</ref>.</p><p>Differentiable memory stack. In our model, different modules may take different numbers of input, and the model sometimes needs to take what it currently sees and compare it with what it has previously seen before. This is typical module input output implementation details name attention type (x: image feature map, c: textual parameter)</p><formula xml:id="formula_4">Find (none) attention aout = conv2 (conv1(x) ⊙ W c) Transform a attention aout = conv2 (conv1(x) ⊙ W1 (a ⊙ x) ⊙ W2c)</formula><note type="other">And a1, a2 attention aout = minimum(a1, a2) Or a1, a2 attention aout = maximum(a1, a2) Filter a attention aout = And(a, Find()), i.e. reusing Find and And Scene (none) attention aout = conv1(x) Answer a answer y</note><formula xml:id="formula_5">= W T 1 (W2 (a ⊙ x) ⊙ W3c) Compare a1, a2 answer y = W T 1 (W2 (a1 ⊙ x) ⊙ W3 (a2 ⊙ x) ⊙ W4c) NoOp</formula><p>(none) (none) (does nothing) <ref type="table">Table 1</ref>. Neural modules used in our model. The modules take image attention maps as inputs, and output either a new image attention aout or a score vector y over all possible answers (⊙ is elementwise multiplication; is sum over spatial dimensions).</p><p>in tree-structured layouts, such as Compare(Find(), Transform(Find())). To handle tree-structured layouts, the model needs to have a memory to remember the outputs from the previous reasoning time-steps. Similar to Memory Networks <ref type="bibr" target="#b33">[34]</ref>, we provide a differentiable memory pool to store and retrieve the intermediate outputs. However, to encourage compositional behavior, we restrict our memory pool to be a Last-In-First-Out (LIFO) stack similar to <ref type="bibr" target="#b11">[12]</ref>. The LIFO behavior encourages the neural modules to work like functions in a computer program, allowing only arguments and returned values to be passed between the modules, without arbitrary memory modification. Our memory stack can be used to store vectors with fixed dimensions. It consists of a length-L memory array</p><formula xml:id="formula_6">A = {A i } L i=1</formula><p>(where L is the stack length) and a stack-top pointer p, implemented as a L-dimensional one-hot vector. The stack (A, p) implements differentiable push and pop operations as follows. Pushing a new vector z into stack (A, p) is done via pointer increment as p := 1d conv(p, [0, 0, 1]) followed by value writing as</p><formula xml:id="formula_7">A i := A i · (1 − p i ) + z · p i , for each i = 1, ..., L.</formula><p>Similarly, popping the current stack-top vector z from stack (A, p) is done via value reading as z := L i=1 A i · p i followed by pointer decrement as p := 1d conv(p, <ref type="bibr" target="#b0">[1,</ref><ref type="bibr">0,</ref><ref type="bibr">0]</ref>). Here A i is the vector at stack depth i in A. In both push and pop operations, the one-hot stack pointer p is incremented or decremented using 1-d convolution.</p><p>In our model, we use the above memory stack to store the H ×W dimensional image attention maps, where H and W are the height and the width of the image feature map. Using the memory stack, each module first pops from the stack to obtain input image attentions, and then pushes its result back to the stack. For example, in tree-like layouts such as Compare(Find(), Transform(Find())), the Find module pushes its localization result into the stack, the Transform module pops one image attention map from the stack and pushes back the transformed attention, and the Compare module pops two image attention maps and uses them to predict the answer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Soft program execution</head><p>Our model performs continuous selection of module layout through the soft module weights w (t) . At each time step t, we execute all the modules in our module list M (shown in <ref type="table">Table 1</ref>), and perform a weighted average of their results with respect to the weights w (t) predicted by the layout controller. Specifically, the resulting memory stacks from the execution of each module are weightedaveraged with respect to w (t) m to produce a single updated memory stack. At time step t = 0, we initialize the memory stack (A, p) with uniform image attention and set stack the pointer p to point at the bottom of the stack (onehot vector with 1 in the 1st dimension). Then, at each time step t, for every module m ∈ M we execute it on the current memory stack (A (t) , p (t) ). During execution, each module m may pop from the stack and push back its results, producing an updated stack (A</p><formula xml:id="formula_8">(t) m , p (t) m ) as A (t) m , p (t) m = run module m, A (t) , p (t) ,</formula><p>for each m ∈ M . We average the resulting new stack from each module according to its weight w</p><formula xml:id="formula_9">(t) m as A (t+1) = m∈M A (t) m · w (t)</formula><p>m , and then sharpen the stack pointer with a softmax operation to keep it as a (nearly) one-hot vector</p><formula xml:id="formula_10">as p (t+1) = softmax m∈M p (t) m · w (t)</formula><p>m . Final output. We apply this model to both the Visual Question Answering (VQA) task and the Referential Expressions Grounding (REF) task. To obtain the answer in the VQA task, we collect the output answer logits (i.e. scores) in all time-steps from those modules that have answer outputs (Answer and Compare in <ref type="table">Table 1</ref> To output grounding results in the REF task, we take the image-attention map at the top of the final stack at t = T , and extract attended image features from this attention map. Then, a linear layer is applied on the attended image feature to predict the bounding box offsets from the feature grid location.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Training</head><p>Unlike previous modular approaches N2NMN <ref type="bibr" target="#b15">[16]</ref>, PG+EE <ref type="bibr" target="#b18">[19]</ref> and TbD <ref type="bibr" target="#b20">[21]</ref>, our model does not require expert layouts to achieve good performance. When such expert layout supervision is available, our model can also utilize it by supervising the soft module weights w (t) with a cross-entropy loss to match the expert's module choice. But as the entire network is fully differentiable, it can be trained effectively without reinforcement learning, from task supervision alone, in the absence of expert layout supervision.</p><p>For VQA, we train with softmax cross entropy loss on the final answer scores y. For REF, we map the center of the ground-truth bounding box to a location on the feature grid. Then we train with a softmax cross entropy loss on the final image attention map to put all the attention on the ground-truth feature grid, and a bounding box regression loss on the bounding box offsets to match the ground-truth box. We train with the Adam optimizer with 10 −4 learning rate. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We evaluate our model on the Visual Question Answering (VQA) task on the large-scale CLEVR dataest <ref type="bibr" target="#b17">[18]</ref>. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Model performance</head><p>Our model aims to simultaneously handle both VQA and REF tasks, and to decompose the reasoning procedure into sub-tasks by inducing a suitable module layout on each question or referential expression. We train our model on the CLEVR dataset for the VQA task, and the CLEVR-Ref dataset for the REF task. We experiment with training only on the VQA task, training only on the REF task, and joint training on both tasks (VQA+REF) using the loss from both tasks. To test whether our model can induce a reasonable sub-task decomposition and module layout, we experiment with both using expert layout supervision (same as in <ref type="bibr" target="#b15">[16]</ref>) and training from scratch without expert layout. We use a ResNet-101 convnet <ref type="bibr" target="#b13">[14]</ref> pretrained on ImageNet classification to extract visual features from the image.</p><p>The results are summarized in <ref type="table">Table 2</ref>. It can be seen that when training on each individual task, our model achieves over 90% accuracy on both tasks (which is reasonably good performance), whether using expert layout supervision or not. Furthermore, joint training can lead to even higher accuracy on these two tasks (especially when not using expert layout). Our model can simultaneously handle these two tasks by exploiting the common sub-tasks in them, such as finding object and handling relationships.</p><p>Sub-task decomposition and layout induction. By comparing the bottom 3 rows (trained without using expert layout) and the top 3 rows (trained with expert layout supervision), it can be seen that although the models trained with expert layout still outperforms training from scratch, the gap between the two scenarios is relatively small. This indicates that our model can still work well without layout supervision, which is something previous modular approaches such as N2NMN <ref type="bibr" target="#b15">[16]</ref>, PG+EE <ref type="bibr" target="#b18">[19]</ref> and TbD <ref type="bibr" target="#b20">[21]</ref> could not handle.</p><p>We visualize the reasoning procedure our multi-task model on both VQA and REF task, for both with expert layout and without expert layout supervision. <ref type="figure" target="#fig_3">Figure 3</ref> shows the module layout, the intermediate reasoning outputs and the most attended words from textual attention (cv t,s in Sec. 3.1). It can be seen that our model can induce a reasonable decomposition of the inference procedure into sub-tasks without expert layout supervision, and it learns to share common sub-tasks such as find (localization) and transform in across the two tasks.</p><p>We note that our model learns peaky module weights after convergence. The average entropy of the learned soft module weights (which can be seen as a probability distribution) is 0.082 when trained without layout supervision (corresponds to putting over 98% weights on one module), and 7.5 × 10 −5 when trained with layout supervision (corresponds to putting over 99.99% weights on one module). This shows that even without any strong supervision on module layout, our model learns to almost discretely select one module through the soft module weights at test time. Hence, our proposed framework can be regarded as a novel end-to-end differentiable training approach for modular networks.</p><p>We further experiment with test-time layout discretization by replacing the soft module weights with a one-hot argmax vector. This results in sightly lower performance on the CLEVR validation set (90.0% when trained without layout supervision and 94.8% with layout supervision). Considering the discrepancy between training and test time, the relatively small accuracy drop (&lt; 4%) from test-time layout discretization indicates that our model works similar to previous modular networks at test time, rather than acting as a mixture of experts.</p><p>Evaluation of accuracy. We first compare the accuracy of our model on the CLEVR VQA dataset with the previous modular approaches N2NMN <ref type="bibr" target="#b15">[16]</ref>, PG+EE <ref type="bibr" target="#b18">[19]</ref> and TbD <ref type="bibr" target="#b20">[21]</ref>. N2NMN uses a layout policy to predict discrete layouts and a neural module network to answer the question. PG+EE and TbD are also modular approachs similar to N2NMN, where the program generator is similar to the layout policy, and the execution engine is essentially a neural module network. For fair comparison with previous work, we train our model on the CLEVR VQA dataset only (without using CLEVR-Ref for joint training).</p><p>The results are shown in <ref type="table">Table 3</ref>. It can be seen from the top 4 rows that among all the modular approaches (N2NMN, PG+EE, TbD and Ours), when layout supervision is available, our model outperforms N2NMN by a large margin, and achieves comparable performance with PG+EE while underperforms TbD by a small margin. We note that even when using expert layout, our model still uses less supervision than PG+EE or TbD as they both require fine-grained module specification (e.g. finding shape and finding color are different modules in <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b20">21]</ref> while the same module with different textual attention in our model).</p><p>The bottom 4 rows show the results without using expert layout supervision, where our model significantly outperform N2NMN. In this case, N2NMN has large performance drop while PG+EE and TbD fails to converge or cannot not be trained without layout supervision. This can be attributed to the fact that N2NMN, PG+EE and TbD all use discrete non-differentiable layout, while our model is fully differentiable and can be trained with back-propagation.</p><p>Method expert layout accuracy on CLEVR N2NMN <ref type="bibr" target="#b15">[16]</ref> yes 83.7 PG+EE <ref type="bibr" target="#b18">[19]</ref> yes 96.9 TbD <ref type="bibr" target="#b20">[21]</ref> yes 99.1 Ours yes 96.5 N2NMN <ref type="bibr" target="#b15">[16]</ref> no 69.0 PG+EE <ref type="bibr" target="#b18">[19]</ref> no (does not converge) TbD <ref type="bibr" target="#b20">[21]</ref> no (not supported) Ours no 93.0 <ref type="table">Table 3</ref>. Comparison of our model and other modular approaches on the CLEVR dataset for VQA. Our model achieves the best accuracy when not relying on expert layout, while N2NMN has significant performance drop in this case. The best nonmodular architectures (e.g., <ref type="bibr" target="#b16">[17]</ref>) do achieve higher performance; we compare those against modular performance on both accuracy and interpretability in Sec.  <ref type="table">Table 4</ref>. Single-model accuracy of our method and N2NMN <ref type="bibr" target="#b15">[16]</ref> on both VQAv1 <ref type="bibr" target="#b5">[6]</ref> and VQAv2 <ref type="bibr" target="#b10">[11]</ref> datasets, using the same experimental settings (e.g. visual features).</p><p>We note that the best non-modular architectures <ref type="bibr" target="#b16">[17]</ref> achieve higher performance without using expert layout supervision, and compare those against modular performance on both accuracy and interpretability in Sec. 4.2.</p><p>Results on real-image VQA datasets. We also evaluate our method on real-image visual question answering datasets and compare with N2NMN <ref type="bibr" target="#b15">[16]</ref>. We run our approach on both VQAv1 and VQAv2 datasets <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b10">11]</ref> following the same settings (e.g. using ResNet-152 image features and single model at test time without ensemble) as in <ref type="bibr" target="#b15">[16]</ref>, where the results are in <ref type="table">Table 4</ref>. Although the question answering task in these datasets focuses more on visual recognition than on compositional reasoning, our method still outperforms <ref type="bibr" target="#b15">[16]</ref> even without expert layout supervision (the expert layouts are obtained by a syntactic parser).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Model interpretability</head><p>Evaluation of interpretability. It is often suggested in existing works <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b20">21]</ref> that modular networks can be more interpretable to humans compared to holistic models. However, there is a lack of human studies in these works to support this claim. In this section, we evaluate how well the user can understand the internal reasoning process within our model, and compare it with MAC <ref type="bibr" target="#b16">[17]</ref>. We compare to MAC because it is a state-of-the-art holistic model that also performs multi-step sequential reasoning and has image and textual attention at each time-step, while other models (e.g., FiLM <ref type="bibr" target="#b25">[26]</ref> and Relation Net <ref type="bibr" target="#b30">[31]</ref>) have lower performance and do not have any image or textual attention to visualize. MAC is a multi-step recurrent structure with a control unit and a reading-writing unit. Similar to our model, it also attend to text and image in each reasoning step. But unlike our model, there is not explicit modular structure in MAC.</p><p>Here, we investigate two distinct, but related questions: does modular structure improve humans' subjective perceptions of model interpretability, and does this structure allow users to form truthful beliefs about model behavior? To this end, we present two different sets of experiments (subjective understanding and forward prediction) with human evaluators. With respect to the taxonomy of interpretability evaluations presented in <ref type="bibr" target="#b7">[8]</ref>, these are both "human-grounded" metrics aimed at testing "general notions of the quality of an explanation".</p><p>In the subjective understanding evaluation, we visualize model's intermediate outputs such as the image attention and textual attention at each step, and we also show the model's final prediction. The visualizations can be seen in <ref type="figure" target="#fig_3">Figure 3</ref>. Then the human evaluators are asked to judge how well they can understand the internal reasoning process, or whether it clear to the user what the model is doing at each step. Each example is rated on a 4-point Likert scale (clear, mostly clear, somewhat unclear and unclear ) corresponding to numerical scores of 4, 3, 2 and 1. The averaged scores and the percentage of each choice are shown in <ref type="table">Table 5</ref>, where it can be seen that our model has higher subjective understanding scores than MAC <ref type="bibr" target="#b16">[17]</ref> and is much more often rated as "clear" in both cases (using or not using expert layout supervision). This shows that the users can more clearly understand the reasoning procedure in our model.</p><p>In the forward prediction evaluation, we investigate whether humans can predict the model's answer and detect its failure based on these visualizations. We split the test set into half correct and half incorrect model predictions, and the final answer output is not shown, so that human baseline performance should be chance or 50%. Our hypothesis is that if humans can predict whether the model succeed or fail better than chance, they understand something about the model's decision process. In <ref type="table">Table 5</ref>, we show the human accuracy on this task along with 95% confidence interval. It can be seen that our model allows them to predict whether the model will get the correct answer or fail consistently higher than chance when trained without expert layout supervision. We also notice that when using supervision from expert layout, our model does worse at human prediction of model's failure. We suspect it is because predicting the answer requires human to understand how the model works. When supervising the layout, the model may overfit to the expert layout, at the expense of predictability. It may output an "intuitive" layout by mimicking the training data, but that layout may not actually be how it is solving the problem. On the other hand, the unsupervised model is not being forced to predict any particular layouts to minimize loss, so its layouts may be more directed at minimizing the answer loss.</p><p>Finally, we compare our model with MAC on VQA accuracy in <ref type="table">Table 5</ref>. Our model underperforms the state-of-the-art MAC in terms of VQA accuracy. However, our model is more interpretable to a human user. This is in line with the intuition that there may be an accuracy-explainability tradeoff, e.g., linear clear <ref type="formula">(4)</ref> mostly clear <ref type="formula">(3)</ref> somewhat unclear <ref type="formula">(2)</ref> unclear <ref type="formula">(1)</ref> ours (w/ expert) ours (w/o expert) MAC  <ref type="table">Table 5</ref>. Human evaluation of our model and the state-of-the-art non-modular MAC model <ref type="bibr" target="#b16">[17]</ref>. Based on the models' intermediate outputs, the evaluators are asked to (a) judge how clearly they can understand the reasoning steps performed by these models on a 4-point scale (i.e. subjective understanding) and (b) do forward prediction (failure detection) and decide whether the model fails without seeing the final output answer. The results show that our model is more interpretable to human users. However, our model underperforms the non-modular MAC approach in VQA accuracy, which is in line with the intuition that there may be an accuracy-explainability tradeoff.</p><p>models are less accurate but more interpretable than non-linear models. However, our model greatly reduces the accuracy gap with the top performing models, without requiring expert layout supervision at training time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>In this paper, we have proposed a novel model for visual question answering and referential expression grounding. We demonstrate that our model simultaneously addresses both tasks by exploiting the intuition that related tasks should share common sub-tasks, and sharing a common set of neural modules between tasks. Compared with previous modular approaches, our model induces a decomposition of the inference procedure into sub-tasks while not requiring expert layout supervision. The proposed model can explain its reasoning steps with a sequence of soft module choices, image attentions, and textual attentions. Experimental evaluation found that these explanations produced better understanding in human users with respect to both subjective and objective evaluations, even in the absence of human-provided explanations at training time.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Overview of our model. Our model predicts a continuous layout via module weights w (t) and executes the modules in a soft manner with a memory stack.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>), and accumulate them with respect to their module weights as y =where M ans contains Answer and Compare.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>The dataset consists of 70000, 15000 and 15000 images for training, validation and test, and each image is associated with 10 questions. The images in the dataset are rendered from a graphics engine, and the questions are synthesized with complex reasoning procedure. To evaluate our model on the Referential Expression Grounding (REF) task [30], we build a new CLEVR-Ref dataset with images and referential expres- sions in CLEVR style using the code base of [18]. Our new CLEVR-Ref dataset has the same scale as the original CLEVR dataset for VQA, but contains ref- erential expressions instead of questions. Each referential expression refers to a unique object in the image, and the model is required to ground (i.e. localize) the corresponding object with a bounding box. The grounded bounding box is considered correct if it overlaps with the ground-truth bounding box by at least 0.5 intersection-over-union (IoU). Similar to question answering in the CLEVR dataset, the referential expressions also involve complex reasoning and relation- ship handling. See Figure 3 for an example of the CLEVR-Ref dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. Examples of our model on VQA (left) and REF (right). At each step, we visualize the module with the highest weight, the words receiving most textual attention (cvt,s in Sec. 3.1) and the module output.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Fig. 1. Our model reveals interpretable subtask structure by inducing a decomposition of the reasoning procedure into several sub-tasks, each addressed by a neural module. It can simultaneously answer visual questions and ground referential expressions.</figDesc><table>any spheres 
+are 
+any spheres 
+left 
+small grey block 
+
+yellow object 
+material 
+cyan thing 
+the 
+
+find 
+transform 
+filter 
+filter 
+answer 
+
+"yes" 
+
+question="There is a small gray block; are there any spheres to the left of it?" 
+
+find 
+transform 
+filter 
+filter 
+bbox regression 
+
+referential expression="the cyan thing that is made of the same material as the yellow object" 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>where Wand W 2 are d × d and d × 2d matrices respectively, and b 1 and b 2 are d-dimensional vectors. Unlike all other parameters in the layout controller, W</figDesc><table>(t) 
+1 
+
+(t) 
+1 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>percentage of each choice (clear, mostly clear, somewhat unclear and unclear )</figDesc><table>expert 
+subjective 
+forward prediction (failure detection) VQA 
+Method 
+layout understanding accuracy ± 95% confidence interval accuracy 
+Ours 
+yes 
+3.47 
+0.545 ± 0.069 
+96.5 
+Ours 
+no 
+3.33 
+0.625 ± 0.067 
+93.0 
+MAC [17] n/a 
+2.46 
+0.565 ± 0.069 
+98.9 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. This work was partially supported by US DoD and DARPA XAI and D3M, and the Berkeley Artificial Intelligence Research (BAIR) Lab.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Buehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Teney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.07998</idno>
+		<title level="m">Bottom-up and top-down attention for image captioning and vqa</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Translating neuralese</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dragan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Klein</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Modular multitask reinforcement learning with policy sketches</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Machine Learning (ICML</title>
+		<meeting>the International Conference on Machine Learning (ICML</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Learning to compose neural networks for question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Klein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Conference of the North American Chapter of the Association for Computational Linguistics (NAACL)</title>
+		<meeting>the Conference of the North American Chapter of the Association for Computational Linguistics (NAACL)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Neural module networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Klein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Vqa: Visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Antol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lawrence Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2425" to="2433" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<title level="m">Network dissection: Quantifying interpretability of deep visual representations</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="3319" to="3327" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision and Pattern Recognition (CVPR), 2017 IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Towards a rigorous science of interpretable machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Doshi-Velez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kim</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Extraction of logical rules from neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Duch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Adamczak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grabczewski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Processing Letters</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="211" to="219" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Multimodal compact bilinear pooling for visual question answering and visual grounding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fukui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">H</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Conference on Empirical Methods in Natural Language Processing</title>
+		<meeting>the Conference on Empirical Methods in Natural Language Processing</meeting>
+		<imprint>
+			<publisher>EMNLP</publisher>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Making the v in vqa matter: Elevating the role of image understanding in visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Khot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Summers-Stay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Learning to transduce with unbounded memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Hermann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Suleyman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Blunsom</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1828" to="1836" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Mask r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2017 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2980" to="2988" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision (ICCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Generating visual explanations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Hendricks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3" to="19" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Learning to reason: End-to-end module networks for visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Compositional attention networks for machine reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Hudson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Learning Representation (ICLR</title>
+		<meeting>the International Conference on Learning Representation (ICLR</meeting>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Clevr: A diagnostic dataset for compositional language and elementary visual reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2017 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1988" to="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Inferring and executing programs for visual reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Understanding black-box predictions via influence functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">W</forename><surname>Koh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Liang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.04730</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Transparency by design: Closing the gap between performance and interpretability in visual reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mascharka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Soklaski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Majumdar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2018" />
+			<biblScope unit="page" from="4942" to="4950" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Recurrent models of visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2204" to="2212" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">The building blocks of interpretability</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Satyanarayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Schubert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mordvintsev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Distill</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">10</biblScope>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Safe and interpretable machine learning: a methodological review</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Otte</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computational intelligence in intelligent data analysis</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="111" to="122" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">H</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Hendricks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.04757</idno>
+		<title level="m">Attentive explanations: Justifying decisions and pointing to the evidence</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Film: Visual reasoning with a general conditioning layer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Perez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Strub</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>De Vries</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Dumoulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>AAAI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Top-down visual saliency guided by captions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramanishka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Das</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Grad-cam: Why did you say that? visual explanations from deep networks via gradient-based localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ramprasaath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Abhishek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramakrishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Devi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Dhruv</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="volume">2016</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Why should I trust you?: Explaining the predictions of any classifier</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">T</forename><surname>Ribeiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guestrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</title>
+		<meeting>the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1135" to="1144" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Grounding of textual phrases in images by reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="817" to="834" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A simple neural network module for relational reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Santoro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Raposo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Barrett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Malinowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Battaglia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="4974" to="4983" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">The intuitive appeal of explainable machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Selbst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Barocas</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>SSRN</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Striving for simplicity: The all convolutional net</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6806</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">End-to-end memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2440" to="2448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Ask, attend and answer: Exploring question-guided spatial attention for visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="451" to="466" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Stacked attention networks for image question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="21" to="29" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Top-down neural attention by excitation backprop</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="543" to="559" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">N</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Zhu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1802.00121</idno>
+		<title level="m">Interpreting cnns via decision trees</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Interpreting deep visual representations via network dissection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+	<note>2017 IEEE Conference</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Learning deep features for discriminative localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2016 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2921" to="2929" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

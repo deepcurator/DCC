@@ -1,25 +1,11 @@
-import sys
-import ast
-import astor
-import os
-import pdb
-import pprint
-import numpy as np
-import networkx as nx
-
+import ast, pprint, itertools, astor
 from glob import glob
 from pathlib import Path
-from rdflib import Graph, BNode, RDFS, RDF, URIRef, Literal
-from pyvis.network import Network
-from sklearn.preprocessing import LabelEncoder
-from showast.rendering.graphviz import render
-from showast import Settings
 
-import itertools
 
 class ASTExplorer:
     
-    def __init__(self, code_path):
+    def __init__(self, code_path, resolution="module"):
         # path to code repository
         self.code_path = code_path
         # path of all python files
@@ -28,34 +14,65 @@ class ASTExplorer:
         self.leaves={}
         # paths between leaves of ast tree for each module
         self.paths={}
-        self.ast_nodes={}
+
         self.function_defs={}
+        
+        # parameters
         self.path_length_upper_bound = 10
         self.path_length_lower_bound = 3
-
-    def process_all_files(self):
+        self.resolution = resolution
+        
+        # this is the trunk of nodes, the type of it will change depending on resolution. 
+        self.nodes = self.get_all_nodes()
+    
+    def get_all_nodes(self):
+        ''' generate all the ast nodes according to resolution. '''
+        nodes = {} 
 
         for py_file in self.all_py_files:
+            
             with open(py_file, "rt", encoding="utf-8") as f:
-                content = f.read()
-
-                module_node = ast.parse(content, py_file)
-
-                self.leaves[py_file] = self.generate_leaves(module_node)
-
-                self.paths[py_file]  = self.generate_paths(self.leaves[py_file])
-
-                self.ast_nodes[py_file] = module_node
-    
-                self.function_defs[py_file] = self.generate_function_defs(module_node)
                 
-                print(py_file, len(self.leaves[py_file]))
-        # self.dump_leaf_nodes()
-        # self.dump_paths()
+                root_node = ast.parse(f.read(), py_file)
                 
-    def generate_leaves(self, root):
+                module_name = Path(py_file).resolve().stem
+                
+                if self.resolution is "module":
+                    nodes[module_name] = root_node
+                
+                elif self.resolution is "function":
+                    for node in ast.walk(root_node):
+                        if isinstance(node, ast.FunctionDef):
+                            #TODO need to address __init__ one day. 
+                            nodes[module_name +'.'+ node.name] = node
+
+        return nodes
+        
+    def process_all_nodes(self):
+        
+        for node_name, node in self.nodes.items():
+            
+            print('processing:', node_name)
+            
+            ''' acquire leaves with corresponding paths in self.leaves for each starting node (module or function)'''
+            self.leaves[node_name] = self.generate_leaves(node)
+
+            ''' acquire paths by iterating through all leave pairs for each starting node (module or function)'''
+            self.paths[node_name]  = self.generate_paths(self.leaves[node_name])
+            
+            # self.function_defs[node] = self.generate_function_defs(node)
+            
+            print(node_name, ' gets %s leaves' % len(self.leaves[node_name]))
+            print(node_name, ' gets %s paths' %  len(self.paths[node_name]))
+
+    def generate_leaves(self, node):
         # for each python file, the root will always be a module class. 
-        fringe = [(root, [])] 
+
+        # the node is the root of the AST subtree. (can be module/functiondef)
+        
+        # a tuple is used for each item in DFS (ast node and visited paths)
+
+        fringe = [(node, [])] 
         leaf_nodes = []
         
         while fringe:
@@ -70,21 +87,18 @@ class ASTExplorer:
                 if isinstance(f[1], list):
                     for item in f[1]: 
                         if isinstance(item, ast.AST):
-                            # print(node, "has_%s"%f[0], item)
                             trunk.append((item, curr_path))
 
                             if isinstance(item, ast.FunctionDef):
-                                print(self.dump_node(item))
+                                pass
+                                # print(self.dump_node(item))
 
                         else:
-                            # print(node, "has_%s"%f[0], item)
                             leaf_nodes.append((item, curr_path))
-                            # print('leaves:', item, curr_path)
-                            # print(item, isinstance(item, ast.AST))
+
                 elif isinstance(f[1], ast.AST):
-                    # print(node, "has_%s"%f[0], f[1])
-                    # trunk.append(f[1])
                     trunk.append((f[1], curr_path))
+                
                 else:
                     if f[1] is not None:
                         # print(node, "has_%s"%f[0], f[1])
@@ -93,20 +107,19 @@ class ASTExplorer:
 
             # fringe should be updated to be [trunk;fringe].
             fringe = trunk + fringe
-            # fringe = trunk
             
         return leaf_nodes
 
-    # Given a module name, return list of function definitions
-    def generate_function_defs(self, root):
-        function_defs = []
-        for f in ast.iter_fields(root):
-            if isinstance(f[1], list):
-                for item in f[1]:
-                    if isinstance(item, ast.FunctionDef):
-                        function_defs.append(item.name)
-                        print('Function definition %s found at %s' % (item.name, item.lineno))
-        return function_defs
+    # def generate_function_defs(self, root):
+    #     # Given a module name, return list of function definitions
+    #     function_defs = []
+    #     for f in ast.iter_fields(root):
+    #         if isinstance(f[1], list):
+    #             for item in f[1]:
+    #                 if isinstance(item, ast.FunctionDef):
+    #                     function_defs.append(item.name)
+    #                     print('Function definition %s found at %s' % (item.name, item.lineno))
+    #     return function_defs
 
     def generate_paths(self, leaves):
         paths = []
@@ -128,7 +141,53 @@ class ASTExplorer:
             paths.append((left_leaf, path, right_leaf))
             paths.append((right_leaf, path[::-1], left_leaf))
 
-        return paths
+        return paths   
+
+    def visualize_ast(self):
+        save_path = (Path(self.code_path) / "ast_trees")
+        save_path.mkdir(exist_ok=True)
+        # for py_file in self.ast_nodes:
+            # file_name = (py_file.split('/')[-1]).split('.')[0] + '.svg'
+            # module = self.ast_nodes[py_file]
+            # Settings['terminal_color'] = "#8B0000"
+            # svg = render(module, Settings)
+            # with open(str(save_path/file_name), 'w') as f:
+            #     f.write(svg._repr_svg_())
+
+    def export(self):
+        # export all the paths contained in self.paths to file_name.txt
+        # file name contains labels. 
+
+        triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
+        triple_dir_path.mkdir(exist_ok=True)
+
+        for node_name in self.paths:
+
+            file_name = "%s.txt" % (node_name)
+            save_path = triple_dir_path / file_name
+
+            with open(str(save_path), 'w') as f:
+                for left_leaf, path, right_leaf in self.paths[node_name]:
+                    
+                    if len(path) >= 2 and (type(path[-1]).__name__ == "Str" and type(path[-2]).__name__ == "Expr"):
+                        ## skip comment in left leaf for easier data pre-processing. 
+                        continue
+
+                    if len(path) >= 2 and (type(path[0]).__name__ == "Str" and type(path[1]).__name__ == "Expr"):
+                        ## skip comment in right leaf for easier data pre-processing. 
+                        continue
+                        
+                    if self.path_length_lower_bound <= len(path) <= self.path_length_upper_bound:
+                        path_string = "_".join([type(i).__name__ for i in path])
+
+                        f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
+    
+    def dump_functions_source_code(self):
+        assert(self.resolution is "function")
+        filepath = Path(self.code_path) / "functions.txt"
+        with open(str(filepath.resolve()), 'w') as file:
+            for function in self.nodes.values():
+                file.write(astor.to_source(function).replace('\n', ' <nl>') + '\n')
 
     def dump_node(self, node):
         # utility function.
@@ -140,34 +199,11 @@ class ASTExplorer:
     def dump_paths(self):
         pprint.pprint(self.paths)
 
-    def visualize_ast(self):
-        save_path = (Path(self.code_path) / "ast_trees")
-        save_path.mkdir(exist_ok=True)
-        for py_file in self.ast_nodes:
-            file_name = (py_file.split('/')[-1]).split('.')[0] + '.svg'
-            module = self.ast_nodes[py_file]
-            Settings['terminal_color'] = "#8B0000"
-            svg = render(module, Settings)
-            with open(str(save_path/file_name), 'w') as f:
-                f.write(svg._repr_svg_())
-
-    def export(self, file_name, limit=10):
-        # export all the paths contained in self.paths to file_name.txt
-        save_path = (Path(self.code_path) / file_name).resolve()
-        with open(save_path, 'w') as f:
-            for py_file in self.paths:
-                for left_leaf, path, right_leaf in self.paths[py_file]:
-                    if self.path_length_lower_bound <= len(path) <= self.path_length_upper_bound:
-                        path_string = "_".join([type(i).__name__ for i in path])
-                        f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
-                
-
-
 if __name__ == "__main__":
-    explorer = ASTExplorer('../test/fashion_mnist')
+    # explorer = ASTExplorer('../test/fashion_mnist')
     # explorer = ASTExplorer('../test/Alexnet')
-    # explorer = ASTExplorer('../test/AGAN')
-    explorer.process_all_files()
-    explorer.visualize_ast()
-    explorer.export("path_triples.txt")
-    # import pdb; pdb.set_trace()
+    # explorer = ASTExplorer('../test/AGAN', resolution="function")
+    explorer = ASTExplorer('../test', resolution="function")
+    explorer.process_all_nodes()
+    # explorer.visualize_ast()
+    explorer.export()

@@ -1,0 +1,1258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:34+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">FC 4 : Fully Convolutional Color Constancy with Confidence-weighted Pooling</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuanming</forename><surname>Hu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Baoyuan</forename><surname>Wang</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Lin</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Microsoft Research</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">FC 4 : Fully Convolutional Color Constancy with Confidence-weighted Pooling</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Improvements in color constancy have arisen from the use of convolutional neural networks (CNNs). However, the patch-based CNNs that exist for this problem are faced with the issue of estimation ambiguity, where a patch may contain insufficient information to establish a unique or even a limited possible range of illumination colors. Image patches with estimation ambiguity not only appear with great frequency in photographs, but also significantly degrade the quality of network training and inference. To overcome this problem, we present a fully convolutional network architecture in which patches throughout an image can carry different confidence weights according to the value they provide for color constancy estimation. These confidence weights are learned and applied within a novel pooling layer where the local estimates are merged into a global solution. With this formulation, the network is able to determine "what to learn" and "how to pool" automatically from color constancy datasets without additional supervision. The proposed network also allows for end-to-end training, and achieves higher efficiency and accuracy. On standard benchmarks, our network outperforms the previous state-of-the-art while achieving 120× greater efficiency.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Computational color constancy is a longstanding problem, where the goal is to remove illumination color casts in images. This form of color correction can benefit downstream applications such as visual recognition, where color is an important feature for distinguishing objects. Despite various needs for accurate color constancy, there remains much room for improvement among current algorithms due to the significant challenges that this task presents.</p><p>State-of-the-art techniques <ref type="bibr" target="#b38">[38,</ref><ref type="bibr" target="#b6">6,</ref><ref type="bibr" target="#b7">7,</ref><ref type="bibr" target="#b31">31,</ref><ref type="bibr" target="#b5">5]</ref> have harnessed the power of convolutional neural networks (CNNs) to learn color constancy models from large training sets, * This work was done when Yuanming Hu was an intern at Microsoft Research.  The problem (top), the challenge (middle), and our solution (bottom). Some images are from the Color Checker Dataset <ref type="bibr">[21]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Computational Color Constancy</head><p>composed of photographs and their associated labels for illumination color. Many of these networks operate on sampled image patches as input, and produce corresponding local estimates that are subsequently pooled into a global result. A major challenge of this patch-based approach is that there commonly exists ambiguity in local estimates, as illustrated in <ref type="figure" target="#fig_1">Figure 1</ref> (middle). When inferring the illumination color in a patch, or equivalently the reflectance colors within the local scene area, it is often the case that the patch contains little or no semantic context to help infer its reflectance or illumination. If the classes of objects within a patch can be of arbitrary reflectance (such as a painted wall), then there may be a broad range of illuminations that can plausibly explain the patch's appearance in an image. On the other hand, patches containing objects that have an innate color (such as bananas) provide cues that are much more informative for color constancy estimation. In patchbased CNNs, these two types of patches are treated equally, even though patches that are ambiguous for color constancy provide little or no value, and furthermore inject noise into both CNN training and inference. Noisy data adversely affects CNN-based estimation, as noted in recent works on object recognition <ref type="bibr" target="#b34">[34]</ref> and image classification <ref type="bibr" target="#b41">[41,</ref><ref type="bibr" target="#b43">43]</ref>. For color constancy, noise is an especially concerning issue, since ambiguous patches occur at high frequency within many photographs and may diminish the influence of more valuable patches.</p><p>To address this problem, we propose a fully convolutional network, called FC 4 , where the patches in an input image can differ in influence over the color constancy estimation. This influence is formulated as a confidence weight that reflects the value of a patch for inferring the illumination color. The confidence weights are integrated into a novel pooling layer where they are applied to local patch estimates in determining a global color constancy result. In contrast to existing patch-based CNNs for this problem, which process patches sequentially and individually, FC 4 considers all of the image patches together at the same time, which allows the usefulness of patches to be compared and learned during training. In this way, the network can learn from color constancy datasets about which local areas in an image are informative for color constancy and how to combine their information to produce a final estimation result.</p><p>This network design with joint patch processing and confidence-weighted pooling not only distinguishes between useful and noisy data in both the training and evaluation phases, but also confers other advantages including end-to-end training, direct processing of images with arbitrary size, and much faster computation. Our experiments show that FC 4 compares favorably in performance to stateof-the-art techniques, and is also less prone to large estimation errors. Aside from its utility for color constancy, the proposed scheme for learning and pooling confidence weights may moreover be useful for other vision problems in which a global estimate is determined from aggregated local inferences.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Color constancy Methods for computational color constancy fall mainly into two categories: statistics-based and learning-based. The former assumes certain statistical properties of natural scenes, such as an average surface reflectance of gray <ref type="bibr" target="#b11">[11]</ref>, and solves for an illumination color that explains the deviation of an image from that property. A unified model for various statistics-based methods was presented by Van De Weijer et al. <ref type="bibr" target="#b42">[42]</ref>.</p><p>Learning-based techniques estimate illumination color using a model learned from training data. This approach has become prevalent because of its generally higher accuracy relative to statistics-based methods. Many of these techniques employ models based on handcrafted features <ref type="bibr" target="#b12">[12,</ref><ref type="bibr" target="#b18">18,</ref><ref type="bibr" target="#b20">20,</ref><ref type="bibr" target="#b35">35,</ref><ref type="bibr" target="#b15">15]</ref>, while the most recent works learn features using convolutional neural networks <ref type="bibr" target="#b6">[6,</ref><ref type="bibr" target="#b31">31,</ref><ref type="bibr" target="#b5">5,</ref><ref type="bibr" target="#b7">7,</ref><ref type="bibr" target="#b38">38]</ref>. Here, we will review these latter works, which yield the highest performance and are the most relevant to ours. We refer readers to the surveys in <ref type="bibr" target="#b24">[24]</ref> and <ref type="bibr" target="#b23">[23]</ref> for additional background.</p><p>Among the CNN-based approaches, there are those that operate on local patches as input <ref type="bibr" target="#b38">[38,</ref><ref type="bibr" target="#b6">6,</ref><ref type="bibr" target="#b7">7]</ref>, while others directly take full image data <ref type="bibr" target="#b5">[5,</ref><ref type="bibr" target="#b31">31]</ref>. In the work of Barron <ref type="bibr" target="#b5">[5]</ref> 1 , the full image data is in the form of various chroma histograms, for which convolutional filters are learned to discriminatively evaluate possible illumination color solutions in the chroma plane. As spatial information is only weakly encoded in these histograms, semantic context is largely ignored. The method of Lou et al. <ref type="bibr" target="#b31">[ 31]</ref> instead uses the image itself as input. It thus considers semantic information at a global level, where the significance of semantically valuable local regions is difficult to discern. The learning is further complicated by the limited number of full images for color constancy training. Also, as their CNN is not fully convolutional, test images need to be resized to predefined dimensions, which may introduce spatial distortions of image content. While our network also takes a full image as input, it does not suffer from these limitations, as its estimation is based on windows within the image, and the network is formulated in a fully convolutional structure.</p><p>Patch-based CNNs were first used for color constancy by Bianco et al., where a conventional convolutional network is used to extract local features which are then pooled <ref type="bibr" target="#b6">[6]</ref>or passed to a support vector regressor <ref type="bibr" target="#b7">[7]</ref> to estimate illumination color. Later, Shi et al. <ref type="bibr" target="#b38">[38]</ref> proposed a more advanced network to deal with estimation ambiguities, where multiple illumination hypotheses are generated for each patch in a two-branch structure, and a selection sub-network adaptively chooses an estimate from among the hypotheses. Our work also employs a selection mechanism, but instead selects which patches in an image are used for estimation. Learning the semantic value of local regions makes our approach more robust to the estimation ambiguities addressed in <ref type="bibr" target="#b38">[38]</ref>, as semantically ambiguous patches can then be prevented from influencing the illumination estimation.</p><p>Related to patch-based CNNs is the method of Bianco and Schettini <ref type="bibr" target="#b8">[8,</ref><ref type="bibr" target="#b9">9]</ref>, which focuses specifically on face re-  <ref type="table">Table 1</ref>. We note that in comparison to the small patches used in <ref type="bibr" target="#b38">[38,</ref><ref type="bibr" target="#b6">6,</ref><ref type="bibr" target="#b7">7]</ref>, our network processes larger patches which can potentially carry more semantic value, since they can better encompass scene areas at an object level.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Noisy data handling in CNNs</head><p>Only recently has the problem of noisy data been directly addressed in deep learning. The work that exists on this problem focuses on noise in label data for recognition and classification <ref type="bibr" target="#b34">[34,</ref><ref type="bibr" target="#b41">41,</ref><ref type="bibr" target="#b43">43]</ref>, which may be caused by mislabeled image tags and erroneous search results. To deal with this noise, methods have been presented based on prediction consistency among similar images <ref type="bibr" target="#b34">[34]</ref>, adapting network outputs to match the label noise distribution <ref type="bibr" target="#b41">[41]</ref>, and learning probabilistic models of the relationships between images, labels and noise <ref type="bibr" target="#b43">[43]</ref>. Different from the noisy labels of classification and recognition, the noise in color constancy is due to patches for which an estimate cannot reliably be determined from the information it contains. Our network learns to identify such noise using datasets for color constancy, without the need for extra supervision.</p><p>Fully convolutional structures Since its successful adoption for semantic segmentation <ref type="bibr" target="#b30">[30,</ref><ref type="bibr" target="#b36">36]</ref>, fully convolutional networks (FCNs) have been used for many tasks that require pixel-wise output. In our work, we present a fully convolutional structure that differs from conventional FCNs in that the upsampling to produce pixel-wise output is replaced with a novel pooling layer that fuses the feature map into a single output. With its confidence-weighted pooling layer, the network is able to smartly combine local estimates into a global one, and also dispatch supervisory signals only to semantically valuable regions during training. In short, it learns "what to learn" and "how to pool".</p><p>Fully convolutional networks are conventionally trained with pixel-level annotations. To relax this need for full supervision, recent methods for semantic segmentation have instead been formulated for weak supervision using imagelevel tags, which constrain the pixel-level loss with respect to a latent distribution of pixel labels <ref type="bibr" target="#b32">[32]</ref> or simply a multiclass label set <ref type="bibr" target="#b33">[33]</ref>. Our fully convolutional network, by contrast, enforces image-level labels on a global loss function defined through weighted pooling. In addition, the image-level labels are used not only to guide the network toward producing a certain output, but also to learn what parts of an input image should be used for inference.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Fully Convolutional Color Constancy</head><p>Problem formulation Given an RGB image I, our goal is to estimate its global illumination color p g =( r, g, b) so that its color cast can be removed from the image, by replacing the normalized illumination colorp g = pg pg 2 with a canonical light source color, usually pure white,</p><formula xml:id="formula_0">1 √ 3 , 1 √ 3 , 1 √ 3 T .</formula><p>While there can be multiple illuminants in a scene, we focus in this work on the traditional problem of estimating a single global illumination color.</p><p>Method overview Our approach is to find a function f θ , so that f θ (I)=p g is as close to the ground truth as possible. In the context of deep learning, f θ is typically represented as a convolutional neural network parameterized by θ. Let us denotep * g as the normalized ground truth illumination color. Then f θ is learned by minimizing a loss function, defined as the angular error (in degrees) between its estimatep g and the ground truthp * g :</p><formula xml:id="formula_1">L(p g )= 180 π arccos p g ·p * g .<label>(1)</label></formula><p>As discussed before, the ideal color constancy function f θ should encourage all the semantically informative regions while suppressing the negative impact of ambiguous ones. Therefore, we have to (1) find a way to output the estimate for each local region within I, and (2) aggregate those local estimates into a global one in an adaptive manner. Suppose R = {R 1 ,R 2 ,...,R n } is a set of overlapping local regions in I, and function g(R i ) outputs the regional light color estimate for R i . Then for f θ to effectively aggregate all the g(R i ) to generate the final result, we define</p><formula xml:id="formula_2">f θ (I)=p g = normalize i∈R c(R i )g(R i )<label>(2)</label></formula><p>where c(R i ) is a weighting function that represents the confidence value of R i . Intuitively, if R i is a local region that contains useful semantic context for illumination estimation, then c(R i ) should be large. In this paper, we propose an end-to-end deep learning system that can naturally embed both g and c into f ,e v e n though we have no explicit supervision for either g or c. The network should learn to fuse optimal combinations of local estimates, through adaptive use of the corresponding g and c for each local region such that the impact of ambiguous patches will be suppressed. Toward this end, we propose a novel architecture based on a fully convolutional network (FCN) and a weighted pooling layer that are tailored for the color constancy problem. <ref type="figure" target="#fig_2">Figure 2</ref> shows the architecture of our network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Fully Convolutional Architecture</head><p>Following the observation that mid-level semantic information provides more clues for illumination estimation, we extract medium-sized window regions R = {R i } from I as square subsets of the image. For each region, the estimate made by function g(R i ) is denoted asp i . Unlike previous patch-based methods, such as <ref type="bibr" target="#b7">[7]</ref>, which treat each R i independently over an image and use a CNN to learn g,w e instead consider all of the local patches within the same image jointly so that their relative importance for estimating the global illumination color can be well explored. Therefore, given an image, we wish to determine the local estimates simultaneously. Fortunately, a fully convolutional network can accomplish our goal by sharing all the convolution computations in a natural way and predicting all the spatially local estimates at the same time. In addition, an FCN can take an input of any size, which avoids distortions of semantic information that may occur with CNN methods that employ resizing <ref type="bibr" target="#b31">[31]</ref>.</p><p>We design our fully convolutional network as shown in <ref type="figure" target="#fig_2">Figure 2</ref>. As our basic model for extracting semantic features for each patch, we adapt all the layers up to conv5 of AlexNet <ref type="bibr" target="#b29">[29]</ref>, which are pretrained on ImageNet <ref type="bibr" target="#b16">[16]</ref>. A relatively large conv6 (6 × 6 × 64) and subsequent conv7 (1 × 1 × 4 for dimensionality reduction) are further used in extracting semi-dense feature maps. Those feature maps are passed to a weighted pooling layer to aggregate from local to global to generate the final color constancy estimate as described in Eqn. 2.</p><p>Note that, within the four channels in the semi-dense feature maps, we force the first three channels to represent the color tripletp i = g(R i ) estimated from each corresponding patch, while the last one represents its confidence c i = c(R i ) in contributing to the final global estimation. The four channels are passed through a ReLU layer to avoid negative values, and the final estimated RGB channels are l 2 -normalized per pixel. We define the weighted estimate</p><formula xml:id="formula_3">p i as c ipi .</formula><p>Discussion Theoretically, either shallower (i.e. <ref type="bibr" target="#b38">[ 38]</ref>) or deeper networks (i.e., VGG-16 <ref type="bibr" target="#b39">[39]</ref>o r <ref type="bibr" target="#b2">[ 2]</ref>) could be used to replace AlexNet in our system. However, due to the nature of the color constancy problem, the best model is constrained by at least two important properties: (1) the network should be able to extract sufficient semantic features to discriminate ambiguous patches (such as textureless walls) for illumination estimation, and (2) the network should not be illumination invariant, but rather it should be sensitive to different lighting colors. As we can see, the second requirement violates the knowledge embedded in networks trained on classification tasks, since lighting conditions should not affect the class of an object. Unfortunately, networks with strong ability to extract semantic information are usually also insensitive to changing lighting conditions, meaning that the extracted features are invariant to illumination color.</p><p>To find a good balance between the two aforementioned properties, we experimented with different network configurations. We tried a shallower version of AlexNet with conv4 and/or conv5 removed, and found that the performance becomes worse, perhaps due to insufficient ability for semantic feature extraction. In addition, we tried other kernel sizes for conv6, including 1×1, 3×3 and 10×10, but found that 6 × 6, which is the original output size of AlexNet after the convolution layers, leads to the best results. To reduce model size, we experimented with SqueezeNet <ref type="bibr" target="#b25">[25]</ref> v1.1 and found that it also leads to good results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Confidence-weighted Pooling Layer</head><p>As explained earlier, different local regions may differ in value for illumination estimation based on their semantic content. To treat these patches differently, a function c(R i ) is regressed to output the confidence values of the corresponding estimates. Although a function c could be modeled as a separate fully convolutional branch originating from conv5 or even lower layers, it is more straightforward to implement it jointly as a fourth channel that is included with the three color channels of each local illumination estimate. The final result is simply a weighted-average pooling of all the local estimates, as expressed in Eqn. 3 and 4.</p><p>Note that patch based training with average pooling can be regarded as a special case of our network by setting each c(R i )=1. In our network, thanks to the FCN architecture, convolutional operations are shared among patches within the same image, while for the patch-based CNNs each patch needs to go through the same network sequentially. There also exist other pooling methods, such as fully connected pooling or max-pooling; however, they either lack flexibility (i.e., require a specific input image size) or have been shown to be not very effective for color constancy estimation. Median pooling does a better job according to <ref type="bibr" target="#b38">[38]</ref>, as it prevents outliers from contributing directly to the global estimation, but it does not completely eliminate their impact when a significant proportion of the estimates are noisy. Furthermore, even if we incorporate it in an end-toend training pipeline, the loss can only back-propagate to a single (median) patch in the image each time, ignoring pairwise dependencies among the patches. For a comparison of different pooling methods, please refer to <ref type="table" target="#tab_1">Table 2</ref>.</p><p>Mathematical analysis Here we show where the ability of learning the confidence comes from, by a more rigid mathematical analysis. During back-propagation, this pooling layer serves as a "gradient dispatcher" which backpropagates gradients to local regions with respect to their confidence. Let us take a closer look at the pooling layer by differentiating the loss function with respect to a local estimatep i and confidence c(R i ) (denoted as c i in the following for simplicity). The weighted pooling is defined as</p><formula xml:id="formula_4">p g = i∈R c ipi ,<label>(3)</label></formula><formula xml:id="formula_5">p g = p g p g 2 = 1 p g 2 i∈R c ipi .<label>(4)</label></formula><p>Then by the chain rule, we get</p><formula xml:id="formula_6">∂L(p g ) ∂p i = c i p g 2 · ∂L(p g ) ∂p g .<label>(5)</label></formula><p>From the above, it can be seen that among the estimatesp i , their gradients all share the same direction but have different magnitudes that are proportional to c i , the confidence. So for the local estimates, the confidence serves as a mask for the supervision signal, which prevents our network from learning noisy data. Similarly, for confidence c i ,wehave</p><formula xml:id="formula_7">∂L(p g ) ∂c i = 1 p g 2 · ∂L(p g ) ∂p g ·p i .<label>(6)</label></formula><p>Intuitively, as long as a local estimate helps the global estimation get closer to the ground truth, the network increases the corresponding confidence. Otherwise, the confidence will be reduced. This is exactly how the confidence should be learned. Please refer to the supplementary material for a more detailed deduction and illustration of the training cycle.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Settings</head><p>Implementation and Training Our network was implemented in TensorFlow [1]. Explicitly outputting c i andp i after conv7 is mathematically clearer, and in practice we found that directly outputting the weighted estimate p i instead, where c i andp i are implicitly the norm and direction of p i , leads to similar accuracy and also a simpler implementation.</p><p>We trained our network end-to-end by back-propagation. For optimization, Adam <ref type="bibr" target="#b28">[28]</ref> is employed with a batch size of 16 and a base learning rate of 1 × 10 −4 for AlexNet and 3 × 10 −4 for SqueezeNet. We fine-tuned all of the convolutional layers from the pre-trained networks. Since the color constancy task is quite different from the original image classification task, we use the same learning rate for the pre-trained layers as for the last two layers, instead of smaller ones, to expedite their adaptation to color constancy. We also include a dropout <ref type="bibr" target="#b40">[40]</ref> probability of 0.5 for conv6 and a weight decay of 5 × 10 −5 for all layers to help prevent overfitting.</p><p>Data augmentation and preprocessing Considering the relatively small size of color constancy datasets, we augmented the data aggressively on-the-fly. To facilitate this augmentation, we use square crops of the images, which are initially obtained by first randomly choosing a side length that is 0.1 ∼ 1 times the shorter edge of the original image, and then randomly selecting the upper-left corner of the square. The crop is rotated by a random angle between −30</p><p>• ∼ +30</p><p>• , and is left-right flipped with a probability of 0.5. When training SqueezeNet-FC 4 on [37], we rescale images and ground truth by random RGB values in [0.6, 1.4]. Finally, we resize the crop to 512px×512px and feed a batch of them to the network for training. In testing, the images are downsampled to 50% for faster processing.</p><p>Since AlexNet and SqueezeNet are pretrained on ImageNet <ref type="bibr" target="#b16">[16]</ref>, where images are gamma-corrected for display, we apply a gamma correction of γ =1 /2.2 on linear RGB images to make them more similar to those in ImageNet.</p><p>Datasets Two standard datasets are used for benchmarking: the reprocessed <ref type="bibr" target="#b37">[37]</ref> Color Checker Dataset <ref type="bibr">[21]</ref> and the NUS 8-Camera Dataset <ref type="bibr" target="#b14">[14]</ref>. These datasets contain 568 and 1736 raw images, respectively. In the NUS 8-Camera Dataset, the images are divided into 8 subsets of about 210 images for each camera. As a result, although the total number of images is larger, each independent experiment on the NUS 8-Camera Dataset involves only about 1/3 the number of images in the reprocessed Color Checker Dataset. For images in both datasets, a Macbeth Color Checker (MCC) is present for obtaining the ground truth illumination color. The corners of the MMCs are provided by the datasets, and we mask the MCCs by setting the enclosed image regions to RGB =( 0 , 0, 0) for both training and testing. No other special processing was done for these regions. Both datasets contain photos of different orientations, and the Color Checker Dataset has photos of different sizes from two cameras. Our fully convolutional networks naturally handle these arbitrary-sized inputs.</p><p>Following previous work, three-fold cross validation is used for both datasets. Several standard metrics are reported in terms of angular error in degrees: mean, median, tri-mean of all the errors, mean of the lowest 25% of errors, and mean of the highest 25% of errors. For the reprocessed Color Checker Dataset, we additionally report the 95 th percentile error. For the NUS dataset, we also report the geometric mean (G.M. in <ref type="table">Table 5</ref>) of the other five metrics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Internal comparisons</head><p>We compare FC 4 with variants of itself that employ other combinations of pooling layers and network inputs. This evaluation of accuracy and speed is performed on the reprocessed Color Checker Dataset, and the results are shown in <ref type="table" target="#tab_2">Table 3</ref>.</p><p>FC layer average median weighted End-to-end training Arbitrary-sized input Noisy data masking Parameter-free Pooling layers To examine the improvements induced by confidence-weighted pooling, we experimentally compare it to the following alternatives:</p><p>• Fully connected (FC) layer, which takes the feature map from the last convolutional layer as input, and outputs RGB values. This is very similar to traditional CNNs which are not fully convolutional. Note that one drawback of FC layers is their fixed input size, which requires rescaling or trimming of images. Because of its learnable parameters, an FC layer introduces extra network complexity which may worsen overfitting, especially on small datasets.</p><p>• Average pooling, which is equivalent to equallyweighted pooling where all regions, regardless of estimation value for color constancy, are treated the same.</p><p>We note that median pooling is also a popular alternative that has been used in previous techniques <ref type="bibr" target="#b38">[38,</ref><ref type="bibr" target="#b7">7]</ref>. However, since its gradient is not usually considered to be computable, end-to-end training cannot be easily performed so we omit it from this experiment. Median pooling, along with the other pooling schemes, is nevertheless included in the pooling comparison of <ref type="table" target="#tab_1">Table 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Network inputs</head><p>We also compare our use of arbitrarysized images (full images without resizing) to other types of network input:</p><p>• Patches, which are commonly used in previous methods <ref type="bibr" target="#b38">[38,</ref><ref type="bibr" target="#b6">6,</ref><ref type="bibr" target="#b7">7]</ref>. Here we extract random patches of size 512px×512px from the image. There exists a tradeoff between patch coverage and efficiency. With more patches there is higher coverage and thus better accuracy, but lower efficiency. Note that additional pooling is needed to combine patch-based estimates for global estimation.</p><p>• Full image with resizing, where both scale and aspect ratio are adjusted to fit a certain input size. Resizing can potentially distort semantic information.</p><p>We tested all the combinations of pooling layers and network inputs. The results are listed in <ref type="table" target="#tab_2">Table 3</ref>. Eval. time   <ref type="bibr" target="#b17">[17]</ref> results with asterisks were obtained from <ref type="bibr" target="#b5">[5]</ref>.</p><p>Discussion The results make evident the importance of weighted pooling and using original images as network in- <ref type="table">Table 5</ref>: Results on the NUS 8-Camera Dataset. Background colors and asterisks are used in the same way as in <ref type="table" target="#tab_3">Table 4.</ref> put. Given the same type of input, enabling weighted pooling yields clear improvements over FC and average pooling. Extracting more patches was found to reduce errors to some extent, but with increasing evaluation times that greatly exceed using original or resized images. The differences between average and median pooling of patch estimates are subtle. Resized input images allow for one-pass inference, but their image distortions may limit accuracy. In short, weighted pooling with original images as input leads to the highest accuracy and efficiency simultaneously.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">External comparisons</head><p>On both datasets, we compare FC 4 to previous state-ofthe-art methods. Results are listed in <ref type="table" target="#tab_3">Table 4 and Table 5</ref>. Some visualizations of testing outputs are presented in <ref type="figure" target="#fig_3">Figure 3</ref>, and more are contained in the supplementary material. On the NUS Dataset, we benchmark our algorithm for each performance metric by taking its geometric mean over the eight image subsets, as done in previous works. For most metrics, FC 4 outperforms the previous state-of-the-art, e.g. CCC <ref type="bibr" target="#b5">[5]</ref> and DS-Net <ref type="bibr" target="#b38">[38]</ref>. On the reprocessed Color Checker Dataset, the margins are generally larger, likely because our network is deeper than that of CCC and DS-Net and thus benefits more from the greater data. Collecting bigger datasets will further exploit the learning capability.</p><p>Robustness Another fact reflected by the performance metrics is that FC 4 is more robust than the previous methods. On both datasets, significant improvements are obtained on worst-case metrics (worst-25% and 95 th percentile), likely because of the automatic masking of estimates from semantically ambiguous regions. By combining only high confidence (and thus lower variance) local estimates, there is greater stability in global estimation.</p><p>Efficiency Since color constancy can be used as preprocessing for many other computer vision algorithms, as well as for white balance on mobile devices with limited computational resources, making this process fast is important. Our method was found to be two orders of magnitude faster than the previous state-of-the-art <ref type="bibr" target="#b38">[38]</ref>. An unoptimized GPU version of our algorithm takes 0.025s per image, compared to 3 seconds for <ref type="bibr" target="#b38">[38]</ref>. This efficiency can be attributed to our network's fully convolutional structure, in which convolution results are shared among local regions, and our novel pooling layer which enables arbitrary-sized inputs and one-pass full image inference. An optimized implementation that maximizes GPU throughput would further boost efficiency.</p><p>What is learned The confidence map not only masks out noisy patches, but also makes it easier to understand what the network learns. Specifically, we find that faces, surfaces with rich texture, bright patches, specular reflections and objects with a restricted range of innate colors (especially achromatic ones) generally lead to high confidence. Equally important to identifying high confidence regions is to exclude low confidence regions, such as solid-colored patches, which would contribute noisy estimates. Several typical confidence maps are illustrated in <ref type="figure" target="#fig_2">Figure 2</ref> and 3, and more visualizations are provided in the supplemental document.</p><p>The average values of learned confidence maps can serve as the "confidence" of FC 4 . Higher confidence is associated with lower average error, and confidence values are meaningful not only within a single image, but also across different images, as shown in the supplemental document, <ref type="figure" target="#fig_1">Figure  10</ref>. Using even more robust (but not necessarily as accurate) methods as a fail-safe when the confidence is low would be interesting for future study.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this paper, we proposed the notion of distinguishing between semantically valuable and semantically ambiguous local regions for illumination color estimation. Based on this idea, we developed a novel CNN architecture for color constancy that learns this distinction among image patches, as well as how to use this information for training and inference. We believe that this network architecture could be useful for other applications in which estimation quality is affected by local context, such as patch-based image classification. Adapting our network to such problems is a potential direction for future work.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: The problem (top), the challenge (middle), and our solution (bottom). Some images are from the Color Checker Dataset [21].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: The architecture of AlexNet-FC 4 . Replacing AlexNet (conv1-conv5) with SqueezeNet v1.1 (conv1-fire8 plus an extra 2 × 2 pooling) yields SqueezeNet-FC 4 .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Examples of outputs by our network. Note that noisy estimates in regions of little semantic value are masked by the confidence map, resulting in more robust estimation. The angular errors are 0.54, 4.63, 1.78 and 4.76 degrees, respectively.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Comparison of different pooling methods. More stars stands for stronger property.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Accuracy and inference speed 2 of variants of our method on the reprocessed Color Checker Dataset. AlexNet and SqueezeNet are denoted by "A" and "S", respectively.. For weighted pooling with patch based inference, we show results with different numbers of patches, denoted as x p. When there are eight or more patches, we compare average and median pooling of local estimates.Corrected-Moment (19 Color)* [17] 2.96 2.15 2.37 0.64 6.69 8.23 Corrected-Moment (19 Edge) [17]Moment (19 Edge)* [17] 3.12 2.38 2.59 0.90 6.46 7.801.65 1.18 1.27 0.38 3.78 4.73</figDesc><table>Method 
+Mean Med. Tri. 
+Best 
+25% 
+
+Worst 
+25% 
+
+95% 
+Quant. 
+White-Patch [10] 
+7.55 5.68 6.35 1.45 16.12 -
+Edge-based Gamut [3] 
+6.52 5.04 5.43 1.90 13.58 -
+Gray-World [11] 
+6.36 6.28 6.28 2.33 10.58 11.3 
+1st-order Gray-Edge [42] 
+5.33 4.52 4.73 1.86 10.03 11.0 
+2nd-order Gray-Edge [42] 
+5.13 4.44 4.62 2.11 9.26 
+-
+Shades-of-Gray [19] 
+4.93 4.01 4.23 1.14 10.20 11.9 
+Bayesian [21] 
+4.82 3.46 3.88 1.26 10.49 -
+General Gray-World [4] 
+4.66 3.48 3.81 1.00 10.09 -
+Intersection-based Gamut [3] 
+4.20 2.39 2.93 0.51 10.70 -
+Pixel-based Gamut [3] 
+4.20 2.33 2.91 0.50 10.72 14.1 
+Natural Image Statistics [22] 
+4.19 3.13 3.45 1.00 9.22 11.7 
+Bright Pixels [27] 
+3.98 2.61 
+----
+Spatio-spectral (GenPrior) [13] 
+3.59 2.96 3.10 0.95 7.61 
+-
+Cheng et al. 2014 [14] 
+3.52 2.14 2.47 0.50 8.74 
+-
+Corrected-Moment (19 Color) [17] 
+3.50 2.60 
+-
+-
+-
+8.60 
+Exemplar-based [26] 
+3.10 2.30 
+----
+2.80 2.00 
+-
+-
+-
+6.90 
+Corrected-Regression Tree [15] 
+2.42 1.65 1.75 0.38 5.87 
+-
+CNN [7] 
+2.36 1.98 
+----
+CCC (dist+ext) [5] 
+1.95 1.22 1.38 0.35 4.76 5.85 
+DS-Net (HypNet+SelNet) [38] 
+1.90 1.12 1.33 0.31 4.84 5.99 
+AlexNet-FC 
+
+4 
+
+1.77 1.11 1.29 0.34 4.29 5.44 
+SqueezeNet-FC 
+
+4 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Results on the reprocessed Color Checker Dataset. For each metric, the top three results are highlighted with increasingly dark backgrounds for better results. For met- ric values not reported in the literature, their entries are left blank. The Corrected-Moment</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Though the system in [5] utilizes only a single convolutional layer, we include it in our discussion of CNN-based methods.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">All the experiments in this work were done on NVIDIA GTX TITAN X (Maxwell) GPUs.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>White-Patch</surname></persName>
+		</author>
+		<idno>10] 10.62 10.58 10.49 1.86 19.45 8.43</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Harp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kudlur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Levenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mané</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Steiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Talwar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Viégas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Warden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wicke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zheng</surname></persName>
+		</author>
+		<title level="m">TensorFlow: Large-scale machine learning on heterogeneous systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Software available from tensorflow.org. 5</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Improving inception and image classification in tensorflow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+		<ptr target="https://research.googleblog.com/2016/08/improving-inception-and-image.html.4" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Improvements to gamut mapping colour constancy algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="390" to="403" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">A comparison of computational color constancy algorithms. ii. experiments with image data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Funt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="985" to="996" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Convolutional color constancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="379" to="387" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Color constancy using cnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bianco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cusano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Schettini</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition Workshops</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="81" to="89" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Single and multiple illuminant estimation using convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bianco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cusano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Schettini</surname></persName>
+		</author>
+		<idno>1508.00998</idno>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Color constancy using faces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bianco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Schettini</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="65" to="72" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Adaptive color constancy using faces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bianco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Schettini</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1505" to="1518" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Analysis of the retinex theory of color vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">H</forename><surname>Brainard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">A</forename><surname>Wandell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JOSA A</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1651" to="1661" />
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A spatial processor model for object colour perception</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Buchsbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the Franklin Institute</title>
+		<imprint>
+			<biblScope unit="volume">310</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="26" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Estimating the scene illumination chromaticity by using a neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">C</forename><surname>Cardei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Funt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JOSA A</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2374" to="2386" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Color constancy with spatio-spectral statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chakrabarti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hirakawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zickler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1509" to="1519" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Illuminant estimation for color constancy: why spatial-domain methods work and the role of the color distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">K</forename><surname>Prasad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Brown</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JOSA A</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1049" to="1058" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Effective learning-based illuminant estimation using simple features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Price</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Brown</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="1000" to="1008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Feifei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Corrected-moment illuminant estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Finlayson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="1904" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Color by correlation: A simple, unifying framework for color constancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Finlayson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">D</forename><surname>Hordley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Hubel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1209" to="1221" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Shades of gray and colour constancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Finlayson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Trezzi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Color and Imaging Conference</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="37" to="41" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Estimating illumination chromaticity via support vector regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Funt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xiong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Color and Imaging Conference</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page" from="47" to="52" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Bayesian color constancy revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">V</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Minka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Color constancy using natural image statistics and scene semantics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gijsenij</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="687" to="698" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Computational color constancy: Survey and experiments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gijsenij</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Weijer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="2475" to="2489" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Scene illuminant estimation: past, present, and future</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">D</forename><surname>Hordley</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Color Research &amp; Applications</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="303" to="314" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Squeezenet: Alexnet-level accuracy with 50x fewer parameters and &lt; 0.5 mb model size</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">N</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Moskewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ashraf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Keutzer</surname></persName>
+		</author>
+		<idno>1602.07360</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Exemplar-based color constancy and multiple illumination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">R V</forename><surname>Joze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Drew</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="860" to="873" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">The role of bright pixels in illumination estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">R V</forename><surname>Joze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Drew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Finlayson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A T</forename><surname>Rey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Color and Imaging Conference</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2012</biblScope>
+			<biblScope unit="page" from="41" to="46" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3431" to="3440" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Color constancy by deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Lucassen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Constrained convolutional neural networks for weakly supervised segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pathak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krahenbuhl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Fully convolutional multi-class multiple instance learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pathak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Training deep neural networks on noisy labels with bootstrapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Color constancy using kl-divergence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rosenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="239" to="246" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="640" to="651" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Re-processed version of the gehler color constancy dataset of 568 images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Funt</surname></persName>
+		</author>
+		<ptr target="http://www.cs.sfu.ca/˜colour/data/.6" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Deep specialized network for illuminant estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="371" to="387" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Dropout: a simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Training convolutional networks with noisy labels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Paluri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Edge-based color constancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van De Weijer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gijsenij</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="2207" to="2214" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Learning from massive noisy labeled data for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

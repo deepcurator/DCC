@@ -1,0 +1,890 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:29+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">BlitzNet: A Real-Time Deep Network for Scene Understanding</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikita</forename><surname>Dvornik</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Konstantin</forename><surname>Shmelkov</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julien</forename><surname>Mairal</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cordelia</forename><surname>Schmid Inria</surname></persName>
+						</author>
+						<title level="a" type="main">BlitzNet: A Real-Time Deep Network for Scene Understanding</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Object detection and semantic segmentation are two fundamental problems for scene understanding in computer vision. The task of object detection is to identify on an image all objects of predefined categories and localize them via bounding boxes. Semantic segmentation operates at a finer scale; its aim is to parse an image and associate a class label to each pixel. Despite the similarities of the two tasks, only few works have tackled them jointly <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b28">29]</ref>.</p><p>Yet, there is a strong motivation to address both problems simultaneously. On the one hand, good segmentation is sufficient to perform detection in some cases. As <ref type="figure" target="#fig_0">Figure 1</ref> suggests, an object may be sometimes identified and localized from segmentation only by simply looking at connected components of pixels sharing the same label. In the more general case, it is easy to conduct a simple experiment showing that ground-truth segmentation is a meaningful clue for detection, using for instance ground-truth segmentation as the input of an object detection pipeline. On the other hand, correctly identified detections are also useful for segmentation as shown by the success of weakly supervised segmentation techniques that learn from bounding box annotation only <ref type="bibr" target="#b20">[21]</ref>. The goal of our paper is to solve (a) Generated bounding boxes (b) Generated masks efficiently both problems at the same time, by exploiting image data annotated at the global object level (via bounding boxes), at the pixel level (via partially or fully annoated segmentation maps), or at both levels. As most recent image recognition pipelines, our approach is based on convolutional neural networks <ref type="bibr" target="#b11">[12]</ref>, which are widely adopted for object detection <ref type="bibr" target="#b5">[6]</ref> and semantic segmentation <ref type="bibr" target="#b16">[17]</ref>. More precisely, deep neural networks were first used as feature extractors to classify a large number of candidate bounding boxes <ref type="bibr" target="#b5">[6]</ref>, which is computationally expensive. The improved version <ref type="bibr" target="#b4">[5]</ref> reduces the computational cost but relies on shallow techniques for extracting bounding box proposals and does not allow end-toend training. This issue was later solved in <ref type="bibr" target="#b24">[25]</ref> by making the object proposal mechanism a part of the neural network. Yet, the approach remains expensive and relies on a regionbased strategy (see also <ref type="bibr" target="#b12">[13]</ref>) that makes the network architecture inappropriate for semantic segmentation.</p><p>To match the real-time speed requirement, we choose instead to base our work on the Single Shot Detection (SSD) <ref type="bibr" target="#b15">[16]</ref> approach, which consists of a fullyconvolutional model to perform object detection in one forward pass. Besides the fact that it allows all computations to be performed in real time, the pipeline is more generic, imposes less constraints on the network architecture and opens new perspectives to solve our multi-task problem.</p><p>Interestingly, recent work on semantic segmentations are also moving in the same direction, see for instance <ref type="bibr" target="#b16">[17]</ref>. Specific to semantic segmentation, <ref type="bibr" target="#b16">[17]</ref> also introduces new ideas such as the joint use of feature maps of different resolutions, in order to obtain more accurate classification. The idea was then improved by adding deconvolutional layers at all scales to better aggregate context, in addition to using skip and residual connections <ref type="bibr" target="#b25">[26]</ref>. Deconvolutional layers turned out to be useful to estimate precise segmentations, and are thus good candidates to design architectures where localization is important.</p><p>In this paper, we consider the multi-task scene understanding problem consisting of joint object detection and semantic segmentation. For that purpose, we propose a novel pipeline called BlitzNet, which will be released as an opensource software package. BlitzNet is able to provide accurate segmentation and object bounding boxes in real time. With a single network for solving both problems, the computational cost is reduced, and we show also that the two tasks benefit from each other in terms of accuracy.</p><p>The paper is organized as follows: Section 2 discusses related work; Section 3 presents our real-time multi-task pipeline called BlitzNet. Finally, Section 4 is devoted to our experiments, and Section 5 concludes the paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Before we introduce our approach, we now present techniques for object detection, semantic segmentation, and previous attempts to combine both tasks.</p><p>Object detection. The field of object detection has been recently dominated by variants of the R-CNN architecture <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b24">25]</ref>, where bounding-box proposals are independently classified by a convolutional neural network, and then filtered by a non-maximum suppression algorithm. It provides great accuracy, but relatively low inference speed since it requires a significant amount of computation per proposal. R-FCN <ref type="bibr" target="#b12">[13]</ref> is a fully-convolutional variant that further improves detection and significantly reduces the computational cost per proposal. Its region-based mechanism is however dedicated to object detection only.</p><p>SSD <ref type="bibr" target="#b15">[16]</ref> is a recent state-of-the-art object detector, which uses a sliding window approach instead of generated proposals to classify all boxes directly. SSD creates a scale pyramid to find objects of various sizes in one forward pass. Because of its speed and high accuracy, we have chosen to build our work on, and subsequently improve, the SSD approach. Finally, YOLO <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b23">24]</ref> also provides real-time object detection and shares some ideas with SSD.</p><p>Semantic segmentation and deconvolutional layers. Deconvolutional architectures consist of adding to a classical convolutional neural networks with feature pooling, a sequence of layers whose purpose is to increase the resolution of the output feature maps. This idea is natural in the context of semantic segmentation <ref type="bibr" target="#b19">[20]</ref>, since segmentation maps are expected to have the same resolution as input images. Yet, it was also successfully evaluated in other contexts, such as pose estimation <ref type="bibr" target="#b18">[19]</ref>, and object detection, as extensions of SSD <ref type="bibr" target="#b3">[4]</ref> and Faster-R-CNN <ref type="bibr" target="#b13">[14]</ref>.</p><p>Joint semantic segmentation and object detection. The idea of joint semantic segmentation and object detection was investigated first for shallow approaches in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b6">7]</ref>. There, it was shown that learning both tasks simultaneously could be better than learning them independently.</p><p>More recently, UberNet <ref type="bibr" target="#b10">[11]</ref> integrates multiple vision tasks such as semantic segmentation and object detection into a single deep neural network. The detection part is based on the Faster R-CNN approach and is thus neither fully-convolutional nor real-time. Closely related to our work, but dedicated to autonomous driving, <ref type="bibr" target="#b27">[28]</ref> also proposes to integrate semantic segmentation and object detection via a deep network. There, the VGG16 network <ref type="bibr" target="#b26">[27]</ref> is used to compute image features (encoding step), and then two different sub-networks are used for the prediction of object bounding boxes and segmentation maps (decoding).</p><p>Our work is inspired by these previous attempts, but goes a step further in integrating the two tasks, with a fully convolutional approach where network weights are shared for both tasks until the last layer, which has advantages in terms of speed, feature sharing, and simplicity for training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Scene Understanding with BlitzNet</head><p>In this section, we introduce the BlitzNet architecture and discuss its different building blocks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Global View of the Pipeline</head><p>The joint object detection and segmentation pipeline is presented in <ref type="figure" target="#fig_1">Figure 2</ref>. The input image is first processed by a convolutional neural network to produce a map that carries high-level features. Because of its high performance for classification and good trade-off for speed, we use the network ResNet-50 <ref type="bibr" target="#b8">[9]</ref> as our feature encoder.</p><p>Then, the resolution of the feature map is iteratively reduced to perform a multi-scale search of bounding boxes, following the SSD approach <ref type="bibr" target="#b15">[16]</ref>. Inspired by the hourglass architecture <ref type="bibr" target="#b18">[19]</ref> for pose estimation and an earlier work on semantic segmentation <ref type="bibr" target="#b19">[20]</ref>, the feature maps are then up-scaled via deconvolutional layers in order to predict subsequently precise segmentation maps. Recent DSSD approach <ref type="bibr" target="#b3">[4]</ref> uses a similar strategy for object detection the top part of our architecture presented in <ref type="figure" target="#fig_1">Figure 2</ref> may be seen as a variant of DSSD with a simpler "deconvolution module", called ResSkip, that involves residual and skip connections.</p><p>Finally, prediction is achieved by single convolutional layers, one for detection, and one for segmentation, in one On the left, CNN denotes a feature extractor, here ResNet-50 <ref type="bibr" target="#b8">[9]</ref>; it is followed by the downscale-stream (in blue) and the last part of the net is the upscale-stream (in purple), which consists of a sequence of deconvolution layers interleaved with ResSkip blocks (see <ref type="figure" target="#fig_2">Figure 3</ref>). The localization and classification of bounding boxes (top) and pixelwise segmentation (bottom) are performed in a multiscale fashion by single convolutional layers operating on the output of deconvolution layers.</p><p>forward pass, which is the main originality of our work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">SSD and Downscale Stream</head><p>The Single Shot MultiBox Detector <ref type="bibr" target="#b15">[16]</ref> tiles an input image with a regular grid of anchor boxes and then uses a convolutional neural network to classify these boxes and predict corrections to their initial coordinates. In the original paper <ref type="bibr" target="#b15">[16]</ref>, the base network VGG-16 <ref type="bibr" target="#b26">[27]</ref> is followed by a cascade of convolutional and pooling layers to form a sequence of feature maps with progressively decreasing spatial resolution and increasing field of view. In <ref type="bibr" target="#b15">[16]</ref>, each of these layers is processed separately in order to classify and predict coordinates correction for a set of default bounding boxes of a particular scale. At test time, the set of predicted bounding boxes is filtered by non-maximum suppression (NMS) to form the final output.</p><p>Our pipeline uses such a cascade (see <ref type="figure" target="#fig_1">Figure 2</ref>), but the classification of bounding boxes and pixels to build the segmentation maps is performed in subsequent layers, called deconvolutional layers, which will be described next.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Deconvolution Layers and ResSkip Blocks</head><p>Modeling visual context is often a key to complicated scenes parsing, which is typically achieved by pooling layers in a convolutional neural network, leading to large receptive fields for each output neuron. For semantic segmentation, precise localization is equally important, and <ref type="bibr" target="#b19">[20]</ref> proposes to use deconvolutional operations to solve that issue. Later, this process was improved in <ref type="bibr" target="#b18">[19]</ref> by adding skip connections. Apart from combining high-and lowlevel features it also eases the learning process <ref type="bibr" target="#b8">[9]</ref>.</p><p>Like <ref type="bibr" target="#b3">[4]</ref> for object detection and <ref type="bibr" target="#b18">[19]</ref> for pose estimation, we also use such a mechanism with skip connections that combines feature maps from the downscale and upscale streams (see <ref type="figure" target="#fig_1">Figure 2</ref>). More precisely, maps from the downscale and upscale streams are combined with a simple strategy, which we call ResSkip, presented in <ref type="figure" target="#fig_2">Figure 3</ref>. First, incoming feature maps are upsampled to the size of corresponding skip connection via bilinear interpolation. Then both skip connection feature maps and upsampled maps are concatenated and passed through a block (1 × 1 convolution, 3 × 3 convolution, 1 × 1 convolution) and summed with the upsampled input through a residual connection. The benefits of this topology will be justified and discussed in more details in the experimental section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Multiscale Detection and Segmentation</head><p>The problem of semantic segmentation and object detection share several key properties. They both require perregion classification, based on the pixels inside an object while taking into account its surrounding, and benefit from rich features that include localization information. Instead of training a separate network to perform these two tasks, we train a single one that allows weight sharing, such that both tasks can benefit from each other.</p><p>In our pipeline, most of the weights are shared. Object detection is performed by a single convolutional layer that predicts a class and coordinate corrections for each bounding box in the feature maps of the upscale stream. Similarly, a single convolutional layer is used to predict the pixel la- bels and produce segmentation maps. To achieve this we upscale all the activations of the upscale stream, concatenate them and feed to the final classification layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Speeding up Non-Maximum Suppression</head><p>Increasing the number of anchor boxes heavily affects inference time because it performs NMS on a potentially huge number of proposals (in the worst case scenario, it may be all of them). Indeed, we observed that by using sliding window proposals, addition of small scale proposals slows down the inference even more than increasing image resolution. Surprisingly, non-maximum suppression may then become the bottleneck at inference time. We observed that this occurred sometimes for particular object classes that return a lot of bounding box candidates. Therefore, we suggest a different post-processing strategy to accelerate detection when there are too many proposals. For each class, we pre-select the top 400 boxes with largest scores, and perform NMS leaving only 50 of them. Overall, the final detection is the top 200 highest scoring boxes per image after non-maximum suppression. This strategy yields a reasonable computational time for NMS, and has marginal impact on accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6.">Training and Loss Functions</head><p>Given labeled training data where each data point is annotated with segmentation maps, or bounding boxes, or with both, we consider a loss function which is simply the sum of two loss functions of the two task. Note that we tried reweighting the two loss functions, but we did not observe noticeable improvements in terms of accuracy.</p><p>For segmentation, the loss is the cross-entropy between predicted and target class distribution of pixels <ref type="bibr" target="#b0">[1]</ref>. Specifically, we use a 1 × 1 convolutional operation with 64 channels to map each layer of the upscale-stream to an intermediate representation. After this, each layer is upscaled to the size of the last layer using bilinear interpolation and all maps are concatenated. This representation is mapped to c feature maps, where c is the number of classes, by using 3 × 3 convolutions to predict posterior class probabilities.</p><p>For detection, we use the same loss function as <ref type="bibr" target="#b15">[16]</ref> when performing tiling of the input image with anchor boxes and matching them to ground truth bounding boxes. We use activations of each layer in the upscale-stream to regress corrections for coordinates of the anchor boxes and to predict the class probability distribution. We use the same data augmentation suggested in the original SSD pipeline, namely photometric distortions, random crops, horizontal flips and zoom-out operation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We now present various experiments conducted on the COCO, Pascal VOC 2007 and 2012 datasets, for which both bounding box annotations and segmentation maps are available. Section 4.1 discusses in more details the datasets and the metrics we used; Section 4.2 presents technical details that are useful to make our work reproducible, and then each subsequent subsection is devoted to a particular experiment. The last two sections discuss the inference speed and clarify particular choices in the network architecture. Our code is now available as an open-source software package at http://thoth.inrialpes.fr/research/ blitznet/.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets and Metrics</head><p>We use the COCO <ref type="bibr" target="#b14">[15]</ref>, VOC07, and VOC12 datasets <ref type="bibr" target="#b1">[2]</ref>. All images in the VOC datasets are annotated with ground truth bounding boxes of objects and only a subset of VOC12 is annotated with target segmentation masks. The VOC07 dataset is divided into 2 subsets, trainval (5011 images) and test (4952 images). The VOC12-train subset contains 5717 images annotated for detection and 1464 of them have segmentation ground truth as well (VOC12-trainseg), while VOC12-val has 5823 images for detection and 1449 images for segmentation (we call this subset VOC12-val-seg). Both datasets have 20 object classes.</p><p>The COCO dataset includes 80 object categories for detection and instance segmentation. For the task of detection, there are 80k images for training and 40k for validation. There is no either a protocol for evaluation of semantic segmentation or even annotations to train it from. In this work, we are interested particularly in semantic segmentation masks so we obtain them from instance segmentation annotations by combining instances of one category.</p><p>To carry out more extensive experiments we leverage extra annotations for VOC12 segmentation provided by <ref type="bibr" target="#b7">[8]</ref>, which gives a total of 10,582 fully annotated images for training that we call VOC12-train-seg-aug. We still keep the original PASCAL annotations in VOC12 val-seg, even if a more precise annotation is available in <ref type="bibr" target="#b7">[8]</ref>, for a fair comparison with other methods that do not benefit from these extra annotations.</p><p>In VOC12 and VOC07 datasets, a predicted bounding box is correct if its intersection over union with the ground truth bounding box is higher than 0.5. The metric for evaluation detection performance is the mean average precision (mAP) and the quality of predicted segmentation masks is measured with mean intersection over union (mIoU).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Experimental Setup</head><p>In this section, we discuss the common setup to all experiments. BlitzNet is coded in Python and TensorFlow. All experiments were conducted on a single Titan X GPU (Maxwell architecture), which makes the speed comparison with previous work easy, as long as they use the same GPU.</p><p>Optimization Setup. In all our experiments, unless explicitly stated otherwise, we use the Adam algorithm <ref type="bibr" target="#b9">[10]</ref>, with a mini-batch size of 32 images. The initial learning rate is set to 10 −4 and decreased twice during training by a factor 10. We also use a weight decay parameter of 5 × 10 −4 .</p><p>Modeling setup. As already mentioned, we use ResNet-50 <ref type="bibr" target="#b8">[9]</ref> as a feature extractor, 512 feature maps for each layer in down-scale and up-scale streams, 64 channels for intermediate representations in the segmentation branches; BlitzNet300 takes input images of size 300 × 300 and BlitzNet512 uses 512 × 512 images. Different versions of the network vary in the stride of the last layer of the upscaling-stream. Strides 4 and 8 in the result tables are denoted as (s4) and (s8) suffix respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">PASCAL VOC 2007</head><p>In this experiment, we train our networks on the union of VOC07 trainval set and VOC12 trainval set; then, we test them on the VOC07 test set. The results are reported in the <ref type="table">Table 1</ref>. For experiments that involve segmentation, we leverage ground truth segmentation masks during training if they are available in VOC12 train-seg-aug or in VOC12 val-seg. When using images of size 300 × 300 as input, the stochastic gradient descent algorithm is performed by training for 65K iterations with the initial learning rate, which is then decreased after 35K and 50K steps. When training on 512 × 512 images, we choose the batch size of 16 and learn for 75K iterations decreasing the learning rate after 45K and 60K steps.</p><p>The results show that BlitzNet300 outperforms SSD300 and YOLO with a 78.5 mAP, while being a real time detector. BlitzNet512 (s8) performs 0.8% better than R-FCNthe most accurate competitive model, scoring 81.2% mAP.</p><p>We further improve the results by training for detection and segmentation jointly achieving 79.1% and 81.5% mAP with BlitzNet300 (s4) and BlitzNet512 (s8) respectively.</p><p>We think that the performance gain for BlitzNet300 over BlitzNet512 could be explained by the larger stride used for the last layer, which is 4, vs 8 for BlitzNet512, and seems to be helpful for better learning finer details. Unfortunately, training BlitzNet512 with stride 4 was impossible because of memory limitations on our single GPU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">PASCAL VOC 2012</head><p>In this experiment, we use VOC12 train-seg-aug for training and VOC12 val-seg for testing both segmentation and detection. We train the models for 40K steps with the initial learning rate, and then decrease it after 25K and 35K iterations. As <ref type="table" target="#tab_3">Table 3</ref> shows, joint training improves accuracy on both tasks comparing to learning a single task. Detection improves by more than 1% while segmentation mIoU grows by 0.4%. We argue that this result could be explained by feature sharing in the universal architecture.</p><p>To confirm this fact, we conducted another experiment by adding the VOC07 trainval images to VOC12 train-segaug for training. Then, the proportion of images that have segmentation annotations to the ones that have detection ones only is 2/1, in contrast to the previous experiments where all the images where annotated for both tasks. To deal with cases where a mini-batch has no images to train for segmentation, we set the corresponding loss to 0 and do not back propagate with respect to these images, otherwise we use all images that have target segmentation masks in a batch to update the weights. The results presented in <ref type="table" target="#tab_4">Table 4</ref> show an improvement of 3.3%. Detection also improves in mAP by 0.6%. <ref type="figure">Figure 5</ref> shows that extra data for detection helps to improve classification results and to mitigate confusion between similar categories. In <ref type="table" target="#tab_2">Table 2</ref>, we report results for these models on the VOC12 test server, which again shows that our results are competitive. More qualitative results, including failure cases, are presented in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Microsoft COCO Dataset</head><p>To further validate the proposed framework, we conduct experiments on the COCO dataset <ref type="bibr" target="#b14">[15]</ref>. Here, as explained in Section 4.1, we obtain segmentation masks and again training the model on different types of data, i.e., detection, segmentation and both, to study the influence of joint training on detection accuracy.</p><p>We train the BlitzNet300 or BlitzNet512 models for 700k iterations in total, starting from the initial learning rate 10 −4 and then decreasing it after the 400k and 550k iterations by the factor of 10.       <ref type="table">Table 6</ref>: Detection performance of BlitzNet on the COCO dataset, with minival2014 and test-dev2015 splits The networks were trained on COCO trainval dataset. Detection performance is measured in average precision (%) with different criteria, namely, minimum Jaccard overlap between annotated and predicted bounding box is 0.5, 0.75 or integrated from 0.5 to 0.95 % (column "int").   detection results on COCO test-dev2015 in <ref type="table">Table 6</ref>. Our results are also publicly available on the COCO evaluation test server.</p><formula xml:id="formula_0">4 - - - - - - - - - - - - - - - - - - - -- BlitzNet512 + seg (s8)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.6.">Inference Speed Comparison</head><p>In <ref type="table" target="#tab_7">Table 7</ref> and <ref type="figure" target="#fig_3">Figure 4</ref>, we report speed comparison to other state-of-the-art detection pipelines. Our approach is the most accurate among the real time detectors working 24 frames per second (FPS) and in the setting close to real time <ref type="bibr">(19 FPS)</ref>, it provides the most accurate detections among the counterparts, while also providing semantic segmentation mask. Note that all methods are run using the same GPU (Titan X, Maxwell architecture).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.7.">Study of the Network Architecture</head><p>The BlitzNet pipeline simultaneously operates with several types of data. To demonstrate the effectiveness of the ResSkip block, we set up the following experiment: we leave the pipeline unchanged while only substituting this block with another one. We consider in particular fusion blocks that appear in the state-of-the-art approaches on semantic segmentation. <ref type="bibr" target="#b18">[19]</ref> [22] <ref type="bibr" target="#b25">[26]</ref>. <ref type="table" target="#tab_8">Table 8</ref> shows that our ResSkip block performs similar or better (on average) than all counterparts, which may be due to the fact that its design uses similar skip-connections as the Backbone network ResNet50, making the overall architecture more homogeneous.</p><p>Optimal parameters for the size of intermediate representations in segmentation stream (64) as well as the number of channels in the upscale-stream (512) where found by using a validation set. We did not conduct experiments by changing the number of layers in the upscale-stream as long as our architecture is designed to be symmetric with respect to the convolutions and the deconvolutions steps. Reducing the number of the steps will result in a smaller number of layers in the upscale stream, which may deteriorate the performance as noted in <ref type="bibr" target="#b15">[16]</ref>. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this paper, we introduce a joint approach for object detection and semantic segmentation. By using a single fullyconvolutional network to solve both problems at the same time, learning is facilitated by weight sharing between the two tasks, and inference is performed in real time. Moreover, we show that our pipeline is competitive in terms of accuracy, and that the two tasks benefit from each other. <ref type="figure">Fig. 5</ref>: Effect of extra data annotated for detection on the quality of estimated segmentation masks. The first column displays test images; the second column contains its segmentation ground truth masks. The third column corresponds to segmentations predicted by BlitzNet300 trained on VOC12 train-segmentation augmented with extra segmentation masks and VOC07. The last row is segmentation masks produced by the same architecture but trained without VOC07.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: The outputs of our pipeline. (a) The results of object detection. (b) The results of semantic segmentation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 2 :</head><label>2</label><figDesc>Fig. 2: The BlitzNet architecture, which performs object detection and segmentation with one fully convolutional network. On the left, CNN denotes a feature extractor, here ResNet-50 [9]; it is followed by the downscale-stream (in blue) and the last part of the net is the upscale-stream (in purple), which consists of a sequence of deconvolution layers interleaved with ResSkip blocks (see Figure 3). The localization and classification of bounding boxes (top) and pixelwise segmentation (bottom) are performed in a multiscale fashion by single convolutional layers operating on the output of deconvolution layers.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: ResSkip block integrating feature maps from the upscale and downscale streams, with skip connection.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Speed comparison with other methods. The detection accuracy of different methods measured in mAP is depicted on y-axis. x-coordinate is their speed, in FPS.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 5</head><label>5</label><figDesc>shows clear benefits from joint training for both of the tasks on the COCO dataset. To be comparable with other methods, we also report the</figDesc><table>network 
+
+backbone 
+mAP aero bike bird boat bottle bus car cat chair cow table dog horse mbike persn plant sheep sofa train 
+tv 
+SSD300* [16] 
+VGG-16 
+77.6 79.2 84.0 75.6 69.9 50.9 86.7 85.9 88.6 60.1 81.4 76.8 86.2 87.3 84.2 79.5 52.7 79.3 79.4 87.7 77.2 
+SSD300* (our reimpl) ResNet-50 75.3 75.3 85.1 72.5 67.4 45.5 85.7 83.9 82.8 57.2 79.1 76.7 83.1 86.5 83.3 77.5 50.1 74.4 79.4 86.5 73.3 
+BlitzNet300 (s8) 
+ResNet-50 78.5 79.7 85.9 80.1 72.1 50.9 87.0 84.6 88.2 62.3 83.7 77.1 87.3 85.0 84.7 79.2 54.9 81.5 80.0 87.0 78.0 
+BlitzNet300 (s4) 
+ResNet-50 78.2 86.8 85.1 78.3 70.4 47.5 85.4 85.0 86.2 59.0 81.8 77.9 86.9 86.1 85.4 78.6 54.9 81.9 81.1 87.7 78.2 
+BlitzNet300 + seg (s4) ResNet50 
+79.1 86.7 86.2 78.9 73.1 47.6 85.7 86.1 87.7 59.3 85.1 78.4 86.3 87.9 84.2 79.1 58.5 82.5 81.7 85.7 81.8 
+SSD512* [16] 
+VGG-16 
+79.6 84.9 85.8 80.7 73.0 58.0 87.8 88.4 87.6 63.6 85.4 73.1 86.3 87.7 83.7 82.6 55.3 81.5 79.1 86.4 80.3 
+BlitzNet512 (s8) 
+ResNet-50 80.7 87.7 85.4 83.6 73.3 58.5 86.6 87.9 88.5 63.7 87.3 77.6 87.3 88.1 86.2 81.3 57.1 84.9 79.8 87.9 81.5 
+R-FCN[13] 
+ResNet-101 80.5 79.9 87.2 81.5 72.0 69.8 86.8 88.5 89.8 67.0 88.1 74.5 89.8 90.6 79.9 81.2 53.7 81.8 81.5 85.9 79.9 
+Faster RCNN 
+ResNet-101 76.4 79.8 80.7 76.2 68.3 55.9 85.1 85.3 89.8 56.7 87.8 69.4 88.3 88.9 80.9 78.4 41.7 78.6 79.8 85.3 72.0 
+YOLO [23] 
+YOLO net 63.</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Comparison of detection performance on Pascal VOC 2012 test set. The models where trained on VOC07 trainval + VOC12 trainval. The BlitzNet models where trained for segmentation jointly with data from VOC12 trainval and extra annotations provided by [8]. Suffix '+ COCO' means that the model was pretrained on the COCO dataset. The reported values correspond to average precision per class (%). Detailed results of submissions are available on the VOC12 test server.</figDesc><table>network 
+seg det mIoU mAP 
+BlitzNet300 
+-
+78.9 
+BlitzNet300 
+72.8 
+80.0 
+BlitzNet300 
+72.4 
+-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 :</head><label>3</label><figDesc>The effect of joint learning on both tasks. The networks where trained on VOC12 train-seg-aug, and tested on VOC12 val.</figDesc><table>network 
+seg det mIoU mAP 
+BlitzNet300 
+-
+83.0 
+BlitzNet300 
+75.7 
+83.6 
+BlitzNet300 
+72.4 
+-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 4 :</head><label>4</label><figDesc>The effect of extra data with bounding box an- notations on segmentation performance. The networks were trained on VOC12 trainval (aug) + VOC07 tainval. Detection performance is measured in average precision (%) and mean IoU is the metric for segmentation segmen- tation(%).</figDesc><table>network 
+seg det mIoU mAP 
+BlitzNet512 
+-
+33.2 
+BlitzNet512 
+53.5 
+34.1 
+BlitzNet512 
+48.3 
+-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 5 :</head><label>5</label><figDesc>The effect of joint training tested on COCO minival2014. The networks were trained on COCO train.</figDesc><table>method 
+minival2014 
+test-dev2015 
+int 
+0.5 
+0.75 int 
+0.5 
+0.75 
+BlitzNet300 29.7 49.4 31.2 29.8 49.7 31.1 
+BlitzNet512 34.1 55.1 35.9 34.2 55.5 35.8 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="true"><head>Table 7 :</head><label>7</label><figDesc>Comparison of inference time on PASCAL VOC 2007, when running on a Titan X (Maxwell) GPU.</figDesc><table>Block type 
+mAP mIoU 
+Hourglass-style [19] 78.7 
+75.6 
+Refine-style [22] 
+78.0 
+76.1 
+ResSkip (no res) 
+78.4 
+75.3 
+ResSkip (ours) 
+79.1 
+75.7 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_8" validated="false"><head>Table 8 :</head><label>8</label><figDesc>The effect of fusion block type on performance, measured on detection (VOC07-test) and segmentation (VOC12-val) The networks were trained on VOC12-train (aug) + VOC07 tainval, see Sec. 4.1. Detection performance is measured in average precision (%) and mean IoU is the metric for segmentation segmentation(%).</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. This work was supported by a grant from ANR (MACARON, ANR-14-CE23-0003-01) and by the ERC projects SOLARIS and ALLEGRO. We gratefully acknowledge the Intel gift and the support of NVIDIA Corporation with the donation of GPUs used for this research.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Semantic image segmentation with deep convolutional nets and fully connected CRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">The PASCAL visual object classes (VOC) challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">88</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="303" to="338" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Bottom-up segmentation for top-down detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ranga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tyagi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.06659</idno>
+		<title level="m">DSSD: Deconvolutional single shot detector</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Fast R-CNN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Region-based segmentation and object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Semantic contours from inverse detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">UberNet: Training a universal convolutional neural network for low-, mid-, and high-level vision using diverse datasets and limited memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Backpropagation applied to handwritten zip code recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Boser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Henderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hubbard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="541" to="551" />
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">R-FCN: Object detection via region-based fully convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Feature pyramid networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Microsoft COCO: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">SSD: Single shot multibox detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">The role of context for object detection and semantic segmentation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N.-G</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Stacked hourglass networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning deconvolution network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Weakly-and semi-supervised learning of a deep convolutional network for semantic image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning to refine object segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">You only look once: Unified, real-time object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Divvala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.08242</idno>
+		<title level="m">YOLO9000: better, faster, stronger</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Faster R-CNN: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">U-net: Convolutional networks for biomedical image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ronneberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<editor>MIC-CAI</editor>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Teichmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Weber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zoellner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Multinet</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.07695</idno>
+		<title level="m">Real-time joint semantic reasoning for autonomous driving</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Describing the scene as a whole: Joint object detection, scene classification and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

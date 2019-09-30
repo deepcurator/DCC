@@ -1,0 +1,1349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:17+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">3DMV: Joint 3D-Multi-View Prediction for 3D Semantic Scene Segmentation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Angela</forename><surname>Dai</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Nießner</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Technical University of Munich</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">3DMV: Joint 3D-Multi-View Prediction for 3D Semantic Scene Segmentation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"> <ref type="figure">Fig. 1</ref><p>. 3DMV takes as input a reconstruction of an RGB-D scan along with its color images (left), and predicts a 3D semantic segmentation in the form of per-voxel labels (mapped to the mesh, right). The core of our approach is a joint 3D-multi-view prediction network that leverages the synergies between geometric and color features.</p><p>Abstract. We present 3DMV, a novel method for 3D semantic scene segmentation of RGB-D scans in indoor environments using a joint 3D-multi-view prediction network. In contrast to existing methods that either use geometry or RGB data as input for this task, we combine both data modalities in a joint, end-to-end network architecture. Rather than simply projecting color data into a volumetric grid and operating solely in 3D -which would result in insufficient detail -we first extract feature maps from associated RGB images. These features are then mapped into the volumetric feature grid of a 3D network using a differentiable backprojection layer. Since our target is 3D scanning scenarios with possibly many frames, we use a multi-view pooling approach in order to handle a varying number of RGB input views. This learned combination of RGB and geometric features with our joint 2D-3D architecture achieves significantly better results than existing baselines. For instance, our final result on the ScanNet 3D segmentation benchmark increases from 52.8% to 75% accuracy compared to existing volumetric architectures.</p><p>https://github.com/angeladai/3DMV 2 A. Dai and M. Nießner</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"> <ref type="figure">Fig. 1</ref><p>. 3DMV takes as input a reconstruction of an RGB-D scan along with its color images (left), and predicts a 3D semantic segmentation in the form of per-voxel labels (mapped to the mesh, right). The core of our approach is a joint 3D-multi-view prediction network that leverages the synergies between geometric and color features.</p><p>Abstract. We present 3DMV, a novel method for 3D semantic scene segmentation of RGB-D scans in indoor environments using a joint 3D-multi-view prediction network. In contrast to existing methods that either use geometry or RGB data as input for this task, we combine both data modalities in a joint, end-to-end network architecture. Rather than simply projecting color data into a volumetric grid and operating solely in 3D -which would result in insufficient detail -we first extract feature maps from associated RGB images. These features are then mapped into the volumetric feature grid of a 3D network using a differentiable backprojection layer. Since our target is 3D scanning scenarios with possibly many frames, we use a multi-view pooling approach in order to handle a varying number of RGB input views. This learned combination of RGB and geometric features with our joint 2D-3D architecture achieves significantly better results than existing baselines. For instance, our final result on the ScanNet 3D segmentation benchmark increases from 52.8% to 75% accuracy compared to existing volumetric architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Semantic scene segmentation is important for a large variety of applications as it enables understanding of visual data. In particular, deep learning-based approaches have led to remarkable results in this context, allowing prediction of accurate per-pixel labels in images <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b13">14]</ref>. Typically, these approaches operate on a single RGB image; however, one can easily formulate the analogous task in 3D on a per-voxel basis <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b40">41]</ref>, which is a common scenario in the context of 3D scene reconstruction. In contrast to 2D, the third dimension offers a unique opportunity as it not only predicts semantics, but also provides a spatial semantic map of the scene content based on the underlying 3D representation. This is particularly relevant for robotics applications since a robot relies not only on information of what is in a scene but also needs to know where things are.</p><p>In 3D, the representation of a scene is typically obtained from RGB-D surface reconstruction methods <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b5">6]</ref> which often store scanned geometry in a 3D voxel grid where the surface is encoded by an implicit surface function such as a signed distance field <ref type="bibr" target="#b3">[4]</ref>. One approach towards analyzing these reconstructions is to leverage a CNN with 3D convolutions, which has been used for shape classification <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b29">30]</ref>, and recently also for predicting dense semantic 3D voxel maps <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b7">8]</ref>. In theory, one could simply add an additional color channel to the voxel grid in order to incorporate RGB information; however, the limited voxel resolution prevents encoding feature-rich image data.</p><p>In this work, we specifically address this problem of how to incorporate RGB information for the 3D semantic segmentation task, and leverage the combined geometric and RGB signal in a joint, end-to-end approach. To this end, we propose a novel network architecture that takes as input the 3D scene representation as well as the input of nearby views in order to predict a dense semantic label set on the voxel grid. Instead of mapping color data directly on the voxel grid, the core idea is to first extract 2D feature maps from 2D images using the full-resolution RGB input. These features are then downsampled through convolutions in the 2D domain, and the resulting 2D feature map is subsequently backprojected into 3D space. In 3D, we leverage a 3D convolutional network architecture to learn from both the backprojected 2D features as well as 3D geometric features. This way, we can join the benefits of existing approaches and leverage all available information, significantly improving on existing approaches.</p><p>Our main contribution is the formulation of a joint, end-to-end convolutional neural network which learns to infer 3D semantics from both 3D geometry and 2D RGB input. In our evaluation, we provide a comprehensive analysis of the design choices of the joint 2D-3D architecture, and compare it with current state of the art methods. In the end, our approach increases 3D segmentation accuracy from 52.8% to 75% compared to the best existing volumetric architecture.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Deep Learning in 3D. An important avenue for 3D scene understanding has been opened through recent advances in deep learning. Similar to the 2D domain, convolutional neural networks (CNNs) can operate in volumetric domains using an additional spatial dimension for the filter banks. 3D ShapeNets <ref type="bibr" target="#b1">[2]</ref> was one of the first works in this context; they learn a 3D convolutional deep belief network from a shape database. Several works have followed, using 3D CNNs for object classification <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b29">30]</ref> or generative scene completion tasks <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b7">8]</ref>. In order to address the memory and compute requirements, hierarchical 3D CNNs have been proposed to more efficiently represent and process 3D volumes <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b41">42,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b9">10]</ref>. The spatial extent of a 3D CNN can also be increased with dilated convolutions <ref type="bibr" target="#b43">[44]</ref>, which have been used to predict missing voxels and infer semantic labels <ref type="bibr" target="#b35">[36]</ref>, or by using a fully-convolutional networks, in order to decouple the dimensions of training and test time <ref type="bibr" target="#b7">[8]</ref>. Very recently, we have seen also network architectures that operate on an (unstructured) point-based representation <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b30">31]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Multi-view Deep</head><p>Networks. An alternative way of learning a classifier on 3D input is to render the geometry, run a 2D feature extractor, and combine the extracted features using max pooling. The multi-view CNN approach by Su et al. <ref type="bibr" target="#b36">[37]</ref> was one of the first to propose such an architecture for object classification. However, since the output is a classification score, this architecture does not spatially correlate the accumulated 2D features.Very recently, a multi-view network has been proposed for part-based mesh segmentation <ref type="bibr" target="#b17">[18]</ref>. Here, 2D confidence maps of each part label are projected on top of ShapeNet <ref type="bibr" target="#b1">[2]</ref> models, where a mesh-based CRF accumulates inputs of multiple images to predict the part labels on the mesh geometry. This approach handles only relatively small label sets (e.g., 2-6 part labels), and its input is 2D renderings of the 3D meshes; i.e., the multi-view input is meant as a replacement input for 3D geometry. Although these methods are not designed for 3D semantic segmentation, we consider them as the main inspiration for our multi-view component.</p><p>Multi-view networks have also been proposed in the context of stereo reconstruction. For instance, Choi et al. <ref type="bibr" target="#b2">[3]</ref> use an RNN to accumulate features from different views and Tulsiani et al. <ref type="bibr" target="#b38">[39]</ref> propose an unsupervised approach that takes multi-view input to learn a latent 3D space for 3D reconstruction. Multiview networks have also been used in the context of stereo reconstruction <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref>, leveraging feature projection into 3D to produce consistent reconstruction. An alternative way to combine several input views with 3D, is by projecting colors directly into the voxels, maintaining one channel for each input view per voxel <ref type="bibr" target="#b15">[16]</ref>. However, due to memory requirements, this becomes impractical for a large number of input views.</p><p>3D Semantic Segmentation. Semantic segmentation on 2D images is a popular task and has been heavily explored using cutting-edge neural network approaches <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b13">14]</ref>. The analog task can be formulated in 3D, where the goal is to predict semantic labels on a per-voxel level <ref type="bibr" target="#b39">[40,</ref><ref type="bibr" target="#b40">41]</ref>. Although this is a relatively recent task, it is extremely relevant to a large range of applications, in particular, robotics, where a spatial understanding of the inferred semantics is essential. For the 3D semantic segmentation task, several datasets and benchmarks have recently been developed. The ScanNet <ref type="bibr" target="#b4">[5]</ref> dataset introduced a 3D semantic segmentation task on approx. 1.5k RGB-D scans and reconstructions obtained with a Structure Sensor. It provides ground truth annotations for training, validation, and testing directly on the 3D reconstructions; it also includes approx. 2.5 mio RGB-D frames whose 2D annotations are derived using rendered 3D-to-2D projections. Matterport3D <ref type="bibr" target="#b0">[1]</ref> is another recent dataset of about 90 building-scale scenes in the same spirit as ScanNet; it includes fewer RGB-D frames (approx. 194,400) but has more complete reconstructions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Overview</head><p>The goal of our method is to predict a 3D semantic segmentation based on the input of commodity RGB-D scans. More specifically, we want to infer semantic class labels on per-voxel level of the grid of a 3D reconstruction. To this end, we propose a joint 2D-3D neural network that leverages both RGB and geometric information obtained from a 3D scans. For the geometry, we consider a regular volumetric grid whose voxels encode a ternary state (known-occupied, knownfree, unknown). To perform semantic segmentation on full 3D scenes of varying sizes, our network operates on a per-chunk basis; i.e., predicting columns of a scene in sliding-window fashion through the xy-plane at test time. For a given xy-location in a scene, the network takes as input the volumetric grid of the surrounding area (chunks of 31 × 31 × 62 voxels). The network then extracts geometric features using a series of 3D convolutions, and predicts per-voxel class labels for the center column at the current xy-location. In addition to the geometry, we select nearby RGB views at the current xy-location that overlap with the associated chunk. For all of these 2D views, we run the respective images through a 2D neural network that extracts their corresponding features. Note that these 2D networks all have the same architecture and share the same weights.</p><p>In order to combine the 2D and 3D features, we introduce a differentiable backprojection layer that maps 2D features onto the 3D grid. These projected features are then merged with the 3D geometric information through a 3D convolutional part of the network. In addition to the projection, we add a voxel pooling layer that enables handling a variable number of RGB views associated with a 3D chunk; the pooling is performed on a per-voxel basis. In order to run 3D semantic segmentation for entire scans, this network is run for each xy-location of a scene, taking as input the corresponding local chunks.</p><p>In the following, we will first introduce the details of our network architecture (see Sec. 4) and then show how we train and implement our method (see Sec. 5).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Network Architecture</head><p>Our network is composed of a 3D stream and several 2D streams that are combined in a joint 2D-3D network architecture. The 3D part takes as input a volumetric grid representing the geometry of a 3D scan, and the 2D streams take as input the associated RGB images. To this end, we assume that the 3D Network overview: our architecture is composed of a 2D and a 3D part. The 2D side takes as input several aligned RGB images from which features are learned with a proxy loss. These are mapped to 3D space using a differentiable backprojection layer. Features from multiple views are max-pooled on a per-voxel basis and fed into a stream of 3D convolutions. At the same time, we input the 3D geometry into another 3D convolution stream. Then, both 3D streams are joined and the 3D per-voxel labels are predicted. The whole network is trained in an end-to-end fashion.</p><p>scan is composed of a sequence of RGB-D images obtained from a commodity RGB-D camera, such as a Kinect or a Structure Sensor; although note that our method generalizes to other sensor types. We further assume that the RGB-D images are aligned with respect to their world coordinate system using an RGB-D reconstruction framework; in the case of ScanNet <ref type="bibr" target="#b4">[5]</ref> scenes, the BundleFusion <ref type="bibr" target="#b5">[6]</ref> method is used. Finally, the RGB-D images are fused together in a volumetric grid, which is commonly done by using an implicit signed distance function <ref type="bibr" target="#b3">[4]</ref>. An overview of the network architecture is provided in <ref type="figure" target="#fig_0">Fig. 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">3D Network</head><p>Our 3D network part is composed of a series of 3D convolutions operating on a regular volumetric gird. The volumetric grid is a subvolume of the voxelized 3D representation of the scene. Each subvolume is centered around a specific xy-location at a size of 31 × 31 × 62 voxels, with a voxel size of 4.8cm. Hence, we consider a spatial neighborhood of 1.5m × 1.5m and 3m in height. Note that we use a height of 3m in order to cover the height of most indoor environments, such that we only need to train the network to operate in varying xy-space. The 3D network takes these subvolumes as input, and predicts the semantic labels for the center columns of the respective subvolume at a resolution of 1 × 1 × 62 voxels; i.e., it simultaneously predicts labels for 62 voxels. For each voxel, we encode the corresponding value of the scene reconstruction state: known-occupied (i.e., on the surface), known-free space (i.e., based on empty space carving <ref type="bibr" target="#b3">[4]</ref>), or unknown space (i.e., we have no knowledge about the voxel). We represent this through a 2-channel volumetric grid, the first a binary encoding of the occupancy, and the second a binary encoding of the known/unknown space. The 3D network then processes these subvolumes with a series of nine 3D convolutions which expand the feature dimension and reduce the spatial dimensions, along with dropout regularization during training, before a final set of fully connected layers which predict the classification scores for each voxel.</p><p>In the following, we show how to incorporate learned 2D features from associated 2D RGB views.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">2D Network</head><p>The aim of the 2D part of the network is to extract features from each of the input RGB images. To this end, we use a 2D network architecture based on ENet <ref type="bibr" target="#b27">[28]</ref> to learn those features. Note that although we can use a variable of number of 2D input views, all 2D networks share the same weights as they are jointly trained. Our choice to use ENet is due to its simplicity as it is both fast to run and memory-efficient to train. In particular, the low memory requirements are critical since it allows us to jointly train our 2D-3D network in an end-toend fashion with multiple input images per train sample. Although our aim is 2D-3D end-to-end training, we additionally use a 2D proxy loss for each image that allows us to make the training more stable; i.e., each 2D stream is asked to predict meaningful semantic features for an RGB image segmentation task. Here, we use semantic labels of the 2D images as ground truth; in the case of ScanNet <ref type="bibr" target="#b4">[5]</ref>, these are derived from the original 3D annotations by rendering the annotated 3D mesh from the camera points of the respective RGB image poses. The final goal of the 2D network is to obtain the features in the last layer before the proxy loss per-pixel classification scores; these features maps are then backprojected into 3D to join with the 3D network, using a differentiable backprojection layer. In particular, from an input RGB image of size 328 × 256, we obtain a 2D feature map of size (128×)41 × 32, which is then backprojected into the space of the corresponding 3D volume, obtaining a 3D representation of the feature map of size (128×)31 × 31 × 62.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Backprojection Layer</head><p>In order to connect the learned 2D features from each of the input RGB views with the 3D network, we use a differentiable backprojection layer. Since we assume known 6-DoF pose alignments for the input RGB images with respect to each other and the 3D reconstruction, we can compute 2D-3D associations on-the-fly. The layer is essentially a loop over every voxel in 3D subvolume where a given image is associated to. For every voxel, we compute the 3D-to-2D projection based on the corresponding camera pose, the camera intrinsics, and the world-to-grid transformation matrix. We use the depth data from the RGB-D images in order to prune projected voxels beyond a threshold of the voxel size of 4.8cm; i.e., we compute only associations for voxels close to the geometry of the depth map. We compute the correspondences from 3D voxels to 2D pixels since this allows us to obtain a unique voxel-to-pixel mapping. Although one could pre-compute these voxel-to-pixel associations, we simply compute this mapping on-the-fly in the layer as these computations are already highly memory bound on the GPU; in addition, it saves significant disk storage since this it would involve a large amount of index data for full scenes.</p><p>Once we have computed voxel-to-pixel correspondences, we can project the features of the last layer of the 2D network to the voxel grid:</p><formula xml:id="formula_0">n f eat × w 2d × h 2d → n f eat × w 3d × h 3d × d 3d</formula><p>For the backward pass, we use the inverse mapping of the forward pass, which we store in a temporary index map. We use 2D feature maps (feature dim. of 128) of size (128×)41 × 31 and project them to a grid of size (128×)31 × 31 × 62.</p><p>In order to handle multiple 2D input streams, we compute voxel-to-pixel associations with respect to each input view. As a result, some voxels will be associated with multiple pixels from different views. In order to combine projected features from multiple input views, we use a voxel max-pooling operation that computes the maximum response on a per feature channel basis. Since the max pooling operation is invariant to the number of inputs, it enables selecting for the features of interest from an arbitrary number of input images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4">Joint 2D-3D Network</head><p>The joint 2D-3D network combines 2D RGB features and 3D geometric features using the mapping from the backprojection layer. These two inputs are processed with a series of 3D convolutions, and then concatenated together; the joined feature is then further processed with a set of 3D convolutions. We have experimented with several options as to where to join these two parts: at the beginning (i.e., directly concatenated together without independent 3D processing), approximately 1/3 or 2/3 through the 3D network, and at the end (i.e., directly before the classifier). We use the variant that provided the best results, fusing the 2D and 3D features together at 2/3 of the architectures (i.e., after the 6th 3D convolution of 9); see Tab. 5 for the corresponding ablation study. Note that the entire network, as shown in <ref type="figure" target="#fig_0">Fig. 2</ref>, is trained in an end-to-end fashion, which is feasible since all components are differentiable. Tab. 1 shows an overview of the distribution of learnable parameters of our 3DMV model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5">Evaluation in Sliding Window Mode</head><p>Our joint 2D-3D network operates on a per-chunk basis; i.e., it takes fixed subvolumes of a 3D scene as input (along with associated RGB views), and predicts labels for the voxels in the center column of the given chunk. In order to perform a semantic segmentation of large 3D environments, we slide the subvolume 2D only 3D (2D input only) 3D (3D geo only) 3D (fused 2D/3D) # trainable params 146,176 379,744 87,136 10,224,300 <ref type="table">Table 1</ref>. Distribution of learnable parameters of our 3DMV model. Note that the majority of the network weights are part of the combined 3D stream just before the per-voxel predictions where we rely on strong feature maps; see top left of <ref type="figure" target="#fig_0">Fig. 2</ref>.</p><p>through the 3D grid of the underlying reconstruction. Since the height of the subvolume (3m) is sufficient for most indoor environments, we only need to slide over the xy-domain of the scene. Note, however, that for training, the training samples do not need to be spatially connected, which allows us to train on a random set of subvolumes. This de-coupling of training and test extents is particularly important since it allows us to provide a good label and data distribution of training samples (e.g., chunks with sufficient coverage and variety).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Training</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Training Data</head><p>We train our joint 2D-3D network architecture in an end-to-end fashion. To this end, we prepare correlated 3D and RGB input to the network for the training process. The 3D geometry is encoded in a ternary occupancy grid that encodes known-occupied, known-free, and unknown states for each voxel. The ternary information is split upon 2 channels, where the first channel encodes occupancy and the second channel encodes the known vs. unknown state. To select train subvolumes from a 3D scene, we randomly sample subvolumes as potential training samples. For each potential train sample, we check its label distribution and discard samples containing only structural elements (i.e., wall/floor) with 95% probability. In addition, all samples with empty center columns are discarded as well as samples with less than 70% of the center column geometry annotated. For each subvolume, we then associate k nearby RGB images whose alignment is known from the 6-DoF camera pose information. We select images greedily based on maximum coverage; i.e., we first pick the image covering the most voxels in the subvolume, and subsequently take each next image which covers the most number of voxels not covered by current set. We typically select 3-5 images since additional gains in coverage become smaller with each added image. For each sampled subvolume, we augment it with 8 random rotations for a total of 1, 316, 080 train samples. Since existing 3D datasets, such as ScanNet <ref type="bibr" target="#b4">[5]</ref> or Matterport3D <ref type="bibr" target="#b0">[1]</ref> contain unannotated regions in the ground truth (see <ref type="figure" target="#fig_1">Fig. 3</ref>, right), we mask out these regions in both our 3D loss and 2D proxy loss. Note that this strategy still allows for making predictions for all voxels at test time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Implementation</head><p>We implement our approach in PyTorch. While 2D and 3D conv layers are already provided by the PyTorch API, we implement a custom layer for the backprojection layer. We implement this backprojection in python, as a custom PyTorch layer, representing the projection as series of matrix multiplications in order to exploit PyTorch parallelization, and run the backprojection on the GPU through the PyTorch API. For training, we have tried only training parts of the network; however, we found that the end-to-end version that jointly optimizes both 2D and 3D performed best. In the training processes, we use an SGD optimizer with a learning rate of 0.001 and a momentum of 0.9; we set the batch size to 8. Note that our training set is quite biased towards structural classes (e.g., wall, floor), even when discarding most structural-only samples, as these elements are vastly dominant in indoor scenes. In order to account for this data imbalance, we use the histogram of classes represented in the train set to weight the loss during training. We train our network for 200, 000 iterations; for our network trained on 3 views, this takes ≈ 24 hours, and for 5 views, ≈ 48 hours.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Results</head><p>In this section, we provide an evaluation of our proposed method with a comparison to existing approaches. We evaluate on the ScanNet dataset <ref type="bibr" target="#b4">[5]</ref>, which contains 1513 RGB-D scans composed of 2.5M RGB-D images. We use the public train/val/test split of 1045, 156, 312 scenes, respectively, and follow the 20-class semantic segmentation task defined in the original ScanNet benchmark. We evaluate our results with per-voxel class accuracies, following the evaluations of previous work <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b7">8]</ref>. Additionally, we visualize our results qualitatively and in comparison to previous work in <ref type="figure" target="#fig_1">Fig 3,</ref> with close-ups shown in <ref type="figure" target="#fig_2">Fig 4.</ref> Note that we map the predictions from all methods back onto the mesh reconstruction for ease of visualization.</p><p>Comparison to state of the art. Our main results are shown in Tab. 2, where we compare to several state-of-the-art volumetric (ScanNet <ref type="bibr" target="#b4">[5]</ref>, ScanComplete <ref type="bibr" target="#b7">[8]</ref>) and point-based approaches (PointNet++ <ref type="bibr" target="#b30">[31]</ref>) on the ScanNet test set. Additionally, we show an ablation study regarding our design choices in Tab. 3.</p><p>The best variant of our 3DMV network achieves 75% average classification accuracy which is quite significant considering the difficulty of the task and the performance of existing approaches. That is, we improve 22.2% over existing volumetric and 14.8% over the state-of-the-art PointNet++ architecture.</p><p>How much does RGB input help? Tab. 3 includes a direct comparison between our 3D network architecture when using RGB features against the exact same 3D network without the RGB input. Performance improves from 54.4% to 70.1% with RGB input, even with just a single RGB view. In addition, we tried out the naive alternative of using per-voxel colors rather than a 2D feature extractor. Here, we see only a marginal difference compared to the purely geometric baseline (54.4% vs. 55.9%). We attribute this relatively small gain to the limited grid resolution (≈ 5cm voxels), which is insufficient to capture rich RGB features. Overall, we can clearly see the benefits of RGB input, as well as the design choice to first extract features in the 2D domain.</p><p>How much does geometric input help? Another important question is whether we actually need the 3D geometric input, or whether geometric information is a redundant subset of the RGB input; see Tab. 3. The first experiment we conduct in this context is simply a projection of the predicted 2D labels on top of the geometry. If we only use the labels from a single RGB view, we obtain 27% average accuracy (vs. 70.1% with 1 view + geometry); for 3 views, this label backprojection achieves 44.2% (vs. 73.0% with 3 views + geometry). Note that this is related to the limited coverage of the RGB backprojections (see Tab. 4).</p><p>However, the interesting experiment now is what happens if we still run a series of 3D convolutions after the backprojection of the 2D labels. Again, we omit inputting the scene geometry, but we now learn how to combine and propagate the backprojected features in the 3D grid; essentially, we ignore the first part of our 3D network; cf. <ref type="figure" target="#fig_0">Fig. 2</ref>. For 3 RGB views, this results in an accuracy of 58.2%; this is higher than the 54.4% of geometry only; however, it is much lower than our final 3-view result of 73.0% from the joint network. Overall, this shows that the combination of RGB and geometric information aptly complements each other, and that the synergies allow for an improvement over the individual inputs by 14.8% and 18.6%, respectively (for 3 views).</p><p>wall floor cab bed chair sofa table door wind bkshf pic cntr desk curt fridg show toil sink bath other avg ScanNet <ref type="bibr" target="#b4">[5]</ref> 70  <ref type="table">Table 2</ref>. Comparison of our final trained model (5 views, end-to-end) against other state-of-the-art methods on the ScanNet dataset <ref type="bibr" target="#b4">[5]</ref>. We can see that our approach makes significant improvements, 22.2% over existing volumetric and approx. 14.8% over state-of-the-art PointNet++ architectures.</p><p>How to feed 2D features into the 3D network? An interesting question is where to join 2D and 3D features; i.e., at which layer of the 3D network do we fuse together the features originating from the RGB images with the features from the 3D geometry. On the one hand, one could argue that it makes more sense to feed the 2D part early into the 3D network in order to have more capacity for learning the joint 2D-3D combination. On the other hand, it might make more sense to keep the two streams separate for as long as possible to first extract strong independent features before combining them.</p><p>To this end, we conduct an experiment with different 2D-3D network combinations (for simplicity, always using a single RGB view without end-to-end training); see Tab. 5. We tried four combinations, where we fused the 2D and 3D features at the beginning, after the first third of the network, after the second third, and at the very end into the 3D network. Interestingly, the results are relatively similar ranging from 67.6%, 65.4% to 69.1% and 67.5% suggesting that the 3D network can adapt quite well to the 2D features. Across these experiments, the second third option turned out to be a few percentage points higher than the alternatives; hence, we use that as a default in all other experiments.  <ref type="bibr" target="#b4">[5]</ref> test set. We compare with the 3D-based approaches of ScanNet <ref type="bibr" target="#b4">[5]</ref>, ScanComplete <ref type="bibr" target="#b7">[8]</ref>, PointNet++ <ref type="bibr" target="#b30">[31]</ref>. Note that the ground truth scenes contain some unannotated regions, denoted in black. Our joint 3D-multi-view approach achieves more accurate semantic predictions.</p><p>How much do additional views help? In Tab. 3, we also examine the effect of each additional view on classification performance. For geometry only, we obtain an average classification accuracy of 54.4%; adding only a single view per chunk increases to 70.1% (+15.7%); for 3 views, it increases to 73.1% (+3.0%); for 5 views, it reaches 75.0% (+1.9%). Hence, for every additional view the incremental gains become smaller; this is somewhat expected as a large part of the benefits are attributed to additional coverage of the 3D volume with 2D features.</p><p>If we already use a substantial number of views, each additional added feature shares redundancy with previous views, as shown in Tab. 4.</p><p>Is end-to-end training of the joint 2D-3D network useful? Here, we examine the benefits of training the 2D-3D network in an end-to-end fashion, rather than simply using a pre-trained 2D network. We conduct this experiment with 1, 3, and 5 views. The end-to-end variant consistently outperforms the fixed version, improving the respective accuracies by 1.0%, 0.2%, and 0.5%. Although the end-to-end variants are strictly better, the increments are smaller than we initially hoped for. We also tried removing the 2D proxy loss that enforces good 2D predictions, which led to a slightly lower performance. Overall, end-to-end training with a proxy loss always performed best and we use it as our default.  <ref type="table">Table 3</ref>. Ablation study for different design choices of our approach on ScanNet <ref type="bibr" target="#b4">[5]</ref>. We first test simple baselines where we backproject 2D labels from 1 and 3 views (rows 1-2), then run set of 3D convs after the backprojections (row 3). We then test a 3D-geometry-only network (row 4). Augmenting the 3D-only version with per-voxel colors shows only small gains (row 5). In rows 6-11, we test our joint 2D-3D architecture with varying number of views, and the effect of end-to-end training. Our 5-view, end-to-end variant performs best.</p><p>Evaluation in 2D domains using NYUv2. Although we are predicting 3D pervoxel labels, we can also project the obtained voxel labels into the 2D images. In Tab. 6, we show such an evaluation on the NYUv2 <ref type="bibr" target="#b34">[35]</ref> dataset. For this task, we train our network on both ScanNet data as well as the NYUv2 train annotations projected into 3D. Although this is not the actual task of our method, it can be seen as an efficient way to accumulate semantic information from multiple RGB-D frames by using the 3D geometry as a proxy for the learning framework. Overall, our joint 2D-3D architecture compares favorably against the respective baselines on this 13-class task.</p><p>1 view 3 views 5 views coverage 40.3% 64.4% 72.3% <ref type="table">Table 4</ref>. Amount of coverage from varying number of views over the annotated ground truth voxels of the ScanNet <ref type="bibr" target="#b4">[5]</ref>   <ref type="table">Table 5</ref>. Evaluation of various network combinations for joining the 2D and 3D streams in the 3D architecture (cf. <ref type="figure" target="#fig_0">Fig. 2, top)</ref>. We use the single view variant with a fixed 2D network here for simplicity. Interestingly, performance only changes slightly; however, the 2/3 version performed the best, which is our default for all other experiments. Summary Evaluation.</p><note type="other">test scenes. wall floor cab bed chair sofa table door wind bkshf pic cntr desk curt fridg show toil sink bath other avg begin 78.8 96.3 63.7 72.8 83.3 81.9 74.5 81.6 39.5 89.6 24.8 33.9 52.6 74.8 76.0 47.5 80.1 65.4 85.9 49.4 67.6 1/3 79.3 95.</note><p>-RGB and geometric features are orthogonal and help each other -More views help, but increments get smaller with every view -End-to-end training is strictly better, but the improvement is not that big.</p><p>-Variations of where to join the 2D and 3D features change performance to some degree; 2/3 performed best in our tests. -Our results are significantly better than the best volumetric or PointNet baseline (+22.2% and +14.8%, respectively).</p><p>bed books ceil. chair floor furn. obj. pic. sofa table tv wall wind. avg. SceneNet <ref type="bibr" target="#b10">[11]</ref> 70.8 5.  <ref type="table">Table 6</ref>. We can also evaluate our method on 2D semantic segmentation tasks by projecting the predicted 3D labels into the respective RGB-D frames. Here, we show a comparison on dense pixel classification accuracy on NYU2 <ref type="bibr" target="#b24">[25]</ref>. Note that the reported ScanNet classification is on the 11-class task.</p><p>Limitations. While our joint 3D-multi-view approach achieves significant performance gains over previous state of the art in 3D semantic segmentation, there are still several important limitations. Our approach operates on dense volumetric grids, which become quickly impractical for high resolutions; e.g., RGB-D scanning approaches typically produce reconstructions with sub-centimeter voxel resolution; sparse approaches, such as OctNet <ref type="bibr" target="#b32">[33]</ref>, might be a good remedy. Additionally, we currently predict only the voxels of each column of a scene jointly, while each column is predicted independently, which can give rise to some label inconsistencies in the final predictions since different RGB views might be selected; note, however, that due to the convolutional nature of the 3D networks, the geometry remains spatially coherent.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Conclusion and Future Work</head><p>We presented 3DMV, a joint 3D-multi-view approach built on the core idea of combining geometric and RGB features in a joint network architecture. We show that our joint approach can achieve significantly better accuracy for semantic 3D scene segmentation. In a series of evaluations, we carefully examine our design choices; for instance, we demonstrate that the 2D and 3D features complement each other rather than being redundant; we also show that our method can successfully take advantage of using several input views from an RGB-D sequence to gain higher coverage, thus resulting in better performance. In the end, we are able to show results at more than 14% higher classification accuracy than the best existing 3D segmentation approach. Overall, we believe that these improvements will open up new possibilities where not only the semantic content, but also the spatial 3D layout plays an important role. For the future, we still see many open questions in this area. First, the 3D semantic segmentation problem is far from solved, and semantic instance segmentation in 3D is still at its infancy. Second, there are many fundamental questions about the scene representation for realizing 3D convolutional neural networks, and how to handle mixed sparse-dense data representations. And third, we also see tremendous potential for combining multi-modal features for generative tasks in 3D reconstruction, such as scan completion and texturing.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Network overview: our architecture is composed of a 2D and a 3D part. The 2D side takes as input several aligned RGB images from which features are learned with a proxy loss. These are mapped to 3D space using a differentiable backprojection layer. Features from multiple views are max-pooled on a per-voxel basis and fed into a stream of 3D convolutions. At the same time, we input the 3D geometry into another 3D convolution stream. Then, both 3D streams are joined and the 3D per-voxel labels are predicted. The whole network is trained in an end-to-end fashion.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. Qualitative semantic segmentation results on the ScanNet [5] test set. We compare with the 3D-based approaches of ScanNet [5], ScanComplete [8], PointNet++ [31]. Note that the ground truth scenes contain some unannotated regions, denoted in black. Our joint 3D-multi-view approach achieves more accurate semantic predictions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. Additional qualitative semantic segmentation results (close ups) on the ScanNet [5] test set. Note the consistency of our predictions compared to the other baselines.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>wall floor cab bed chair sofa table door wind bkshf pic cntr desk curt fridg show toil sink bath other avg88.1 55.8 31.9 73.2 82.4 74.8 82.6 88.3 72.8 94.7 58.5 75.0</figDesc><table>2D only (1 view) 
+37.1 39.1 26.7 33.1 22.7 38.8 17.5 38.7 13.5 32.6 14.9 7.8 19.1 34.4 33.2 13.3 32.7 29.2 36.3 20.4 27.1 
+2D only (3 views) 
+58.6 62.5 40.8 51.6 38.6 59.7 31.1 55.9 25.9 52.9 25.1 14.2 35.0 51.2 57.3 36.0 47.1 44.7 61.5 34.3 44.2 
+Ours (no geo input) 
+76.2 92.9 59.3 65.6 80.6 73.9 63.3 75.1 22.6 80.2 13.3 31.8 43.4 56.5 53.4 43.2 82.1 55.0 80.8 9.3 58.2 
+Ours (3D geo only) 
+60.4 95.0 54.4 69.5 79.5 70.6 71.3 65.9 20.7 71.4 4.2 20.0 38.5 15.2 59.9 57.3 78.7 48.8 87.0 20.6 54.4 
+Ours (3D geo+voxel color) 58.8 94.7 55.5 64.3 72.1 80.1 65.5 70.7 33.1 69.0 2.9 31.2 49.5 37.2 49.1 54.1 75.9 48.4 85.4 20.5 55.9 
+Ours (1 view, fixed 2D) 
+77.3 96.8 70.0 78.2 82.6 85.0 68.5 88.8 36.0 82.8 15.7 32.6 60.3 71.0 76.7 82.2 74.8 57.6 87.0 58.5 69.1 
+Ours (1 view) 
+70.7 96.8 61.4 76.4 84.4 80.3 70.4 83.9 57.9 85.3 41.7 35.0 64.5 75.6 81.3 58.2 85.0 60.5 81.6 51.7 70.1 
+Ours (3 view, fixed 2D) 
+81.1 96.4 58.0 77.3 84.7 85.2 74.9 87.3 51.2 86.3 33.5 47.0 52.4 79.5 79.0 72.3 80.8 76.1 92.5 60.7 72.8 
+Ours (3 view) 
+75.2 97.1 66.4 77.6 80.6 84.5 66.5 85.8 61.8 87.1 47.6 24.7 68.2 75.2 78.9 73.6 86.9 76.1 89.9 57.2 73.0 
+Ours (5 view, fixed 2D) 
+77.3 95.7 68.9 81.7 89.6 84.2 74.8 83.1 62.0 87.4 36.0 40.5 55.9 83.1 81.6 77.0 87.8 70.7 93.5 59.6 74.5 
+Ours (5 view) 
+73.9 95.6 69.9 80.7 85.9 75.8 67.8 86.6 61.2 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>77.3 96.8 70.0 78.2 82.6 85.0 68.5 88.8 36.0 82.8 15.7 32.6 60.3 71.0 76.7 82.2 74.8 57.6 87.0 58.5 69.1 end 82.7 96.3 67.1 77.8 83.2 80.1 66.0 80.3 41.0 83.9 24.3 32.4 57.7 70.1 71.5 58.5 79.6 65.1 87.2 45.8 67.5</figDesc><table>5 65.1 75.2 80.3 81.5 73.8 86.0 30.5 91.7 11.3 35.5 46.4 66.6 67.9 44.1 81.7 55.5 85.9 53.3 65.4 
+2/3 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>SemanticFusion [24] (RGBD+CRF) 62.0 58.4 43.3 59.5 92.7 64.4 58.3 65.8 48.7 34.3 34.3 86.3 62.3 59.2 SemanticFusion [24, 9] (Eigen+CRF) 48.3 51.5 79.0 74.7 90.8 63.5 46.9 63.6 46.5 45.9 71.5 89.4 55.6 63.6</figDesc><table>5 76.2 59.6 95.9 62.3 50.0 18.0 61.3 42.2 22.2 86.1 32.1 52.5 
+Hermans et al. [15] 
+68.4 45.4 83.4 41.9 91.5 37.1 8.6 35.8 58.5 27.7 38.4 71.8 48.0 54.3 
+ENet [28] 
+79.2 35.5 31.6 60.2 82.3 61.8 50.9 43.0 61.2 42.7 30.1 84.1 67.4 56.2 
+ScanNet [5] 
+81.4 
+-
+46.2 67.6 99.0 65.6 34.6 -67.2 50.9 35.8 55.8 63.1 60.7 
+
+3DMV (ours) 
+84.3 44.0 43.4 77.4 92.5 76.8 54.6 70.5 86.3 58.6 67.3 84.5 85.3 71.2 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">https://github.com/angeladai/3DMV</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Halber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niessner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<title level="m">Matterport3D: Learning from RGB-D data in indoor environments. International Conference on 3D Vision</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">ShapeNet: An Information-Rich 3D Model Repository</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanrahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.03012</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+		<respStmt>
+			<orgName>Stanford University -Princeton University -Toyota Technological Institute at Chicago</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">Tech. Rep.</note>
+	<note>cs.GR</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">3d-r2n2: A unified approach for single and multi-view 3d object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">B</forename><surname>Choy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="628" to="644" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 23rd annual conference on Computer graphics and interactive techniques</title>
+		<meeting>the 23rd annual conference on Computer graphics and interactive techniques</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="1996" />
+			<biblScope unit="page" from="303" to="312" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Scannet: Richly-annotated 3d reconstructions of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Halber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Bundlefusion: Realtime globally consistent 3d reconstruction using on-the-fly surface reintegration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">24</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Shape completion using 3d-encoder-predictor cnns and shape synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Scancomplete: Large-scale scene completion and semantic segmentation for 3d scans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ritchie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bokeloh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.10215</idno>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Predicting depth, surface normals and semantic labels with a common multi-scale convolutional architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2650" to="2658" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">High Resolution Shape Completion Using Deep Neural Networks for Global Structure and Local Geometry Inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kalogerakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Handa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Patraucean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Stent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.07041</idno>
+		<title level="m">Scenenet: Understanding real world indoor scenes with synthetic data</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Hierarchical surface prediction for 3d object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.00710</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Joint 3d scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="97" to="104" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Mask r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2017 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2980" to="2988" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision (ICCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Dense 3D semantic mapping of indoor scenes from RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hermans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Floros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2014 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2631" to="2638" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Surfacenet: An end-to-end 3d neural network for multiview stereopsis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.01749</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Very high frame rate volumetric integration of depth images on mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Kähler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">A</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Y</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE transactions on visualization and computer graphics</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1241" to="1250" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">3d shape segmentation with projective convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kalogerakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Averkiou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning a multi-view stereo machine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="364" to="375" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">End-to-end learning of geometry and context for deep stereo regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Martirosyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dasgupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kennedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bachrach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bry</surname></persName>
+		</author>
+		<idno>abs/1703.04309</idno>
+	</analytic>
+	<monogr>
+		<title level="j">CoRR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Joint semantic segmentation and 3d reconstruction from monocular video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kundu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dellaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="703" to="718" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3431" to="3440" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Voxnet: A 3d convolutional neural network for real-time object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Scherer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS), 2015 IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="922" to="928" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Semanticfusion: Dense 3d semantic mapping with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mccormac</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Handa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leutenegger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2017 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="4628" to="4635" />
+		</imprint>
+	</monogr>
+	<note>Robotics and Automation (ICRA</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Indoor segmentation and support inference from RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Derek</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">K</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Kinectfusion: Real-time dense surface mapping and tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">10th IEEE international symposium on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="127" to="136" />
+		</imprint>
+	</monogr>
+	<note>Mixed and augmented reality (ISMAR)</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Real-time 3d reconstruction at scale using voxel hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Enet: A deep neural network architecture for real-time semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chaurasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Culurciello</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.02147</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Pointnet: Deep learning on point sets for 3d classification and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Volumetric and multiview cnns for object classification on 3d data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Pointnet++: Deep hierarchical feature learning on point sets in a metric space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5105" to="5114" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.01047</idno>
+		<title level="m">Octnetfusion: Learning depth fusion from data</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Octnet: Learning deep 3d representations at high resolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Discrete optimization of ray potentials for semantic 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5511" to="5518" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Indoor scene segmentation using a structured light sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Computer Vision -Workshop on 3D Representation and Recognition</title>
+		<meeting>the International Conference on Computer Vision -Workshop on 3D Representation and Recognition</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Semantic scene completion from a single depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of 30th IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>30th IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Multi-view convolutional neural networks for 3d shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kalogerakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Learned-Miller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="945" to="953" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Octree generating networks: Efficient convolutional architectures for high-resolution 3d outputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tatarchenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.09438</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Multi-view supervision for single-view reconstruction via differentiable ray consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Semanticpaint: Interactive 3d labeling and learning at your fingertips</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Valentin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">154</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Incremental dense semantic stereo fusion for large-scale semantic scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Miksik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lidegaard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Golodetz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">A</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Kähler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2015 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="75" to="82" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">O-cnn: Octree-based convolutional neural networks for 3d shape analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">X</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Y</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">72</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">3d shapenets: A deep representation for volumetric shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1912" to="1920" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.07122</idno>
+		<title level="m">Multi-scale context aggregation by dilated convolutions</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

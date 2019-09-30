@@ -1,0 +1,1072 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:22+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Hierarchical Imitation and Reinforcement Learning</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hoang</forename><forename type="middle">M</forename><surname>Le</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nan</forename><surname>Jiang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alekh</forename><surname>Agarwal</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miroslav</forename><surname>Dudík</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yisong</forename><surname>Yue</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hal</forename><forename type="middle">Daumé</forename><surname>Iii</surname></persName>
+						</author>
+						<title level="a" type="main">Hierarchical Imitation and Reinforcement Learning</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We study how to effectively leverage expert feedback to learn sequential decision-making policies. We focus on problems with sparse rewards and long time horizons, which typically pose significant challenges in reinforcement learning. We propose an algorithmic framework, called hierarchical guidance, that leverages the hierarchical structure of the underlying problem to integrate different modes of expert interaction. Our framework can incorporate different combinations of imitation learning (IL) and reinforcement learning (RL) at different levels, leading to dramatic reductions in both expert effort and cost of exploration. Using long-horizon benchmarks, including Montezuma's Revenge, we demonstrate that our approach can learn significantly faster than hierarchical RL, and be significantly more label-efficient than standard IL. We also theoretically analyze labeling cost for certain instantiations of our framework.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Learning good agent behavior from reward signals alonethe goal of reinforcement learning (RL)-is particularly difficult when the planning horizon is long and rewards are sparse. One successful method for dealing with such long horizons is imitation learning (IL) <ref type="bibr" target="#b0">(Abbeel &amp; Ng, 2004;</ref><ref type="bibr" target="#b4">Daumé et al., 2009;</ref><ref type="bibr" target="#b21">Ross et al., 2011;</ref><ref type="bibr" target="#b13">Ho &amp; Ermon, 2016)</ref>, in which the agent learns by watching and possibly querying an expert. One limitation of existing imitation learning approaches is that they may require a large amount of demonstration data in long-horizon problems.</p><p>The central question we address in this paper is: when experts are available, how can we most effectively leverage their feedback? A common strategy to improve sample ef- ficiency in RL over long time horizons is to exploit hierarchical structure of the problem <ref type="bibr" target="#b26">(Sutton et al., 1998;</ref><ref type="bibr" target="#b27">1999;</ref><ref type="bibr" target="#b14">Kulkarni et al., 2016;</ref><ref type="bibr" target="#b5">Dayan &amp; Hinton, 1993;</ref><ref type="bibr" target="#b30">Vezhnevets et al., 2017;</ref><ref type="bibr" target="#b6">Dietterich, 2000)</ref>. Our approach leverages hierarchical structure in imitation learning. We study the case where the underlying problem is hierarchical, and subtasks can be easily elicited from an expert. Our key design principle is an algorithmic framework called hierarchical guidance, in which feedback (labels) from the high-level expert is used to focus (guide) the low-level learner. The high-level expert ensures that low-level learning only occurs when necessary (when subtasks have not been mastered) and only over relevant parts of the state space. This differs from a naïve hierarchical approach which merely gives a subtask decomposition. Focusing on relevant parts of the state space speeds up learning (improves sample efficiency), while omitting feedback on the already mastered subtasks reduces expert effort (improves label efficiency).</p><p>We begin by formalizing the problem of hierarchical imitation learning (Section 3) and carefully separate out cost structures that naturally arise when the expert provides feedback at multiple levels of abstraction. We first apply hierarchical guidance to IL, derive hierarchically guided variants of behavior cloning and DAgger <ref type="bibr" target="#b21">(Ross et al., 2011)</ref>, and theoretically analyze the benefits (Section 4). We next apply hierarchical guidance to the hybrid setting with highlevel IL and low-level RL (Section 5). This architecture is particularly suitable in settings where we have access to high-level semantic knowledge, the subtask horizon is sufficiently short, but the low-level expert is too costly or unavailable. We demonstrate the efficacy of our approaches on a simple but extremely challenging maze domain, and on Montezuma's Revenge (Section 6). Our experiments show that incorporating a modest amount of expert feedback can lead to dramatic improvements in performance compared to pure hierarchical RL. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>For brevity, we provide here a short overview of related work, and defer to Appendix C for additional discussion.</p><p>Imitation Learning. One can broadly dichotomize IL into passive collection of demonstrations (behavioral cloning) versus active collection of demonstrations. The former setting <ref type="bibr" target="#b0">(Abbeel &amp; Ng, 2004;</ref><ref type="bibr" target="#b33">Ziebart et al., 2008;</ref><ref type="bibr" target="#b28">Syed &amp; Schapire, 2008;</ref><ref type="bibr" target="#b13">Ho &amp; Ermon, 2016)</ref> assumes that demonstrations are collected a priori and the goal of IL is to find a policy that mimics the demonstrations. The latter setting <ref type="bibr" target="#b4">(Daumé et al., 2009;</ref><ref type="bibr" target="#b21">Ross et al., 2011;</ref><ref type="bibr" target="#b20">Ross &amp; Bagnell, 2014;</ref><ref type="bibr" target="#b2">Chang et al., 2015;</ref><ref type="bibr" target="#b25">Sun et al., 2017)</ref> assumes an interactive expert that provides demonstrations in response to actions taken by the current policy. We explore extension of both approaches into hierarchical settings.</p><p>Hierarchical Reinforcement Learning. Several RL approaches to learning hierarchical policies have been explored, foremost among them the options framework <ref type="bibr" target="#b26">(Sutton et al., 1998;</ref><ref type="bibr" target="#b27">1999;</ref><ref type="bibr" target="#b8">Fruit &amp; Lazaric, 2017)</ref>. It is often assumed that a useful set of options are fully defined a priori, and (semi-Markov) planning and learning only occurs at the higher level. In comparison, our agent does not have direct access to policies that accomplish such subgoals and has to learn them via expert or reinforcement feedback. The closest hierarchical RL work to ours is that of <ref type="bibr" target="#b14">Kulkarni et al. (2016)</ref>, which uses a similar hierarchical structure, but no high-level expert and hence no hierarchical guidance.</p><p>Combining Reinforcement and Imitation Learning. The idea of combining IL and RL is not new <ref type="bibr" target="#b18">(Nair et al., 2017;</ref><ref type="bibr" target="#b12">Hester et al., 2018)</ref>. However, previous work focuses on flat policy classes that use IL as a "pre-training" step (e.g., by pre-populating the replay buffer with demonstrations). In contrast, we consider feedback at multiple levels for a hierarchical policy class, with different levels potentially receiving different types of feedback (i.e., imitation at one level and reinforcement at the other). Somewhat related to our hierarchical expert supervision is the approach of <ref type="bibr" target="#b1">Andreas et al. (2017)</ref>, which assumes access to symbolic descriptions of subgoals, without knowing what those symbols mean or how to execute them. Previous literature has not focused much on comparisons of sample complexity between IL and RL, with the exception of the recent work of <ref type="bibr" target="#b25">Sun et al. (2017)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Hierarchical Formalism</head><p>For simplicity, we consider environments with a natural two-level hierarchy; the HI level corresponds to choosing subtasks, and the LO level corresponds to executing those subtasks. For instance, an agent's overall goal may be to leave a building. At the HI level, the agent may first choose the subtask "go to the elevator," then "take the elevator down," and finally "walk out." Each of these subtasks needs to be executed at the LO level by actually navigating the environment, pressing buttons on the elevator, etc.</p><p>2 Subtasks, which we also call subgoals, are denoted as g ∈ G, and the primitive actions are denoted as a ∈ A. An agent (also referred to as learner) acts by iteratively choosing a subgoal g, carrying it out by executing a sequence of actions a until completion, and then picking a new subgoal. The agent's choices can depend on an observed state s ∈ S.</p><p>3 We assume that the horizon at the HI level is H HI , i.e., a trajectory uses at most H HI subgoals, and the horizon at the LO level is H LO , i.e., after at most H LO primitive actions, the agent either accomplishes the subgoal or needs to decide on a new subgoal. The total number of primitive actions in a trajectory is thus at most H FULL := H HI H LO .</p><p>The hierarchical learning problem is to simultaneously learn a HI-level policy µ : S → G, called the metacontroller, as well as the subgoal policies π g : S → A for each g ∈ G, called subpolicies. The aim of the learner is to achieve a high reward when its meta-controller and subpolicies are run together. For each subgoal g, we also have a (possibly learned) termination function β g : S → {True, False}, which terminates the execution of π g . The hierarchical agent behaves as follows:</p><p>1 choose action a ← π g (s)</p><p>The execution of each subpolicy π g generates a LO-level trajectory τ = (s 1 , a 1 , . . . , s H , a H , s H+1 ) with H ≤ H LO . <ref type="bibr">4</ref> The overall behavior results in a hierarchical trajectory σ = (s 1 , g 1 , τ 1 , s 2 , g 2 , τ 2 , . . . ), where the last state of each LO-level trajectory τ h coincides with the next state s h+1 in σ and the first state of the next LO-level trajectory τ h+1 . The subsequence of σ which excludes the LOlevel trajectories τ h is called the HI-level trajectory, τ HI := (s 1 , g 1 , s 2 , g 2 , . . . ). Finally, the full trajectory, τ FULL , is the concatenation of all the LO-level trajectories.</p><p>We assume access to an expert, endowed with a meta-2 An important real-world application is in goal-oriented dialogue systems. For instance, a chatbot assisting a user with reservation and booking for flights and hotels <ref type="bibr" target="#b19">(Peng et al., 2017;</ref><ref type="bibr" target="#b7">El Asri et al., 2017)</ref> needs to navigate through multiple turns of conversation. The chatbot developer designs the hierarchy of subtasks, such as ask user goal, ask dates, offer flights, confirm, etc. Each subtask consists of several turns of conversation. Typically a global state tracker exists alongside the hierarchical dialogue policy to ensure that cross-subtask constraints are satisfied.</p><p>controller µ , subpolicies π g , and termination functions β g , who can provide one or several types of supervision:</p><p>• HierDemo(s): hierarchical demonstration. The expert executes its hierarchical policy starting from s and returns the resulting hierarchical trajectory σ = (s 1 , g 1 , τ 1 , s 2 , g 2 , τ 2 , . . . ), where s 1 = s.</p><p>• Label HI (τ HI ): HI-level labeling. The expert provides a good next subgoal at each state of a given HI-level trajectory τ HI = (s 1 , g 1 , s 2 , g 2 , . . . ), yielding a labeled data set {(s 1 , g 1 ), (s 2 , g 2 ), . . . }.</p><p>• Label LO (τ ; g): LO-level labeling. The expert provides a good next primitive action towards a given subgoal g at each state of a given LO-level trajectory τ = (s 1 , a 1 , s 2 , a 2 , . . . ), yielding a labeled data set {(s 1 , a 1 ), (s 2 , a 2 ), . . . }.</p><p>• Inspect LO (τ ; g): LO-level inspection. Instead of annotating every state of a trajectory with a good action, the expert only verifies whether a subgoal g was accomplished, returning either Pass or Fail.</p><p>• Label FULL (τ FULL ): full labeling. The expert labels the agent's full trajectory τ FULL = (s 1 , a 1 , s 2 , a 2 , . . . ), from start to finish, ignoring hierarchical structure, yielding a labeled data set {(s 1 , a 1 ), (s 2 , a 2 ), . . . }.</p><p>• Inspect FULL (τ FULL ): full inspection. The expert verifies whether the agent's overall goal was accomplished, returning either Pass or Fail.</p><p>When the agent learns not only the subpolicies π g , but also termination functions β g , then Label LO also returns good termination values ω ∈ {True, False} for each state of τ = (s 1 , a 1 . . . ), yielding a data set {(s 1 , a 1 , ω 1 ), . . . }.</p><p>Although HierDemo and Label can be both generated by the expert's hierarchical policy (µ , {π g }), they differ in the mode of expert interaction. HierDemo returns a hierarchical trajectory executed by the expert, as required for passive IL, and enables a hierarchical version of behavioral cloning <ref type="bibr" target="#b0">(Abbeel &amp; Ng, 2004;</ref><ref type="bibr" target="#b28">Syed &amp; Schapire, 2008)</ref>. Label operations provide labels with respect to the learning agent's trajectories, as required for interactive IL. Label FULL is the standard query used in prior work on learning flat policies <ref type="bibr" target="#b4">(Daumé et al., 2009;</ref><ref type="bibr" target="#b21">Ross et al., 2011)</ref>, and Label HI and Label LO are its hierarchical extensions.</p><p>Inspect operations are newly introduced in this paper, and form a cornerstone of our interactive hierarchical guidance protocol that enables substantial savings in label efficiency. They can be viewed as "lazy" versions of the corresponding Label operations, requiring less effort. Our underlying assumption is that if the given hierarchical trajectory σ = {(s h , g h , τ h )} agrees with the expert on HI level, i.e., g h = µ (s h ), and LO-level trajectories pass the</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1 Hierarchical Behavioral Cloning (h-BC)</head><p>1: Initialize data buffers DHI ← ∅ and Dg ← ∅, g ∈ G 2: for t = 1, . . . , T do 3: Get a new environment instance with start state s 4:</p><formula xml:id="formula_0">σ ← HierDemo(s) 5: for all (s h , g h , τ h ) ∈ σ do 6: Append D g h ← D g h ∪ τ h 7:</formula><p>Append DHI ← DHI ∪ {(s h , g h )} 8: Train subpolicies πg ← Train(πg, Dg) for all g 9: Train meta-controller µ ← Train(µ, DHI) inspection, i.e., Inspect LO (τ h ; g h ) = Pass, then the resulting full trajectory must also pass the full inspection, Inspect FULL (τ FULL ) = Pass. This means that a hierarchical policy need not always agree with the expert's execution at LO level to succeed in the overall task.</p><p>Besides algorithmic reasons, the motivation for separating the types of feedback is that different expert queries will typically require different amount of effort, which we refer to as cost. We assume the costs of the Label operations are C For instance, identifying if a robot has successfully navigated to the elevator is presumably much easier than labeling an entire path to the elevator. One reasonable cost model, natural for the environments in our experiments, is to assume that Inspect operations take time O(1) and work by checking the final state of the trajectory, whereas Label operations take time proportional to the trajectory length, which is O(H HI ), O(H LO ) and O(H HI H LO ) for our three Label operations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Hierarchically Guided Imitation Learning</head><p>Hierarchical guidance is an algorithmic design principle in which the feedback from high-level expert guides the lowlevel learner in two different ways: (i) the high-level expert ensures that low-level expert is only queried when necessary (when the subtasks have not been mastered yet), and (ii) low-level learning is limited to the relevant parts of the state space. We instantiate this framework first within passive learning from demonstrations, obtaining hierarchical behavioral cloning (Algorithm 1), and then within interactive imitation learning, obtaining hierarchically guided DAgger (Algorithm 2), our best-performing algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Hierarchical Behavioral Cloning (h-BC)</head><p>We consider a natural extension of behavioral cloning to the hierarchical setting (Algorithm 1). The expert provides a set of hierarchical demonstrations σ , each consisting of <ref type="bibr">LO-level</ref> </p><formula xml:id="formula_1">trajectories τ h = {(s , a )} HLO =1 as well as a HI-level trajectory τ HI = {(s h , g h )} HHI h=1</formula><p>. We then run Algorithm 2 Hierarchically Guided DAgger (hg-DAgger) 1: Initialize data buffers DHI ← ∅ and Dg ← ∅, g ∈ G 2: Run Hierarchical Behavioral Cloning (Algorithm 1) up to t = Twarm-start 3: for t = Twarm-start + 1, . . . , T do 4: Get a new environment instance with start state s 5: Initialize σ ← ∅ 6: repeat 7:</p><p>g ← µ(s) 8:</p><p>Execute πg, obtain LO-level trajectory τ 9:</p><p>Append (s, g, τ ) to σ 10:</p><p>s ← the last state in τ 11:</p><p>until end of episode 12: Extract τFULL and τHI from σ 13:</p><p>if</p><formula xml:id="formula_2">Inspect FULL (τFULL) = Fail then 14: D ← LabelHI(τHI) 15:</formula><p>Process (s h , g h , τ h ) ∈ σ in sequence as long as g h agrees with the expert's choice g h in D : 16:</p><p>if Inspect(τ h ; g h ) = Fail then 17:</p><p>Append</p><formula xml:id="formula_3">Dg h ← Dg h ∪ LabelLO(τ h ; g h ) 18: break 19:</formula><p>Append DHI ← DHI ∪ D 20: Update subpolicies πg ← Train(πg, Dg) for all g 21: Update meta-controller µ ← Train(µ, DHI)</p><p>Train (lines 8-9) to find the subpolicies π g that best predict a from s , and meta-controller µ that best predicts g h from s h , respectively. Train can generally be any supervised learning subroutine, such as stochastic optimization for neural networks or some batch training procedure. When termination functions β g need to be learned as part of the hierarchical policy, the labels ω g will be provided by the expert as part of τ h = {(s , a , ω )}.</p><p>5 In this setting, hierarchical guidance is automatic, because subpolicy demonstrations only occur in relevant parts of the state space.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Hierarchically Guided DAgger (hg-DAgger)</head><p>Passive IL, e.g., behavioral cloning, suffers from the distribution mismatch between the learning and execution distributions. This mismatch is addressed by interactive IL algorithms, such as SEARN <ref type="bibr" target="#b4">(Daumé et al., 2009</ref>) and DAgger <ref type="bibr" target="#b21">(Ross et al., 2011)</ref>, where the expert provides correct actions along the learner's trajectories through the operation Label FULL . A naïve hierarchical implementation would provide correct labels along the entire hierarchical trajectory via Label HI and Label LO . We next show how to use hierarchical guidance to decrease LO-level expert costs. We leverage two HI-level query types: Inspect LO and Label HI . We use Inspect LO to verify whether the subtasks are successfully completed and Label HI to check whether we are staying in the relevant part of the state space. The details are presented in Algorithm 2, which uses DAgger as the learner on both levels, but the scheme can be adapted to other interactive imitation learners.</p><p>In each episode, the learner executes the hierarchical policy, including choosing a subgoal (line 7), executing the LO-level trajectories, i.e., rolling out the subpolicy π g for the chosen subgoal, and terminating the execution according to β g (line 8). Expert only provides feedback when the agent fails to execute the entire task, as verified by Inspect FULL (line 13). When Inspect FULL fails, the expert first labels the correct subgoals via Label HI (line 14), and only performs LO-level labeling as long as the learner's meta-controller chooses the correct subgoal g h (line 15), but its subpolicy fails (i.e., when Inspect LO on line 16 fails). Since all the preceding subgoals were chosen and executed correctly, and the current subgoal is also correct, LO-level learning is in the "relevant" part of the state space. However, since the subpolicy execution failed, its learning has not been mastered yet. We next analyze the savings in expert cost that result from hierarchical guidance.</p><p>Theoretical Analysis. We analyze the cost of hg-DAgger in comparison with flat DAgger under somewhat stylized assumptions. We assume that the learner aims to learn the meta-controller µ from some policy class M, and subpolicies π g from some class Π LO . The classes M and Π LO are finite (but possibly exponentially large) and the task is realizable, i.e., the expert's policies can be found in the corresponding classes: µ ∈ M, and π g ∈ Π LO , g ∈ G. This allows us to use the halving algorithm (Shalev-Shwartz et al., 2012) as the online learner on both levels. (The implementation of our algorithm does not require these assumptions.)</p><p>The halving algorithm maintains a version space over policies, acts by a majority decision, and when it makes a mistake, it removes all the erring policies from the version space. In the hierarchical setting, it therefore makes at most log |M| mistakes on the HI level, and at most log |Π LO | mistakes when learning each π g . The mistake bounds can be further used to upper bound the total expert cost in both hg-DAgger and flat DAgger. To enable an apples-to-apples comparison, we assume that the flat DAgger learns over the policy class Π FULL = {(µ, {π g } g∈G ) : µ ∈ M, π g ∈ Π LO }, but is otherwise oblivious to the hierarchical task structure. The bounds depend on the cost of performing different types of operations, as defined at the end of Section 3. We consider a modified version of flat DAgger that first calls Inspect FULL , and only requests labels (Label FULL ) if the inspection fails. The proofs are deferred to Appendix A. Theorem 1. Given finite classes M and Π LO and realizable expert policies, the total cost incurred by the expert in hg-DAgger by round T is bounded by</p><formula xml:id="formula_4">T C I FULL + log 2 |M| + |G opt | log 2 |Π LO | (C L HI + H HI C I LO ) + |G opt | log 2 |Π LO | C L LO ,<label>(1)</label></formula><p>where G opt ⊆ G is the set of the subgoals actually used by the expert, G opt := µ (S).</p><p>Theorem 2. Given the full policy class Π FULL = {(µ, {π g } g∈G ) : µ ∈ M, π g ∈ Π LO } and a realizable expert policy, the total cost incurred by the expert in flat DAgger by round T is bounded by</p><formula xml:id="formula_5">T C I FULL + log 2 |M| + |G| log 2 |Π LO | C L FULL .<label>(2)</label></formula><p>Both bounds have the same leading term, T C I FULL , the cost of full inspection, which is incurred every round and can be viewed as the "cost of monitoring." In contrast, the remaining terms can be viewed as the "cost of learning" in the two settings, and include terms coming from their respective mistake bounds. The ratio of the cost of hierarchically guided learning to the flat learning is then bounded as</p><formula xml:id="formula_6">Eq. (1) − T C I FULL Eq. (2) − T C I FULL ≤ C L HI + H HI C I LO + C L LO C L FULL ,<label>(3)</label></formula><p>where we applied the upper bound |G opt | ≤ |G|. The savings thanks to hierarchical guidance depend on the specific costs. Typically, we expect the inspection costs to be O(1), if it suffices to check the final state, whereas labeling costs scale linearly with the length of the trajectory. The cost ratio is then ∝ HHI+HLO HHIHLO . Thus, we realize most significant savings if the horizons on each individual level are substantially shorter than the overall horizon. In particular, if H HI = H LO = √ H FULL , the hierarchically guided approach reduces the overall labeling cost by a factor of √ H FULL . More generally, whenever H FULL is large, we reduce the costs of learning be at least a constant factor-a significant gain if this is a saving in the effort of a domain expert.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Hierarchically Guided IL / RL</head><p>Hierarchical guidance also applies in the hybrid setting with interactive IL on the HI level and RL on the LO level. The HI-level expert provides the hierarchical decomposition, including the pseudo-reward function for each subgoal, <ref type="bibr">6</ref> and is also able to pick a correct subgoal at each step. Similar to hg-DAgger, the labels from HI-level expert are used not only to train the meta-controller µ, but also to limit the LO-level learning to the relevant part of the state space. In Algorithm 3 we provide the details, with DAgger on HI level and Q-learning on LO level. The scheme can be adapted to other interactive IL and RL algorithms.</p><p>The learning agent proceeds by rolling in with its metacontroller (line 7). For each selected subgoal g, the subpolicy π g selects and executes primitive actions via the Algorithm 3 Hierarchically Guided DAgger / Q-learning (hg-DAgger/Q) input Function pseudo(s; g) providing the pseudo-reward input Predicate terminal(s; g) indicating the termination of g input Annealed exploration probabilities g &gt; 0, g ∈ G 1: Initialize data buffers DHI ← ∅ and Dg ← ∅, g ∈ G 2: Initialize subgoal Q-functions Qg, g ∈ G 3: for t = 1, . . . , T do 4: Get a new environment instance with start state s 5: Initialize σ ← ∅ 6: repeat 7: sHI ← s, g ← µ(s) and initialize τ ← ∅ 8: repeat 9:</p><p>a ← g -greedy(Qg, s) 10:</p><p>Execute a, next states,r ← pseudo(s; g) 11:</p><p>Update Qg: a (stochastic) gradient descent step on a minibatch from Dg 12:</p><p>Append (s, a,r,s) to τ and update s ←s 13: until terminal(s; g) 14:</p><p>Append (sHI, g, τ ) to σ 15:</p><p>until end of episode 16: Extract τFULL and τHI from σ 17:</p><p>if Inspect FULL (τFULL) = Fail then 18:</p><formula xml:id="formula_7">D ← LabelHI(τHI) 19:</formula><p>Process (s h , g h , τ h ) ∈ σ in sequence as long as g h agrees with the expert's choice g h in D : 20:</p><p>Append</p><formula xml:id="formula_8">Dg h ← Dg h ∪ τ h Append DHI ← DHI ∪ D 21: else 22: Append Dg h ← Dg h ∪ τ h for all (s h , g h , τ h ) ∈ σ 23: Update meta-controller µ ← Train(µ, DHI)</formula><p>-greedy rule (lines 9-10), until some termination condition is met. The agent receives some pseudo-reward, also known as intrinsic reward <ref type="bibr" target="#b14">(Kulkarni et al., 2016</ref>) (line 10). Upon termination of the subgoal, agent's meta-controller µ chooses another subgoal and the process continues until the end of the episode, where the involvement of the expert begins. As in hg-DAgger, the expert inspects the overall execution of the learner (line 17), and if it is not successful, the expert provides HI-level labels, which are accumulated for training the meta-controller.</p><p>Hierarchical guidance impacts how the LO-level learners accumulate experience. As long as the meta-controller's subgoal g agrees with the expert's, the agent's experience of executing subgoal g is added to the experience replay buffer D g . If the meta-controller selects a "bad" subgoal, the accumulation of experience in the current episode is terminated. This ensures that experience buffers contain only the data from the relevant part of the state space.</p><p>Algorithm 3 assumes access to a real-valued function pseudo(s; g), providing the pseudo-reward in state s when executing g, and a predicate terminal(s; g), indicating the termination (not necessarily successful) of subgoal g. This setup is similar to prior work on hierarchical RL <ref type="bibr" target="#b14">(Kulkarni et al., 2016)</ref>. One natural defini-tion of pseudo-rewards, based on an additional predicate success(s; g) indicating a successful completion of subgoal g, is as follows:</p><formula xml:id="formula_9">     1</formula><p>if success(s; g) −1 if ¬success(s; g) and terminal(s; g) −κ otherwise, where κ &gt; 0 is a small penalty to encourage short trajectories. The predicates success and terminal are provided by an expert or learnt from supervised or reinforcement feedback. In our experiments, we explicitly provide these predicates to both hg-DAgger/Q as well as the hierarchical RL, giving them advantage over hg-DAgger, which needs to learn when to terminate subpolicies.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>We evaluate the performance of our algorithms on two separate domains: (i) a simple but challenging maze navigation domain and (ii) the Atari game Montezuma's Revenge.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Maze Navigation Domain</head><p>Task Overview. <ref type="figure">Figure 1</ref> (left) displays a snapshot of the maze navigation domain. In each episode, the agent encounters a new instance of the maze from a large collection of different layouts. Each maze consists of 16 rooms arranged in a 4-by-4 grid, but the openings between the rooms vary from instance to instance as does the initial position of the agent and the target. The agent (white dot) needs to navigate from one corner of the maze to the target marked in yellow. Red cells are obstacles (lava), which the agent needs to avoid for survival. The contextual information the agent receives is the pixel representation of a bird's-eye view of the environment, including the partial trail (marked in green) indicating the visited locations.</p><p>Due to a large number of random environment instances, this domain is not solvable with tabular algorithms. Note that rooms are not always connected, and the locations of the hallways are not always in the middle of the wall. Primitive actions include going one step up, down, left or right. In addition, each instance of the environment is designed to ensure that there is a path from initial location to target, and the shortest path takes at least 45 steps (H FULL = 100). The agent is penalized with reward −1 if it runs into lava, which also terminates the episode. The agent only receives positive reward upon stepping on the yellow block.</p><p>A hierarchical decomposition of the environment corresponds to four possible subgoals of going to the room immediately to the north, south, west, east, and the fifth possible subgoal go to target (valid only in the room containing the target). In this setup, H LO ≈ 5 steps, and H HI ≈ 10-12 steps. The episode terminates after 100 primitive steps if the agent is unsuccessful. The subpolicies and meta-controller use similar neural network architectures and only differ in the number of action outputs. (Details of network architecture are provided in Appendix B.)</p><p>Hierarchically Guided IL. We first compare our hierarchical IL algorithms with their flat versions. The algorithm performance is measured by success rate, defined as the average rate of successful task completion over the previous 100 test episodes, on random environment instances not used for training. The cost of each Label operation equals the length of the labeled trajectory, and the cost of each Inspect operation equals 1.</p><p>Both h-BC and hg-DAgger outperform flat imitation learners <ref type="figure">(Figure 2, left)</ref>. hg-DAgger, in particular, achieves consistently the highest success rate, approaching 100% in fewer than 1000 episodes. <ref type="figure">Figure 2</ref> (left) displays the median as well as the range from minimum to maximum success rate over 5 random executions of the algorithms.</p><p>Expert cost varies significantly between the two hierarchical algorithms. <ref type="figure">Figure 2</ref> (middle) displays the same success rate, but as a function of the expert cost. hg-DAgger achieves significant savings in expert cost compared to other imitation learning algorithms thanks to a more efficient use of the LO-level expert through hierarchical guidance. <ref type="figure">Figure 1 (middle)</ref> shows that hg-DAgger requires most of its LO-level labels early in the training and requests primarily HI-level labels after the subgoals have been mastered. As a result, hg-DAgger requires only a fraction of LO-level labels compared to flat DAgger <ref type="figure">(Figure 2, right)</ref>.</p><p>Hierarchically Guided IL / RL. We evaluate hgDAgger/Q with deep double Q-learning (DDQN, <ref type="bibr" target="#b29">Van Hasselt et al., 2016)</ref> and prioritized experience replay <ref type="bibr" target="#b23">(Schaul et al., 2015b)</ref> as the underlying RL procedure. Each subpolicy learner receives a pseudo-reward of 1 for each successful execution, corresponding to stepping through the correct door (e.g., door to the north if the subgoal is north) and negative reward for stepping into lava or through other doors.</p><p>Figure 1 (right) shows the learning progression of hgDAgger/Q, implying two main observations. First, the number of HI-level labels rapidly increases initially and then flattens out after the learner becomes more successful, thanks to the availability of Inspect FULL operation. As the hybrid algorithm makes progress and the learning agent passes the Inspect FULL operation increasingly often, the algorithm starts saving significantly on expert feedback. Second, the number of HI-level labels is higher than for both hg-DAgger and h-BC. Inspect FULL returns Fail often, especially during the early parts of training. This is primarily due to the slower learning speed of Q-learning at the <ref type="bibr">LO</ref>   level. This means that the hybrid algorithm is suited for settings where LO-level expert labels are either not available or more expensive than the HI-level labels. This is exactly the setting we analyze in the next section.</p><p>In Appendix B.1, we compare hg-DAgger/Q with hierarchical RL (h-DQN, <ref type="bibr" target="#b14">Kulkarni et al., 2016)</ref>, concluding that h-DQN, even with significantly more LO-level samples, fails to reach success rate comparable to hg-DAgger/Q. Flat Q-learning also fails in this setting, due to a long planning horizon and sparse rewards <ref type="bibr" target="#b16">(Mnih et al., 2015)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Hierarchically Guided IL / RL vs Hierarchical RL:</head><p>Comparison on Montezuma's Revenge Task Overview. Montezuma's Revenge is among the most difficult Atari games for existing deep RL algorithms, and is a natural candidate for hierarchical approach due to the sequential order of subtasks. <ref type="figure" target="#fig_4">Figure 3</ref> (left) displays the environment and an annotated sequence of subgoals. The four designated subgoals are: go to bottom of the right stair, get the key, reverse path to go back to the right stair, then go to open the door (while avoiding obstacles throughout).</p><p>The agent is given a pseudo-reward of 1 for each subgoal completion and -1 upon loss of life. We enforce that the agent can only have a single life per episode, preventing the agent from taking a shortcut after collecting the key (by taking its own life and re-initializing with a new life at the starting position, effectively collapsing the task horizon). Note that for this setting, the actual game environment is equipped with two positive external rewards corresponding to picking up the key (subgoal 2, reward of 100) and using the key to open the door (subgoal 4, reward of 300). Optimal execution of this sequence of subgoals requires more than 200 primitive actions. Unsurprisingly, flat RL algorithms often achieve a score of 0 on this domain <ref type="bibr" target="#b16">(Mnih et al., 2015;</ref><ref type="bibr" target="#b31">Wang et al., 2016)</ref>.</p><p>hg-DAgger/Q versus h-DQN. Similar to the maze domain, we use DDQN with prioritized experience replay at the LO level of hg-DAgger/Q. We compare its performance with h-DQN using the same neural network architecture as <ref type="bibr" target="#b14">Kulkarni et al. (2016)</ref>. <ref type="figure" target="#fig_4">Figure 3</ref> (middle) shows the learning progression of our hybrid algorithm. The HI-level horizon H HI = 4, so meta-controller is learnt from fairly few samples. Each episode roughly corresponds to one Label HI query. Subpolicies are learnt in the order of subgoal execution as prescribed by the expert. We introduce a simple modification to Q-learning on the LO level to speed up learning: the accumulation of experience replay buffer does not begin until the first time the agent encounters positive pseudo-reward. During this period, in effect, only the meta-controller is being trained. This modification ensures the reinforcement learner encounters at least some positive pseudo-rewards, which boosts learning in the long horizon settings and should naturally work with any off-policy learning scheme (DQN, DDQN, Dueling-DQN). For a fair comparison, we introduce the same modification to the h-DQN learner (otherwise, h-DQN failed to achieve any reward).</p><p>To mitigate the instability of DQN (see, for example, learning progression of subgoal 2 and 4 in <ref type="figure" target="#fig_4">Figure 3</ref>, middle), we introduce one additional modification. We terminate training of subpolicies when the success rate exceeds 90%, at which point the subgoal is considered learned. Subgoal success rate is defined as the percentage of successful subgoal completions over the previous 100 attempts.</p><p>Figure 3 (right) shows the median and the inter-quartile range over 100 runs of hg-DAgger/Q and hg-DQN. <ref type="bibr">7</ref> The LO-level sample sizes are not directly comparable with the middle panel, which displays the learning progression for a random successful run, rather than an aggregate over multiple runs. In all of our experiments, the performance of the imitation learning component is stable across many different trials, whereas the performance of the reinforcement learning component varies substantially. Subgoal 4 (door) is the most difficult to learn due to its long horizon whereas subgoals 1-3 are mastered very quickly, especially compared to h-DQN. Our algorithm benefits from hierarchical guidance and accumulates experience for each subgoal only within the relevant part of the state space, where the subgoal is part of an optimal trajectory. In contrast, h-DQN <ref type="bibr">7</ref> In Appendix B, we present additional plots, including 10 best runs of each algorithm, subgoal completion rate over 100 trials, and versions of <ref type="figure" target="#fig_4">Figure 3</ref> (middle) for additional random instances. may pick bad subgoals and the resulting LO-level samples then "corrupt" the subgoal experience replay buffers and substantially slow down convergence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>8</head><p>The number of HI-level labels in <ref type="figure" target="#fig_4">Figure 3</ref> (middle) can be further reduced by using a more efficient RL procedure than DDQN at the LO level. In the specific example of Montezuma's Revenge, the actual human effort is in fact much smaller, since the human expert needs to provide a sequence of subgoals only once (together with simple subgoal detectors), and then HI-level labeling can be done automatically. The human expert only needs to understand the high level semantics, and does not need to be able to play the game.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We have presented hierarchical guidance framework and shown how it can be used to speed up learning and reduce the cost of expert feedback in hierarchical imitation learning and hybrid imitation-reinforcement learning.</p><p>Our approach can be extended in several ways. For instance, one can consider weaker feedback such as preference or gradient-style feedback <ref type="bibr" target="#b9">(Fürnkranz et al., 2012;</ref><ref type="bibr" target="#b15">Loftin et al., 2016;</ref><ref type="bibr" target="#b3">Christiano et al., 2017)</ref>, or a weaker form of imitation feedback, only saying whether the agent action is correct or incorrect, corresponding to bandit variant of imitation learning <ref type="bibr" target="#b21">(Ross et al., 2011)</ref>.</p><p>Our hybrid IL / RL approach relied on the availability of a subgoal termination predicate indicating when the subgoal is achieved. While in many settings such a termination predicate is relatively easy to specify, in other settings this predicate needs to be learned. We leave the question of learning the termination predicate, while learning to act from reinforcement feedback, open for future research.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>of Maryland, College Park, MD. Correspondence to: Hoang M. Le &lt;hmle@caltech.edu&gt;. Proceedings of the 35 th International Conference on Machine Learning, Stockholm, Sweden, PMLR 80, 2018. Copyright 2018 by the author(s).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>. In many settings, LO-level in- spection will require significantly less effort than LO-level labeling, i.e.,</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 1 .Figure 2 .</head><label>12</label><figDesc>Figure 1. Maze navigation. (Left) One sampled environment instance; the agent needs to navigate from bottom right to bottom left. (Middle) Expert cost over time for hg-DAgger; the cost of Label operations equals the length of labeled trajectory, the cost of Inspect operations is 1. (Right) Success rate of hg-DAgger/Q and the HI-level label cost as a function of the number of LO-level RL samples.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Montezuma's revenge: hg-DAgger/Q versus h-DQN. (Left) Screenshot of Montezuma's Revenge in black-and-white with color-coded subgoals. (Middle) Learning progression of hg-DAgger/Q in solving the first room of Montezuma's Revenge for a typical successful trial. Subgoal colors match the left pane; success rate is the fraction of times the LO-level RL learner achieves its subgoal over the previous 100 attempts. (Right) Learning performance of hg-DAgger/Q versus h-DQN (median and inter-quartile range).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>: for h HI = 1 . . . H HI do</figDesc><table>2: 
+
+observe state s and choose subgoal g ← µ(s) 
+
+3: 
+
+for h LO = 1 . . . H LO do 
+
+4: 
+
+observe state s 
+
+5: 
+
+if β g (s) then break 
+
+6: 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>level, requiring more expert feedback at the HI</figDesc><table>episode 0-250 
+(success rate 27%) 
+
+250-500 
+(81%) 
+
+500-750 
+(91%) 
+
+750-1000 
+(97%) 
+
+0K 
+
+2K 
+
+4K 
+
+6K 
+
+8K 
+
+10K 
+
+expert cost 
+
+hg-DAgger (Alg. 2) 
+expert cost per type 
+HI-level labeling 
+LO-level labeling 
+LO-level inspection 
+
+0K 50K 100K 150K 200K 250K 300K 350K 400K 
+
+RL samples at LO-level 
+
+0% 
+
+20% 
+
+40% 
+
+60% 
+
+80% 
+
+100% 
+
+success rate 
+
+hg-DAgger/Q (Alg. 3) 
+RL samples vs. expert cost 
+
+0K 
+
+5K 
+
+10K 
+
+15K 
+
+20K 
+
+25K 
+
+30K 
+
+35K 
+
+40K 
+
+HI-level expert cost 
+success rate 
+HI-level expert cost 
+every 5K episodes 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Code and experimental setups are available at https:// sites.google.com/view/hierarchical-il-rl</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">While we use the term state for simplicity, we do not require the environment to be fully observable or Markovian. 4 The trajectory might optionally include a reward signal after each primitive action, which might either come from the environment, or be a pseudo-reward as we will see in Section 5.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">In our hierarchical imitation learning experiments, the termination functions are all learned. Formally, the termination signal ωg, can be viewed as part of an augmented action at LO level.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="6">This is consistent with many hierarchical RL approaches, including options (Sutton et al., 1999), MAXQ (Dietterich, 2000), UVFA (Schaul et al., 2015a) and h-DQN (Kulkarni et al., 2016).</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="8">In fact, we further reduced the number of subgoals of h-DQN to only two initial subgoals, but the agent still largely failed to learn even the second subgoal (see the appendix for details).</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>The majority of this work was done while HML was an intern at Microsoft Research. HML is also supported in part by an Amazon AI Fellowship.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Apprenticeship learning via inverse reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Modular multitask reinforcement learning with policy sketches</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Andreas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning to search better than your teacher</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-W</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krishnamurthy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iii</forename><surname>Daume</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Langford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Deep reinforcement learning from human preferences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Christiano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Leike</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Martic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Legg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amodei</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Search-based structured prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Daumé</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Langford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Marcu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">75</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="297" to="325" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Feudal reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Hierarchical reinforcement learning with the MAXQ value function decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">G</forename><surname>Dietterich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Artif. Intell. Res.(JAIR)</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="227" to="303" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Frames: a corpus for adding memory to goal-oriented dialogue systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>El Asri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Schulz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sharma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zumer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Harris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Fine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mehrotra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Suleman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 18th Annual SIGdial Meeting on Discourse and Dialogue</title>
+		<meeting>the 18th Annual SIGdial Meeting on Discourse and Dialogue</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="207" to="219" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Exploration-exploitation in mdps with options</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fruit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lazaric</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.08667</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Preference-based reinforcement learning: a formal framework and a policy iteration algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fürnkranz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hüllermeier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-H</forename><surname>Park</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">89</biblScope>
+			<biblScope unit="issue">1-2</biblScope>
+			<biblScope unit="page" from="123" to="156" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Deep reinforcement learning in parameterized action space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hausknecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Stone</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Puma: Planning under uncertainty with macro-actions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brunskill</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roy</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Deep q-learning from demonstrations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vecerik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Pietquin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lanctot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Piot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sendonaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dulac-Arnold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Osband</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Agapiou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Generative adversarial imitation learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ermon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4565" to="4573" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Hierarchical deep reinforcement learning: Integrating temporal abstraction and intrinsic motivation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">D</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Narasimhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saeedi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3675" to="3683" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Learning behaviors via human-delivered discrete feedback: modeling implicit feedback strategies to speed up learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Loftin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Macglashan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">L</forename><surname>Littman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">E</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">L</forename><surname>Roberts</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAMAS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Fidjeland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ostrovski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page">529</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Asynchronous methods for deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Badia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Harley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1928" to="1937" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Overcoming exploration in reinforcement learning with demonstrations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Mcgrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andrychowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abbeel</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Composite task-completion dialogue policy learning via hierarchical deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Celikyilmaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-F</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2017 Conference on Empirical Methods in Natural Language Processing</title>
+		<meeting>the 2017 Conference on Empirical Methods in Natural Language Processing</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2231" to="2240" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Reinforcement and imitation learning via interactive no-regret learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bagnell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.5979</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">A reduction of imitation learning and structured prediction to no-regret online learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Gordon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bagnell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="627" to="635" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Universal value function approximators</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Horgan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1312" to="1320" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Quan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Antonoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.05952</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">Prioritized experience replay. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Online learning and online convex optimization. Foundations and Trends R in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="107" to="194" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Deeply aggrevated: Differentiable imitation learning for sequential prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Venkatraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Gordon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Boots</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bagnell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.01030</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Intra-option learning about temporally abstract actions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hierarchical</forename><surname>Imitation</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Reinforcement Learning Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Precup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename><surname>Singh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">98</biblScope>
+			<biblScope unit="page" from="556" to="564" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Between mdps and semi-mdps: A framework for temporal abstraction in reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Precup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Singh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Artificial intelligence</title>
+		<imprint>
+			<biblScope unit="volume">112</biblScope>
+			<biblScope unit="issue">1-2</biblScope>
+			<biblScope unit="page" from="181" to="211" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A game-theoretic approach to apprenticeship learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Syed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Schapire</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1449" to="1456" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Deep reinforcement learning with double q-learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Van Hasselt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Guez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="page" from="2094" to="2100" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Feudal networks for hierarchical reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">S</forename><surname>Vezhnevets</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.01161</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Dueling network architectures for deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hessel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hasselt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lanctot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Generating long-term trajectories using deep hierarchical networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lucey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Maximum entropy inverse reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">D</forename><surname>Ziebart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Maas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bagnell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Dey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

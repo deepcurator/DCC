@@ -1,0 +1,831 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Predict and Constrain: Modeling Cardinality in Deep Structured Prediction</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nataly</forename><surname>Brukhim</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amir</forename><surname>Globerson</surname></persName>
+						</author>
+						<title level="a" type="main">Predict and Constrain: Modeling Cardinality in Deep Structured Prediction</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Many machine learning problems require the prediction of multi-dimensional labels. Such structured prediction models can benefit from modeling dependencies between labels. Recently, several deep learning approaches to structured prediction have been proposed. Here we focus on capturing cardinality constraints in such models. Namely, constraining the number of non-zero labels that the model outputs. Such constraints have proven very useful in previous structured prediction approaches, but it is a challenge to introduce them into a deep learning framework. Here we show how to do this via a novel deep architecture. Our approach outperforms strong baselines, achieving state-of-the-art results on multi-label classification benchmarks.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Deep structured prediction models have attracted considerable interest in recent years <ref type="bibr" target="#b4">(Belanger et al. 2017;</ref><ref type="bibr" target="#b25">Zheng et al. 2015;</ref><ref type="bibr" target="#b6">Chen et al. 2015;</ref><ref type="bibr" target="#b17">Ma &amp; Hovy 2016)</ref>. The goal in the structured prediction setting is to predict multiple labels simultaneously while utilizing dependencies between labels to improve accuracy. Examples of such application domains include dependency parsing of text and semantic image segmentation.</p><p>Several recent approaches have proposed to combine the representational power of deep neural networks with the ability of structured prediction models to capture label dependence. This concept has been shown to be effective for various applications <ref type="bibr" target="#b17">Ma &amp; Hovy 2016;</ref><ref type="bibr" target="#b4">Belanger et al. 2017)</ref>. However, there are still many important label dependency structures which are not fully captured by these approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>One of the most effective forms of label dependencies is</head><p>Proceedings of the 35 th International Conference on Machine Learning, <ref type="bibr">Stockholm, Sweden, PMLR 80, 2018</ref><ref type="bibr">. Copyright 2018</ref> by the author(s).</p><p>cardinality <ref type="bibr" target="#b23">Tarlow et al. 2010;</ref><ref type="bibr" target="#b20">Milch et al. 2008;</ref><ref type="bibr" target="#b22">Swersky et al. 2012;</ref><ref type="bibr" target="#b13">Gupta et al. 2007</ref>). Namely, the fact that the overall number of labels taking a specific value has a distribution specific to the domain. For example, in natural language processing, they can express a constraint on the number of occurrences of a part-of-speech (e.g., that each sentence contains at least one verb <ref type="bibr" target="#b10">(Ganchev et al., 2010)</ref>). In computer vision, a cardinality potential can encode a prior distribution over object sizes in an image.</p><p>Although cardinality potentials have been very effective in many structured prediction works, they have not yet been successfully integrated into deep structured prediction frameworks. This is precisely the goal of our work.</p><p>The challenge in modeling cardinality in deep learning is that cardinality is essentially a combinatorial notion, and it is thus not clear how to integrate it into a differentiable model. Our proposal to achieve this goal is based on two key observations. First, we note that learning to predict how many labels are active for a given input is easier than predicting which labels are active. Hence, we break our inference process into two complementary components: we first estimate the label cardinality for a given input using a learned neural network, and then predict a label that satisfies this constraint.</p><p>The second observation is that constraining a label to satisfy a cardinality constraint can be approximated via projected gradient descent, where the cardinality constraint corresponds to a set of linear constraints. Thus, the overall label prediction architecture performs projected gradient descent in label space. Moreover, the above projection can be implemented via sorting, and results in an end-to-end differentiable architecture which can be directly optimized to maximize any performance measure (e.g., F 1 , recall at K, etc.). Importantly, with this approach cardinality can be naturally integrated with other higher-order scores, such as the global scores considered in <ref type="bibr" target="#b3">Belanger &amp; McCallum 2016</ref>, and used in our model as well.</p><p>Our proposed method significantly improves prediction accuracy on several datasets, when compared to recent deep structured prediction methods. We also experiment with other approaches for modeling cardinality in deep structured prediciton, and observe that our Predict and Constrain method outperforms these.</p><p>Taken together, our results demonstrate that deep structured prediction models can benefit from representing cardinality, and that a Predict and Constrain approach is an effective method for introducing cardinality in a differentiable endto-end manner.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Preliminaries</head><p>We consider the setting of assigning L labels y = (y 1 , . . . , y L ) to an input x ∈ X . We assume y i are binary labels, however our approach can be generalized to the multi-class case. We denote [L] = {1, ..., L}.</p><p>To model our problem in a structured prediction framework, we consider a score function s(x, y). The score is meant to reflect how "compatible" a label y is with an input x. Thus, for a given input x, the predicted label is:</p><formula xml:id="formula_0">y = argmax y s(x, y)<label>(1)</label></formula><p>In practice, we will maximize over y by relaxing the integrality constraint and using projected gradient ascent. We assume that s(x, y) can be decomposed as follows,</p><formula xml:id="formula_1">s(x, y) = i s i (x, y i ) + s g (y) + s z(x) (y)<label>(2)</label></formula><p>where s i is a function that depends on a single output variable (i.e., a unary potential), s g is an arbitrary learned global potential defined over all variables and independent of the input, and s z(x) is a cardinality potential which constrains y to be of cardinality z(x), as explained in Section 3. For brevity, we denote the cardinality potential as s z .</p><p>Concretely, s i (x, y i ) is defined as the multiplication of y i by a linear function of a feature representation of the input, where the feature representation is given by a multi-layer perceptron f (x). The global score s g is obtained by applying a neural network over the variables, and evaluates such assignments independent of x, similarly to the architecture used by <ref type="bibr" target="#b3">Belanger &amp; McCallum 2016</ref>.</p><p>The components of the score function s(x, y) are parameterized by a set of weights w. As in Belanger &amp; McCallum 2016, we learn these by end-to-end minimization of a loss function on the training data. In what follows we describe our method in more detail.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Learning with Cardinality Potentials</head><p>We next explain how cardinality is modeled in our score function, and how the score is maximized. Our cardinality score has two key components. First, a learned cardinality predictor z = h(x) that maps an input to an estimate of the cardinality of y. Second, the cardinality potential s z (y), which corresponds to the hard constraint that the cardinality of y is equal to z. Namely:</p><formula xml:id="formula_2">s z (y) = 0 if i y i = z −∞ otherwise .<label>(3)</label></formula><p>We refer to the method of using this two component potential as a Predict and Constrain approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Inference with Projected Gradient Ascent</head><p>We turn to the problem of maximizing the score function with respect to y. Exact maximization is intractable for the potentials we consider. As in <ref type="bibr" target="#b3">Belanger &amp; McCallum 2016</ref> we address this by first relaxing the integrality constraint on y, and using gradient ascent for inference. However, the cardinality constraint means that we cannot use naive gradient ascent on the relaxed y. Instead we will repeatedly project y onto the constrained space.</p><p>We first relax the discrete constraint on the binary variables y to a continuous constraint y i ∈ [0, 1]. Next, the score s(x, y) is maximized with respect to the relaxed y using projected gradient ascent, as depicted in <ref type="figure" target="#fig_0">Figure 1</ref>. At each iteration of projected gradient ascent, the following two updates are performed. First, we apply a gradient update step over the score function, excluding the cardinality potential, with respect to y. Second, we project it onto the cardinality constrained space, as explained in Section 3.2.</p><p>The above projected-gradient updates are repeated for T iterations, where the initial variables y 0 are given by a sigmoid function applied over the unary terms. Since all update operations are differentiable, this results in an end-to-end differentiable architecture. Thus, we can directly apply a loss function to the output of this network y T , and optimize it (see <ref type="bibr" target="#b4">Belanger et al. 2017;</ref><ref type="bibr" target="#b18">Maclaurin et al. 2015)</ref>.</p><p>Let (y, y * ) be a label-loss function, reflecting the error of predicting a label y where the true label is y * . For example, (y, y * ) might be the cross-entropy loss function, or a differentiable approximation of any performance measure of interest, such as the F 1 measure we use in our experiments (see Equation <ref type="formula" target="#formula_0">(10)</ref>).</p><p>Given training data (x, y * ), let y t (x) be the value of label y after t iterations of projected gradient ascent. We would like to minimize the final loss (y T (x), y * ). As in other end-toend approaches <ref type="bibr" target="#b4">(Belanger et al., 2017)</ref>, we found it better to apply the loss function over all T iterations. Specifically, we minimize the following objective:</p><formula xml:id="formula_3">(x, y * ) = 1 T T t=1 (y t (x), y * ) T − t + 1</formula><p>By using all iterates in the objective, the model learns to converge quickly during inference. Additionally, the fact that the loss function incorporates all layers helps avoiding vanishing gradients.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Enforcing Cardinality via Projection</head><p>We now turn to explain the implementation of the projection step. During inference we iteratively apply projected gradient ascent over the variables for T steps. In each step t ∈ [T ] of the inference pipeline we update the label variables as follows,ỹ</p><formula xml:id="formula_4">t+1 = y t + η∇ ys (x, y)<label>(4)</label></formula><formula xml:id="formula_5">y t+1 = Π Z ỹ t+1 (5) wheres(x, y) = i s i (y i , x) + s g (y)</formula><p>, η is the inference learning rate, and Π Z denotes an approximate projection operator, described below. The gradient update step is given by Equation (4), and Equation (5) corresponds to the projection step. The operator Π Z differentiably computes an approximation of a Euclidean projection onto a set defined as,</p><formula xml:id="formula_6">Z = {y|∀i.y i ∈ [0, 1], i y i = z}</formula><p>with z obtained using the cardinality predictor z(x) 1 . Thus, Π Z (v) approximately solves the following problem,</p><formula xml:id="formula_7">minimize u 1 2 v − u 2 2 subject to L i=1 u i = z, 0 ≤ u i ≤ 1, ∀i ∈ [L].<label>(6)</label></formula><p>First, we note that it is possible to compute the above minimization directly by solving the convex optimization problem in (6). However, it does not naturally translate into an end-to-end differentiable network, as detailed in Section 4.1. Instead, we construct operator Π Z using two sub-processes, each computing a projection onto a different set, A and B,</p><formula xml:id="formula_8">such that Z = A ∩ B. Let A = {y|∀i.y i ≤ 1}. Given Algorithm 1 Soft projection onto the simplex Input: vector v ∈ R L , cardinality z ∈ [Z] Sort v into µ: µ 1 ≥ ... ≥ µ L Computeμ the cumulative sum of µ Let I be a vector of indices 1, ..., L. δ = Softsign µ • I − (μ − z) ρ = Softmax δ • I θ = 1 I T ρ μ T ρ − z Output: max(v − θ, 0)</formula><p>y, its Euclidean projection onto A is obtained simply by clipping values larger than 1, i.e. Π A (y) = min(y, 1). Let B = {y|∀i.y i ≥ 0, i y i = z}, the positive simplex. When z = 1, B is the probability simplex. The Euclidean projection onto B can be done using an O(L log L) algorithm which relies on sorting <ref type="bibr" target="#b7">(Duchi et al., 2008)</ref>.</p><p>In designing our end-to-end differentiable network, we must take into account the smoothness restriction of our network components. Hence, we devise a differentiable variation of the simplex projection algorithm. The soft procedure for computing Π B (y) is given in Algorithm 1. For differential sorting we use a sorting component based on a differential variation of Radix sort, built in the deep learning library TensorFlow <ref type="bibr" target="#b0">(Abadi et al., 2015)</ref>. It is an interesting direction for future research to explore other differentiable sorting operations that can be computed more efficiently.</p><p>Next, we need to combine the outputs of the operators Π A (y) and Π B (y) to output the desired Π Z (y). If A and B were affine sets we could have applied the alternating projection method <ref type="bibr" target="#b9">(Escalante &amp; Raydan, 2011)</ref>, by alternately projecting onto the sets A and B. In this case, the method is guaranteed to converge to the Euclidean projection of y onto the intersection Z = A ∩ B. Since these are not affine sets due to the inequality constraints, this method is only guaranteed to converge to some point in the intersection.</p><p>Instead, we use Dykstra's algorithm <ref type="bibr" target="#b5">(Boyle &amp; Dykstra, 1986)</ref> which is a variant of the alternating projection method. Dykstra's algorithm converges to the Euclidean projection onto the intersection of convex sets, such as A and B. Specifically, for each step r ∈ [R] for a fixed number of iterations R we compute the following sequence,</p><formula xml:id="formula_9">y (r) = Π A (y (r) + p (r) ) p (r+1) = y (r) + p (r) −ỹ (r) y (r+1) = Π B (ỹ (r) + q (r) ) q (r+1) =ỹ (r) + q (r) − y (r+1)</formula><p>Where p (0) = q (0) = 0. Empirically, we find that a small number of iterations is sufficient, and we set R = 2 in all our experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Review of Alternative Approaches</head><p>In this section we review alternative approaches to modeling cardinality. Our goal is to further examine possible directions of dealing with complex global structures of the output labels, as well as to demonstrate the motivation behind the design choices made in our deep structured architecture.</p><p>First, we consider an architecture which only consists of the unary and cardinality scores, s i and s z , discarding the global potential s g . In this case, exact maximization is possible by simply sorting the unary terms and obtaining the top z values. The maximizer y * is the binary vector in which the labels corresponding to the top z values are on. This approach can be trained using standard structured hinge loss.</p><p>Although appealing in its simplicity, this method fails to perform as well without utilizing the expressiveness of the global score s g , which captures variable interactions that cannot be modeled by cardinality or unary potentials alone. SPENs <ref type="bibr" target="#b3">(Belanger &amp; McCallum, 2016)</ref> have demonstrated the expressive power of such global scores to captures important structural dependencies among labels, such as mutual exclusivity and implicature.</p><p>The y i ∈ [0, 1] constraint may be achieved directly by setting y = σ(α) where σ is the sigmoid function. This is the approach taken in <ref type="bibr" target="#b4">Belanger et al. 2017</ref>. We could have used this representation instead of clipping, though due to our implementation of cardinality constraints as projection in y space, clipping is more natural.</p><p>Since the global score s g is used in our framework, it can in principle model cardinality, eliminating the need for the cardinality potential s z . However, such a neural network would require using a deeper structure with more parameters, and is thus prone to overfitting. Additionally, the projection operator used in our network is tailored for the cardinality case, and is thus more effective. We have experimented with an architecture which relies only on unary and global scores, and observed that adding cardinality to those improves performance, as demonstrated in Section 6.</p><p>Our cardinality component introduces a hard constraint on label counts. Alternatively, the projection component of our pipeline could conceivably be replaced with a cardinalitydependent potential as follows. Let w z be a score assigned to labels y with i y i = z. To implement this in a differentiable manner, define I z (y) = σ i y i − z , where σ is the sigmoid function. We then define,</p><formula xml:id="formula_10">s z (y) = w z · I z (y) · 1 − I z+1 (y)<label>(7)</label></formula><p>If a threshold function was used instead of the sigmoid function, this term exactly assigns a score w z to labels of cardinality z. By using the sigmoid function we obtain a differentiable representation of that potential. The advantage of that approach is that no projection is needed and a simple optimization over y i ∈ [0, 1] is sufficient. However, in practice we have found that it does not perform as well as our Predict and Constrain approach, as shown in Section 6.</p><p>The potential defined in Equation <ref type="formula" target="#formula_10">(7)</ref> is another way of modeling "hard" cardinality in a differentiable way. Instead of choosing this "hard" modeling form, we have also examined a "softer" notion of cardinality. Specifically, setting</p><formula xml:id="formula_11">s z (y) = w z · i y i − z 2 2</formula><p>, encourages the label count to be within a small range from a predicted (or fixed) cardinality z.</p><p>However, similarly to the s z discussed above, these potentials have a smaller effect on the inner optimization than applying projection, while a natural way of modeling cardinality via projection is in a "hard" form. Essentially, the design of s z as in Equation <ref type="formula" target="#formula_2">(3)</ref>, and its differentiable implementation as a projection operation, exhibits the best empirical performance compared to the alternatives discussed above.</p><p>Finally, it is possible to frame the task of maximizing s(x, y) as a mixed integer linear program, obtaining an exact inference scheme for our network.</p><p>2 In order to train our model we could use the standard structured hinge loss. This formulation could also be relaxed to a linear program making it more efficient to solve. However, solving an LP for each prediction is impractical.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Fast Exact Projection</head><p>Our projection scheme relies on Dykstra's algorithm which requires us to alternately apply Π A and Π B in an iterative fashion. In order to solve optimization problem 6 to optimality we would need to encode several iterates of these alternations in our computation graph, to form a deeper network.</p><p>Instead, we could compute the projection Π Z by solving optimization problem 6 directly, without separately applying Π A and Π B . A solution to problem in Equation 6 was given by <ref type="bibr" target="#b12">Gupta et al. 2010</ref>. They also describe a fast linear-time algorithm to obtain the maximizer u * . We will give a brief description of their method.</p><p>Assume w.l.o.g. that v is sorted such that v 1 ≥ ... ≥ v n . Let ρ 1 , ρ 2 be the indices up until which all projected values are ones, and after which all projected values are zeros, respectively. Then, the values of the maximizer u * take the following form,</p><formula xml:id="formula_12">u i =      0 if v i − λ ≤ 0 v i − λ if 0 &lt; v i − λ &lt; 1 1 if v i − λ ≥ 1<label>(8)</label></formula><p>with λ defined as follows,</p><formula xml:id="formula_13">λ = ρ2 i=ρ1+1 v i − (z − ρ 1 ) ρ 2 − ρ 1<label>(9)</label></formula><p>The algorithm suggested in <ref type="bibr" target="#b12">Gupta et al. 2010</ref> computes λ in an iterative fashion, based on the fact that z is a piecewise linear function in λ with points of discontinuity at values v andṽ = max(v − 1, 0). The algorithm requires maintaining an uncertainty interval for λ, which is initialized at [min(ṽ), max(v)]. In each iteration j ∈ [J] we obtain λ j , the median of the merged set of unique values ofṽ and v, lying in the current uncertainty interval. We then need to compare z j to z, where z j can be computed using Equation 9. The size of the uncertainty interval is reduced in every iteration, until the correct value is recovered.</p><p>Although this method efficiently computes the correct projection, it requires applying non-trivial combinatorial operations which do not naturally translate to differentiable operations, such as set-union, and median.</p><p>We have experimented with a differentiable implementation of this algorithm in Section 6. The projection algorithm requires many components added to the computation graph making it deeper and thus harder to backpropagate through. Alternatively, by iterating for only a small number of iterations, the resulting λ J is far from the correct λ.</p><p>Overall, in this end-to-end setting, we found it to have inferior performance compared to the alternating projection method described in Section 3.2. Instead, the use of Dykstra's algorithm with a few alternating projection iterations, was both efficient and thus easier to differentiate through, and resulted in a good approximation of the correct maximizer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Related Work</head><p>Several recent approaches have applied gradient-based inference to a variety of structured prediction tasks <ref type="bibr" target="#b3">(Belanger &amp; McCallum 2016;</ref><ref type="bibr" target="#b14">Gygli et al. 2017;</ref><ref type="bibr" target="#b1">Amos &amp; Kolter 2017)</ref>. Specifically, Structured Prediction Energy Networks (SPENs) <ref type="bibr" target="#b3">(Belanger &amp; McCallum, 2016)</ref> optimize the sum of local unary potentials and a global potential and are trained with a structured SVM loss. Another approach is the Deep Value Network (DVN) <ref type="bibr" target="#b14">(Gygli et al., 2017)</ref> which uses an energy network architecture similar to SPEN, but instead trains it to fit the task cost function.</p><p>Our architecture was constructed similarly to SPEN and DVN for the unary and global potentials s i , and s g , though we extended the expressivity of this architecture both by introducing the cardinality potential s z , as well as an effective inference method for the overall score.</p><p>Input Convex Neural Networks (ICNNs) <ref type="bibr" target="#b1">(Amos &amp; Kolter, 2017)</ref> design potentials which are convex with respect to the labels, so that inference optimization will be able to reach global optimum. Their design achieves convexity by restricting the model parameters and activation functions, limiting the expressiveness of the learned potentials. In practice, it has inferior performance compared to its nonconvex counterpart, as shown by <ref type="bibr" target="#b4">Belanger et al. 2017</ref>.</p><p>Our approach differs from these methods mainly in its capability of encapsulating complex global dependencies in the form of cardinality potentials, which are harder to obtain using general form global potentials, optimized with an effective end-to-end inference method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Cardinality Potentials</head><p>The use of higher-order global potentials, and specifically of cardinality relations, have shown to be useful in a wide range of applications. For example, in computer vision they have been used to improve human activity recognition <ref type="bibr" target="#b15">(Hajimirsadeghi et al., 2015)</ref> by considering the number of people involved in an activity, which is harder to infer using spatial relations alone. In part-of-speech tagging, cardinalities can enforce the constraint that each sentence must contain at least one verb <ref type="bibr" target="#b10">(Ganchev et al., 2010)</ref>.</p><p>The properties of cardinality potentials and corresponding inference methods have been explored previously <ref type="bibr" target="#b23">Tarlow et al. 2010;</ref><ref type="bibr" target="#b20">Milch et al. 2008;</ref><ref type="bibr" target="#b22">Swersky et al. 2012;</ref><ref type="bibr" target="#b13">Gupta et al. 2007</ref>). General form global potentials often result in non-trivial dependencies between variables that make exact inference intractable, thus requiring the use of approximate inference methods.</p><p>Conversely, MAP inference for cardinality potential models is well-understood. Notably, <ref type="bibr" target="#b13">Gupta et al. 2007</ref> shows an exact MAP inference algorithm, and <ref type="bibr" target="#b23">Tarlow et al. 2010</ref> gives a an algorithm for computing the cardinality potential messages for max-product belief propagation, both algorithms are solved efficiently in O(Llog L) time. Still, when considering general form global potentials as in our framework, we must employ an approximate inference scheme which can be computed efficiently.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Unrolled Optimization</head><p>End-to-end training with unrolled optimization was first used in deep networks by <ref type="bibr" target="#b18">Maclaurin et al. 2015</ref> for tuning hyperparameters. More recently, other approaches have unrolled gradient-based methods within deep networks in various different contexts <ref type="bibr" target="#b19">(Metz et al. 2016;</ref><ref type="bibr" target="#b2">Andrychowicz et al. 2016;</ref><ref type="bibr" target="#b11">Greff et al. 2017</ref>).</p><p>In the context of inference, <ref type="bibr" target="#b4">Belanger et al. 2017</ref> explored SPENs which use gradient descent to approximate energy minimization, while learning the energy function end-toend. In computer vision, several works have incorporated structured prediction methods like conditional random fields within neural networks , and the Mean-Field algorithm was used for inference. Recent work by <ref type="bibr" target="#b16">Larsson et al. 2017</ref> has used projected gradient descent for CRF inference with pairwise potentials, where they project the variables onto the simplex, rather than constraining their values based on learned potentials via projection.</p><p>An important advantage of these training schemes is that they return not only the learned potentials, but also an actual inference optimization method, tuned on the training data, to be used at test time. However, these methods are either restricted to basic graphical models (e.g with pairwise or low order clique potentials) to ensure tractability, or have used global potentials implemented via multi-layer fully connected nets. Our approach harnesses the effectiveness of unrolled optimization while boosting its ability to infer important structures expressed by cardinality potentials.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>We evaluate our method on multi-label document classification (MLC). The MLC task is relevant in a wide range of machine learning applications, and characterized by higherorder labels interaction, which can be addressed by our deep structured network. Therefore, it is a natural application of our method. We use 3 standard MLC benchmarks, as used by other recent approaches <ref type="bibr" target="#b3">(Belanger &amp; McCallum 2016;</ref><ref type="bibr" target="#b14">Gygli et al. 2017;</ref><ref type="bibr" target="#b1">Amos &amp; Kolter 2017)</ref>: Bibtex, Delicious, and Bookmarks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Cardinality Prediction Analysis</head><p>We begin by demonstrating the effectiveness of estimating the cardinality of a label y given the input x. We train a simple feed-forward neural network which consists of a single hidden layer with ReLU activations, with the goal of predicting the ground-truth cardinality. The output layer is a softmax over Z output neurons, where Z is allowed the maximal cardinality of the labels. This is the same architecture we used for h(x) in the MLC experiments below. For the current experiment, we use the correct cardinality |y * | as ground truth and optimize h(x) to maximize prediction accuracy.</p><p>We evaluate the results on the Delicious dataset using the mean squared error of our predictor output with respect to the correct cardinality. We compare our predictor to a random baseline over the range of <ref type="bibr">[0,</ref><ref type="bibr">25]</ref>, which is the range of possible cardinalities in the data, as well as to the constant cardinality of 19 which is the average cardinality in the training data. Our predictor performs better than both baselines, with MSE rand = 74.9, MSE const = 26.9, and MSE h = 19.5.</p><p>A possible explanation for this phenomenon is that some attributes of the input data might indicate approximately how many active labels the label set contains. Features such as the number of distinct words, or the existence or absence of specific meaningful words could be relevant here, making the task of inferring the number of active labels easier than predicting which labels are active. For example, an article with many distinct words suggests that it discusses a broad range of subjects, and thus relates to many different tags, while an article with few distinct words is more likely to be focused on a specific subject and therefore has only a small set of tags. Learning which combination of input words corresponds to which specific tagging set is harder than learning to predict cardinality based on feature representations of simpler forms, such as the ones discussed above.</p><p>The other datasets we tested, Bibtex and Bookmarks, are extremely sparse with average cardinalities of 2.4 and 2, respectively. The task of predicting the correct cardinality within this smaller possible range is harder. Accordingly, the predictor h(x) approximately learns the average cardinality, and we observed in our experiments that projecting to a predicted cardinality z = h(x) yields similar performance to projection onto a set defined by constant cardinality z. However, using the predictor h(x) did manage to improve our overall performance for the Bibtex dataset compared to a fixed z, whereas for Bookmarks our results are slightly lower than for using a fixed z.</p><p>The Predict and Constrain approach of first estimating the relevant cardinality and then projecting onto the cardinalityconstrained space is especially useful for datasets of larger average cardinality and cardinality variance, such as Delicious, for which we obtained a significant performance improvement using this method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Experimental Setup</head><p>The evaluation metric for the MLC task is the example averaged (macro-average) F 1 measure. We found it useful to use its continuous extension as our loss function (y, y * ), similarly to <ref type="bibr">Gygli et al. 2017, i</ref>.e., (y, y</p><formula xml:id="formula_14">* ) = − 2y T y * i (y i + y * i )<label>(10)</label></formula><p>where y * is binary and y ∈ [0, 1]. We observed improved performance by training with (y, y * ) as opposed to alternative loss functions such as cross entropy. The architecture used for all datasets consists of neural networks for the unary potentials s i , the global potential s g , and the cardinality estimator h(x), respectively. For all neural networks we use a single hidden layer, with ReLU activations. For the unrolled optimization we used gradient ascent with momentum 0.9, unrolled for T iterations, with T ranging between 10 − 20, and with R = 2 alternating projection iterations. All of the hyperparameters were tuned on development data. We trained our network using AdaGrad <ref type="bibr" target="#b8">(Duchi et al., 2011)</ref> with learning rate η = 0.1.</p><p>We compare our method to the following baselines:</p><p>• SPEN -Structured Prediction Energy Networks <ref type="bibr" target="#b3">(Belanger &amp; McCallum, 2016)</ref> use gradient-based inference to optimize an energy network of local and global potentials, and are trained with a structured-SVM loss.</p><p>• E2E-SPEN -an end-to-end version of SPEN <ref type="bibr" target="#b4">(Belanger et al., 2017)</ref>.</p><p>• DVN -Deep Value Networks <ref type="bibr" target="#b14">(Gygli et al., 2017</ref>) train an energy function to estimate the task loss on different labels for a given input, with gradient-based inference.</p><p>• MLP -a multi-layer perceptron with ReLU activations trained with a cross-entropy loss function.</p><p>The MLP and SPEN baseline results were taken from <ref type="bibr" target="#b3">(Belanger &amp; McCallum, 2016)</ref>. The E2E-SPEN results were obtained by running their publicly available code on these datasets. In our experiments we follow the same train and test split as the baseline methods on all datasets. The results are shown in <ref type="table" target="#tab_0">Table 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">Alternative Implementations</head><p>In addition to prior work, we also compared our approach to alternative implementation of cardinality constraints, as discussed in Section 4. The goal of this comparison is to examine the role of our unrolled projection scheme in capturing cardinality structure. Specifically, we consider the following methods,</p><p>• SC -The sigmoid-based indicators as cardinality potentials, discussed in Section 4.</p><p>• FP -The fast exact projection method described in Section 4.1.</p><p>• NC -A simple baseline which uses our architecture excluding cardinality potentials altogether.</p><p>All methods used unrolled gradient ascent inference, and the negative F 1 loss function in Equation (10).</p><p>The fast projection method was implemented using a differentiable approximation of the projection algorithm steps. The algorithm performs a binary search over the values of z to obtain the correct λ, using set-union and median operations. Instead, we maintain a lower and upper bound for the uncertainty interval, and in each iteration we compute the average, rather than the median, until the gap between the lower and upper bounds is below a threshold. In each iteration j, we compared z to z j , given by Equation <ref type="formula" target="#formula_13">(9)</ref>.</p><p>To obtain the values ρ 1 , ρ 2 , we compute ρ 1 and ρ 2 , the one-hot encodings of ρ 1 , ρ 2 at every iteration j. Let µ be the sorted values of the vector we wish to project. We first compute δ</p><formula xml:id="formula_15">(j) 1 = Softsign(µ − λ (j) − 1) and δ (j) 2 = Softsign(µ − λ (j)</formula><p>). Then, we apply Softmax over the element-wise multiplication of a fixed indices vector and δ</p><formula xml:id="formula_16">(j) 1 or δ (j)</formula><p>2 , to obtain ρ 1 and ρ 2 , respectively. We compute the dot-product of the one-hot encodings and the cumulative sum vector of µ to obtain the partial sum in Equation (9). Finally, we use Equation (8) to obtain the projected values.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.4.">Results</head><p>It can be seen from <ref type="table" target="#tab_0">Table 1</ref> that our method outperforms all baselines we have compared to, obtaining state-of-the-art results in these tasks. Comparing our network to another end-to-end gradient-based inference method, the E2E-SPEN achieves significantly low performance. As stated by the authors in their release notes, their method is prone to overfitting and actually performs worse than the original SPEN on these benchmarks. Additionally, our method improves upon the original SPEN by a large margin.</p><p>Our method also outperformed DVN on the Bibtex and Bookmarks datasets. They DVN paper did not report results on the Delicious dataset, and running the public DVN code yielded low accuracy on it, which suggests that further fine tuning of their method is required for different datasets. The Delicious dataset has the largest label space with 982 labels, while Bibtex and Bookmarks have 159 and 208, respectively, and is therefore the most challenging. Thus, these results illustrate the robustness of our method, as it achieves superior performance for Delicious over all baselines, albeit not being specifically tuned for it.</p><p>The performance of the NC, SC, and FP baselines is surpassed by that of our network. Nevertheless, they obtain competitive results compared to strong baselines. This further demonstrates the effectiveness of unrolled optimization over applying an inference scheme separately from the training process.</p><p>Moreover, the results obtained by the SC and FP baselines indicate the power of combining general form global potentials with cardinality-based potentials to represent complex structural relations. The role of cardinality modeling in our framework is also evident from the inferior results obtained by the NC baseline, which does not utilize cardinality information.</p><p>Note that we have used the same unary and non-cardinality global scores for all methods compared. This highlights the fact that improvement in performance is due to the use of cardinality potentials, coupled with our Predict and Constrain approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Extension to Non-Binary Labels</head><p>Thus far we considered binary labels y i . In this section we discuss extensions to the case where each y i can have more than two values. For example, in image segmentation tasks in which each pixel could be assigned to one of multiple classes, cardinality potentials can enforce constraints on the size of labeled objects and encourage smoothness over large groups of pixels.</p><p>To re-frame our method in the general non-binary form, consider a matrix Y ∈ {0, 1} L×M where M is the number of possible classes, and L the number of labels. Here, every row corresponds to the one-hot representation of the class j ∈ [M ] which label i ∈ [L] is assigned to.</p><p>To facilitate continuous optimization, we relax the matrix values to lie in the continuous interval Y ∈ [0, 1] L×M . However, now we will also want to enforce the constraint that the rows of Y lie in the probabilistic simplex, while the columns should obey cardinality constraints. Denote the space of matrices for which these constraints hold asZ.</p><p>Our approach translates into projection onto the intersection of two sets C and D, such thatZ = C ∩ D, where, C = {Y|∀i, j.Y i,j ≥ 0, ∀i. where z j is the cardinality constraint of class j. Since C and D are convex, we can again apply Dykstra's algorithm, alternating between the projections onto the row constraints and column constraints.</p><p>Since there is no dependence between the rows within C, or columns within D, the projections can be applied in parallel. Specifically, we can alternately apply simultaneous projection of all rows onto the unit simplex, and of all columns onto the positive simplex (using Algorithm 1 with z = 1 for each row, z j for each column j). We note that it is also possible to discard the inequality constraint in D to obtain a simpler projection algorithm.</p><p>For cardinality prediction, we could learn a predictor h j (x) for each class j, so that we can then apply the projection operator of D for z j = h j (x). Thus, we utilize the benefits of first predicting the desired cardinalities of each class for a given input and then projecting the columns of Y onto the cardinality constrained space, which have have shown successful in our experiments for the binary label case.</p><p>This extension of our framework generalizes our approach to be useful in a wide range of application domains. However, we did not experiment with this extension, and it remains an interesting direction for future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8.">Conclusion</head><p>This paper presents a method for using highly non-linear score functions for structured prediction augmented with cardinality constraints. We show how this can be done in an end-to-end manner, by using the algorithmic form of projection into the linear constraints that restrict cardinality. This results in a powerful new structured prediction model, that can capture elaborate dependencies between the labels, and can be trained to optimize model accuracy directly.</p><p>We evaluate our method on standard datasets in multi-label classification. Our experiments demonstrate that our method achieves new state of the art results on these datasets, and outperforms all recent deep learning approaches to the problem.</p><p>We introduced the novel concept of Predict and Constrain, which we hope to be further explored in the future and applied to additional application domains. The general underlying approach is to consider high order constraints where the value of the constraint is predicted by one network, and another network implements projecting on this constraint. It will be interesting to explore other types of constraints and projections where this is possible from an algorithmic perspective and effective empirically.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Deep structured model with unrolled projected gradient ascent inference.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>D</head><label></label><figDesc>= {Y|∀i, j.Y i,j ≥ 0, ∀j. i Y i,j = z j }</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>F1 performance of our approach compared to the state-of- the-art on multi-label classification.</figDesc><table>DATASET 
+BIBTEX BOOKMARKS DELICIOUS 
+
+SPEN 
+42.2 
+34.4 
+37.5 
+E2E-SPEN 
+38.3 
+33.9 
+35.1 
+DVN 
+44.7 
+37.1 
+-
+MLP 
+38.9 
+33.8 
+37.8 
+SC 
+42.0 
+34.6 
+34.6 
+FP 
+42.1 
+36.0 
+34.2 
+NC 
+40.3 
+35.9 
+36.3 
+OURS 
+45.5 
+39.1 
+38.4 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Tel Aviv University, Blavatnik School of Computer Science. Correspondence to: Nataly Brukhim &lt;natalybr@mail.tau.ac.il&gt;, Amir Globerson &lt;gamir@post.tau.ac.il&gt;.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Note that z(x) need not be integral as the variables themselves were relaxed to the [0, 1] range.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Assuming the global potential sg is designed as a multi-layer neural network with ReLU activations.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This work was supported by the ISF Centers of Excellence grant, and by the Yandex Initiative in Machine Learning.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Predict and Constrain: Modeling Cardinality in Deep Structured Prediction</head></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">TensorFlow: Largescale machine learning on heterogeneous systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Harp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kudlur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Levenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mané</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Steiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Talwar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Viégas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Warden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wicke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zheng</surname></persName>
+		</author>
+		<ptr target="https://www.tensorflow.org/.Softwareavailablefromtensorflow.org" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Input-convex deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Amos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Z</forename><surname>Kolter</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Learning to learn by gradient descent by gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andrychowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pfau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>De Freitas</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Structured prediction energy networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">End-to-end learning for structured prediction energy networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A method for finding projections onto the intersection of convex sets in hilbert spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Boyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">L</forename><surname>Dykstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in order restricted statistical inference</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning deep structured models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Efficient projections onto the l 1-ball for learning in high dimensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chandra</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Alternating Projection Methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Escalante</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Raydan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>SIAM</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Posterior regularization for structured latent variable models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ganchev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gillenwater</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="2001" to="2049" />
+			<date type="published" when="2010-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Highway and residual networks learn unrolled iterative estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiao</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<title level="m">L1 projections with box constraints. CoRR, abs:1010.0141v1</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Efficient inference with cardinality-based clique potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Diwan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sarawagi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 24th international conference on Machine learning</title>
+		<meeting>the 24th international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="329" to="336" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Deep value networks learn to evaluate and iteratively refine structured outputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gygli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Angelova</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Visual recognition by counting instances: A multi-instance cardinality potential kernel</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hajimirsadeghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vahdat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2596" to="2605" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">A projected gradient descent method for crf inference allowing end-to-end training of arbitrary pairwise potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Larsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Arnab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torr</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Energy Minimization Methods in Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<publisher>EMMCVPR</publisher>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">End-to-end sequence labeling via bi-directional lstm-cnns-crf</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hovy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Gradientbased hyperparameter optimization through reversible learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maclaurin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adams</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Unrolled generative adversarial networks. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Poole</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pfau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Lifted probabilistic inference with counting formulas</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Milch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Zettlemoyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kersting</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Haimes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">P</forename><surname>Kaelbling</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>AAAI</publisher>
+			<biblScope unit="page">10621068</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.02351</idno>
+		<title level="m">Fully connected deep structured networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Cardinality restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tarlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="3293" to="3301" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Hop-map: Efficient message passing with high order potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tarlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">E</forename><surname>Givoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of 13th Conference on Artificial Intelligence and Statistics</title>
+		<meeting>13th Conference on Artificial Intelligence and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Fast exact inference for recursive cardinality models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tarlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">J</forename><surname>Frey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 28th Conference on Uncertainty in Artificial Intelligence</title>
+		<meeting>the 28th Conference on Uncertainty in Artificial Intelligence</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torr</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename></persName>
+		</author>
+		<title level="m">Conditional random fields as recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

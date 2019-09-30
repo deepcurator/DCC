@@ -1,0 +1,1337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">PlaneMatch: Patch Coplanarity Prediction for Robust RGB-D Reconstruction</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yifei</forename><surname>Shi</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Princeton University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">National University of Defense Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kai</forename><surname>Xu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>2⋆</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">National University of Defense Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nießner</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="institution">Technical University of Munich</orgName>
+								<address>
+									<addrLine>4 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Szymon</forename><surname>Rusinkiewicz</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Funkhouser</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">PlaneMatch: Patch Coplanarity Prediction for Robust RGB-D Reconstruction</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>
+					<term>RGB-D registration</term>
+					<term>co-planarity</term>
+					<term>loop closure</term>
+				</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. We introduce a novel RGB-D patch descriptor designed for detecting coplanar surfaces in SLAM reconstruction. The core of our method is a deep convolutional neural network that takes in RGB, depth, and normal information of a planar patch in an image and outputs a descriptor that can be used to find coplanar patches from other images. We train the network on 10 million triplets of coplanar and non-coplanar patches, and evaluate on a new coplanarity benchmark created from commodity RGB-D scans. Experiments show that our learned descriptor outperforms alternatives extended for this new task by a significant margin. In addition, we demonstrate the benefits of coplanarity matching in a robust RGBD reconstruction formulation. We find that coplanarity constraints detected with our method are sufficient to get reconstruction results comparable to state-of-the-art frameworks on most scenes, but outperform other methods on established benchmarks when combined with traditional keypoint matching.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>With the recent proliferation of inexpensive RGB-D sensors, it is now becoming practical for people to scan 3D models of large indoor environments with hand-held cameras, enabling applications in cultural heritage, real estate, virtual reality, and many other fields. Most state-of-the-art RGB-D reconstruction algorithms either perform frame-to-model alignment <ref type="bibr" target="#b0">[1]</ref> or match keypoints for global pose estimation <ref type="bibr" target="#b1">[2]</ref>. Despite the recent progress in these algorithms, registration of hand-held RGB-D scans remains challenging when local surface features are not discriminating and/or when scanning loops have little or no overlaps.</p><p>An alternative is to detect planar features and associate them across frames with coplanarity, parallelism, and perpendicularity constraints <ref type="bibr" target="#b2">[3]</ref><ref type="bibr" target="#b3">[4]</ref><ref type="bibr" target="#b4">[5]</ref><ref type="bibr" target="#b5">[6]</ref><ref type="bibr" target="#b6">[7]</ref><ref type="bibr" target="#b7">[8]</ref><ref type="bibr" target="#b8">[9]</ref>. Recent work has shown compelling evidence that planar patches can be detected and tracked robustly, especially in indoor environments where flat surfaces are ubiquitous. In cases where traditional features such as keypoints are missing (e.g., wall), there seems tremendous potential to support existing 3D reconstruction pipelines.</p><p>Even though coplanarity matching is a promising direction, current approaches lack strong per-plane feature descriptors for establishing putative matches between disparate observations. As a consequence, coplanarity priors have only been used in the context of frame-to-frame tracking <ref type="bibr" target="#b2">[3]</ref> or in post-process steps for refining a global optimization <ref type="bibr" target="#b3">[4]</ref>. We see this as analogous to the relationship between ICP and keypoint matching: just as ICP only converges with a good initial guess for pose, current methods for exploiting coplanarity are unable to initialize a reconstruction process from scratch due to the lack of discriminative coplanarity features. This paper aims to enable global, ab initio coplanarity matching by introducing a discriminative feature descriptor for planar patches of RGB-D images. Our descriptor is learned from data to produce features whose L2 difference is predictive of whether or not two RGB-D patches from different frames are coplanar. It can be used to detect pairs of coplanar patches in RGB-D scans without an initial alignment, which can be used to find loop closures or to provide coplanarity constraints for global alignment (see <ref type="figure" target="#fig_0">Figure 1)</ref>.</p><p>A key novel aspect of this approach is that it focuses on detection of coplanarity rather than overlap. As a result, our plane patch features can be used to discover long-range alignment constraints (like "loop closures") between distant, non-overlapping parts of the same large surface (e.g., by recognizing carpets on  <ref type="figure">Fig. 2</ref>: An overview of our method. We train an embedding network (c-d) to predict coplanarity for a pair of planar patches across different views, based on the co-planar patches (b) sampled from training sequences with ground-truth camera poses (a). Given a test sequence, our robust optimization performs reconstruction (f) based on predicted co-planar patches (e).</p><p>floors, tiles on ceilings, paneling on walls, etc.). In <ref type="figure" target="#fig_0">Figure 1</ref>, the two patch pairs shown to the right helped produce a reconstruction with globally flat walls.</p><p>To learn our planar patch descriptor, we design a deep network that takes in color, depth, normals, and multi-scale context for pairs of planar patches extracted from RGB-D images, and predicts whether they are coplanar or not. The network is trained in a self-supervised fashion where training examples are automatically extracted from coplanar and noncoplanar patches from ScanNet <ref type="bibr" target="#b9">[10]</ref>.</p><p>In order to evaluate our descriptor, we introduce a new coplanarity matching datasets, where we can see in series of thorough experiments that our new descriptor outperforms existing baseline alternatives by significant margins. Furthermore, we demonstrate that by using our new descriptor, we are able to compute strong coplanarity constraints that improve the performance of current global RGB-D registration algorithms. In particular, we show that by combining coplanarity and point-based correspondences reconstruction algorithms are able to handle difficult cases, such as scenes with a low number of features or limited loop closures. We outperform other state-of-the-art algorithms on the standard TUM RGB-D reconstruction benchmark <ref type="bibr" target="#b10">[11]</ref>. Overall, the research contributions of this paper are:</p><p>-A new task: predicting coplanarity of image patches for the purpose of RGB-D image registration. -A self-supervised process for training a deep network to produce features for predicting whether two image patches are coplanar or not. -An extension of the robust optimization algorithm <ref type="bibr" target="#b11">[12]</ref> to solve camera poses with coplanarity constraints. -A new training and test benchmark for coplanarity prediction.</p><p>-Reconstruction results demonstrating that coplanarity can be used to align scans where keypoint-based methods fail to find loop closures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>RGB-D Reconstruction: Many SLAM systems have been described for reconstructing 3D scenes from RGB-D video. Examples include KinectFusion <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b0">1]</ref>, VoxelHashing <ref type="bibr" target="#b13">[14]</ref>, ScalableFusion <ref type="bibr" target="#b14">[15]</ref>, Point-based Fusion <ref type="bibr" target="#b15">[16]</ref>, Octrees on CPU <ref type="bibr" target="#b16">[17]</ref>, Elastic Fusion <ref type="bibr" target="#b17">[18]</ref>, Stereo DSO <ref type="bibr" target="#b18">[19]</ref>, Colored Registration <ref type="bibr" target="#b19">[20]</ref>, and Bundle Fusion <ref type="bibr" target="#b1">[2]</ref>. These systems generally perform well for scans with many loop closures and/or when robust IMU measurements are available. However, they often exhibit drift in long scans when few constraints can be established between disparate viewpoints. In this work, we detect and enforce coplanarity constraints between planar patches to address this issue as an alternative feature channel for global matching.</p><p>Feature Descriptors: Traditionally, SLAM systems have utlized keypoint detectors and descriptors to establish correspondence constraints for camera pose estimation. Example keypoint descriptors include SIFT <ref type="bibr" target="#b20">[21]</ref>, SURF <ref type="bibr" target="#b21">[22]</ref>, ORB <ref type="bibr" target="#b22">[23]</ref>, etc. More recently, researchers have learned keypoint descriptors from data -e.g., MatchNet <ref type="bibr" target="#b23">[24]</ref>, Lift <ref type="bibr" target="#b24">[25]</ref>, SE3-Nets <ref type="bibr" target="#b25">[26]</ref>, 3DMatch <ref type="bibr" target="#b26">[27]</ref>, Schmidt et al. <ref type="bibr" target="#b27">[28]</ref>. These methods rely upon repeatable extraction of keypoint positions, which is difficult for widely disparate views. In contrast, we explore the more robust method of extracting planar patches without concern for precisely positioning the patch center.</p><p>Planar Features: Many previous papers have leveraged planar surfaces for RGB-D reconstruction. The most commmon approach is to detect planes in RGB-D scans, establish correspondences between matching features, and solve for the camera poses that align the corresponding features <ref type="bibr" target="#b28">[29]</ref><ref type="bibr" target="#b30">[30]</ref><ref type="bibr" target="#b31">[31]</ref><ref type="bibr" target="#b32">[32]</ref><ref type="bibr" target="#b33">[33]</ref><ref type="bibr" target="#b34">[34]</ref><ref type="bibr" target="#b35">[35]</ref><ref type="bibr" target="#b36">[36]</ref>. More recent approaches build models comprising planar patches, possibly with geometric constraints <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b37">37]</ref>, and match planar features found in scans to planar patches in the models <ref type="bibr" target="#b3">[4]</ref><ref type="bibr" target="#b4">[5]</ref><ref type="bibr" target="#b5">[6]</ref><ref type="bibr" target="#b6">[7]</ref><ref type="bibr" target="#b7">[8]</ref>. The search for correspondences is often aided by handtuned descriptors designed to detect overlapping surface regions. In contrast, our approach finds correspondences between coplanar patches (that may not be overlapping); we learn descriptors for this task with a deep network.</p><p>Global Optimization: For large-scale surface reconstruction, it is common to use off-line or asynchronously executed global registration procedures. A common formulation is to compute a pose graph with edges representing pairwise transformations between frames and then optimize an objective function penalizing deviations from these pairwise alignments <ref type="bibr" target="#b38">[38]</ref><ref type="bibr" target="#b39">[39]</ref><ref type="bibr" target="#b40">[40]</ref>. Recent methods <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b41">41]</ref> use indicator variables to identify loop closures or matching points during global optimization using a least-squares formulation. We extend this formulation by setting indicator variables for individual coplanarity constraints.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Method</head><p>Our method consists of two components: 1) a deep neural network trained to generate a descriptor that can be used to discover coplanar pairs of RGB-D patches without an initial registration, and 2) a global SLAM reconstruction algorithm that takes special advantage of detected pairs of coplanar patches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Coplanarity Network</head><p>Coplanarity of two planar patches is by definition geometrically measurable. However, for two patches that are observed from different, yet unknown views, whether they are coplanar is not determinable based on geometry alone. Furthermore, it is not clear that coplanarity can be deduced solely from the local appearance of the imaged objects. We argue that the prediction of coplanarity across different views is a structural, or even semantic, visual reasoning task, for which neither geometry nor local appearance alone is reliable. Humans infer coplanarity by perceiving and understanding the structure and semantics of objects and scenes, and contextual information plays a critical role in this reasoning task. For example, humans are able to differentiate different facets of an object, from virtually any view, by reasoning about the structure of the facets and/or by relating them to surrounding objects. Both involve inference with a context around the patches being considered, possibly at multiple scales. This motivates us to learn to predict cross-view coplanarity from appearance and geometry, using multi-scale contextual information. We approach this task by learning an embedding network that maps coplanar patches from different views nearby in feature space.</p><p>Network Design: Our coplanarity network ( <ref type="figure" target="#fig_1">Figure 2 and 3</ref>) is trained with triplets of planar patches, each involving an anchor, a coplanar patch (positive) and a noncoplanar patch (negative), similar to <ref type="bibr" target="#b42">[42]</ref>. Each patch of a triplet is fed into a convolutional network based on ResNet-50 <ref type="bibr" target="#b43">[43]</ref> for feature extraction, and a triplet loss is estimated based on the relative proximities of the three features. To learn coplanarity from both appearance and geometry, our network takes multiple channels as input: an RGB image, depth image, and normal map.</p><p>We encode the contextual information of a patch at two scales, local and global. This is achieved by cropping the input images (in all channels) to rectangles of 1.5 and 5 times the size of the patch's bounding box, respectively. All cropped images are clamped at image boundaries, padded to a square, and then resized to 224 × 224. The padding uses 50% gray for RGB images and a value of 0 for depth and normal maps; see <ref type="figure" target="#fig_1">Figure 3</ref>.</p><p>To make the network aware of the region of interest (as opposed to context) in each input image, we add, for each of the two scales, an extra binary mask channel. The local mask is binary, with the patch of interest in white and the rest of the image in black. The global mask, in contrast, is continuous, with the patch of interest in white and then a smooth decay to black outside the patch boundary. Intuitively, the local mask helps the network distinguish the patch of interest from the close-by neighborhood, e.g. other sides on the same object. The global mask, on the other hand, directs the network to learn global structure by attending to a larger context, with importance smoothly decreasing based on distance to the patch region. Meanwhile, it also weakens the effect of specific patch shape, which is unimportant when considering global structure.</p><p>In summary, each scale consists of RGB, depth, normal, and mask channels. These inputs are first encoded independently. Their feature maps are concatenated after the 11-th convolutional layer, and then pass through the remaining 39 layers. The local and global scales share weights for the corresponding channels, and their outputs are finally combined with a fully connected layer <ref type="figure" target="#fig_1">(Figure 3</ref>).</p><p>Network Training: The training data for our network are generated from datasets of RGB-D scans of 3D indoor scenes, with high-quality camera poses provided with the datasets. For each RGB-D frame, we segment it into planar patches using agglomerative clustering on the depth channel. For each planar patch, we also estimate its normal based on the depth information. The extracted patches are projected to image space to generate all the necessary channels of input to our network. Very small patches, whose local mask image contains less than 300 pixels with valid depths, are discarded.</p><p>Triplet Focal Loss: When preparing triplets to train our network, we encounter the well-known problem of a severely imbalanced number of negative and positive patch pairs. Given a training sequence, there are many more negative pairs, and most of them are too trivial to help the network learn efficiently. Using randomly sampled triplets would overwhelm the training loss by the easy negatives.</p><p>We opt to resolve the imbalance issue by dynamically and discriminatively scaling the losses for hard and easy triplets, inspired by the recent work of focal loss for object detection <ref type="bibr" target="#b44">[44]</ref>. Specifically, we propose the triplet focal loss:</p><formula xml:id="formula_0">L focal (xa, xp, xn) = max 0, α − ∆d f α λ ,<label>(1)</label></formula><p>where x a , x p and x n are the feature maps extracted for anchor, positive, and negative patches, respectively; ∆d</p><formula xml:id="formula_1">f = d f (x n , x a ) − d f (x p , x a )</formula><p>, with d f being the L2 distance between two patch features. Minimizing this loss encouranges the anchor to be closer to the positive patch than to the negative in descriptor space, but with less weight for larger distances. See <ref type="figure" target="#fig_2">Figure 4</ref>, left, for a visualization of the loss function with α = 1. When λ = 1, this loss becomes the usual margined loss, which gives non-negligible loss  to easy examples near the margin α. When λ &gt; 1, however, we obtain a focal loss that down-weights easy-to-learn triplets while keeping high loss for hard ones. Moreover, it smoothly adjusts the rate at which easy triplets are down-weighted. We found λ = 3 to achieve the best training efficiency <ref type="figure" target="#fig_2">(Figure 4</ref>, right). <ref type="figure" target="#fig_3">Figure 5</ref> shows a t-SNE visualization of coplanarity-based patch features.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Coplanarity-Based Robust Registration</head><p>To investigate the utility of this planar patch descriptor and coplanarity detection approach for 3D reconstruction, we have developed a global registration algorithm that estimates camera poses for an RGB-D video using pairwise constraints derived from coplanar patch matches in addition to keypoint matches. Our formulation is inspired by the work of Choi et al. <ref type="bibr" target="#b11">[12]</ref>, where the key feature is the robust penalty term used for automatically selecting the correct matches from a large pool of hypotheses, thus avoiding iterative rematching as in ICP. Note that this formulation does not require an initial alignment of camera poses, which would be required for other SLAM systems that leverage coplanarity constraints.</p><p>Given an RGB-D video sequence F, our goal is to compute for each frame i ∈ F a camera pose in the global reference frame, T i = (R i , t i ), that brings them into alignment. This is achieved by jointly aligning each pair of frames (i, j) ∈ P that were predicted to have some set of coplanar patches, Π ij . For each pair π = (p, q) ∈ Π ij , let us suppose w.l.o.g. that patch p is from frame i and q from j. Meanwhile, let us suppose a set of matching key-point pairs Θ ij is detected and matched between frame i and j. Similarly, we assume for each point pair θ = (u, v) ∈ Θ ij that key-point u is from frame i and v from j.</p><p>Objective Function: The objective of our coplanarity-based registration contains four terms, responsible for coplanar alignment, coplanar patch pair selection, key-point alignment, and key-point pair selection:</p><formula xml:id="formula_2">E(T, s) = E data-cop (T, s) + Ereg-cop(s) + E data-kp (T, s) + E reg-kp (s).<label>(2)</label></formula><p>Given a pair of coplanar patches predicted by the network, the coplanarity data term enforces the coplanarity, via minimizing the point-to-plane distance from sample points on one patch to the plane defined by the other patch:</p><formula xml:id="formula_3">E data-cop (T, s) = (i,j)∈P π∈Π ij wπ sπ δ 2 (Ti, Tj, π),<label>(3)</label></formula><p>where δ is the coplanarity distance of a patch pair π = (p, q). It is computed as the root-mean-square point-to-plane distance over both sets of sample points:</p><formula xml:id="formula_4">δ 2 = 1 |V p | vp ∈Vp d 2 (T i v p , φ G q ) + 1 |V q | vq ∈Vq d 2 (T j v q , φ G p ),</formula><p>where V p is the set of sample points on patch p and d is point-to-plane distance:</p><formula xml:id="formula_5">d(T i v p , φ G q ) = (R i v p + t i − p q ) · n q . φ G q = (p q , n q )</formula><p>is the plane defined by patch q, which is estimated in the global reference frame using the corresponding transformation T j , and is updated in every iteration. s π is a control variable (in [0, 1]) for the selection of patch pair π, with 1 standing for selected and 0 for discarded. w π is a weight that measures the confidence of pair π's being coplanar. This weight is another connection between the optimization and the network, besides the predicted patch pairs themselves. It is computed based on the feature distance of two patches, denoted by d f (p, q), extracted by the network:</p><formula xml:id="formula_6">w (p,q) = e −d 2 f (p,q)/(σ 2 d 2 fm )</formula><p>, where d fm is the maximum feature distance and σ = 0.6.</p><p>The coplanarity regularization term is defined as:</p><formula xml:id="formula_7">Ereg-cop(s) = (i,j)∈P π∈Π ij µ wπ Ψ (sπ),<label>(4)</label></formula><p>where the penalty function is defined as Ψ (s) = ( √ s − 1) 2 . Intuitively, minimizing this term together with the data term encourages the selection of pairs incurring a small value for the data term, while immediately pruning those pairs whose data term value is too large and deemed to be hard to minimize. w π is defined the same as before, and µ is a weighting variable that controls the emphasis on pair selection.</p><p>The key-point data term is defined as:</p><formula xml:id="formula_8">E data-kp (T, s) = (i,j)∈P θ∈Θ ij s θ ||Tiu − Tjv||,<label>(5)</label></formula><p>Similar to coplanarity, a control variable s θ is used to determine the selection of point pair θ, subjecting to the key-point regularization term:</p><formula xml:id="formula_9">E reg-kp (s) = (i,j)∈P θ∈Θ ij µ Ψ (s θ ),<label>(6)</label></formula><p>where µ shares the same weighting variable with Equation (4).</p><p>Optimization: The optimization of Equation <ref type="formula" target="#formula_2">(2)</ref> is conducted iteratively, where each iteration interleaves the optimization of transformations T and selection variables s. Ideally, the optimization could take every pair of frames in a sequence as an input for global optimization. However, this is prohibitively expensive since for each frame pair the system scales with the number of patch pairs and key-point pairs. To alleviate this problem, we split the sequence into a list of overlapping fragments, optimize frame poses within each fragment, and then perform a final global registration of the fragments, as in <ref type="bibr" target="#b11">[12]</ref>. For each fragment, the optimization takes all frame pairs within that fragment and registers them into a rigid point cloud. After that, we take the matching pairs that have been selected by the intra-fragment optimization, and solve the inter-fragment registration based on those pairs. Inter-fragment registration benefits more from long-range coplanarity predictions.</p><p>The putative matches found in this manner are then pruned further with a rapid and approximate RANSAC algorithm applied for each pair of fragments. Given a pair of fragments, we randomly select a set of three matching feature pairs, which could be either planar-patch or key-point pairs. We compute the transformation aligning the selected triplet, and then estimate the "support" for the transformation by counting the number of putative match pairs that are aligned by the transformation. For patch pairs, alignment error is measures by the root-mean-square closest distance between sample points on the two patches. For key-point pairs, we simply use the Euclidean distance. Both use the same threshold of 1cm. If a transformation is found to be sufficiently supported by the matching pairs (more than 25% consensus), we include all the supporting pairs into the global optimization. Otherwise, we simply discard all putative matches.</p><p>Once a set of pairwise constraints have been established in this manner, the frame transformations and pair selection variables are alternately optimized with an iterative process using Ceres <ref type="bibr" target="#b45">[45]</ref> for the minimization of the objective function at each iteration. The iterative optimization converges when the relative value change of each unknown is less than 1 × 10 −6 . At a convergence, the weighting variable µ, which was initialized to 1m in the beginning, is decreased by half and the above iterative optimization continues. The whole process is repeated until µ is lower than 0.01m, which usually takes less than 50 iterations. The supplementary material provides a study of the optimization behavior, including convergence and robustness to incorrect pairs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Results and Evaluations</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Training Set, Parameters, and Timings</head><p>Our training data is generated from the ScanNet <ref type="bibr" target="#b9">[10]</ref> dataset, which contains 1513 scanned sequences of indoor scenes, reconstructed by BundleFusion <ref type="bibr" target="#b1">[2]</ref>. We adopt the training/testing split provided with ScanNet and the training set (1045 scenes) are used to generate our training triplets. Each training scene contributes 10K triplets. About 10M triplets in total are generated from all training scenes. For evaluating our network, we build a coplanarity benchmark using 100 scenes from the testing set. For hierarchical optimization, the fragment size is 21, with a 5-frame overlap between adjacent fragments. The network training takes about 20 hours to converge. For a sequence of 1K frames with 62 fragments and 30 patches per frame, the running time is 10 minutes for coplanarity prediction (0.1 second per patch pair) and 20 minutes for optimization (5 minutes for intra-fragment and 15 minutes for inter-fragment).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Coplanarity Benchmark</head><p>We create a benchmark COP for evaluating RGB-D-based coplanarity matching of planar patches. The benchmark dataset contains 12K patch pairs with ground-truth coplanarity, which are organized according to the physical size/area of patches (COP-S) and the centroid distance between pairs of patches (COP-D). COP-S contains 6K patch pairs which are split uniformly into three subsets with decreasing average patch size, where the patch pairs are sampled at random distances. COP-D comprises three subsets (each containing 2K pairs) with increasing average pair distance but uniformly distributed patch size. For all subsets, the numbers of positive and negative pairs are equal. Details of the benchmark are provided in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Network Evaluation</head><p>Our network is the first, to our knowledge, that is trained for coplanarity prediction. Therefore, we perform comparison against baselines and ablation studies. See visual results of coplanarity matching in the supplementary material.</p><p>Comparing to Baseline Methods: We first compare to two hand-crafted descriptors, namely the color histogram within the patch region and the SIFT feature at the patch centroid. For the task of key-point matching, a commonly practiced method (e.g., in <ref type="bibr" target="#b46">[46]</ref>) is to train a neural network that takes image patches centered around the key-points as input. We extend this network to the task of coplanarity prediction, as a non-trivial baseline. For a fair comparison, we train a triplet network with ResNet-50 with only one tower per patch taking three channels (RGB, depth, and normal) as input. For each channel, the image is cropped around the patch centroid, with the same padding and resizing scheme as before. Thus, no mask is needed since the target is always at the image center.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>COP-S1</head><p>COP-S2 COP-S3 precision recall recall recall We train two networks with different triplets for the task of 1) exact center point matching and 2) coplanarity patch matching, respectively. The comparison is conducted over COP-S and the results of precision-recall are plotted in <ref type="figure">Figure 6</ref>. The hand-crafted descriptors fail on all tests, which shows the difficulty of our benchmark datasets. Compared to the two alternative centerpoint-based networks (point matching and coplanarity matching), our method performs significantly better, especially on larger patches.</p><p>Ablation Studies: To investigate the need for the various input channels, we compare our full method against that with the RGB, depth, normal, or mask input disabled, over the COP benchmark. To evaluate the effect of multi-scale context, our method is also compared to that without local or global channels. The PR plots in <ref type="figure">Figure 7</ref> show that our full method works the best for all tests.</p><p>From the experiments, several interesting phenomena can be observed. First, the order of overall importance of the different channels is: mask &gt; normal &gt; RGB &gt; depth. This clearly shows that coplanarity prediction across different views can neither rely on appearance or geometry alone. The important role of masking in concentrating the network's attention is quite evident. We provide a further comparison to justify our specific masking scheme in the supplementary material. Second, the global scale is more effective for bigger patches and more distant pairs, for which the larger scale is required to encode more context. The opposite goes for the local scale due the higher resolution of its input channels. This verifies the complementary effect of the local and global channels in capturing contextual information at different scales.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4">Reconstruction Evaluation</head><p>Quantitative Results: We perform a quantitative evaluation of reconstruction using the TUM RGB-D dataset by <ref type="bibr" target="#b10">[11]</ref>, for which ground-truth camera trajectories are available. Reconstruction error is measured by the absolute trajectory error (ATE), i.e., the root-mean-square error (RMSE) of camera positions along a trajectory. We compare our method with six state-of-the-art reconstruction methods, including RGB-D SLAM <ref type="bibr" target="#b47">[47]</ref>, VoxelHashing <ref type="bibr" target="#b13">[14]</ref>, ElasticFusion <ref type="bibr" target="#b17">[18]</ref>, Redwood <ref type="bibr" target="#b11">[12]</ref>, BundleFusion <ref type="bibr" target="#b1">[2]</ref>, and Fine-to-Coarse <ref type="bibr" target="#b3">[4]</ref>. Note that unlike the other methods, Redwood does not use color information. Fine-to-Coarse is the most closely related to our method, since it uses planar surfaces for structurallyconstrained registration. This method, however, relies on a good initialization of camera trajectory to bootstrap, while our method does not. Our method uses SIFT features for key-point detection and matching. We also implement an enhanced version of our method where the key-point matchings are pre-filtered by BundleFusion (named 'BundleFusion+Ours').</p><p>As an ablation study, we implement five baseline variants of our method. 1) 'Coplanarity' is our optimization with only coplanarity constraints. Without keypoint matching constraint, our optimization can sometimes be under-determined and needs reformulation to achieve robust registration when not all degrees of freedom (DoFs) can be fixed by coplanarity. The details on the formulation can be found in the supplementary material. 2) 'Keypoint' is our optimization with only SIFT key-point matching constraints. 3) 'No D. in RANSAC' stands for our method where we did not use our learned patch descriptor during the voting in frame-to-frame RANSAC. In this case, any two patch pairs could cast a vote if they are geometrically aligned by the candidate transformation. 4) 'No D. in Opt' means that the optimization objective for coplanarity is not weighted by the matching confidence predicted by our network (w π in Equation <ref type="formula" target="#formula_3">(3)</ref> and <ref type="formula" target="#formula_7">(4)</ref>). 5) 'No D. in Both' is a combination of 3) and 4). <ref type="table" target="#tab_2">Table 1</ref> reports the ATE RMSE comparison. Our method achieves stateof-the-art results for the first three TUM sequences (the fourth is a flat wall). This is achieved by exploiting our long-range coplanarity matching for robust large-scale loop closure, while utilizing key-point based matching to pin down the possible free DoFs which are not determinable by coplanarity. When being  combined with BundleFusion key-points, our method achieves the best results over all sequences. Therefore, our method complements the current state-of-theart methods by providing a means to handle limited frame-to-frame overlap. The ablation study demonstrates the importance of our learned patch descriptor in our optimization -i.e., our method performs better than all variants that do not include it. It also shows that coplanarity constraints alone are superior to keypoints only for all sequences except the flat wall (fr3/nst). Using coplanar and keypoint matches together provides the best method overall.</p><p>Qualitative Results: <ref type="figure">Figure 8</ref> shows visual comparisons of reconstruction on sequences from ScanNet <ref type="bibr" target="#b9">[10]</ref> and new ones scanned by ourselves. We compare reconstruction results of our method with a state-of-the-art key-point based method (BundleFusion) and a planar-structure-based method (Fine-to-Coarse). The low frame overlap makes the key-point based loop-closure detection fail in BundleFusion. Lost tracking of successive frames provides a poor initial alignment for Fine-to-Coarse, causing it to fail. In contrast, our method can successfully detect non-overlapping loop closures through coplanar patch pairs and achieve good quality reconstructions for these examples without an initial registration. More visual results are shown in the supplementary material.</p><p>Effect of Long-Range Coplanarity. To evaluate the effect of long-range coplanarity matching on reconstruction quality, we show in <ref type="figure" target="#fig_5">Figure 9</ref> the reconstruction results computed with all, half, and none of the long-range coplanar pairs predicted by our network. We also show a histogram of coplanar pairs survived the optimization. From the visual reconstruction results, the benefit of long-range coplanar pairs is apparent. In particular, the larger scene (bottom) benefits more from long-range coplanarity than the smaller one (top). In <ref type="figure">Figure 8</ref>, we also give the number of non-overlapping coplanar pairs after optimization, showing that long-range coplanarity did help in all examples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>We have proposed a new planar patch descriptor designed for finding coplanar patches without a priori global alignment. At its heart, the method uses a deep  <ref type="bibr" target="#b1">[2]</ref>, and Fine-to-Coarse (F2C) <ref type="bibr" target="#b3">[4]</ref>, on six sequences. Red ellipses indicate parts with misalignment. For our results, we give the number of long-range coplanar pairs selected by the optimization. network to map planar patch inputs with RGB, depth, and normals to a descriptor space where proximity can be used to predict coplanarity. We expect that deep patch coplanarity prediction provides a useful complement to existing features for SLAM applications, especially in scans with large planar surfaces and little inter-frame overlap.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: Scene reconstruction based on coplanarity matching of patches across different views (numbers indicate frame ID) for both overlapping (left two pairs) and non-overlapping (right two pairs) patch pairs. The two pairs to the right are long-range, without overlapping. The bottom shows a zoomed-in comparison between our method (left) and key-point matching based method [2] (right).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: Network architecture of the local and global towers. Layers shaded in the same color share weights.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Visualization and comparison (prediction accuracy over #iter.) of different triplet loss functions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 5 :</head><label>5</label><figDesc>Fig. 5: t-SNE visualization of coplanarity-based features of planar patches from different views. Ground-truth coplanarity (measured by mutual RMS point-toplane distance) is encoded by color and physical size of patches by dot size.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 6 :Fig. 7 :</head><label>67</label><figDesc>Fig. 6: Comparing to baselines including center-point matching networks trained with coplanarity and exact point matching, respectively, SIFT-based point matching and color distribution based patch matching.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 9 :</head><label>9</label><figDesc>Fig. 9: Reconstruction results with 100% (left column), 50% (middle) and 0% (right) of long-range coplanar pairs detected, respectively. The histograms of long-range coplanar patch pairs (count over patch distance (1 ∼ 5m)) are given.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Comparison of ATE RMSE (in cm) with alternative and baseline meth- ods on TUM sequences [11]. Colors indicate the best and second best results.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Fig. 8: Visual comparison of reconstructions by our method, BundleFusion (BF)</figDesc><table>Ours (40660) 
+BF 
+F2C 
+Ours (9607) 
+BF 
+F2C 
+
+Ours (13791) 
+BF 
+F2C 
+Ours (4975) 
+BF 
+F2C 
+
+Ours (2712) 
+BF 
+F2C 
+Ours (9889) 
+BF 
+F2C 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgement We are grateful to Min Liu, Zhan Shi, Lintao Zheng, and Maciej Halber for their help on data preprocessing. We also thank Yizhong Zhang for the early discussions. This work was supported in part by the NSF (VEC 1539014/ 1539099, IIS 1421435, CHS 1617236), NSFC (61532003, 61572507, 61622212), Google, Intel, Pixar, Amazon, and Facebook. Yifei Shi was supported by the China Scholarship Council.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">KinectFusion: Real-time 3D reconstruction and interaction using a moving depth camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. UIST</title>
+		<meeting>UIST</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="559" to="568" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">BundleFusion: Realtime globally consistent 3d reconstruction using on-the-fly surface reintegration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graph</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">24</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Online structure analysis for real-time indoor scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">159</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Fine-to-coarse global registration of rgb-d scans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Halber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.08539</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Joint layout estimation and global multi-view registration for indoor reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Yea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">J</forename><surname>Yoon</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.07632</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Cpa-slam: Consistent plane-model alignment for direct rgb-d slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kerl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Stückler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1285" to="1291" />
+		</imprint>
+	</monogr>
+	<note>Robotics and Automation (ICRA)</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Planar surface slam with 3d and 2d sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Trevor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">G</forename><surname>Rogers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">I</forename><surname>Christensen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA)</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="3041" to="3048" />
+		</imprint>
+	</monogr>
+	<note>IEEE</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Emptying, refurnishing, and relighting indoor spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">174</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">3dlite: Towards commodity 3d scanning for content creation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">2017</biblScope>
+			<date type="published" when="2017" />
+			<publisher>TOG</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Scannet: Richly-annotated 3d reconstructions of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Halber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">A benchmark for the evaluation of rgb-d slam systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Engelhard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IROS</title>
+		<meeting>IROS</meeting>
+		<imprint>
+			<date type="published" when="2012-10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Robust reconstruction of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5556" to="5565" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">KinectFusion: Real-time dense surface mapping and tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ISMAR</title>
+		<meeting>ISMAR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="127" to="136" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Real-time 3d reconstruction at scale using voxel hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>ACM TOG</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Scalable real-time volumetric surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bautembach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">113</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Real-time 3d reconstruction in dynamic scenes using point-based fusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Keller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lefloch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lambers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weyrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kolb</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc</title>
+		<meeting>null</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Volumetric 3d mapping in real-time on a cpu</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Steinbruecker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2014 IEEE International Conference on Robotics and Automation (ICRA)</title>
+		<meeting><address><addrLine>Hongkong, China</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">ElasticFusion: Dense SLAM without a pose graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leutenegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Salas-Moreno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Glocker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. RSS</title>
+		<meeting>RSS<address><addrLine>Rome, Italy</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Stereo dso: Large-scale direct sparse visual odometry with stereo cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schwörer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.07878</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Colored point cloud registration revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="143" to="152" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Object recognition from local scale-invariant features. In: Computer vision, 1999. The proceedings of the seventh IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1999" />
+			<publisher>Ieee</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1150" to="1157" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Surf: Speeded up robust features. Computer vision-ECCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="404" to="417" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Orb: An efficient alternative to sift or surf</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rublee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rabaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolige</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2011 IEEE international conference on</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2564" to="2571" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Matchnet: Unifying feature and metric learning for patch-based matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3279" to="3286" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Lift: Learned invariant feature transform</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Trulls</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="467" to="483" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Se3-nets: Learning rigid body motion using deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Byravan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2017 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="173" to="180" />
+		</imprint>
+	</monogr>
+	<note>Robotics and Automation (ICRA</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niessner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fisher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1802" to="1811" />
+		</imprint>
+	</monogr>
+	<note>3DMatch: Learning local geometric descriptors from rgb-d reconstructions</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Self-supervised visual descriptor learning for dense correspondence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Robotics and Automation Letters</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="420" to="427" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Dpptam: Dense piecewise planar tracking and mapping from a monocular sequence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Concha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Civera</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+			</analytic>
+	<monogr>
+		<title level="m">IEEE/RSJ International Conference on</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5686" to="5693" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Exploring high-level plane primitives for indoor 3d reconstruction with a hand-held rgb-d camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fuchs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Asian Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="94" to="108" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Keyframe-based dense planar slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hsiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Westman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. International Conference on Robotics and Automation (ICRA)</title>
+		<meeting>International Conference on Robotics and Automation (ICRA)</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Planar features for visual slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pietzsch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Artificial Intelligence</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="119" to="126" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Proença</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gao</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.06516</idno>
+		<title level="m">Probabilistic combination of noisy points and planes for rgb-d odometry</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Dense planar slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Salas-Moreno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Glocken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Kelly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mixed and Augmented Reality (ISMAR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="157" to="164" />
+		</imprint>
+	</monogr>
+	<note>IEEE</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Point-plane slam for handheld 3d sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">D</forename><surname>Jian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramalingam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Feng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="5182" to="5189" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">3d slam using planar segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weingarten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Siegwart</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE/RSJ International Conference on</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="3062" to="3067" />
+		</imprint>
+	</monogr>
+	<note>Intelligent Robots and Systems</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Orthogonal wall correction for visual motion estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Stuckler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Behnke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA 2008. IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1" to="6" />
+		</imprint>
+	</monogr>
+	<note>Robotics and Automation</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">A tutorial on graph-based slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Grisetti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kummerle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stachniss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Intelligent Transportation Systems Magazine</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="31" to="43" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Rgb-d mapping: Using depth cameras for dense 3d modeling of indoor environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Krainin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Herbst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">In the 12th International Symposium on Experimental Robotics (ISER, Citeseer</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Dense scene reconstruction with points of interest</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">112</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Fast global registration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="766" to="782" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Facenet: A unified embedding for face recognition and clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schroff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalenichenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="815" to="823" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.02002</idno>
+		<title level="m">Focal loss for dense object detection</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">Ceres solver: Tutorial &amp; reference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mierle</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>Google Inc</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">72</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Matterport3d: Learning from rgb-d data in indoor environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on 3D Vision (3DV)</title>
+		<meeting>the International Conference on 3D Vision (3DV)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">An evaluation of the rgb-d slam system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Engelhard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2012 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1691" to="1696" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

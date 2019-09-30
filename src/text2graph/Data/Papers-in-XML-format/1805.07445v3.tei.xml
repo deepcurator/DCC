@@ -1,0 +1,1285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">DVAE#: Discrete Variational Autoencoders with Relaxed Boltzmann Priors</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arash</forename><surname>Vahdat</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">D-Wave Systems Inc. Burnaby</orgName>
+								<address>
+									<region>BC</region>
+									<country key="CA">Canada</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Evgeny</forename><surname>Andriyash</surname></persName>
+							<email>evgeny@quadrant.ai</email>
+							<affiliation key="aff0">
+								<orgName type="institution">D-Wave Systems Inc. Burnaby</orgName>
+								<address>
+									<region>BC</region>
+									<country key="CA">Canada</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><roleName>Quadrant.ai</roleName><forename type="first">William</forename><forename type="middle">G</forename><surname>Macready</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">D-Wave Systems Inc. Burnaby</orgName>
+								<address>
+									<region>BC</region>
+									<country key="CA">Canada</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">DVAE#: Discrete Variational Autoencoders with Relaxed Boltzmann Priors</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Boltzmann machines are powerful distributions that have been shown to be an effective prior over binary latent variables in variational autoencoders (VAEs). However, previous methods for training discrete VAEs have used the evidence lower bound and not the tighter importance-weighted bound. We propose two approaches for relaxing Boltzmann machines to continuous distributions that permit training with importance-weighted bounds. These relaxations are based on generalized overlapping transformations and the Gaussian integral trick. Experiments on the MNIST and OMNIGLOT datasets show that these relaxations outperform previous discrete VAEs with Boltzmann priors. An implementation which reproduces these results is available at https://github.com/QuadrantAI/dvae.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Advances in amortized variational inference <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b3">4]</ref> have enabled novel learning methods <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b5">6]</ref> and extended generative learning into complex domains such as molecule design <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8]</ref>, music <ref type="bibr" target="#b8">[9]</ref> and program <ref type="bibr" target="#b9">[10]</ref> generation. These advances have been made using continuous latent variable models in spite of the computational efficiency and greater interpretability offered by discrete latent variables. Further, models such as clustering, semi-supervised learning, and variational memory addressing <ref type="bibr" target="#b10">[11]</ref> all require discrete variables, which makes the training of discrete models an important challenge.</p><p>Prior to the deep learning era, Boltzmann machines were widely used for learning with discrete latent variables. These powerful multivariate binary distributions can represent any distribution defined on a set of binary random variables <ref type="bibr" target="#b11">[12]</ref>, and have seen application in unsupervised learning <ref type="bibr" target="#b12">[13]</ref>, supervised learning <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b14">15]</ref>, reinforcement learning <ref type="bibr" target="#b15">[16]</ref>, dimensionality reduction <ref type="bibr" target="#b16">[17]</ref>, and collaborative filtering <ref type="bibr" target="#b17">[18]</ref>. Recently, Boltzmann machines have been used as priors for variational autoencoders (VAEs) in the discrete variational autoencoder (DVAE) <ref type="bibr" target="#b18">[19]</ref> and its successor DVAE++ <ref type="bibr" target="#b19">[20]</ref>. It has been demonstrated that these VAE models can capture discrete aspects of data. However, both these models assume a particular variational bound and tighter bounds such as the importance weighted (IW) bound <ref type="bibr" target="#b20">[21]</ref> cannot be used for training.</p><p>We remove this constraint by introducing two continuous relaxations that convert a Boltzmann machine to a distribution over continuous random variables. These relaxations are based on overlapping transformations introduced in <ref type="bibr" target="#b19">[20]</ref> and the Gaussian integral trick <ref type="bibr" target="#b21">[22]</ref> (known as the HubbardStratonovich transform <ref type="bibr" target="#b22">[23]</ref> in physics). Our relaxations are made tunably sharp by using an inverse temperature parameter.</p><p>VAEs with relaxed Boltzmann priors can be trained using standard techniques developed for continuous latent variable models. In this work, we train discrete VAEs using the same IW bound on the log-likelihood that has been shown to improve importance weighted autoencoders (IWAEs) <ref type="bibr" target="#b20">[21]</ref>. This paper makes two contributions: i) We introduce two continuous relaxations of Boltzmann machines and use these relaxations to train a discrete VAE with a Boltzmann prior using the IW bound. ii) We generalize the overlapping transformations of <ref type="bibr" target="#b19">[20]</ref> to any pair of distributions with computable probability density function (PDF) and cumulative density function (CDF). Using these more general overlapping transformations, we propose new smoothing transformations using mixtures of Gaussian and power-function <ref type="bibr" target="#b23">[24]</ref> distributions. Power-function overlapping transformations provide lower variance gradient estimates and improved test set log-likelihoods when the inverse temperature is large. We name our framework DVAE# because the best results are obtained when the power-function transformations are sharp. <ref type="bibr" target="#b1">2</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1">Related Work</head><p>Previous work on training discrete latent variable models can be grouped into five main categories: i) Exhaustive approaches marginalize all discrete variables <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b25">26]</ref> and which are not scalable to more than a few discrete variables.</p><p>ii) Local expectation gradients <ref type="bibr" target="#b26">[27]</ref> and reparameterization and marginalization <ref type="bibr" target="#b27">[28]</ref> estimators compute low-variance estimates at the cost of multiple function evaluations per gradient. These approaches can be applied to problems with a moderate number of latent variables.</p><p>iii) Relaxed computation of discrete densities <ref type="bibr" target="#b28">[29]</ref> replaces discrete variables with continuous relaxations for gradient computation. A variation of this approach, known as the straight-through technique, sets the gradient of binary variables to the gradient of their mean <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b30">31]</ref>.</p><p>iv) Continuous relaxations of discrete distributions <ref type="bibr" target="#b31">[32]</ref> replace discrete distributions with continuous ones and optimize a consistent objective. This method cannot be applied directly to Boltzmann distributions. The DVAE <ref type="bibr" target="#b18">[19]</ref> solves this problem by pairing each binary variable with an auxiliary continuous variable. This approach is described in Sec. 2.</p><p>v) The REINFORCE estimator <ref type="bibr" target="#b32">[33]</ref> (also known as the likelihood ratio <ref type="bibr" target="#b33">[34]</ref> or score-function estimator) replaces the gradient of an expectation with the expectation of the gradient of the score function. This estimator has high variance, but many increasingly sophisticated methods provide lower variance estimators. NVIL <ref type="bibr" target="#b2">[3]</ref> uses an input-dependent baseline, and MuProp <ref type="bibr" target="#b34">[35]</ref> uses a first-order Taylor approximation along with an input-dependent baseline to reduce noise. VIMCO <ref type="bibr" target="#b35">[36]</ref> trains an IWAE with binary latent variables and uses a leave-one-out scheme to define the baseline for each sample. REBAR <ref type="bibr" target="#b36">[37]</ref> and its generalization RELAX <ref type="bibr" target="#b37">[38]</ref> use the reparameterization of continuous distributions to define baselines.</p><p>The method proposed here is of type iv) and differs from <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref> in the way that binary latent variables are marginalized. The resultant relaxed distribution allows for DVAE training with a tighter bound. Moreover, our proposal encompasses a wider variety of smoothing methods and one of these empirically provides lower-variance gradient estimates.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Background</head><p>Let x x x represent observed random variables and ζ ζ ζ continuous latent variables. We seek a generative model p(x x x, ζ ζ ζ) = p(ζ ζ ζ)p(x x x|ζ ζ ζ) where p(ζ ζ ζ) denotes the prior distribution and p(x x x|ζ ζ ζ) is a probabilistic decoder. In the VAE <ref type="bibr" target="#b0">[1]</ref>, training maximizes a variational lower bound on the marginal log-likelihood:</p><p>log p(x x x) ≥ E q(ζ ζ ζ|x x x) log p(x x x|ζ ζ ζ) − KL q(ζ ζ ζ|x x x)||p(ζ ζ ζ) .</p><p>A probabilistic encoder q(ζ ζ ζ|x x x) approximates the posterior over latent variables. For continuous ζ ζ ζ, the bound is maximized using the reparameterization trick. With reparameterization, expectations with respect to q(ζ ζ ζ|x x x) are replaced by expectations against a base distribution and a differentiable function that maps samples from the base distribution to q(ζ ζ ζ|x x x). This can always be accomplished when q(ζ ζ ζ|x x x) has an analytic inverse cumulative distribution function (CDF) by mapping uniform samples through the inverse CDF. However, reparameterization cannot be applied to binary latent variables because the CDF is not differentiable.</p><p>The DVAE <ref type="bibr" target="#b18">[19]</ref> resolves this issue by pairing each binary latent variable with a continuous counterpart. Denoting a binary vector of length D by z z z ∈ {0, 1} D , the Boltzmann prior is p(z z z) = e −E θ θ θ (z z z) /Z θ θ θ where E θ θ θ (z z z) = −a a a T z z z − 1 2 z z z T W W Wz z z is an energy function with parameters θ θ θ ≡ {W W W , a a a} and partition function Z θ θ θ . The joint model over discrete and continuous variables is p(x x x, z z z, ζ ζ ζ) = p(z z z)r(ζ ζ ζ|z z z)p(x x x|ζ ζ ζ) where r(ζ ζ ζ|z z z) = i r(ζ i |z i ) is a smoothing transformation that maps each discrete z i to its continuous analogue ζ i . DVAE <ref type="bibr" target="#b18">[19]</ref> and DVAE++ <ref type="bibr" target="#b19">[20]</ref> differ in the type of smoothing transformations r(ζ|z): <ref type="bibr" target="#b18">[19]</ref> uses spike-and-exponential transformation (Eq. (1) left), while <ref type="bibr" target="#b19">[20]</ref> uses two overlapping exponential distributions (Eq. (1) right). Here, δ(ζ) is the (one-sided) Dirac delta distribution, ζ ∈ [0, 1], and Z β is the normalization constant:</p><formula xml:id="formula_0">r(ζ|z) = δ(ζ) if z = 0 e β(ζ−1) /Z β otherwise , r(ζ|z) = e −βζ /Z β if z = 0 e β(ζ−1) /Z β otherwise .<label>(1)</label></formula><p>The variational bound for a factorial approximation to the posterior where q(ζ ζ ζ|x x x) = i q(ζ i |x x x) and q(z z z|x x x) = i q(z i |x x x) is derived in <ref type="bibr" target="#b19">[20]</ref> as</p><formula xml:id="formula_1">log p(x x x) ≥ E q(ζ ζ ζ|x x x) [log p(x x x|ζ ζ ζ)] + H(q(z z z|x x x)) + E q(ζ ζ ζ|x x x) E q(z z z|x x x,ζ ζ ζ) log p(z z z)) ,<label>(2)</label></formula><p>Here q(ζ i |x x x) = zi q(z i |x x x)r(ζ i |z i ) is a mixture distribution combining r(ζ i |z i = 0) and r(ζ i |z i = 1) with weights q(z i |x x x). The probability of binary units conditioned on ζ i , q(z z z|x x x, ζ ζ ζ) = i q(z i |x x x, ζ i ), can be computed analytically. H(q(z z z|x x x)) is the entropy of q(z z z|x x x). The second and third terms in Eq. (2) have analytic solutions (up to the log normalization constant) that can be differentiated easily with an automatic differentiation (AD) library. The expectation over q(ζ ζ ζ|x x x) is approximated with reparameterized sampling.</p><p>We extend <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref> to tighten the bound of Eq. (2) by importance weighting <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b38">39]</ref>. These tighter bounds are shown to improve VAEs. For continuous latent variables, the K-sample IW bound is</p><formula xml:id="formula_2">log p(x x x) ≥ L K (x x x) = E ζ ζ ζ (k) ∼q(ζ ζ ζ|x x x) log 1 K K k=1 p(ζ ζ ζ (k) )p(x x x|ζ ζ ζ (k) ) q(ζ ζ ζ (k) |x x x) .<label>(3)</label></formula><p>The tightness of the IW bound improves as K increases <ref type="bibr" target="#b20">[21]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Model</head><p>We introduce two relaxations of Boltzmann machines to define the continuous prior distribution p(ζ ζ ζ) in the IW bound of Eq. (3). These relaxations rely on either overlapping transformations (Sec. 3.1) or the Gaussian integral trick (Sec. 3.2). Sec. 3.3 then generalizes the class of overlapping transformations that can be used in the approximate posterior q(ζ ζ ζ|x x x).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Overlapping Relaxations</head><p>We obtain a continuous relaxation of p(z z z) through the marginal p(ζ ζ ζ) = z p(z z z)r(ζ ζ ζ|z z z) where r(ζ ζ ζ|z z z) is an overlapping smoothing transformation <ref type="bibr" target="#b19">[20]</ref> that operates on each component of z z z and ζ ζ ζ independently; i.e., r(ζ ζ ζ|z z z) = i r(ζ i |z i ). Overlapping transformations such as mixture of exponential in Eq. (1) may be used for r(ζ ζ ζ|z z z). These transformations are equipped with an inverse temperature hyperparameter β to control the sharpness of the smoothing transformation. As β → ∞, r(ζ ζ ζ|z z z) approaches δ(ζ ζ ζ − z z z) and p(ζ ζ ζ) = z p(z z z)δ(ζ ζ ζ − z z z) becomes a mixture of 2 D delta function distributions centered on the vertices of the hypercube in R D . At finite β, p(ζ ζ ζ) provides a continuous relaxation of the Boltzmann machine.</p><p>To train an IWAE using Eq. (3) with p(ζ ζ ζ) as a prior, we must compute log p(ζ ζ ζ) and its gradient with respect to the parameters of the Boltzmann distribution and the approximate posterior. This computation involves marginalization over z z z, which is generally intractable. However, we show that this marginalization can be approximated accurately using a mean-field model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.1">Computing log p(ζ ζ ζ) and its Gradient for Overlapping Relaxations</head><p>Since overlapping transformations are factorial, the log marginal distribution of ζ ζ ζ is</p><formula xml:id="formula_3">log p(ζ ζ ζ) = log z z z p(z z z)r(ζ ζ ζ|z z z) = log z z z e −E θ θ θ (z z z)+b b b β (ζ ζ ζ) T z z z+c c c β (ζ ζ ζ) − log Z θ θ θ ,<label>(4)</label></formula><p>where</p><formula xml:id="formula_4">b β i (ζ ζ ζ) = log r(ζ i |z i = 1) − log r(ζ i |z i = 0) and c β i (ζ ζ ζ) = log r(ζ i |z i = 0). For the mixture of exponential smoothing b β i (ζ ζ ζ) = β(2ζ i − 1) and c β i (ζ ζ ζ) = −βζ i − log Z β .</formula><p>The first term in Eq. <ref type="formula" target="#formula_3">(4)</ref> is the log partition function of the Boltzmann machinep(z z z) with augmented energy functionÊ</p><formula xml:id="formula_5">β θ θ θ,ζ ζ ζ (z z z) := E θ θ θ (z z z)−b b b β (ζ ζ ζ) T z z z−c c c β (ζ ζ ζ).</formula><p>Estimating the log partition function accurately can be expensive, particularly because it has to be done for each ζ ζ ζ. However, we note that each ζ i comes from a bimodal distribution centered at zero and one, and that the bias b b b β (ζ ζ ζ) is usually large for most components i (particularly for large β). In this case, mean field is likely to provide a good approximation ofp(z z z), a fact we demonstrate empirically in Sec. 4.</p><p>To compute log p(ζ ζ ζ) and its gradient, we first fit a mean-field distribution m(z z z) = i m i (z i ) by minimizing KL(m(z z z)||p(z z z)) <ref type="bibr" target="#b39">[40]</ref>. The gradient of log p(ζ ζ ζ) with respect to β, θ θ θ or ζ ζ ζ is:</p><formula xml:id="formula_6">∇ log p(ζ ζ ζ) = −E z z z∼p(z z z) ∇Ê β θ θ θ,ζ ζ ζ (z z z) + E z z z∼p(z z z) ∇E θ θ θ (z z z) ≈ −E z z z∼m(z z z) ∇Ê β θ θ θ,ζ ζ ζ (z z z) + E z z z∼p(z z z) ∇E θ θ θ (z z z) = −∇Ê β θ θ θ,ζ ζ ζ (m m m) + E z z z∼p(z z z) ∇E θ θ θ (z z z) ,<label>(5)</label></formula><p>where</p><formula xml:id="formula_7">m m m T = [m 1 (z 1 = 1) · · · m D (z D = 1)</formula><p>] is the mean-field solution and where the gradient does not act on m m m. The first term in Eq. <ref type="formula" target="#formula_6">(5)</ref> is the result of computing the average energy under a factorial distribution. <ref type="bibr" target="#b2">3</ref> The second expectation corresponds to the negative phase in training Boltzmann machines and is approximated by Monte Carlo sampling from p(z z z).</p><p>To compute the importance weights for the IW bound of Eq. <ref type="formula" target="#formula_2">(3)</ref> we must compute the value of log p(ζ ζ ζ) up to the normalization; i.e. the first term in Eq. <ref type="bibr" target="#b3">(4)</ref>. Assuming that KL m(z z z)||p(z z z) ≈ 0 and using</p><formula xml:id="formula_8">KL(m(z z z)||p(z z z)) =Ê β θ θ θ,ζ ζ ζ (m m m) + log z e −Ê β θ θ θ,ζ ζ ζ (z z z) − H(m(z z z)),<label>(6)</label></formula><p>the first term of Eq. <ref type="formula" target="#formula_3">(4)</ref> is approximated as H m(z z z) −Ê β θ θ θ,ζ ζ ζ (m m m).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">The Gaussian Integral Trick</head><p>The computational complexity of log p(ζ ζ ζ) arises from the pairwise interactions z z z T W W Wz z z present in E θ θ θ (z z z). Instead of applying mean field, we remove these interactions using the Gaussian integral trick <ref type="bibr" target="#b40">[41]</ref>. This is achieved by defining Gaussian smoothing:</p><formula xml:id="formula_9">r(ζ ζ ζ|z z z) = N (ζ ζ ζ|A A A(W W W + βI I I)z z z, A A A(W W W + βI I I)A A A T )</formula><p>for an invertible matrix A A A and a diagonal matrix βI I I with β &gt; 0. Here, β must be large enough so that W W W + βI I I is positive definite. Common choices for A A A include A A A = I I I or A A A = Λ Λ Λ</p><formula xml:id="formula_10">− 1 2 V V V T where V V V Λ Λ ΛV V V</formula><p>T is the eigendecomposition of W W W + βI I I <ref type="bibr" target="#b40">[41]</ref>. However, neither of these choices places the modes of p(ζ ζ ζ) on the vertices of the hypercube in R D . Instead, we take A A A = (W W W + βI I I) −1 giving the smoothing transformation r(ζ ζ ζ|z z z) = N (ζ ζ ζ|z z z, (W W W + βI I I) −1 ). The joint density is then</p><formula xml:id="formula_11">p(z z z, ζ ζ ζ) ∝ e − 1 2 ζ ζ ζ T (W W W +βI I I)ζ ζ ζ+z z z T (W W W +βI I I)ζ ζ ζ+(a a a− 1 2 β1 1 1) T z z z ,</formula><p>where 1 1 1 is the D-vector of all ones. Since p(z z z, ζ ζ ζ) no longer contains pairwise interactions z z z can be marginalized out giving</p><formula xml:id="formula_12">p(ζ ζ ζ) = Z −1 θ θ θ 1 2π (W W W + βI I I) 1 2 e − 1 2 ζ ζ ζ T (W W W +βI I I)ζ ζ ζ i 1 + e ai+ci− β 2 ,<label>(7)</label></formula><p>where c i is the i th element of (W W W + βI I I)ζ ζ ζ.</p><p>The marginal p(ζ ζ ζ) in Eq. <ref type="formula" target="#formula_12">(7)</ref> is a mixture of 2 D Gaussian distributions centered on the vertices of the hypercube in R D with mixing weights given by p(z z z). Each mixture component has covariance Σ Σ Σ = (W W W + βI I I) −1 and, as β gets large, the precision matrix becomes diagonally dominant. As <ref type="bibr" target="#b2">3</ref> The augmented energyÊ β θ θ θ,ζ ζ ζ (z z z) is a multi-linear function of {zi} and under the mean-field assumption each zi is replaced by its average value m(zi = 1).</p><p>β → ∞, each mixture component becomes a delta function and p(ζ ζ ζ) approaches z p(z z z)δ(ζ ζ ζ − z z z). This Gaussian smoothing allows for simple evaluation of log p(ζ ζ ζ) (up to Z θ θ θ ), but we note that each mixture component has a nondiagonal covariance matrix, which should be accommodated when designing the approximate posterior q(ζ ζ ζ|x x x).</p><p>The hyperparameter β must be larger than the absolute value of the most negative eigenvalue of W W W to ensure that W W W + βI I I is positive definite. Setting β to even larger values has the benefit of making the Gaussian mixture components more isotropic, but this comes at the cost of requiring a sharper approximate posterior with potentially noisier gradient estimates.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Generalizing Overlapping Transformations</head><p>The previous sections developed two r(ζ ζ ζ|z z z) relaxations for Boltzmann priors. Depending on this choice, compatible q(ζ ζ ζ|x x x) parameterizations must be used. For example, if Gaussian smoothing is used, then a mixture of Gaussian smoothers should be used in the approximate posterior. Unfortunately, the overlapping transformations introduced in DVAE++ <ref type="bibr" target="#b19">[20]</ref> are limited to mixtures of exponential or logistic distributions where the inverse CDF can be computed analytically. Here, we provide a general approach for reparameterizing overlapping transformations that does not require analytic inverse CDFs. Our approach is a special case of the reparameterization method for multivariate mixture distributions proposed in <ref type="bibr" target="#b41">[42]</ref>.</p><p>Assume q(ζ|x x x) = (1 − q)r(ζ|z = 0) + qr(ζ|z = 1) is the mixture distribution resulting from an overlapping transformation defined for one-dimensional z and ζ where q ≡ q(z = 1|x x x). Ancestral sampling from q(ζ|x x x) is accomplished by first sampling from the binary distribution q(z|x x x) and then sampling ζ from r(ζ|z). This process generates samples but is not differentiable with respect to q.</p><p>To compute the gradient (with respect to q) of samples from q(ζ|x x x), we apply the implicit function theorem. The inverse CDF of q(ζ|x x x) at ρ is obtained by solving:</p><formula xml:id="formula_13">CDF(ζ) = (1 − q)R(ζ|z = 0) + qR(ζ|z = 1) = ρ,<label>(8)</label></formula><p>where ρ ∈ [0, 1] and R(ζ|z) is the CDF for r(ζ|z). Assuming that ζ is a function of q but ρ is not, we take the gradient from both sides of Eq. (8) with respect to q giving</p><formula xml:id="formula_14">∂ζ ∂q = R(ζ|z = 0) − R(ζ|z = 1) (1 − q)r(ζ|z = 0) + qr(ζ|z = 1) ,<label>(9)</label></formula><p>which can be easily computed for a sampled ζ if the PDF and CDF of r(ζ|z) are known. This generalization allows us to compute gradients of samples generated from a wide range of overlapping transformations. Further, the gradient of ζ with respect to the parameters of r(ζ|z) (e.g. β) is computed similarly as</p><formula xml:id="formula_15">∂ζ ∂β = − (1 − q) ∂ β R(ζ|z = 0) + q ∂ β R(ζ|z = 1) (1 − q)r(ζ|z = 0) + qr(ζ|z = 1) .</formula><p>With this method, we can apply overlapping transformations beyond the mixture of exponentials considered in <ref type="bibr" target="#b19">[20]</ref>. The inverse CDF of exponential mixtures is shown in <ref type="figure" target="#fig_0">Fig. 1(a)</ref> for several β. As β increases, the relaxation approaches the original binary variables, but this added fidelity comes at the cost of noisy gradients. Other overlapping transformations offer alternative tradeoffs:</p><p>Uniform+Exp Transformation: We ensure that the gradient remains finite as β → ∞ by mixing the exponential with a uniform distribution. This is achieved by defining r (ζ|z) = (1 − )r(ζ|z) + where r(ζ|z) is the exponential smoothing and ζ ∈ [0, 1]. The inverse CDF resulting from this smoothing is shown in <ref type="figure" target="#fig_0">Fig. 1(b)</ref>.</p><p>Power-Function Transformation: Instead of adding a uniform distribution we substitute the exponential distribution for one with heavier tails. One choice is the power-function distribution <ref type="bibr" target="#b23">[24]</ref>:</p><formula xml:id="formula_16">r(ζ|z) = 1 β ζ ( 1 β −1) if z = 0 1 β (1 − ζ) ( 1 β −1)</formula><p>otherwise for ζ ∈ [0, 1] and β &gt; 1.</p><p>The conditionals in Eq. (10) correspond to the Beta distributions B(1/β, 1) and B(1, 1/β) respectively. The inverse CDF resulted from this smoothing is visualized in <ref type="figure" target="#fig_0">Fig. 1(c)</ref>. In the second row, the gradient of the inverse CDF with respect to q is visualized. Each column corresponds to a different smoothing transformation. As the transition region sharpens with increasing β, a sampling based estimate of the gradient becomes noisier; i.e., the variance of ∂ζ/∂q increases. The uniform+exp exponential has a very similar inverse CDF (first row) to the exponential but has potentially lower variance (bottom row). In comparison, the power-function smoothing with β = 40 provides a good relaxation of the discrete variables while its gradient noise is still moderate. See the supplementary material for a comparison of the gradient noise.</p><p>Gaussian Transformations: The transformations introduced above have support ζ ∈ [0, 1]. We also explore Gaussian smoothing r(ζ|z) = N (ζ|z, 1 β ) with support ζ ∈ R. None of these transformations have an analytic inverse CDF for q(ζ|x x x) so we use Eq. (9) to calculate gradients.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section we compare the various relaxations for training DVAEs with Boltzmann priors on statically binarized MNIST <ref type="bibr" target="#b42">[43]</ref> and OMNIGLOT <ref type="bibr" target="#b43">[44]</ref> datasets. For all experiments we use a generative model of the form p(x x x, ζ ζ ζ) = p(ζ ζ ζ)p(x x x|ζ ζ ζ) where p(ζ ζ ζ) is a continuous relaxation obtained from either the overlapping relaxation of Eq. (4) or the Gaussian integral trick of Eq. (7). The underlying Boltzmann distribution is a restricted Boltzmann machine (RBM) with bipartite connectivity which allows for parallel Gibbs updates. We use a hierarchical autoregressively-structured q(ζ ζ ζ|x x x) = G g=1 q(ζ ζ ζ g |x x x, ζ ζ ζ &lt;g ) to approximate the posterior distribution over ζ ζ ζ. This structure divides the components of ζ ζ ζ into G equally-sized groups and defines each conditional using a factorial distribution conditioned on x x x and all ζ ζ ζ from previous groups.</p><p>The smoothing transformation used in q(ζ ζ ζ|x x x) depends on the type of relaxation used in p(ζ ζ ζ). For overlapping relaxations, we compare exponential, uniform+exp, Gaussian, and power-function. With the Gaussian integral trick, we use shifted Gaussian smoothing as described below. The decoder p(x x x|ζ ζ ζ) and conditionals q(ζ ζ ζ g |x x x, ζ ζ ζ &lt;g ) are modeled with neural networks. Following <ref type="bibr" target="#b19">[20]</ref>, we consider both linear (-) and nonlinear (∼) versions of these networks. The linear models use a single linear layer to predict the parameters of the distributions p(x x x|ζ ζ ζ) and q(ζ ζ ζ g |x x x, ζ ζ ζ &lt;g ) given their input. The nonlinear models use two deterministic hidden layers with 200 units, tanh activation and batchnormalization. We use the same initialization scheme, batch-size, optimizer, number of training iterations, schedule of learning rate, weight decay and KL warm-up for training that was used in <ref type="bibr" target="#b19">[20]</ref> (See Sec. 7.2 in <ref type="bibr" target="#b19">[20]</ref>). For the mean-field optimization, we use 5 iterations. To evaluate the trained models, we estimate the log-likelihood on the discrete graphical model using the importance-weighted bound with 4000 samples <ref type="bibr" target="#b20">[21]</ref>. At evaluation p(ζ ζ ζ) is replaced with the Boltzmann distribution p(z z z), and q(ζ ζ ζ|x x x) with q(z z z|x x x) (corresponding to β = ∞).</p><p>For DVAE, we use the original spike-and-exp smoothing. For DVAE++, in addition to exponential smoothing, we use a mixture of power-functions. The DVAE# models are trained using the IW bound in Eq. (3) with K = 1, 5, 25 samples. To fairly compare DVAE# with DVAE and DVAE++ (which can only be trained with the variational bound), we use the same number of samples K ≥ 1 when estimating the variational bound during DVAE and DVAE++ training.</p><p>The smoothing parameter β is fixed throughout training (i.e. β is not annealed). However, since β acts differently for each smoothing function r, its value is selected by cross validation per smoothing and structure. We select from β ∈ {4, 5, 6, 8} for spike-and-exp, β ∈ {8, 10, 12, 16} for exponential, β ∈ {16, 20, 30, 40} with = 0.05 for uniform+exp, β ∈ {15, 20, 30, 40} for power-function, and β ∈ {20, 25, 30, 40} for Gaussian smoothing. For models other than the Gaussian integral trick, β is set to the same value in q(ζ ζ ζ|x x x) and p(ζ ζ ζ). For the Gaussian integral case, β in the encoder is trained as discussed next, but is selected in the prior from β ∈ {20, 25, 30, 40}.</p><p>With the Gaussian integral trick, each mixture component in the prior contains off-diagonal correlations and the approximation of the posterior over ζ ζ ζ should capture this. We recall that a multivariate Gaussian N (ζ ζ ζ|µ µ µ, Σ Σ Σ) can always be represented as a product of Gaussian conditionals i N ζ i |µ i + ∆µ i (ζ ζ ζ &lt;i ), σ i where ∆µ i (ζ ζ ζ &lt;i ) is linear in ζ ζ ζ &lt;i . Motivated by this observation, we provide flexibility in the approximate posterior q(ζ ζ ζ|x x x) by using shifted Gaussian smoothing where r(ζ i |z i ) = N (ζ i |z i + ∆µ i (ζ ζ ζ &lt;i ), 1/β i ), and ∆µ i (ζ ζ ζ &lt;i ) is an additional parameter that shifts the distribution. As the approximate posterior in our model is hierarchical, we generate ∆µ i (ζ ζ ζ &lt;g ) for the i th element in g th group as the output of the same neural network that generates the parameters of q(ζ ζ ζ g |x x x, ζ ζ ζ &lt;g ). The parameter β i for each component of ζ ζ ζ g is a trainable parameter shared for all x x x.</p><p>Training also requires sampling from the discrete RBM to compute the θ θ θ-gradient of log Z θ θ θ . We have used both population annealing <ref type="bibr" target="#b44">[45]</ref> with 40 sweeps across variables per parameter update and persistent contrastive divergence <ref type="bibr" target="#b45">[46]</ref> for sampling. Population annealing usually results in a better generative model (see the supplementary material for a comparison). We use QuPA <ref type="bibr" target="#b3">4</ref> , a GPU implementation of population annealing. To obtain test set log-likelihoods we require log Z θ θ θ , which we estimate with annealed importance sampling <ref type="bibr" target="#b46">[47,</ref><ref type="bibr" target="#b47">48]</ref>. We use 10,000 temperatures and 1,000 samples to ensure that the standard deviation of the log Z θ θ θ estimate is small (∼ 0.01).</p><p>We compare the performance of DVAE# against DVAE and DVAE++ in <ref type="table" target="#tab_0">Table 1</ref>. We consider four neural net structures when examining the various smoothing models. Each structure is denoted "G -/∼" where G represent the number of groups in the approximate posterior and -/∼ indicates linear/nonlinear conditionals. The RBM prior for the structures "1 -/∼" is 100 × 100 (i.e. D = 200) and for structures "2/4 ∼" the RBM is 200 × 200 (i.e. D = 400).</p><p>We make several observations based on <ref type="table" target="#tab_0">Table 1</ref>: i) Most baselines improve as K increases. The improvements are generally larger for DVAE# as they optimize the IW bound. ii) Power-function smoothing improves the performance of DVAE++ over the original exponential smoothing. iii) DVAE# and DVAE++ both with power-function smoothing for K = 1 optimizes a similar variational bound with same smoothing transformation. The main difference here is that DVAE# uses the marginal p(ζ ζ ζ) in the prior whereas DVAE++ has the joint p(z z z, ζ ζ ζ) = p(z z z)r(z z z|ζ ζ ζ). For this case, it can be seen that DVAE# usually outperforms DVAE++ . iv) Among the DVAE# variants, the Gaussian integral trick and Gaussian overlapping relaxation result in similar performance, and both are usually inferior to the other DVAE# relaxations. v) In DVAE#, the uniform+exp smoothing performs better than exponential smoothing alone. vi) DVAE# with the power-function smoothing results in the best generative models, and in most cases outperforms both DVAE and DVAE++.</p><p>Given the superior performance of the models obtained using the mean-field approximation of Sec. 3.1.1 top(ζ ζ ζ), we investigate the accuracy of this approximation. In <ref type="figure" target="#fig_1">Fig. 2(a)</ref>, we show that the mean-field model converges quickly by plotting the KL divergence of Eq. (6) with the number of mean-field iterations for a single ζ ζ ζ. To assess the quality of the mean-field approximation, in <ref type="figure" target="#fig_1">Fig. 2(b)</ref> we compute the KL divergence for randomly selected ζ ζ ζs during training at different iterations for exponential and power-function smoothings with different βs. As it can be seen, throughout the  training the KL value is typically &lt; 0.2. For larger βs, the KL value is smaller due to the stronger bias that b b b β (ζ ζ ζ) imposes on z z z.</p><p>Lastly, we demonstrate that the lower variance of power-function smoothing may contribute to its success. As noted in <ref type="figure" target="#fig_0">Fig. 1</ref>, power-function smoothing potentially has moderate gradient noise while still providing a good approximation of binary variables at large β. We validate this hypothesis in <ref type="figure" target="#fig_1">Fig. 2(c)</ref> by measuring the variance of the derivative of the variational bound (with K = 1) with respect to the logit of q during training of a 2-layer nonlinear model on MNIST. When comparing the exponential (β = 10) to power-function smoothing (β = 30) at the β that performs best for each smoothing method, we find that power-function smoothing has significantly lower variance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusions</head><p>We have introduced two approaches for relaxing Boltzmann machines to continuous distributions, and shown that the resulting distributions can be trained as priors in DVAEs using an importance-weighted bound. We have proposed a generalization of overlapping transformations that removes the need for computing the inverse CDF analytically. Using this generalization, the mixture of power-function smoothing provides a good approximation of binary variables while the gradient noise remains moderate. In the case of sharp power smoothing, our model outperforms previous discrete VAEs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A Population Annealing vs. Persistence Contrastive Divergence</head><p>In this section, we compare population annealing (PA) to persistence contrastive divergence (PCD) for sampling in the negative phase. In <ref type="table" target="#tab_1">Table 2</ref>, we train DVAE# with the power-function smoothing on the binarized MNIST dataset using PA and PCD. As shown, PA results in a comparable generative model when there is one group of latent variables and better models in other cases. Our experiments show that power-function smoothing performs best because it provides a better approximation of the binary random variables. We demonstrate this qualitatively in <ref type="figure" target="#fig_0">Fig. 1</ref> and quantitatively in <ref type="figure" target="#fig_1">Fig. 2(c)</ref> of the paper. This is also visualized in <ref type="figure" target="#fig_2">Fig. 3</ref>. Here, we generate 10 6 samples from q(ζ) = (1 − q)r(ζ|z = 0) + qr(ζ|z = 1) for q = 0.5 using both the exponential and power smoothings with different values of β (β ∈ {8, 9, 10, . . . , 15} for exponential, and β ∈ {10, 20, 30, . . . , 80} for power smoothing). The value of β is increasing from left to right on each curve. The mean of |ζi − zi| (for zi = 1 [ζ i &gt;0.5] ) vs. the variance of ∂ζi/∂q is visualized in this figure. For a given gradient variance, power function smoothing provides a closer approximation to the binary variables. samples from q(ζ). For a given gradient variance, power function smoothing provides a closer approximation to the binary variables.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: In the first row, we visualize the inverse CDF of the mixture q(ζ) = z q(z)r(ζ|z) for q = q(z = 1) = 0.5 as a function of the random noise ρ ∈ [0, 1]. In the second row, the gradient of the inverse CDF with respect to q is visualized. Each column corresponds to a different smoothing transformation. As the transition region sharpens with increasing β, a sampling based estimate of the gradient becomes noisier; i.e., the variance of ∂ζ/∂q increases. The uniform+exp exponential has a very similar inverse CDF (first row) to the exponential but has potentially lower variance (bottom row). In comparison, the power-function smoothing with β = 40 provides a good relaxation of the discrete variables while its gradient noise is still moderate. See the supplementary material for a comparison of the gradient noise.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: (a) The KL divergence between the mean-field model and the augmented Boltzmann machinep(z z z) as a function of the number of optimization iterations of the mean-field. The mean-field model converges to KL = 0.007 in three iterations. (b) The KL value is computed for randomly selected ζs during training at different iterations for exponential and power-function smoothings with different β. (c) The variance of the gradient of the objective function with respect to the logit of q is visualized for exponential and power-function smoothing transformations. Power-function smoothing tends to have lower variance than exponential smoothing. The artifact seen early in training is due to the warm-up of KL. Models in (b) and (c) are trained for 100K iterations with batch size of 1,000.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Average distance between ζ and its binarized z vs. variance of ∂ζ/∂q measured on 10 6</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>The performance of DVAE# is compared against DVAE and DVAE++ on MNIST and OMNIGLOT. Mean±standard deviation of the negative log-likelihood for five runs are reported.15±0.04 89.62±0.08 88.56±0.04 88.25±0.03 25 89.20±0.13 89.92±0.07 89.04±0.07 91.18±0.21 89.55±0.10 89.27±0.09 88.02±0.04 87.67±0.07105.11±0.11 106.71±0.08 105.45±0.08 110.81±0.32 106.81±0.07 107.21±0.14 105.89±0.06 105.47±0.09 5 104.68±0.21 106.83±0.09 105.34±0.05 112.26±0.70 106.16±0.11 106.86±0.10 104.94±0.05 104.42±0.09 25 104.38±0.15 106.85±0.07 105.38±0.14 111.92±0.30 105.75±0.10 106.88±0.09 104.49±0.07 103.98±0.05 1 ∼ 1 102.95±0.07 101.84±0.08 101.88±0.06 103.50±0.06 102.74±0.08 102.23±0.08 101.86±0.06 101.70±0.01 5 102.45±0.08 102.13±0.11 101.67±0.07 102.15±0.04 102.00±0.09 101.59±0.06 101.22±0.05 101.00±0.02 25 102.74±0.05 102.66±0.09 101.80±0.15 101.42±0.04 101.60±0.09 101.48±0.04 100.93±0.07 100.60±0.05 2 ∼ 1 103.10±0.31 101.34±0.04 100.42±0.03 102.07±0.16 102.84±0.23 100.38±0.09 99.84±0.06 99.75±0.05 5 100.88±0.13 100.55±0.09 99.51±0.05 100.85±0.02 101.43±0.11 99.93±0.07 99.57±0.06 99.24±0.05 25 100.55±0.08 100.31±0.15 99.49±0.07 100.20±0.02 100.45±0.08 100.10±0.28 99.59±0.16 98.93±0.0563±0.47 101.58±0.22 100.42±0.08 102.91±0.25 103.43±0.10 100.85±0.12 99.92±0.11 99.65±0.09 5 101.77±0.20 101.01±0.09 99.52±0.09 101.79±0.25 101.82±0.13 100.32±0.19 99.61±0.07 99.13±0.10 25 100.89±0.13 100.37±0.09 99.43±0.14 100.73±0.08 100.97±0.21 99.92±0.30 99.36±0.09 98.88±0.09</figDesc><table>DVAE 
+DVAE++ 
+DVAE# 
+Struct. 
+K 
+Spike-Exp 
+Exp 
+Power 
+Gauss. Int 
+Gaussian 
+Exp 
+Un+Exp 
+Power 
+
+MNIST 
+
+1 -
+
+1 
+89.00±0.09 90.43±0.06 89.12±0.05 
+92.14±0.12 
+91.33±0.13 90.55±0.11 89.57±0.08 89.35±0.06 
+5 
+89.15±0.12 90.13±0.03 89.09±0.05 
+91.32±0.09 
+90.1 ∼ 
+
+1 
+85.48±0.06 85.13±0.06 85.05±0.02 
+86.23±0.05 
+86.24±0.05 85.37±0.05 85.19±0.05 84.93±0.02 
+5 
+85.29±0.03 85.13±0.09 85.29±0.10 
+84.99±0.03 
+84.91±0.07 84.83±0.03 84.47±0.02 84.21±0.02 
+25 
+85.92±0.10 86.14±0.18 85.59±0.10 
+84.36±0.04 
+84.30±0.04 84.69±0.08 84.22±0.01 83.93±0.06 
+
+2 ∼ 
+
+1 
+83.97±0.04 84.15±0.07 83.62±0.04 
+84.30±0.05 
+84.35±0.04 83.96±0.06 83.54±0.06 83.37±0.02 
+5 
+83.74±0.03 84.85±0.13 83.57±0.07 
+83.68±0.02 
+83.61±0.04 83.70±0.04 83.33±0.04 82.99±0.04 
+25 
+84.19±0.21 85.49±0.12 83.58±0.15 
+83.39±0.04 
+83.26±0.04 83.76±0.04 83.30±0.04 82.85±0.03 
+
+4 ∼ 
+
+1 
+84.38±0.03 84.63±0.11 83.44±0.05 
+84.59±0.06 
+84.81±0.19 84.06±0.06 83.52±0.06 83.18±0.05 
+5 
+83.93±0.07 85.41±0.09 83.17±0.09 
+83.89±0.09 
+84.20±0.15 84.15±0.05 83.41±0.04 82.95±0.07 
+25 
+84.12±0.07 85.42±0.07 83.20±0.08 
+83.52±0.06 
+83.80±0.04 84.22±0.13 83.39±0.04 82.82±0.02 
+
+OMNIGLOT 
+
+1 -
+
+1 
+4 ∼ 
+
+1 
+104.</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>The performance of DVAE# with power-function smoothing for binarized MNIST when PCD or PA is used in the negative phase.B On the Gradient Variance of the Power-function Smoothing</figDesc><table>Struct. 
+K 
+PCD 
+PA 
+
+1 -
+
+1 
+89.25±0.04 
+89.35±0.06 
+5 
+88.18±0.08 
+88.25±0.03 
+25 
+87.66±0.09 
+87.67±0.07 
+
+1 ∼ 
+
+1 
+84.95±0.05 
+84.93±0.02 
+5 
+84.25±0.04 
+84.21±0.02 
+25 
+83.91±0.05 
+83.93±0.06 
+
+2 ∼ 
+
+1 
+83.48±0.04 
+83.37±0.02 
+5 
+83.12±0.04 
+82.99±0.04 
+25 
+83.06±0.03 
+82.85±0.03 
+
+4 ∼ 
+
+1 
+83.62±0.06 
+83.18±0.05 
+5 
+83.34±0.06 
+82.95±0.07 
+25 
+83.18±0.05 
+82.82±0.02 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">And not because our model is proposed after DVAE and DVAE++.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">This library is publicly available at https://try.quadrant.ai/qupa</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Auto-encoding variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Jimenez Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Neural variational inference and learning in belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Deep autoregressive networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivo</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charles</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">VAE learning via Stein variational gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuchen</forename><surname>Pu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhe</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ricardo</forename><surname>Henao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chunyuan</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaobo</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lawrence</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Markov chain Monte Carlo and variational inference: Bridging the gap</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1218" to="1226" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Automatic chemical design using a data-driven continuous representation of molecules</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rafael</forename><surname>Gómez-Bombarelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jennifer</forename><forename type="middle">N</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José</forename><forename type="middle">Miguel</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benjamín</forename><surname>Sánchez-Lengeling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dennis</forename><surname>Sheberla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Aguilera-Iparraguirre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">D</forename><surname>Hirzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alán</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Aspuru-Guzik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACS Central Science</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Grammar variational autoencoder</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brooks</forename><surname>Kusner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José Miguel Hernández-Lobato</forename><surname>Paige</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A hierarchical latent vector model for learning long-term structure in music</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename><surname>Roberts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jesse</forename><surname>Engel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Colin</forename><surname>Raffel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Curtis</forename><surname>Hawthorne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Douglas</forename><surname>Eck</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Neural sketch learning for conditional program generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vijayaraghavan</forename><surname>Murali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Letao</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Swarat</forename><surname>Chaudhuri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Jermaine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Variational memory addressing in generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jörg</forename><surname>Bornschein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Zoran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><forename type="middle">Jimenez</forename><surname>Rezende</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="3923" to="3932" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Representational power of restricted Boltzmann machines and deep belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Le Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Deep Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Classification using discriminative restricted Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hugo</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Supervised restricted Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dinh</forename><surname>Tu Dinh Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Viet</forename><surname>Phung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trung</forename><surname>Huynh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">UAI</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Reinforcement learning with factored states and actions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Sallans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page" from="1063" to="1088" />
+			<date type="published" when="2004-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Reducing the dimensionality of data with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">313</biblScope>
+			<biblScope unit="issue">5786</biblScope>
+			<biblScope unit="page" from="504" to="507" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Restricted Boltzmann machines for collaborative filtering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 24th International Conference on Machine Learning, ICML &apos;07</title>
+		<meeting>the 24th International Conference on Machine Learning, ICML &apos;07<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="791" to="798" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Discrete variational autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Tyler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rolfe</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">DVAE++: Discrete variational autoencoders with overlapping transformations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arash</forename><surname>Vahdat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><forename type="middle">G</forename><surname>Macready</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhengbing</forename><surname>Bian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amir</forename><surname>Khoshaman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Evgeny</forename><surname>Andriyash</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Importance weighted autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuri</forename><surname>Burda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Introduction to the theory of neural computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Hertz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Palmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anders</forename><surname>Krogh</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1991" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Calculation of partition functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hubbard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physical Review Letters</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">77</biblScope>
+			<date type="published" when="1959" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Characterization of the exponential and power distributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zakkula</forename><surname>Govindarajulu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Scandinavian Actuarial Journal</title>
+		<imprint>
+			<biblScope unit="issue">3-4</biblScope>
+			<biblScope unit="page" from="132" to="136" />
+			<date type="published" when="1966" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Semi-supervised learning with deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Diederik P Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Jimenez Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Semi-supervised generation with cluster-aware generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lars</forename><surname>Maaløe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marco</forename><surname>Fraccaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ole</forename><surname>Winther</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.00637</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Local expectation gradients for black box variational inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michalis</forename><surname>Titsias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Aueb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Lázaro-Gredilla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2638" to="2646" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Evaluating the variance of likelihood-ratio gradient estimators</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Seiya</forename><surname>Tokui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Issei</forename><surname>Sato</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="3414" to="3423" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Categorical reparametrization with gumble-softmax</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><surname>Jang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Poole</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Estimating or propagating gradients through stochastic neurons for conditional computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Léonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1308.3432</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tapani</forename><surname>Raiko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mathias</forename><surname>Berglund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guillaume</forename><surname>Alain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurent</forename><surname>Dinh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.2989</idno>
+		<title level="m">Techniques for learning binary stochastic feedforward neural networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">The concrete distribution: A continuous relaxation of discrete random variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Chris J Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yee Whye</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Teh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ronald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Reinforcement Learning</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1992" />
+			<biblScope unit="page" from="5" to="32" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Likelihood ratio gradient estimation for stochastic systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Glynn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications of the ACM</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="75" to="84" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">MuProp: Unbiased backpropagation for stochastic neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Variational inference for Monte Carlo objectives</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2188" to="2196" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">REBAR: Low-variance, unbiased gradient estimates for discrete latent variable models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Lawson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jascha</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2624" to="2633" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Backpropagation through the void: Optimizing control variates for black-box gradient estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Will</forename><surname>Grathwohl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dami</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuhuai</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoff</forename><surname>Roeder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Duvenaud</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Rényi divergence variational inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yingzhen</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">E</forename><surname>Turner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1073" to="1081" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">A new learning algorithm for mean field Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial Neural Networks</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="351" to="357" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Continuous relaxations for discrete Hamiltonian Monte Carlo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yichuan</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amos</forename><forename type="middle">J</forename><surname>Storkey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charles A</forename><surname>Sutton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="3194" to="3202" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.05690</idno>
+		<title level="m">Stochastic backpropagation through mixture density distributions</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">On the quantitative analysis of deep belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iain</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 25th international conference on Machine learning</title>
+		<meeting>the 25th international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="872" to="879" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Human-level concept learning through probabilistic program induction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Brenden M Lake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joshua</forename><forename type="middle">B</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">350</biblScope>
+			<biblScope unit="issue">6266</biblScope>
+			<biblScope unit="page" from="1332" to="1338" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Population annealing and its application to a spin glass</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hukushima</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Iba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AIP Conference Proceedings</title>
+		<imprint>
+			<publisher>AIP</publisher>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">690</biblScope>
+			<biblScope unit="page" from="200" to="206" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Training restricted Boltzmann machines using approximations to the likelihood gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tijmen</forename><surname>Tieleman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 25th international conference on Machine learning</title>
+		<meeting>the 25th international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1064" to="1071" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Annealed importance sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Neal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Statistics and computing</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="125" to="139" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">On the quantitative analysis of deep belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iain</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 25th international conference on Machine learning</title>
+		<meeting>the 25th international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="872" to="879" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

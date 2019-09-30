@@ -1,0 +1,2151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:30+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Mask R-CNN</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Facebook AI Research (FAIR)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georgia</forename><surname>Gkioxari</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Facebook AI Research (FAIR)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Piotr</forename><surname>Dollár</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Facebook AI Research (FAIR)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>Girshick</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Facebook AI Research (FAIR)</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Mask R-CNN</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We present a conceptually simple, flexible, and general framework for object instance segmentation. </p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The vision community has rapidly improved object detection and semantic segmentation results over a short period of time. In large part, these advances have been driven by powerful baseline systems, such as the Fast/Faster R-CNN <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b28">29]</ref> and Fully Convolutional Network (FCN) <ref type="bibr" target="#b23">[24]</ref> frameworks for object detection and semantic segmentation, respectively. These methods are conceptually intuitive and offer flexibility and robustness, together with fast training and inference time. Our goal in this work is to develop a comparably enabling framework for instance segmentation.</p><p>Instance segmentation is challenging because it requires the correct detection of all objects in an image while also precisely segmenting each instance. It therefore combines elements from the classical computer vision tasks of object detection, where the goal is to classify individual objects and localize each using a bounding box, and semantic segmentation, where the goal is to classify each pixel into a fixed set of categories without differentiating object instances. <ref type="bibr" target="#b0">1</ref> Given this, one might expect a complex method is required to achieve good results. However, we show that a surprisingly simple, flexible, and fast system can surpass prior state-of-the-art instance segmentation results.</p><p>Our method, called Mask R-CNN, extends Faster R-CNN <ref type="bibr" target="#b28">[29]</ref> by adding a branch for predicting segmentation masks on each Region of Interest (RoI), in parallel with the existing branch for classification and bounding box regression ( <ref type="figure" target="#fig_0">Figure 1</ref>). The mask branch is a small FCN applied to each RoI, predicting a segmentation mask in a pixel-topixel manner. Mask R-CNN is simple to implement and train given the Faster R-CNN framework, which facilitates a wide range of flexible architecture designs. Additionally, the mask branch only adds a small computational overhead, enabling a fast system and rapid experimentation.</p><p>In principle Mask R-CNN is an intuitive extension of Faster R-CNN, yet constructing the mask branch properly is critical for good results. Most importantly, Faster R-CNN was not designed for pixel-to-pixel alignment between network inputs and outputs. This is most evident in how RoIPool <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b8">9]</ref>, the de facto core operation for attending to instances, performs coarse spatial quantization for feature extraction. To fix the misalignment, we propose a simple, quantization-free layer, called RoIAlign, that faithfully preserves exact spatial locations. Despite being a seem-dining  <ref type="figure" target="#fig_2">Figure 2</ref>. Mask R-CNN results on the COCO test set. These results are based on ResNet-101 <ref type="bibr" target="#b14">[15]</ref>, achieving a mask AP of 35.7 and running at 5 fps. Masks are shown in color, and bounding box, category, and confidences are also shown. ingly minor change, RoIAlign has a large impact: it improves mask accuracy by relative 10% to 50%, showing bigger gains under stricter localization metrics. Second, we found it essential to decouple mask and class prediction: we predict a binary mask for each class independently, without competition among classes, and rely on the network's RoI classification branch to predict the category. In contrast, FCNs usually perform per-pixel multi-class categorization, which couples segmentation and classification, and based on our experiments works poorly for instance segmentation.</p><p>Without bells and whistles, Mask R-CNN surpasses all previous state-of-the-art single-model results on the COCO instance segmentation task <ref type="bibr" target="#b22">[23]</ref>, including the heavilyengineered entries from the 2016 competition winner. As a by-product, our method also excels on the COCO object detection task. In ablation experiments, we evaluate multiple basic instantiations, which allows us to demonstrate its robustness and analyze the effects of core factors.</p><p>Our models can run at about 200ms per frame on a GPU, and training on COCO takes one to two days on a single 8-GPU machine. We believe the fast train and test speeds, together with the framework's flexibility and accuracy, will benefit and ease future research on instance segmentation.</p><p>Finally, we showcase the generality of our framework via the task of human pose estimation on the COCO keypoint dataset <ref type="bibr" target="#b22">[23]</ref>. By viewing each keypoint as a one-hot binary mask, with minimal modification Mask R-CNN can be applied to detect instance-specific poses. Without tricks, Mask R-CNN surpasses the winner of the 2016 COCO keypoint competition, and at the same time runs at 5 fps. Mask R-CNN, therefore, can be seen more broadly as a flexible framework for instance-level recognition and can be readily extended to more complex tasks.</p><p>We will release code to facilitate future research.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work R-CNN:</head><p>The Region-based CNN (R-CNN) approach <ref type="bibr" target="#b9">[10]</ref> to bounding-box object detection is to attend to a manageable number of candidate object regions <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b15">16]</ref> and evaluate convolutional networks <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b18">19]</ref> independently on each RoI. R-CNN was extended <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b8">9]</ref> to allow attending to RoIs on feature maps using RoIPool, leading to fast speed and better accuracy. Faster R-CNN <ref type="bibr" target="#b28">[29]</ref> advanced this stream by learning the attention mechanism with a Region Proposal Network (RPN). Faster R-CNN is flexible and robust to many follow-up improvements (e.g., <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b16">17]</ref>), and is the current leading framework in several benchmarks.</p><p>Instance Segmentation: Driven by the effectiveness of R-CNN, many approaches to instance segmentation are based on segment proposals. Earlier methods <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b5">6]</ref> resorted to bottom-up segments <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b1">2]</ref>. DeepMask <ref type="bibr" target="#b26">[27]</ref> and following works <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b4">5]</ref> learn to propose segment candidates, which are then classified by Fast R-CNN. In these methods, segmentation precedes recognition, which is slow and less accurate. Likewise, Dai et al. <ref type="bibr" target="#b6">[7]</ref> proposed a complex multiple-stage cascade that predicts segment proposals from bounding-box proposals, followed by classification. Instead, our method is based on parallel prediction of masks and class labels, which is simpler and more flexible. Most recently, Li et al. <ref type="bibr" target="#b20">[21]</ref> combined the segment proposal system in <ref type="bibr" target="#b4">[5]</ref> and object detection system in <ref type="bibr" target="#b7">[8]</ref> for "fully convolutional instance segmentation" (FCIS). The common idea in <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b20">21]</ref> is to predict a set of positionsensitive output channels fully convolutionally. These channels simultaneously address object classes, boxes, and masks, making the system fast. But FCIS exhibits systematic errors on overlapping instances and creates spurious edges ( <ref type="figure" target="#fig_2">Figure 5)</ref>, showing that it is challenged by the fundamental difficulties of segmenting instances.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Mask R-CNN</head><p>Mask R-CNN is conceptually simple: Faster R-CNN has two outputs for each candidate object, a class label and a bounding-box offset; to this we add a third branch that outputs the object mask. Mask R-CNN is thus a natural and intuitive idea. But the additional mask output is distinct from the class and box outputs, requiring extraction of much finer spatial layout of an object. Next, we introduce the key elements of Mask R-CNN, including pixel-to-pixel alignment, which is the main missing piece of Fast/Faster R-CNN.</p><p>Faster R-CNN: We begin by briefly reviewing the Faster R-CNN detector <ref type="bibr" target="#b28">[29]</ref>. Faster R-CNN consists of two stages. The first stage, called a Region Proposal Network (RPN), proposes candidate object bounding boxes. The second stage, which is in essence Fast R-CNN <ref type="bibr" target="#b8">[9]</ref>, extracts features using RoIPool from each candidate box and performs classification and bounding-box regression. The features used by both stages can be shared for faster inference. We refer readers to <ref type="bibr" target="#b16">[17]</ref> for latest, comprehensive comparisons between Faster R-CNN and other frameworks.</p><p>Mask R-CNN: Mask R-CNN adopts the same two-stage procedure, with an identical first stage (which is RPN). In the second stage, in parallel to predicting the class and box offset, Mask R-CNN also outputs a binary mask for each RoI. This is in contrast to most recent systems, where classification depends on mask predictions (e.g. <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b20">21]</ref>). Our approach follows the spirit of Fast R-CNN <ref type="bibr" target="#b8">[9]</ref> that applies bounding-box classification and regression in parallel (which turned out to largely simplify the multi-stage pipeline of original R-CNN <ref type="bibr" target="#b9">[10]</ref>).</p><p>Formally, during training, we define a multi-task loss on each sampled RoI as L = L cls + L box + L mask . The classification loss L cls and bounding-box loss L box are identical as those defined in <ref type="bibr" target="#b8">[9]</ref>. The mask branch has a Km 2 -dimensional output for each RoI, which encodes K binary masks of resolution m × m, one for each of the K classes. To this we apply a per-pixel sigmoid, and define L mask as the average binary cross-entropy loss. For an RoI associated with ground-truth class k, L mask is only defined on the k-th mask (other mask outputs do not contribute to the loss).</p><p>Our definition of L mask allows the network to generate masks for every class without competition among classes; we rely on the dedicated classification branch to predict the class label used to select the output mask. This decouples mask and class prediction. This is different from common practice when applying FCNs <ref type="bibr" target="#b23">[24]</ref> to semantic segmentation, which typically uses a per-pixel softmax and a multinomial cross-entropy loss. In that case, masks across classes compete; in our case, with a per-pixel sigmoid and a binary loss, they do not. We show by experiments that this formulation is key for good instance segmentation results.</p><p>Mask Representation: A mask encodes an input object's spatial layout. Thus, unlike class labels or box offsets that are inevitably collapsed into short output vectors by fully-connected (fc) layers, extracting the spatial structure of masks can be addressed naturally by the pixel-to-pixel correspondence provided by convolutions.</p><p>Specifically, we predict an m × m mask from each RoI using an FCN <ref type="bibr" target="#b23">[24]</ref>. This allows each layer in the mask branch to maintain the explicit m × m object spatial layout without collapsing it into a vector representation that lacks spatial dimensions. Unlike previous methods that resort to fc layers for mask prediction <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b6">7]</ref>, our fully convolutional representation requires fewer parameters, and is more accurate as demonstrated by experiments.</p><p>This pixel-to-pixel behavior requires our RoI features, which themselves are small feature maps, to be well aligned to faithfully preserve the explicit per-pixel spatial correspondence. This motivated us to develop the following RoIAlign layer that plays a key role in mask prediction.</p><p>RoIAlign: RoIPool <ref type="bibr" target="#b8">[9]</ref> is a standard operation for extracting a small feature map (e.g., 7×7) from each RoI. RoIPool first quantizes a floating-number RoI to the discrete granularity of the feature map, this quantized RoI is then subdivided into spatial bins which are themselves quantized, and finally feature values covered by each bin are aggregated (usually by max pooling). Quantization is performed, e.g., on a continuous coordinate x by computing [x/16], where 16 is a feature map stride and [·] is rounding; likewise, quantization is performed when dividing into bins (e.g., 7×7). These quantizations introduce misalignments between the RoI and the extracted features. While this may not impact classification, which is robust to small translations, it has a large negative effect on predicting pixel-accurate masks.</p><p>To address this, we propose an RoIAlign layer that removes the harsh quantization of RoIPool, properly aligning the extracted features with the input. Our proposed change is simple: we avoid any quantization of the RoI boundaries or bins (i.e., we use x/16 instead of [x/16]). We use bilinear interpolation <ref type="bibr" target="#b17">[18]</ref> to compute the exact values of the input features at four regularly sampled locations in each RoI bin, and aggregate the result (using max or average). <ref type="bibr" target="#b1">2</ref> RoIAlign leads to large improvements as we show in §4.2. We also compare to the RoIWarp operation proposed in <ref type="bibr" target="#b6">[7]</ref>. Unlike RoIAlign, RoIWarp overlooked the alignment issue and was implemented in <ref type="bibr" target="#b6">[7]</ref> as quantizing RoI just like RoIPool. So even though RoIWarp also adopts bilinear resampling motivated by <ref type="bibr" target="#b17">[18]</ref>, it performs on par with RoIPool as shown by experiments (more details in Table 2c), demonstrating the crucial role of alignment.</p><p>Network Architecture: To demonstrate the generality of our approach, we instantiate Mask R-CNN with multiple architectures. For clarity, we differentiate between: (i) the convolutional backbone architecture used for feature extraction over an entire image, and (ii) the network head for bounding-box recognition (classification and regression) and mask prediction that is applied separately to each RoI.</p><p>We denote the backbone architecture using the nomenclature network-depth-features. We evaluate ResNet <ref type="bibr" target="#b14">[15]</ref> and ResNeXt <ref type="bibr" target="#b34">[35]</ref> networks of depth 50 or 101 layers. The original implementation of Faster R-CNN with ResNets <ref type="bibr" target="#b14">[15]</ref> extracted features from the final convolutional layer of the 4-th stage, which we call C4. This backbone with ResNet-50, for example, is denoted by ResNet-50-C4. This is a common choice used in <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b30">31]</ref>.</p><p>We also explore another more effective backbone recently proposed by Lin et al. <ref type="bibr" target="#b21">[22]</ref>, called a Feature Pyramid Network (FPN). FPN uses a top-down architecture with lateral connections to build an in-network feature pyramid from a single-scale input. Faster R-CNN with an FPN backbone extracts RoI features from different levels of the feature pyramid according to their scale, but otherwise the rest of the approach is similar to vanilla ResNet. Using a ResNet-FPN backbone for feature extraction with Mask R-CNN gives excellent gains in both accuracy and speed. For further details on FPN, we refer readers to <ref type="bibr" target="#b21">[22]</ref>.</p><p>For the network head we closely follow architectures presented in previous work to which we add a fully convolutional mask prediction branch. Specifically, we extend the Faster R-CNN box heads from the ResNet <ref type="bibr" target="#b14">[15]</ref> and FPN <ref type="bibr" target="#b21">[22]</ref> papers. Details are shown in <ref type="figure" target="#fig_2">Figure 3</ref>. The head on the ResNet-C4 backbone includes the 5-th stage of ResNet (namely, the 9-layer 'res5' <ref type="bibr" target="#b14">[15]</ref>), which is computeintensive. For FPN, the backbone already includes res5 and thus allows for a more efficient head that uses fewer filters.</p><p>We note that our mask branches have a straightforward structure. More complex designs have the potential to improve performance but are not the focus of this work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Implementation Details</head><p>We set hyper-parameters following existing Fast/Faster R-CNN work <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b21">22]</ref>. Although these decisions were made for object detection in original papers <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b21">22]</ref>, we found our instance segmentation system is robust to them.</p><p>Training: As in Fast R-CNN, an RoI is considered positive if it has IoU with a ground-truth box of at least 0.5 and negative otherwise. The mask loss L mask is defined only on positive RoIs. The mask target is the intersection between an RoI and its associated ground-truth mask.</p><p>We adopt image-centric training <ref type="bibr" target="#b8">[9]</ref>. Images are resized such that their scale (shorter edge) is 800 pixels <ref type="bibr" target="#b21">[22]</ref>. Each mini-batch has 2 images per GPU and each image has N sampled RoIs, with a ratio of 1:3 of positive to negatives Faster R-CNN w/ ResNet <ref type="bibr" target="#b14">[15]</ref> Faster R-CNN w/ FPN <ref type="bibr" target="#b21">[22]</ref> Figure 3. Head Architecture: We extend two existing Faster R-CNN heads <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b21">22]</ref>. Left/Right panels show the heads for the ResNet C4 and FPN backbones, from <ref type="bibr" target="#b14">[15]</ref> and <ref type="bibr" target="#b21">[22]</ref>, respectively, to which a mask branch is added. Numbers denote spatial resolution and channels. Arrows denote either conv, deconv, or fc layers as can be inferred from context (conv preserves spatial dimension while deconv increases it). All convs are 3×3, except the output conv which is 1×1, deconvs are 2×2 with stride 2, and we use ReLU <ref type="bibr" target="#b24">[25]</ref> in hidden layers. Left: 'res5' denotes ResNet's fifth stage, which for simplicity we altered so that the first conv operates on a 7×7 RoI with stride 1 (instead of 14×14 / stride 2 as in <ref type="bibr" target="#b14">[15]</ref>). Right: '×4' denotes a stack of four consecutive convs. <ref type="bibr" target="#b8">[9]</ref>. N is 64 for the C4 backbone (as in <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b28">29]</ref>) and 512 for FPN (as in <ref type="bibr" target="#b21">[22]</ref>). We train on 8 GPUs (so effective minibatch size is 16) for 160k iterations, with a learning rate of 0.02 which is decreased by 10 at the 120k iteration. We use a weight decay of 0.0001 and a momentum of 0.9. The RPN anchors span 5 scales and 3 aspect ratios, following <ref type="bibr" target="#b21">[22]</ref>. For convenient ablation, RPN is trained separately and does not share features with Mask R-CNN, unless specified. For every entry in this paper, RPN and Mask R-CNN have the same backbones and so they are shareable.</p><p>Inference: At test time, the proposal number is 300 for the C4 backbone (as in <ref type="bibr" target="#b28">[29]</ref>) and 1000 for FPN (as in <ref type="bibr" target="#b21">[22]</ref>). We run the box prediction branch on these proposals, followed by non-maximum suppression <ref type="bibr" target="#b10">[11]</ref>. The mask branch is then applied to the highest scoring 100 detection boxes. Although this differs from the parallel computation used in training, it speeds up inference and improves accuracy (due to the use of fewer, more accurate RoIs). The mask branch can predict K masks per RoI, but we only use the k-th mask, where k is the predicted class by the classification branch. The m×m floating-number mask output is then resized to the RoI size, and binarized at a threshold of 0.5.</p><p>Note that since we only compute masks on the top 100 detection boxes, Mask R-CNN adds a small overhead to its Faster R-CNN counterpart (e.g., ∼20% on typical models).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments: Instance Segmentation</head><p>We perform a thorough comparison of Mask R-CNN to the state of the art along with comprehensive ablation experiments. We use the COCO dataset <ref type="bibr" target="#b22">[23]</ref>   <ref type="table">Table 1</ref>. Instance segmentation mask AP on COCO test-dev. MNC <ref type="bibr" target="#b6">[7]</ref> and FCIS <ref type="bibr" target="#b20">[21]</ref> are the winners of the COCO 2015 and 2016 segmentation challenges, respectively. Without bells and whistles, Mask R-CNN outperforms the more complex FCIS+++, which includes multi-scale train/test, horizontal flip test, and OHEM <ref type="bibr" target="#b29">[30]</ref>. All entries are single-model results.</p><p>is evaluating using mask IoU. As in previous work <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b21">22]</ref>, we train using the union of 80k train images and a 35k subset of val images (trainval35k), and report ablations on the remaining 5k subset of val images (minival). We also report results on test-dev <ref type="bibr" target="#b22">[23]</ref>, which has no disclosed labels. Upon publication, we will upload our full results on test-std to the public leaderboard, as recommended.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Main Results</head><p>We compare Mask R-CNN to the state-of-the-art methods in instance segmentation in <ref type="table">Table 1</ref>. All instantiations of our model outperform baseline variants of previous state-of-the-art models. This includes MNC <ref type="bibr" target="#b6">[7]</ref> and FCIS <ref type="bibr" target="#b20">[21]</ref>, the winners of the COCO 2015 and 2016 segmentation challenges, respectively. Without bells and whistles, Mask R-CNN with ResNet-101-FPN backbone outperforms FCIS+++ <ref type="bibr" target="#b20">[21]</ref>, which includes multi-scale train/test, horizontal flip test, and online hard example mining (OHEM) <ref type="bibr" target="#b29">[30]</ref>. While outside the scope of this work, we expect many such improvements to be applicable to ours.</p><p>Mask R-CNN outputs are visualized in <ref type="figure" target="#fig_2">Figures 2 and 4</ref>. Mask R-CNN achieves good results even under challenging conditions. In <ref type="figure" target="#fig_2">Figure 5</ref> we compare our Mask R-CNN baseline and FCIS+++ <ref type="bibr" target="#b20">[21]</ref>. FCIS+++ exhibits systematic artifacts on overlapping instances, suggesting that it is challenged by the fundamental difficulty of instance segmentation. Mask R-CNN shows no such artifacts.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Ablation Experiments</head><p>We run a number of ablations to analyze Mask R-CNN. Results are shown in <ref type="table">Table 2</ref> and discussed in detail next.</p><p>Architecture: <ref type="table">Table 2a</ref> shows Mask R-CNN with various backbones. It benefits from deeper networks (50 vs. 101) and advanced designs including FPN and ResNeXt <ref type="bibr" target="#b2">3</ref> . We note that not all frameworks automatically benefit from deeper or advanced networks (see benchmarking in <ref type="bibr" target="#b16">[17]</ref>   <ref type="table">Table 2</ref>. Ablations for Mask R-CNN. We train on trainval35k, test on minival, and report mask AP unless otherwise noted.</p><p>Multinomial vs. Independent Masks: Mask R-CNN decouples mask and class prediction: as the existing box branch predicts the class label, we generate a mask for each class without competition among classes (by a per-pixel sigmoid and a binary loss). In <ref type="table">Table 2b</ref>, we compare this to using a per-pixel softmax and a multinomial loss (as commonly used in FCN <ref type="bibr" target="#b23">[24]</ref>). This alternative couples the tasks of mask and class prediction, and results in a severe loss in mask AP (5.5 points). This suggests that once the instance has been classified as a whole (by the box branch), it is sufficient to predict a binary mask without concern for the categories, which makes the model easier to train.</p><p>Class-Specific vs. Class-Agnostic Masks: Our default instantiation predicts class-specific masks, i.e., one m×m mask per class. Interestingly, Mask R-CNN with classagnostic masks (i.e., predicting a single m×m output regardless of class) is nearly as effective: it has 29.7 mask AP vs. 30.3 for the class-specific counterpart on ResNet-50-C4. This further highlights the division of labor in our approach which largely decouples classification and segmentation.</p><p>RoIAlign: An evaluation of our proposed RoIAlign layer is shown in <ref type="table">Table 2c</ref>. For this experiment we use the ResNet-50-C4 backbone, which has stride 16. RoIAlign improves AP by about 3 points over RoIPool, with much of the gain coming at high IoU (AP 75 ). RoIAlign is insensitive to max/average pool; we use average in the rest of the paper. Additionally, we compare with RoIWarp proposed in MNC <ref type="bibr" target="#b6">[7]</ref> that also adopt bilinear sampling. As discussed in §3, RoIWarp still quantizes the RoI, losing alignment with the input. As can be seen in <ref type="table">Table 2c</ref>, RoIWarp performs on par with RoIPool and much worse than RoIAlign. This highlights that proper alignment is key.</p><p>We also evaluate RoIAlign with a ResNet-50-C5 backbone, which has an even larger stride of 32 pixels. We use the same head as in <ref type="figure" target="#fig_2">Figure 3</ref> (right), as the res5 head is not applicable. <ref type="table">Table 2d</ref> shows that RoIAlign improves mask AP by a massive 7.3 points, and mask AP 75 by 10.5 points (50% relative improvement). Moreover, we note that with RoIAlign, using stride-32 C5 features (30.9 AP) is more accurate than using stride-16 C4 features (30.3 AP, <ref type="table">Table 2c</ref>). RoIAlign largely resolves the long-standing challenge of using large-stride features for detection and segmentation.</p><p>Finally, RoIAlign shows a gain of 1.5 mask AP and 0.5 box AP when used with FPN, which has finer multi-level strides. For keypoint detection that requires finer alignment, RoIAlign shows large gains even with FPN (  <ref type="table">Table 3</ref>. Object detection single-model results (bounding box AP), vs. state-of-the-art on test-dev. Mask R-CNN using ResNet-101-FPN outperforms the base variants of all previous state-of-the-art models (the mask output is ignored in these experiments). The gains of Mask R-CNN over <ref type="bibr" target="#b21">[22]</ref> come from using RoIAlign (+1.1 AP bb ), multitask training (+0.9 AP bb ), and ResNeXt-101 (+1.6 AP bb ).</p><p>Mask Branch: Segmentation is a pixel-to-pixel task and we exploit the spatial layout of masks by using an FCN.</p><p>In <ref type="table">Table 2e</ref>, we compare multi-layer perceptrons (MLP) and FCNs, using a ResNet-50-FPN backbone. Using FCNs gives a 2.1 mask AP gain over MLPs. We note that we choose this backbone so that the conv layers of the FCN head are not pre-trained, for a fair comparison with MLP.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Bounding Box Detection Results</head><p>We compare Mask R-CNN to the state-of-the-art COCO bounding-box object detection in <ref type="table">Table 3</ref>. For this result, even though the full Mask R-CNN model is trained, only the classification and box outputs are used at inference (the mask output is ignored). Mask R-CNN using ResNet-101-FPN outperforms the base variants of all previous state-ofthe-art models, including the single-model variant of G-RMI <ref type="bibr" target="#b16">[17]</ref>, the winner of the COCO 2016 Detection Challenge. Using ResNeXt-101-FPN, Mask R-CNN further improves results, with a margin of 3.0 points box AP over the best previous single model entry from <ref type="bibr" target="#b30">[31]</ref> (which used Inception-ResNet-v2-TDM).</p><p>As a further comparison, we trained a version of Mask R-CNN but without the mask branch, denoted by "Faster R-CNN, RoIAlign" in <ref type="table">Table 3</ref>. This model performs better than the model presented in <ref type="bibr" target="#b21">[22]</ref> due to RoIAlign. On the other hand, it is 0.9 points box AP lower than Mask R-CNN. This gap of Mask R-CNN on box detection is therefore due solely to the benefits of multi-task training.</p><p>Lastly, we note that Mask R-CNN attains a small gap between its mask and box AP: e.g., 2.7 points between 37.1 (mask, <ref type="table">Table 1</ref>) and 39.8 (box, <ref type="table">Table 3</ref>). This indicates that our approach largely closes the gap between object detection and the more challenging instance segmentation task.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Timing</head><p>Inference: We train a ResNet-101-FPN model that shares features between the RPN and Mask R-CNN stages, following the 4-step training of Faster R-CNN <ref type="bibr" target="#b28">[29]</ref>. This model runs at 195ms per image on an Nvidia Tesla M40 GPU (plus 15ms CPU time resizing the outputs to the original resolution), and achieves statistically the same mask AP as the unshared one. We also report that the ResNet-101-C4 variant takes ∼400ms as it has a heavier box head <ref type="figure" target="#fig_2">(Figure 3</ref>), so we do not recommend using the C4 variant in practice.</p><p>Although Mask R-CNN is fast, we note that our design is not optimized for speed, and better speed/accuracy tradeoffs could be achieved <ref type="bibr" target="#b16">[17]</ref>, e.g., by varying image sizes and proposal numbers, which is beyond the scope of this paper.</p><p>Training: Mask R-CNN is also fast to train. Training with ResNet-50-FPN on COCO trainval35k takes 32 hours in our synchronized 8-GPU implementation (0.72s per 16-image mini-batch), and 44 hours with ResNet-101-FPN. In fact, fast prototyping can be completed in less than one day when training on the train set. We hope such rapid training will remove a major hurdle in this area and encourage more people to perform research on this challenging topic.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Mask R-CNN for Human Pose Estimation</head><p>Our framework can easily be extended to human pose estimation. We model a keypoint's location as a one-hot mask, and adopt Mask R-CNN to predict K masks, one for each of K keypoint types (e.g., left shoulder, right elbow). This task helps demonstrate the flexibility of Mask R-CNN.</p><p>We note that minimal domain knowledge for human pose is exploited by our system, as the experiments are mainly to demonstrate the generality of the Mask R-CNN framework. We expect that domain knowledge (e.g., modeling structures <ref type="bibr" target="#b3">[4]</ref>) will be complementary to our simple approach, but it is beyond the scope of this paper.</p><p>Implementation Details: We make minor modifications to the segmentation system when adapting it for keypoints. For each of the K keypoints of an instance, the training target is a one-hot m × m binary mask where only a single pixel is labeled as foreground. During training, for each visible ground-truth keypoint, we minimize the cross-entropy loss over an m 2 -way softmax output (which encourages a single point to be detected). We note that as in instance segmentation, the K keypoints are still treated independently.</p><p>We adopt the ResNet-FPN variant, and the keypoint head architecture is similar to that in <ref type="figure" target="#fig_2">Figure 3 (right)</ref>. The keypoint head consists of a stack of eight 3×3 512-d conv layers, followed by a deconv layer and 2× bilinear upscaling, producing an output resolution of 56×56. We found that   a relatively high resolution output (compared to masks) is required for keypoint-level localization accuracy.</p><p>Models are trained on all COCO trainval35k images that contain annotated keypoints. To reduce overfitting, as this training set is smaller, we train the models using image scales randomly sampled from [640, 800] pixels; inference is on a single scale of 800 pixels. We train for 90k iterations, starting from a learning rate of 0.02 and reducing it by 10 at 60k and 80k iterations. We use bounding-box non-maximum suppression with a threshold of 0.5. Other implementations are identical as in §3.1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Experiments on Human Pose Estimation:</head><p>We evaluate the person keypoint AP (AP kp ) using ResNet-50-FPN. We have experimented with ResNet-101 and found it achieves similar results, possibly because deeper models benefit from more training data, but this dataset is relatively small. <ref type="table" target="#tab_5">Table 4</ref> shows that our result (62.7 AP kp ) is 0.9 points higher than the COCO 2016 keypoint detection winner <ref type="bibr" target="#b3">[4]</ref> that uses a multi-stage processing pipeline (see caption of <ref type="table" target="#tab_5">Table 4</ref>  son category) improves the AP kp to 63.1 <ref type="table" target="#tab_5">(Table 4)</ref> on test-dev. More ablations of multi-task learning on minival are in <ref type="table" target="#tab_7">Table 5</ref>. Adding the mask branch to the box-only (i.e., Faster R-CNN) or keypoint-only versions consistently improves these tasks. However, adding the keypoint branch reduces the box/mask AP slightly, suggesting that while keypoint detection benefits from multitask training, it does not in turn help the other tasks. Nevertheless, learning all three tasks jointly enables a unified system to efficiently predict all outputs simultaneously ( <ref type="figure" target="#fig_2">Figure 6</ref>).</p><p>We also investigate the effect of RoIAlign on keypoint detection <ref type="table" target="#tab_3">(Table 6</ref>). Though this ResNet-50-FPN backbone has finer strides (e.g., 4 pixels on the finest level), RoIAlign still shows significant improvement over RoIPool and increases AP kp by 4.4 points. This is because keypoint detections are more sensitive to localization accuracy. This again indicates that alignment is essential for pixel-level localization, including masks and keypoints.</p><p>Given the effectiveness of Mask R-CNN for extracting object bounding boxes, masks, and keypoints, we expect it be an effective framework for other instance-level tasks.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. The Mask R-CNN framework for instance segmentation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>( e )</head><label>e</label><figDesc>Mask Branch (ResNet-50-FPN): Fully convolutional networks (FCN) vs. multi-layer perceptrons (MLP, fully-connected) for mask prediction. FCNs im- prove results as they take advantage of explicitly encoding spatial layout.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. Keypoint detection results on COCO test using Mask R-CNN (ResNet-50-FPN), with person segmentation masks predicted from the same model. This model has a keypoint AP of 63.1 and runs at 5 fps.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>for all experiments. We report the standard COCO metrics including AP (aver- aged over IoU thresholds), AP 50 , AP 75 , and AP S , AP M , AP L (AP at different scales). Unless otherwise noted, APFigure 4. More results of Mask R-CNN on COCO test images, using ResNet-101-FPN and running at 5 fps, with 35.7 mask AP (Table 1).</figDesc><table>horse1.00 
+horse1.00 horse1.00 
+
+bus1.00 
+
+bus1.00 
+
+car.98 
+
+truck.88 
+
+car.93 
+
+car.78 
+
+car.98 
+
+car.91 
+car.96 
+
+car.99 
+
+car.94 
+
+car.99 
+
+car.98 
+truck.86 
+
+car.99 
+
+car.95 
+
+car1.00 
+
+car.93 
+car.98 
+
+car.95 
+
+car.97 
+
+car.87 
+
+car.99 
+
+car.82 
+
+car.78 
+
+car.93 
+
+car.95 
+car.97 
+
+person.99 
+
+traffic light.73 
+
+person1.00 
+
+person.99 
+
+person.95 
+
+person.93 
+
+person.93 
+
+person1.00 
+
+person.98 
+
+skateboard.82 
+
+suitcase1.00 
+
+suitcase.99 
+
+suitcase.96 
+
+suitcase1.00 
+
+suitcase.93 
+
+suitcase.98 
+
+suitcase.88 
+
+suitcase.72 
+
+stop sign.88 
+
+person1.00 
+person1.00 
+
+person1.00 
+
+person1.00 
+person.99 
+person.99 
+
+bench.76 
+skateboard.91 
+
+skateboard.83 
+
+handbag.81 
+
+surfboard1.00 
+
+person1.00 
+person1.00 
+surfboard1.00 
+person1.00 
+person.98 
+
+surfboard1.00 
+
+person1.00 
+
+surfboard.98 surfboard1.00 
+
+person.91 
+person.74 
+person1.00 
+person1.00 
+person1.00 
+person1.00 
+person1.00 
+person1.00 
+person.98 
+
+person.99 
+
+person1.00 
+person.99 
+umbrella1.00 
+person.95 
+
+umbrella.99 
+umbrella.97 
+
+umbrella.97 
+
+umbrella.96 
+umbrella1.00 
+
+backpack.96 
+
+umbrella.98 
+
+backpack.95 
+
+person.80 
+
+backpack.98 
+
+bicycle.93 
+
+umbrella.89 
+person.89 
+handbag.97 
+
+handbag.85 
+
+person1.00 
+person1.00 
+person1.00 
+person1.00 
+
+person1.00 
+person1.00 
+
+motorcycle.72 
+
+kite.89 
+
+person.99 
+
+kite.95 
+
+person.99 
+
+person1.00 
+
+person.81 
+person.72 
+
+kite.93 
+
+person.89 
+
+kite1.00 
+
+person.98 
+
+person1.00 
+
+kite.84 
+
+kite.97 
+
+person.80 
+
+handbag.80 
+
+person.99 
+
+kite.82 
+
+person.98 
+person.96 
+
+kite.98 
+
+person.99 
+person.82 
+
+kite.81 
+
+person.95 
+person.84 
+
+kite.98 
+
+kite.72 
+
+kite.99 
+kite.84 
+
+kite.99 
+
+person.94 
+person.72 
+person.98 
+
+kite.95 
+
+person.98 person.77 
+
+kite.73 
+
+person.78 
+person.71 
+person.87 
+
+kite.88 
+
+kite.88 
+
+person.94 
+
+kite.86 
+
+kite.89 
+
+zebra.99 
+
+zebra1.00 
+
+zebra1.00 
+
+zebra.99 
+zebra1.00 
+
+zebra.96 
+zebra.74 
+zebra.96 
+
+zebra.99 
+zebra.90 
+
+zebra.88 
+zebra.76 
+
+dining table.91 
+
+dining table.78 
+
+chair.97 
+
+person.99 
+
+person.86 
+
+chair.94 
+
+chair.98 
+
+person.95 
+
+chair.95 
+
+person.97 
+
+chair.92 chair.99 
+
+person.97 
+
+person.99 
+
+person.94 
+person.99 
+
+person.87 
+
+person.99 
+
+chair.83 
+
+person.94 
+
+person.99 
+person.98 
+
+chair.87 
+
+chair.95 
+
+person.97 
+
+person.96 
+
+chair.99 
+
+person.86 
+person.89 
+
+chair.89 
+
+wine glass.93 
+
+person.98 
+person.88 
+
+person.97 
+
+person.88 
+
+person.88 
+
+person.91 
+chair.96 
+
+person.95 
+
+person.77 
+
+person.92 
+
+wine glass.94 
+
+cup.83 
+
+wine glass.94 
+wine glass.83 
+cup.91 
+
+chair.85 
+dining table.96 
+
+wine glass.91 
+
+person.96 
+
+cup.98 
+
+person.83 
+
+dining table.75 
+
+cup.96 
+
+person.72 
+
+wine glass.80 
+
+chair.98 
+
+person.81 
+person.82 
+
+dining table.81 
+
+chair.85 
+
+chair.78 
+
+cup.75 
+
+person.77 
+
+cup.71 
+wine glass.80 
+
+cup.79 cup.93 
+cup.71 
+
+person.99 
+
+person.99 
+
+person1.00 
+
+person1.00 
+
+frisbee1.00 
+
+person.80 
+
+person.82 
+
+elephant1.00 
+elephant1.00 
+elephant1.00 
+elephant.97 
+
+elephant.99 
+
+person1.00 
+
+person1.00 
+
+dining table.95 
+
+person1.00 
+person.88 
+
+wine glass1.00 
+
+bottle.97 
+
+wine glass1.00 
+
+wine glass.99 
+
+tv.98 
+tv.84 
+
+person1.00 
+
+bench.97 
+
+person.98 
+
+person1.00 person1.00 
+
+handbag.73 
+
+person.86 
+potted plant.92 
+
+bird.93 
+
+person.76 person.98 person.78 
+person.78 
+backpack.88 handbag.91 
+
+cell phone.77 
+clock.73 
+
+person.99 
+
+person1.00 
+person.98 
+
+person1.00 
+
+person1.00 
+person1.00 
+
+person.99 
+
+person.99 
+person.99 
+person1.00 
+person1.00 
+person.98 
+person.99 
+
+handbag.88 
+
+person1.00 
+person.98 
+person.92 
+
+handbag.99 
+
+person.97 
+
+person.95 
+
+handbag.88 
+
+traffic light.99 
+
+person.95 
+person.87 
+
+person.95 
+
+traffic light.87 
+
+traffic light.71 
+
+person.80 
+person.95 
+person.95 
+person.73 
+person.74 
+
+tie.85 
+
+car.99 
+
+car.86 
+
+car.97 
+
+car1.00 
+car.95 
+car.97 
+
+traffic light1.00 
+traffic light.99 
+
+car.99 
+person.99 
+
+car.95 
+
+car.97 
+car.98 
+
+car.98 car.91 
+
+car1.00 
+car.96 
+
+car.96 
+
+bicycle.86 
+car.97 
+
+car.97 
+
+car.97 
+car.94 
+
+car.95 
+
+car.94 
+
+car.81 
+
+person.87 
+
+parking meter.98 
+
+car.89 
+
+donut1.00 
+
+donut.90 
+
+donut.88 
+
+donut.81 
+
+donut.95 
+
+donut.96 
+
+donut1.00 
+donut.98 
+
+donut.99 
+
+donut.94 
+
+donut.97 
+
+donut.99 
+donut.98 
+
+donut1.00 
+
+donut.95 
+
+donut1.00 
+
+donut.98 
+donut.98 
+
+donut.99 
+
+donut.96 
+
+donut.89 
+
+donut.96 
+donut.95 
+donut.98 
+
+donut.89 
+
+donut.93 
+
+donut.95 
+
+donut.90 
+donut.89 
+
+donut.89 
+
+donut.89 
+
+donut.86 
+
+donut.86 
+
+person1.00 
+
+person1.00 
+person1.00 
+
+person1.00 
+
+person1.00 
+
+person1.00 
+
+person1.00 
+
+dog1.00 
+
+baseball bat.99 
+
+baseball bat.85 
+baseball bat.98 
+
+truck.92 
+
+truck.99 
+
+truck.96 
+truck.99 
+truck.97 
+
+bus.99 
+truck.93 bus.90 
+
+person1.00 
+person1.00 
+horse.77 
+
+horse.99 
+
+cow.93 
+
+person.96 
+
+person1.00 
+
+person.99 
+
+horse.97 
+person.98 
+person.97 
+
+person.98 
+
+person.96 
+
+person1.00 
+
+tennis racket1.00 
+
+chair.73 
+
+person.90 
+
+person.77 
+
+person.97 
+person.81 
+
+person.87 
+
+person.71 
+person.96 
+person.99 
+person.98 
+person.94 
+
+chair.97 
+
+chair.80 
+chair.71 
+
+chair.94 chair.92 
+
+chair.99 
+
+chair.93 
+chair.99 
+
+chair.91 
+chair.81 
+chair.98 
+chair.83 
+
+chair.81 
+
+chair.81 
+
+chair.93 
+
+sports ball.99 
+
+person1.00 
+
+couch.82 
+
+person1.00 
+
+person.99 
+
+person1.00 
+person1.00 
+person1.00 
+person.99 
+
+skateboard.99 
+
+person.90 
+
+person.98 
+
+person.99 
+person.91 
+person.99 
+person1.00 
+
+person.80 
+
+skateboard.98 
+
+backbone 
+AP 
+AP 50 AP 75 
+AP S 
+AP M 
+AP L 
+MNC [7] 
+ResNet-101-C4 
+24.6 
+44.3 
+24.8 
+4.7 
+25.9 
+43.6 
+FCIS [21] +OHEM 
+ResNet-101-C5-dilated 29.2 
+49.5 
+-
+7.1 
+31.3 
+50.0 
+FCIS+++ [21] +OHEM ResNet-101-C5-dilated 33.6 
+54.5 
+-
+-
+-
+-
+Mask R-CNN 
+ResNet-101-C4 
+33.1 
+54.9 
+34.8 
+12.1 
+35.6 
+51.1 
+Mask R-CNN 
+ResNet-101-FPN 
+35.7 
+58.0 
+37.8 
+15.5 
+38.1 
+52.4 
+Mask R-CNN 
+ResNeXt-101-FPN 
+37.1 
+60.0 
+39.4 
+16.9 
+39.9 
+53.5 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>).</figDesc><table>person1.00 
+
+person1.00 
+
+person1.00 
+
+person1.00 
+
+umbrella1.00 
+umbrella.99 
+
+car.99 car.93 
+giraffe1.00 
+giraffe1.00 
+
+person1.00 
+person1.00 
+
+person1.00 person1.00 
+
+person.95 
+
+sports ball1.00 
+
+sports ball.98 
+
+person1.00 
+person1.00 
+
+person1.00 
+
+tie.95 
+tie1.00 
+
+FCIS 
+
+Mask R-CNN 
+
+train1.00 
+train.99 
+
+train.80 
+
+person1.00 
+person1.00 
+person1.00 
+
+person1.00 
+person1.00 
+person1.00 
+
+skateboard.98 
+
+person.99 
+person.99 
+
+skateboard.99 
+
+handbag.93 
+
+Figure 5. FCIS+++ [21] (top) vs. Mask R-CNN (bottom, ResNet-101-FPN). FCIS exhibits systematic artifacts on overlapping objects. 
+
+net-depth-features 
+
+AP 
+AP 50 AP 75 
+
+ResNet-50-C4 
+
+30.3 
+51.2 
+31.5 
+
+ResNet-101-C4 
+
+32.7 
+54.2 
+34.3 
+
+ResNet-50-FPN 
+
+33.6 
+55.2 
+35.3 
+
+ResNet-101-FPN 
+
+35.4 
+57.3 
+37.5 
+ResNeXt-101-FPN 36.7 
+59.5 
+38.9 
+
+(a) Backbone Architecture: Better back-
+bones bring expected gains: deeper networks 
+do better, FPN outperforms C4 features, and 
+ResNeXt improves on ResNet. 
+
+AP 
+AP 50 
+AP 75 
+softmax 
+24.8 
+44.1 
+25.1 
+sigmoid 
+30.3 
+51.2 
+31.5 
++5.5 
++7.1 
++6.4 
+
+(b) Multinomial vs. Independent Masks 
+(ResNet-50-C4): Decoupling via per-
+class binary masks (sigmoid) gives large 
+gains over multinomial masks (softmax). 
+
+align? bilinear? agg. 
+
+AP 
+AP 50 AP 75 
+RoIPool [9] 
+max 26.9 
+48.8 
+26.4 
+
+RoIWarp [7] 
+max 27.2 
+49.2 
+27.1 
+ave 27.1 
+48.9 
+27.1 
+
+RoIAlign 
+max 30.2 
+51.0 
+31.8 
+ave 30.3 
+51.2 
+31.5 
+
+(c) RoIAlign (ResNet-50-C4): Mask results with various RoI 
+layers. Our RoIAlign layer improves AP by ∼3 points and 
+AP 75 by ∼5 points. Using proper alignment is the only factor 
+that contributes to the large gap between RoI layers. 
+
+AP 
+AP 50 
+AP 75 
+AP bb 
+AP bb 
+
+50 
+
+AP bb 
+
+75 
+
+RoIPool 
+23.6 
+46.5 
+21.6 
+28.2 
+52.7 
+26.9 
+RoIAlign 
+30.9 
+51.8 
+32.1 
+34.0 
+55.3 
+36.4 
++7.3 
++ 5.3 +10.5 
++5.8 
++2.6 
++9.5 
+
+(d) RoIAlign (ResNet-50-C5, stride 32): Mask-level and box-level 
+AP using large-stride features. Misalignments are more severe than 
+with stride-16 features (Table 2c), resulting in massive accuracy gaps. 
+
+mask branch 
+AP 
+AP 50 
+AP 75 
+MLP 
+fc: 1024→1024→80·28 2 
+31.5 
+53.7 
+32.8 
+MLP 
+fc: 1024→1024→1024→80·28 2 
+31.5 
+54.0 
+32.6 
+FCN conv: 256→256→256→256→256→80 
+33.6 
+55.2 
+35.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 6 ).</head><label>6</label><figDesc></figDesc><table>backbone 
+
+AP bb 
+AP bb 
+
+50 
+
+AP bb 
+
+75 
+
+AP bb 
+
+S 
+
+AP bb 
+
+M 
+
+AP bb 
+
+L 
+
+Faster R-CNN+++ [15] 
+ResNet-101-C4 
+34.9 
+55.7 
+37.4 
+15.6 
+38.7 
+50.9 
+Faster R-CNN w FPN [22] 
+ResNet-101-FPN 
+36.2 
+59.1 
+39.0 
+18.2 
+39.0 
+48.2 
+Faster R-CNN by G-RMI [17] Inception-ResNet-v2 [32] 
+34.7 
+55.5 
+36.7 
+13.5 
+38.1 
+52.0 
+Faster R-CNN w TDM [31] 
+Inception-ResNet-v2-TDM 36.8 
+57.7 
+39.2 
+16.2 
+39.8 
+52.1 
+Faster R-CNN, RoIAlign 
+ResNet-101-FPN 
+37.3 
+59.6 
+40.3 
+19.8 
+40.2 
+48.8 
+Mask R-CNN 
+ResNet-101-FPN 
+38.2 
+60.3 
+41.7 
+20.1 
+41.1 
+50.2 
+Mask R-CNN 
+ResNeXt-101-FPN 
+39.8 
+62.3 
+43.4 
+22.1 
+43.2 
+51.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Mask R-CNN, keypoint &amp; mask 63.1 87.3 68.7 57.8 71.4</figDesc><table>AP kp AP 
+
+kp 
+
+50 AP 
+
+kp 
+
+75 AP 
+
+kp 
+M 
+
+AP 
+
+kp 
+L 
+
+CMU-Pose+++ [4] 
+61.8 84.9 67.5 
+57.1 68.2 
+G-RMI [26]  † 
+62.4 84.0 68.5 
+59.1 68.1 
+Mask R-CNN, keypoint-only 
+62.7 87.0 68.4 
+57.4 71.1 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head>Table 4 .</head><label>4</label><figDesc>Keypoint detection AP on COCO test-dev. Ours (ResNet-50-FPN) is a single model that runs at 5 fps. CMU- Pose+++ [4] is the 2016 competition winner that uses multi-scale testing, post-processing with CPM [34], and filtering with an ob- ject detector, adding a cumulative ∼5 points (clarified in personal communication). † : G-RMI was trained on COCO plus MPII [1] (25k images), using two models (Inception-ResNet-v2 + ResNet- 101). As they use more data, this is not a direct comparison with Mask R-CNN.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head></head><label></label><figDesc>). Our method is considerably simpler and faster. More importantly, we have a unified model that can si- multaneously predict boxes, segments, and keypoints while running at 5 fps. Adding a segment branch (for the per-</figDesc><table>AP bb 
+
+person 
+
+AP mask 
+
+person 
+
+AP kp 
+
+Faster R-CNN 
+52.5 
+-
+-
+Mask R-CNN, mask-only 
+53.6 
+45.8 
+-
+Mask R-CNN, keypoint-only 
+50.7 
+-
+64.2 
+Mask R-CNN, keypoint &amp; mask 
+52.0 
+45.1 
+64.7 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 5 .</head><label>5</label><figDesc>Multi-task learning of box, mask, and keypoint about the person category, evaluated on minival. All entries are trained on the same data for fair comparisons. The backbone is ResNet-50-FPN. The entry with 64.2 AP on minival has 62.7 AP on test-dev. The entry with 64.7 AP on minival has 63.1 AP on test-dev (see Table 4).Table 6. RoIAlign vs. RoIPool for keypoint detection on minival.</figDesc><table>AP kp AP 
+
+kp 
+
+50 AP 
+
+kp 
+
+75 AP 
+
+kp 
+M 
+
+AP 
+
+kp 
+L 
+
+RoIPool 
+59.8 86.2 66.7 
+55.1 67.4 
+RoIAlign 
+64.2 86.6 69.7 
+58.7 73.0 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Following common terminology, we use object detection to denote detection via bounding boxes, not masks, and semantic segmentation to denote per-pixel classification without differentiating instances. Yet we note that instance segmentation is both semantic and a form of detection.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">We sample four regular locations, so that we can evaluate either max or average pooling. In fact, interpolating only a single value at each bin center (without pooling) is nearly as effective. One could also sample more than four locations per bin, which we found to give diminishing returns.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">We use the 64×4d variant of ResNeXt [35].</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">2D human pose estimation: New benchmark and state of the art analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Multiscale combinatorial grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pont-Tuset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Marques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Insideoutside net: Detecting objects in context with skip pooling and recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Realtime multiperson 2d pose estimation using part affinity fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Instance-sensitive fully convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Convolutional feature masking for joint object and stuff segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Instance-aware semantic segmentation via multi-task network cascades</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">R-FCN: Object detection via region-based fully convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Fast R-CNN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Deformable part models are convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Simultaneous detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Hypercolumns for object segmentation and fine-grained localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Spatial pyramid pooling in deep convolutional networks for visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">What makes for effective detection proposals? PAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Speed/accuracy trade-offs for modern convolutional object detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rathod</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Korattikara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wojna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Spatial transformer networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Backpropagation applied to handwritten zip code recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Boser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Henderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hubbard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+	<note>Neural computation</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Fully convolutional instance-aware semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Feature pyramid networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Microsoft COCO: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Towards accurate multiperson pose estimation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kanazawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning to segment object candidates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Learning to refine object segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Faster R-CNN: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Training regionbased object detectors with online hard example mining</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Beyond skip connections: Top-down modulation for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.06851</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Inception-v4, inception-resnet and the impact of residual connections on learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Convolutional pose machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramakrishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Aggregated residual transformations for deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Robust Adversarial Reinforcement Learning</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lerrel</forename><surname>Pinto</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Davidson</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rahul</forename><surname>Sukthankar</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abhinav</forename><surname>Gupta</surname></persName>
+						</author>
+						<title level="a" type="main">Robust Adversarial Reinforcement Learning</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Deep neural networks coupled with fast simulation and improved computation have led to recent successes in the field of reinforcement learning (RL). However, most current RL-based approaches fail to generalize since: (a) the gap between simulation and real world is so large that policy-learning approaches fail to transfer; (b) even if policy learning is done in real world, the data scarcity leads to failed generalization from training to test scenarios (e.g., due to different friction or object masses). Inspired from H ∞ control methods, we note that both modeling errors and differences in training and test scenarios can be viewed as extra forces/disturbances in the system. This paper proposes the idea of robust adversarial reinforcement learning (RARL), where we train an agent to operate in the presence of a destabilizing adversary that applies disturbance forces to the system. The jointly trained adversary is reinforced -that is, it learns an optimal destabilization policy. We formulate the policy learning as a zero-sum, minimax objective function. Extensive experiments in multiple environments (InvertedPendulum, HalfCheetah, Swimmer, Hopper, Walker2d and Ant) conclusively demonstrate that our method (a) improves training stability; (b) is robust to differences in training/test conditions; and c) outperform the baseline even in the absence of the adversary.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>High-capacity function approximators such as deep neural networks have led to increased success in the field of reinforcement learning <ref type="bibr" target="#b20">(Mnih et al., 2015;</ref><ref type="bibr" target="#b32">Silver et al., 2016;</ref><ref type="bibr" target="#b11">Gu et al., 2016;</ref><ref type="bibr" target="#b18">Lillicrap et al., 2015;</ref><ref type="bibr" target="#b21">Mordatch et al., 2015)</ref>. However, a major bottleneck for such <ref type="bibr">1</ref> Carnegie Mellon University 2 Google Brain 3 Google Research. Correspondence to: Lerrel Pinto &lt;lerrelp@cs.cmu.edu&gt;.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proceedings of the 34</head><p>th International Conference on Machine Learning, Sydney, <ref type="bibr">Australia, PMLR 70, 2017</ref><ref type="bibr">. Copyright 2017</ref> by the author(s).</p><p>policy-learning methods is their reliance on data: training high-capacity models requires huge amounts of training data/trajectories. While this training data can be easily obtained for tasks like games (e.g., Doom, Montezuma's Revenge) <ref type="bibr" target="#b20">(Mnih et al., 2015)</ref>, data-collection and policy learning for real-world physical tasks are significantly more challenging.</p><p>There are two possible ways to perform policy learning for real-world physical tasks:</p><p>• Real-world Policy Learning: The first approach is to learn the agent's policy in the real-world. However, training in the real-world is too expensive, dangerous and time-intensive leading to scarcity of data. Due to scarcity of data, training is often restricted to a limited set of training scenarios, causing overfitting. If the test scenario is different (e.g., different friction coefficient), the learned policy fails to generalize. Therefore, we need a learned policy that is robust and generalizes well across a range of scenarios.</p><p>• Learning in simulation: One way of escaping the data scarcity in the real-world is to transfer a policy learned in a simulator to the real world. However the environment and physics of the simulator are not exactly the same as the real world. This reality gap often results in unsuccessful transfer if the learned policy isn't robust to modeling errors <ref type="bibr" target="#b3">(Christiano et al., 2016;</ref><ref type="bibr" target="#b28">Rusu et al., 2016)</ref>.</p><p>Both the test-generalization and simulation-transfer issues are further exacerbated by the fact that many policylearning algorithms are stochastic in nature. For many hard physical tasks such as Walker2D <ref type="bibr" target="#b7">(Erez et al., 2011)</ref>, only a small fraction of runs leads to stable walking policies. This makes these approaches even more time and data-intensive. What we need is an approach that is significantly more stable/robust in learning policies across different runs and initializations while requiring less data during training.</p><p>So, how can we model uncertainties and learn a policy robust to all uncertainties? How can we model the gap between simulations and real-world? We begin with the insight that modeling errors can be viewed as extra forces/disturbances in the system <ref type="bibr" target="#b0">(Başar &amp; Bernhard, 2008)</ref>. For example, high friction at test time might be modeled as extra forces at contact points against the di-InvertedPendulum HalfCheetah Swimmer Hopper Walker2d Ant <ref type="figure">Figure 1</ref>. We evaluate RARL on a variety of OpenAI gym problems. The adversary learns to apply destabilizing forces on specific points (denoted by red arrows) on the system, encouraging the protagonist to learn a robust control policy. These policies also transfer better to new test environments, with different environmental conditions and where the adversary may or may not be present.</p><p>rection of motion. Inspired by this observation, this paper proposes the idea of modeling uncertainties via an adversarial agent that applies disturbance forces to the system. Moreover, the adversary is reinforced -that is, it learns an optimal policy to thwart the original agent's goal. Our proposed method, Robust Adversarial Reinforcement Learning (RARL), jointly trains a pair of agents, a protagonist and an adversary, where the protagonist learns to fulfil the original task goals while being robust to the disruptions generated by its adversary.</p><p>We perform extensive experiments to evaluate RARL on multiple OpenAI gym environments like InvertedPendulum, HalfCheetah, Swimmer, Hopper, Walker2d and Ant (see <ref type="figure">Figure 1</ref>). We demonstrate that our proposed approach is: (a) Robust to model initializations: The learned policy performs better given different model parameter initializations and random seeds. This alleviates the data scarcity issue by reducing sensitivity of learning. (b) Robust to modeling errors and uncertainties: The learned policy generalizes significantly better to different test environment settings (e.g., with different mass and friction values).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Overview of RARL</head><p>Our goal is to learn a policy that is robust to modeling errors in simulation or mismatch between training and test scenarios. For example, we would like to learn policy for Walker2D that works not only on carpet (training scenario) but also generalizes to walking on ice (test scenario). Similarly, other parameters such as the mass of the walker might vary during training and test. One possibility is to list all such parameters (mass, friction etc.) and learn an ensemble of policies for different possible variations <ref type="bibr" target="#b27">(Rajeswaran et al., 2016)</ref>. But explicit consideration of all possible parameters of how simulation and real world might differ or what parameters can change between training/test is infeasible.</p><p>Our core idea is to model the differences during training and test scenarios via extra forces/disturbances in the system. Our hypothesis is that if we can learn a policy that is robust to all disturbances, then this policy will be robust to changes in training/test situations; and hence generalize well. But is it possible to sample trajectories under all possible disturbances? In unconstrained scenarios, the space of possible disturbances could be larger than the space of possible actions, which makes sampled trajectories even sparser in the joint space.</p><p>To overcome this problem, we advocate a two-pronged approach:</p><p>(a) Adversarial agents for modeling disturbances: Instead of sampling all possible disturbances, we jointly train a second agent (termed the adversary), whose goal is to impede the original agent (termed the protagonist) by applying destabilizing forces. The adversary is rewarded only for the failure of the protagonist. Therefore, the adversary learns to sample hard examples: disturbances which will make original agent fail; the protagonist learns a policy that is robust to any disturbances created by the adversary.</p><p>(b) Adversaries that incorporate domain knowledge: The naive way of developing an adversary would be to simply give it the same action space as the protagonist -like a driving student and driving instructor fighting for control of a dual-control car. However, our proposed approach is much richer and is not limited to symmetric action spaceswe can exploit domain knowledge to: focus the adversary on the protagonist's weak points; and since the adversary is in a simulated environment, we can give the adversary "super-powers" -the ability to affect the robot or environment in ways the protagonist cannot (e.g., suddenly change a physical parameter like frictional coefficient or mass).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head><p>Before we delve into the details of RARL, we first outline our terminology, standard reinforcement learning setting and two-player zero-sum games from which our paper is inspired.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Standard reinforcement learning on MDPs</head><p>In this paper we examine continuous space MDPs that are represented by the tuple: (S, A, P, r, γ, s 0 ), where S is a set of continuous states and A is a set of continuous actions, P : S × A × S → R is the transition probability, r : S × A → R is the reward function, γ is the discount factor, and s 0 is the initial state distribution.</p><p>Batch policy algorithms like REINFORCE <ref type="bibr" target="#b37">(Williams, 1992)</ref>, NPG <ref type="bibr" target="#b15">(Kakade, 2002)</ref> and TRPO <ref type="bibr" target="#b29">(Schulman et al., 2015)</ref> attempt to learn a stochastic policy π θ : S × A → R that maximizes the cumulative discounted reward</p><formula xml:id="formula_0">T −1 t=0 γ t r(s t , a t ).</formula><p>Here, θ denotes the parameters for the policy π which takes action a t given state s t at timestep t.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Two-player zero-sum discounted games</head><p>The adversarial setting we propose can be expressed as a two player γ discounted zero-sum Markov game <ref type="bibr" target="#b19">(Littman, 1994;</ref><ref type="bibr" target="#b25">Perolat et al., 2015)</ref>. This game MDP can be expressed as the tuple: (S, A 1 , A 2 , P, r, γ, s 0 ) where A 1 and A 2 are the continuous set of actions the players can take. P : S ×A 1 ×A 2 ×S → R is the transition probability density and r : S ×A 1 ×A 2 → R is the reward of both players. If player 1 (protagonist) is playing strategy µ and player 2 (adversary) is playing the strategy ν, the reward function is r µ,ν = E a 1 ∼µ(.|s),a 2 ∼ν(.|s) [r(s, a 1 , a 2 )]. A zero-sum two-player game can be seen as player 1 maximizing the γ discounted reward while player 2 is minimizing it.</p><p>3. Robust Adversarial RL</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Robust Control via Adversarial Agents</head><p>Our goal is to learn the policy of the protagonist (denoted by µ) such that it is better (higher reward) and robust (generalizes better to variations in test settings). In the standard reinforcement learning setting, for a given transition function P, we can learn policy parameters θ µ such that the expected reward is maximized where expected reward for policy µ from the start s 0 is</p><formula xml:id="formula_1">ρ(µ; θ µ , P) = E T t=0 γ t r(s t , a t )|s 0 , µ, P .<label>(1)</label></formula><p>Note that in this formulation the expected reward is conditioned on the transition function since the the transition function defines the roll-out of states. In standard-RL settings, the transition function is fixed (since the physics engine and parameters such as mass, friction are fixed). However, in our setting, we assume that the transition function will have modeling errors and that there will be differences between training and test conditions. Therefore, in our general setting, we should estimate policy parameters θ µ such that we maximize the expected reward over different possible transition functions as well. Therefore,</p><formula xml:id="formula_2">ρ(µ; θ µ ) = E P E T t=0 γ t r(s t , a t )|s 0 , µ, P . (2)</formula><p>Optimizing for the expected reward over all transition functions optimizes mean performance, which is a risk neutral formulation that assumes a known distribution over model parameters. A large fraction of policies learned under such a formulation are likely to fail in a different environment. Instead, inspired by work in robust control <ref type="bibr" target="#b34">(Tamar et al., 2014;</ref><ref type="bibr" target="#b27">Rajeswaran et al., 2016)</ref>, we choose to optimize for conditional value at risk (CVaR):</p><formula xml:id="formula_3">ρ RC = E [ρ|ρ ≤ Q α (ρ)]<label>(3)</label></formula><p>where Q α (ρ) is the α-quantile of ρ-values. Intuitively, in robust control, we want to maximize the worst-possible ρ-values. But how do you tractably sample trajectories that are in worst α-percentile? Approaches like EP-Opt (Rajeswaran et al., 2016) sample these worst percentile trajectories by changing parameters such as friction, mass of objects, etc. during rollouts.</p><p>Instead, we introduce an adversarial agent that applies forces on pre-defined locations, and this agent tries to change the trajectories such that reward of the protagonist is minimized. Note that since the adversary tries to minimize the protagonist's reward, it ends up sampling trajectories from worst-percentile leading to robust controllearning for the protagonist. If the adversary is kept fixed, the protagonist could learn to overfit to its adversarial actions. Therefore, instead of using either a random or a fixed-adversary, we advocate generating the adversarial actions using a learned policy ν. We would also like to point out the connection between our proposed approach and the practice of hard-example mining <ref type="bibr" target="#b33">(Sung &amp; Poggio, 1994;</ref><ref type="bibr" target="#b31">Shrivastava et al., 2016)</ref>. The adversary in RARL learns to sample hard-examples (worst-trajectories) for the protagonist to learn. Finally, instead of using α as percentileparameter, RARL is parameterized by the magnitude of force available to the adversary. As the adversary becomes stronger, RARL optimizes for lower percentiles. However, very high magnitude forces lead to very biased sampling and make the learning unstable. In the extreme case, an unreasonably strong adversary can always prevent the protagonist from achieving the task. Analogously, the traditional RL baseline is equivalent to training with an impotent (zero strength) adversary.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Formulating Adversarial Reinforcement Learning</head><p>In our adversarial game, at every timestep t both players observe the state s t and take actions a 1 t ∼ µ(s t ) and a 2 t ∼ ν(s t ). The state transitions s t+1 = P(s t , a and a reward r t = r(s t , a 1 t , a 2 t ) is obtained from the environment. In our zero-sum game, the protagonist gets a reward r 1 t = r t while the adversary gets a reward r 2 t = −r t . Hence each step of this MDP can be represented as</p><formula xml:id="formula_4">(s t , a 1 t , a 2 t , r 1 t , r 2 t , s t+1 ).</formula><p>The protagonist seeks to maximize the following reward function,</p><formula xml:id="formula_5">R 1 = E s0∼ρ,a 1 ∼µ(s),a 2 ∼ν(s) [ T −1 t=0 r 1 (s, a 1 , a 2 )].<label>(4)</label></formula><p>Since, the policies µ and ν are the only learnable components, R 1 ≡ R 1 (µ, ν). Similarly the adversary attempts to maximize its own reward:</p><formula xml:id="formula_6">R 2 ≡ R 2 (µ, ν) = −R 1 (µ, ν)</formula><p>. One way to solve this MDP game is by discretizing the continuous state and action spaces and using dynamic programming to solve. <ref type="bibr" target="#b25">Perolat et al. (2015)</ref> and <ref type="bibr" target="#b24">Patek (1997)</ref> show that notions of minimax equilibrium and Nash equilibrium are equivalent for this game with optimal equilibrium reward:</p><formula xml:id="formula_7">R 1 * = min ν max µ R 1 (µ, ν) = max µ min ν R 1 (µ, ν)<label>(5)</label></formula><p>However solutions to finding the Nash equilibria strategies often involve greedily solving N minimax equilibria for a zero-sum matrix game, with N equal to the number of observed datapoints. The complexity of this greedy solution is exponential in the cardinality of the action spaces, which makes it prohibitive <ref type="bibr" target="#b25">(Perolat et al., 2015)</ref>.</p><p>Most Markov Game approaches require solving for the equilibrium solution for a multiplayer value or minimax-Q function at each iteration. This requires evaluating a typically intractable minimax optimization problem. Instead, we focus on learning stationary policies µ * and ν * such that R 1 (µ * , ν * ) → R 1 * . This way we can avoid this costly optimization at each iteration as we just need to approximate the advantage function and not determine the equilibrium solution at each iteration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Proposed Method: RARL</head><p>Our algorithm (RARL) optimizes both of the agents using the following alternating procedure. In the first phase, we learn the protagonist's policy while holding the adversary's policy fixed. Next, the protagonist's policy is held constant and the adversary's policy is learned. This sequence is repeated until convergence.</p><p>Algorithm 1 outlines our approach in detail. The initial parameters for both players' policies are sampled from a random distribution. In each of the N iter iterations, we carry out a two-step (alternating) optimization procedure. First, for N µ iterations, the parameters of the adversary θ ν are held constant while the parameters θ µ of the protagonist Algorithm 1 RARL (proposed algorithm) Input: Environment E; Stochastic policies µ and ν Initialize: Learnable parameters θ µ 0 for µ and θ <ref type="formula" target="#formula_5">4</ref>). The roll function samples N traj trajectories given the environment definition E and the policies for both the players. Note that E contains the transition function P and the reward functions r 1 and r 2 to generate the trajectories.  </p><formula xml:id="formula_8">ν 0 for ν for i=1,2,..N iter do θ µ i ← θ µ i−1 for j=1,2,..N µ do {(s i t , a 1i t , a 2i t , r 1i t , r 2i t )} ← roll(E, µ θ µ i , ν θ ν i−1 , N traj ) θ µ i ← policyOptimizer({(s i t , a 1i t , r 1i t )}, µ, θ µ i ) end for θ ν i ← θ ν i−1 for j=1,2,..N ν do {(s i t , a 1i t , a 2i t , r 1i t , r 2i t )} ← roll(E, µ θ µ i , ν θ ν i , N traj ) θ ν i ← policyOptimizer({(s i t , a 2i t , r 2i t )},</formula><note type="other">ν, θ ν i ) end for end for Return: θ µ Niter , θ ν Niter are optimized to maximize R 1 (Equation</note></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Evaluation</head><p>We now demonstrate the robustness of the RARL algorithm: (a) for training with different initializations; (b) for testing with different conditions; (c) for adversarial disturbances in the testing environment. But first we will describe our implementation and test setting followed by evaluations and results of our algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Implementation</head><p>Our implementation of the adversarial environments build on OpenAI Gym's <ref type="bibr" target="#b1">(Brockman et al., 2016)</ref> control environments with the MuJoCo <ref type="bibr" target="#b35">(Todorov et al., 2012)</ref> physics simulator. Details of the environments and their corresponding adversarial disturbances are (also see <ref type="figure">Figure 1</ref>):</p><formula xml:id="formula_9">InvertedPendulum:</formula><p>The inverted pendulum is mounted on a pivot point on a cart, with the cart restricted to linear movement in a plane. The state space is 4D: position and velocity for both the cart and the pendulum. The protagonist can apply 1D forces to keep the pendulum upright. The adversary applies a 2D force on the center of pendulum in order to destabilize it.</p><p>HalfCheetah: The half-cheetah is a planar biped robot with 8 rigid links, including two legs and a torso, along with 6 actuated joints. The 17D state space includes joint angles and joint velocities. The adversary applies a 6D action with 2D forces on the torso and both feet in order to destabilize it.</p><p>Swimmer: The swimmer is a planar robot with 3 links and 2 actuated joints in a viscous container, with the goal of moving forward. The 8D state space includes joint angles and joint velocities. The adversary applies a 3D force to the center of the swimmer.</p><p>Hopper: The hopper is a planar monopod robot with 4 rigid links, corresponding to the torso, upper leg, lower leg, and foot, along with 3 actuated joints. The 11D state space includes joint angles and joint velocities. The adversary applies a 2D force on the foot.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Walker2D:</head><p>The walker is a planar biped robot consisting of 7 links, corresponding to two legs and a torso, along with 6 actuated joints. The 17D state space includes joint angles and joint velocities. The adversary applies a 4D action with 2D forces on both the feet.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Ant:</head><p>The ant is a quadruped robot with a torso and 4 legs that contain 8 joints. The 111D observation space includes joint angles, joint velocities and contact forces. The adversary applies a 8D action with 2D forces on each foot.</p><p>Our implementation of RARL is built on top of rllab <ref type="bibr" target="#b5">(Duan et al., 2016)</ref> and uses Trust Region Policy Optimization (TRPO) <ref type="bibr" target="#b29">(Schulman et al., 2015)</ref> as the policy optimizer. For all the tasks and for both the protagonist and adversary, we use a policy network with two hidden layers with 64 neurons each. We train both RARL and the baseline for 100 iterations on InvertedPendulum and for 500 iterations on the other tasks. Hyperparameters of TRPO are selected by grid search.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Evaluating Learned Policies</head><p>We evaluate the robustness of our RARL approach compared to the strong TRPO baseline. Since our policies are stochastic in nature and the starting state is also drawn from a distribution, we learn 50 policies for each task with different seeds/initializations. First, we report the mean and variance of cumulative reward (over 50 policies) as a function of the training iterations. <ref type="figure" target="#fig_2">Figure 2</ref> shows the mean and variance of the rewards of learned policies for the task of HalfCheetah, Swimmer, Hopper and Walker2D. We omit the graph for InvertedPendulum because the task is easy and both TRPO and RARL show similar performance and similar rewards. As we can see from the figure, for all the four tasks RARL learns a better policy in terms of mean reward and variance as well. This clearly shows that the policy learned by RARL is better than the policy learned by TRPO even when there is no disturbance or change of settings between training and test conditions. <ref type="table" target="#tab_1">Table 1</ref>  However, the primary focus of this paper is to show robustness in training these control policies. One way of visualizing this is by plotting the average rewards for the n th percentile of trained policies. <ref type="figure" target="#fig_3">Figure 3</ref> plots these percentile curves and highlight the significant gains in robustness for training for the HalfCheetah, Swimmer and Hopper tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Robustness under Adversarial Disturbances</head><p>While deploying controllers in the real world, unmodeled environmental effects can cause controllers to fail. One way of measuring robustness to such effects is by measuring the performance of our learned control polices in the presence of an adversarial disturbance. For this purpose, we train an adversary to apply a disturbance while holding the protagonist's policy constant. We again show the percentile graphs as described in the section above. RARL's control policy, since it was trained on similar adversaries, performs better, as seen in <ref type="figure">Figure 4</ref>. Baseline <ref type="formula">(</ref> Figure 4. Percentile plots with a learned adversarial disturbance show the robustness of RARL compared to the baseline in the presence of an adversary. Here the algorithms are run on multiple initializations followed by learning an adversarial disturbance that is applied at test time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Robustness to Test Conditions</head><p>Finally, we evaluate the robustness and generalization of the learned policy with respect to varying test conditions. In this section, we train the policy based on certain mass and friction values; however at test time we evaluate the policy when different mass and friction values are used in the environment. Note we omit evaluation of Swimmer since the policy for the swimming task is not significantly impacted by a change mass or friction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.1.">EVALUATION WITH CHANGING MASS</head><p>We describe the results of training with the standard mass variables in OpenAI Gym while testing it with different mass. Specifically, the mass of InvertedPendulum, HalfCheetah, Hopper and Walker2D were 4.89, 6.36, 3.53 and 3.53 respectively. At test time, we evaluated the learned policies by changing mass values and estimating the average cumulative rewards. <ref type="figure">Figure 5</ref> plots the average rewards and their standard deviations against a given torso mass (horizontal axis). As seen in these graphs, RARL policies generalize significantly better.</p><p>Baseline <ref type="formula">(</ref>  <ref type="figure">Figure 5</ref>. The graphs show robustness of RARL policies to changing mass between training and testing. For the InvertedPendulum the mass of the pendulum is varied, while for the other tasks, the mass of the torso is varied. We exclude the results of Ant since it's policies aren't significantly affected by changing mass.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.2.">EVALUATION WITH CHANGING FRICTION</head><p>Since several of the control tasks involve contacts and friction (which is often poorly modeled), we evaluate robustness to different friction coefficients in testing. Similar to the evaluation of robustness to mass, the model is trained with the standard variables in OpenAI Gym. <ref type="figure" target="#fig_5">Figure 6</ref> shows the average reward values with different friction coefficients at test time. It can be seen that the baseline policies fail to generalize and the performance falls significantly when the test friction is different from training. On the other hand RARL shows more resilience to changing friction values.</p><p>Baseline <ref type="formula">(</ref> We visualize the increased robustness of RARL in <ref type="figure" target="#fig_6">Figure 7</ref>, where we test with jointly varying both mass and friction coefficient. As observed from the figure, for most combinations of mass and friction values RARL leads significantly higher reward values compared to the baseline.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Visualizing the Adversarial Policy</head><p>Finally, we visualize the adversarial policy for the case of InvertedPendulum and Hopper to see whether the learned policies are human interpretable. As shown in <ref type="figure" target="#fig_7">Figure 8</ref>, the direction of the force applied by the adversary agrees with human intuition: specifically, when the cart is stationary and the pole is already tilted (top row), the adversary attempts to accentuate the tilt. Similarly, when the cart is moving swiftly and the pole is vertical (bottom row), the adversary applies a force in the direction of the cart's motion. The pole will fall unless the cart speeds up further (which can also cause the cart to go out of bounds). Note that the naive policy of pushing in the opposite direction would be less effective since the protagonist could slow the  Similarly for the Hopper task in <ref type="figure">Figure 9</ref>, the adversary applies horizontal forces to impede the motion when the Hopper is in the air (left) while applying forces to counteract gravity and reduce friction when the Hopper is interacting with the ground (right).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Related Research</head><p>Recent applications of deep reinforcement learning (deep RL) have shown great success in a variety of tasks rang-adversarial disturbance <ref type="figure">Figure 9</ref>. Visualization of forces applied by the adversary on Hopper. On the left, the Hopper's foot is in the air while on the right the foot is interacting with the ground.</p><p>ing from games <ref type="bibr" target="#b20">(Mnih et al., 2015;</ref><ref type="bibr" target="#b32">Silver et al., 2016)</ref>, robot control <ref type="bibr" target="#b11">(Gu et al., 2016;</ref><ref type="bibr" target="#b18">Lillicrap et al., 2015;</ref><ref type="bibr" target="#b21">Mordatch et al., 2015)</ref>, to meta learning <ref type="bibr" target="#b40">(Zoph &amp; Le, 2016</ref>). An overview of recent advances in deep RL is presented in <ref type="bibr" target="#b17">Li (2017)</ref> and <ref type="bibr" target="#b14">Kaelbling et al. (1996)</ref>; <ref type="bibr" target="#b16">Kober &amp; Peters (2012)</ref> provide a comprehensive history of RL research.</p><p>Learned policies should be robust to uncertainty and parameter variation to ensure predicable behavior, which is essential for many practical applications of RL including robotics. Furthermore, the process of learning policies should employ safe and effective exploration with improved sample efficiency to reduce risk of costly failure. These issues have long been recognized and investigated in reinforcement learning <ref type="bibr" target="#b8">(Garcıa &amp; Fernández, 2015)</ref> and have an even longer history in control theory research <ref type="bibr" target="#b39">(Zhou &amp; Doyle, 1998)</ref>. These issues are exacerbated in deep RL by using neural networks, which while more expressible and flexible, often require significantly more data to train and produce potentially unstable policies.</p><p>In terms of taxonomy <ref type="bibr" target="#b8">(Garcıa &amp; Fernández, 2015)</ref>, our approach lies in the class of worst-case formulations. We model the problem as an H ∞ optimal control problem <ref type="bibr" target="#b0">(Başar &amp; Bernhard, 2008)</ref>. In this formulation, nature (which may represent input, transition or model uncertainty) is treated as an adversary in a continuous dynamic zero-sum game. We attempt to find the minimax solution to the reward optimization problem. This formulation was introduced as robust RL (RRL) in <ref type="bibr" target="#b22">Morimoto &amp; Doya (2005)</ref>. RRL proposes a model-free actor-disturber-critic method. Solving for the optimal strategy for general nonlinear systems is often analytically infeasible for most problems. To address this, we extend RRL's model-free formulation using deep RL via TRPO <ref type="bibr" target="#b29">(Schulman et al., 2015)</ref> with neural networks as the function approximator.</p><p>Other worst-case formulations have been introduced. <ref type="bibr" target="#b23">Nilim &amp; El Ghaoui (2005)</ref> solve finite horizon tabular MDPs using a minimax form of dynamic programming. Using a similar game theoretic formulation <ref type="bibr" target="#b19">Littman (1994)</ref> introduces the notion of a Markov Game to solve tabular problems, which involves linear program (LP) to solve the game optimization problem. <ref type="bibr" target="#b30">Sharma &amp; Gopal (2007)</ref> extend the Markov game formulation using a trained neural network for the policy and approximating the game to continue using LP to solve the game. <ref type="bibr" target="#b36">Wiesemann et al. (2013)</ref> present an enhancement to standard MDP that provides probabilistic guarantees to unknown model parameters. Other approaches are risk-based including <ref type="bibr" target="#b34">Tamar et al. (2014)</ref> and <ref type="bibr" target="#b4">Delage &amp; Mannor (2010)</ref>, which formulate various mechanisms of percentile risk into the formulation. Our approach focuses on continuous space problems and is a model-free approach that requires explicit parametric formulation of model uncertainty.</p><p>Adversarial methods have been used in other learning problems including <ref type="bibr" target="#b10">Goodfellow et al. (2015)</ref>, which leverages adversarial examples to train a more robust classifiers and <ref type="bibr" target="#b9">Goodfellow et al. (2014)</ref>; <ref type="bibr" target="#b6">Dumoulin et al. (2016)</ref>, which uses an adversarial loss function for a discriminator to train a generative model. In <ref type="bibr" target="#b26">Pinto et al. (2017)</ref> two supervised agents were trained with one acting as an adversary for selfsupervised learning which showed improved robot grasping. Other adversarial multiplayer approaches have been proposed including <ref type="bibr" target="#b13">Heinrich &amp; Silver (2016)</ref> to perform self-play or fictitious play. Refer to <ref type="bibr" target="#b2">Buşoniu et al. (2010)</ref> for an review of multiagent RL techniques.</p><p>Recent deep RL approaches to the problem focus on explicit parametric model uncertainty. <ref type="bibr" target="#b12">Heess et al. (2015)</ref> use recurrent neural networks to perform direct adaptive control. Indirect adaptive control was applied in <ref type="bibr" target="#b38">Yu et al. (2017)</ref> for online parameter identification. <ref type="bibr" target="#b27">Rajeswaran et al. (2016)</ref> learn a robust policy by sampling the worst case trajectories from a class of parametrized models, to learn a robust policy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have presented a novel adversarial reinforcement learning framework, RARL, that is: (a) robust to training initializations; (b) generalizes better and is robust to environmental changes between training and test conditions; (c) robust to disturbances in the test environment that are hard to model during training. Our core idea is that modeling errors should be viewed as extra forces/disturbances in the system. Inspired by this insight, we propose modeling uncertainties via an adversary that applies disturbances to the system. Instead of using a fixed policy, the adversary is reinforced and learns an optimal policy to optimally thwart the protagonist. Our work shows that the adversary effectively samples hard examples (trajectories with worst rewards) leading to a more robust control strategy.</p><p>ACKNOWLEDGEMENTS: This work was supported by ONR MURI, NSF IIS-1320083 and Google Focused Award. AG was supported by Sloan Research Fellowship.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>t</head><label></label><figDesc>). The pro- tagonist's parameters θ µ are then optimized using a policy optimizer. For the second step, player 1's parameters θ µ are held constant for the next N ν iterations. N traj Trajectories are sampled and split into trajectories such that t th element of the i th trajectory is of the form (sPlayer 2's parameters θ ν are then optimized. This alternat- ing procedure is repeated for N iter iterations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Cumulative reward curves for RARL trained policies versus the baseline (TRPO) when tested without any disturbance. For all the tasks, RARL achieves a better mean than the baseline. For tasks like Hopper, we also see a significant reduction of variance across runs.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. We show percentile plots without any disturbance to show the robustness of RARL compared to the baseline. Here the algorithms are run on multiple initializations and then sorted to show the n th percentile of cumulative final reward.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. The graphs show robustness of RARL policies to changing friction between training and testing. Note that we exclude the results of InvertedPendulum and the Swimmer because friction is not relevant to those tasks.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Figure 7. The heatmaps show robustness of RARL policies to changing both friction and mass between training and testing. For both the tasks of Hopper and HalfCheetah, we observe a significant increase in robustness.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .</head><label>8</label><figDesc>Figure 8. Visualization of forces applied by the adversary on InvertedPendulum. In (a) and (b) the cart is stationary, while in (c) and (d) the cart is moving with a vertical pendulum.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Comparison of the best policy learned by RARL and the baseline (mean±one standard deviation)</figDesc><table>InvertedPendulum HalfCheetah Swimmer 
+Hopper 
+Walker2d 
+Ant 
+Baseline 
+1000 ± 0.0 
+5093 ± 44 
+358 ± 2.4 3614 ± 2.16 5418 ± 87 5299 ± 91 
+RARL 
+1000 ± 0.0 
+5444 ± 97 
+354 ± 1.5 3590 ± 7.4 5854 ± 159 5482 ± 28 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">H-infinity optimal control and related minimax design problems: a dynamic game approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tamer</forename><surname>Başar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pierre</forename><surname>Bernhard</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>Springer Science &amp; Business Media</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Brockman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vicki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pettersson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ludwig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonas</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jie</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zaremba</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.01540</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Wojciech. OpenAI gym. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Multi-agent reinforcement learning: An overview. In Innovations in multi-agent systems and applications-1</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lucian</forename><surname>Buşoniu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Babuška</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">De</forename><surname>Schutter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bart</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>Springer</publisher>
+			<biblScope unit="page" from="183" to="221" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Transfer from simulation to real world through learning deep inverse dynamics model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Christiano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mordatch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Igor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonas</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blackwell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Trevor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joshua</forename><surname>Tobin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.03518</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Percentile optimization for Markov decision processes with parameter uncertainty</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Erick</forename><surname>Delage</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shie</forename><surname>Mannor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Operations research</title>
+		<imprint>
+			<biblScope unit="volume">58</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="203" to="213" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Benchmarking deep reinforcement learning for continuous control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yan</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Houthooft</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 33rd International Conference on Machine Learning (ICML)</title>
+		<meeting>the 33rd International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dumoulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Belghazi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ishmael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Poole</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ben</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Lamb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Arjovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olivier</forename><surname>Mastropietro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.00704</idno>
+		<title level="m">Adversarially learned inference</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Infinite horizon model predictive control for nonlinear periodic tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Tassa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Emanuel</forename><surname>Todorov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+	<note>Manuscript under review, 4</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A comprehensive survey on safe reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Javier</forename><surname>Garcıa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fernando</forename><surname>Fernández</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1437" to="1480" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mehdi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Warde</forename><forename type="middle">-</forename><surname>Bing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sherjil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Szegedy</forename></persName>
+		</author>
+		<title level="m">Christian. Explaining and harnessing adversarial examples. International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shixiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Timothy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Levine</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.00748</idno>
+		<title level="m">Continuous deep Q-learning with model-based acceleration</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">J</forename><surname>Hunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Timothy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.04455</idno>
+		<title level="m">Memory-based control with recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Deep reinforcement learning from self-play in imperfect-information games</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Johannes</forename><surname>Heinrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.01121</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Reinforcement learning: A survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Leslie</forename><surname>Kaelbling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Littman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moore</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">W</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of artificial intelligence research</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="237" to="285" />
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A natural policy gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sham</forename><surname>Kakade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1531" to="1538" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Reinforcement learning in robotics: A survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jens</forename><surname>Kober</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Peters</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Reinforcement Learning</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="579" to="610" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Deep reinforcement learning: An overview</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuxi</forename><surname>Li</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.07274</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">P</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">J</forename><surname>Hunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nicolas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tassa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.02971</idno>
+		<title level="m">Continuous control with deep reinforcement learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Markov games as a framework for multi-agent reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">L</forename><surname>Littman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the eleventh international conference on machine learning</title>
+		<meeting>the eleventh international conference on machine learning</meeting>
+		<imprint>
+			<date type="published" when="1994" />
+			<biblScope unit="volume">157</biblScope>
+			<biblScope unit="page" from="157" to="163" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Volodymyr</forename><surname>Mnih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page" from="529" to="533" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Interactive control of diverse complex characters with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Igor</forename><surname>Mordatch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lowrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Galen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoran</forename><surname>Popovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Todorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Emanuel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3132" to="3140" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Robust reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Morimoto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kenji</forename><surname>Doya</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="335" to="359" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Robust control of Markov decision processes with uncertain transition matrices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arnab</forename><surname>Nilim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">El</forename><surname>Ghaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurent</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Operations Research</title>
+		<imprint>
+			<biblScope unit="volume">53</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="780" to="798" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Stochastic and shortest path games: theory and algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Patek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+		<respStmt>
+			<orgName>Massachusetts Institute of Technology</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Approximate dynamic programming for twoplayer zero-sum games</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julien</forename><surname>Perolat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Scherrer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bruno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bilal</forename><surname>Piot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olivier</forename><surname>Pietquin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Supervision via competition: Robot adversaries for learning tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lerrel</forename><surname>Pinto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Davidson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abhinav</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aravind</forename><surname>Rajeswaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ghotra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sarvjeet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Balaraman</forename><surname>Ravindran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sergey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Epopt</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.01283</idno>
+		<title level="m">Learning robust neural network policies using model ensembles</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrei</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vecerik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matej</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rothörl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nicolas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raia</forename><surname>Hadsell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.04286</idno>
+		<title level="m">Sim-toreal robot learning from pixels with progressive nets</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Trust region policy optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sergey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Moritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename><surname>Philipp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+		<idno>abs/1502.05477</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A robust Markov game controller for nonlinear systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rajneesh</forename><surname>Sharma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Madan</forename><surname>Gopal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Applied Soft Computing</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="818" to="827" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Training region-based object detectors with online hard example mining</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abhinav</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abhinav</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<idno>abs/1604.03540</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Mastering the game of Go with deep neural networks and tree search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">529</biblScope>
+			<biblScope unit="issue">7587</biblScope>
+			<biblScope unit="page" from="484" to="489" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Learning and example selection for object and pattern detection. MIT A.I. Memo, 1521</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Poggio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aviv</forename><surname>Tamar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yonatan</forename><surname>Glassner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shie</forename><surname>Mannor</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1404.3862</idno>
+		<title level="m">Optimizing the CVaR via sampling</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Mujoco: A physics engine for model-based control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Emanuel</forename><surname>Todorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Tassa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS), 2012 IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="5026" to="5033" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Robust Markov decision processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wolfram</forename><surname>Wiesemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Kuhn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rustem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Berç</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mathematics of Operations Research</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="page" from="153" to="183" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">3-4</biblScope>
+			<biblScope unit="page" from="229" to="256" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Preparing for the unknown: Learning a universal policy with online system identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wenhao</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Turk</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.02453</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Essentials of robust control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kemin</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Doyle</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Comstock</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<publisher>Prentice hall Upper</publisher>
+			<biblScope unit="volume">104</biblScope>
+			<pubPlace>Saddle River, NJ</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barret</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01578</idno>
+		<title level="m">Neural architecture search with reinforcement learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

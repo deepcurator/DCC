@@ -4,201 +4,278 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
-from pathlib import Path
-import os
-import time
 import wget
+import smtplib
+from queue import Queue
+from pprint import pprint, pformat
+from configparser import ConfigParser
+from dateutil import parser
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import COMMASPACE, formatdate
+
+from .database import Database
 
 
-def write_metadata(path, meta_file, data):
-    filename = meta_file+".txt"
-    file_path = Path(path) / filename
-    with open(file_path, 'w') as myfile:
-        myfile.write(data)
+class PWCReporter:
+    ''' Mail utilities for Paperswithcode service '''
 
+    def __init__(self, cred_path: str):
+        config = ConfigParser()
+        config.read(str(cred_path))
+        self.email_address = config.get("PWCScraper_email", "email_address")
+        self.password = config.get("PWCScraper_email", "password")
+        self.recipients = config.get("PWCScraper_email", "recipients")
+        self.recipients = self.recipients.split(',')
 
-def fetch_paper(paper_link, path):
-    if 'arxiv' in paper_link and '.pdf' in paper_link:
-        filename = wget.download(paper_link, out=str(path))
-        # print(reconstructed)
-    else:
-        print("Don't know how to fetch %s" % paper_link)
+    def send_email(self, subject="No Title", body="No Content", files=None):
 
+        msg = MIMEMultipart()
+        msg['From'] = self.email_address
+        msg['To'] = COMMASPACE.join(self.recipients)
+        msg['Date'] = formatdate(localtime=True)
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body))
 
-def fetch_code(code_link, path):
-    decomposed = code_link.split('/')
-    assert len(decomposed) == 5
-    if 'github' in decomposed[2]:
-        decomposed.append('archive/master.zip')
-        reconstructed = decomposed[0] + "//" + decomposed[2] + "/" + \
-            decomposed[3] + "/" + decomposed[4] + "/" + decomposed[5]
-        filename = wget.download(reconstructed, out=str(path))
-        # print(reconstructed)
-    else:
-        print("Don't know how to fetch %s" % code_link)
+        for f in files or []:
+            part = MIMEApplication(open(f, 'rb').read())
+            part['Content-Disposition'] = 'attachment; filename="%s"' % f.name
+            msg.attach(part)
 
-
-def fetch_metadata(path_to_chromedriver, url, limit: int = -1, save_directory=Path("./data").resolve(), condition: dict={}) -> bool:
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    browser = webdriver.Chrome(str(path_to_chromedriver), options=chrome_options)
-    browser.get(url)
-    delay = 2
-    try:
-        myElem = WebDriverWait(browser, delay).until(
-            EC.presence_of_element_located((By.ID, 'div')))
-        pass
-    except TimeoutException:
-        pass
-    html_source = browser.page_source
-    soup = BeautifulSoup(html_source, "lxml")
-    paper_list = soup.find_all('div', {'class': 'col-lg-9 item-col'})
-    
-    limit = len(paper_list) if (limit == -1) else limit
-
-    print("Retrieving %d out of %d papers..." % (limit, len(paper_list)))
-
-    for paper_num, paper in enumerate(paper_list):
-        
-        if paper_num == limit:
-            break
         try:
-            stop = fetch_one(paper_num, paper, browser, delay, save_directory, condition)
-            if stop:
-                return stop
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.ehlo()
+            server.starttls()
+            server.login(self.email_address, self.password)
+            server.sendmail(self.email_address,
+                            self.recipients, msg.as_string())
+            server.close()
+
+            print("\tSent notification email.")
+
         except Exception as e:
             print(e)
-            continue
-    
-    browser.close()
-    return False
+            print("\tEmail Sent.")
 
-def fetch_one(paper_num, paper, browser, delay, save_directory, condition) -> bool:
-    stop = False
-    # Process paper
-    title = paper.find('h1')
-    # print(title.text)
-    abstract = paper.find('p', {'class': 'item-strip-abstract'})
-    # print(abstract.text)
-    stars = paper.find('div', {'class': 'entity-stars'})
-    mystar = stars.text.strip().split('\n')[0]
-    # print(mystar)
-    date = paper.find('div', {'class': 'stars-accumulated text-center'})
-    # print(date.text.strip())
-    tags = paper.findAll('span', {'class': 'badge badge-primary'})
-    # print(tags[0].string)
 
-    # url where paper and code links are located
-    links_url = paper.find('a')
-    links_url = links_url['href']
+class PWCScraper:
+    ''' Main class for paperswithcode service '''
 
-    dir_name = links_url.split('/')[-1]
-    print("\n%d. %s" % (paper_num+1, dir_name))
-    
-    # create directory
-    paper_directory = save_directory / str(dir_name)
+    def __init__(self, config):
+        self.config = config
 
-    if os.path.isdir(paper_directory):
-        print("\tAlready downloaded.")
-        return stop
-    os.makedirs(paper_directory, exist_ok=True)
+        self.paperswithcode_base_url = "https://paperswithcode.com"
+        self.paperswithcode_url = "https://paperswithcode.com/latest"
 
-    paper_link = None
-    code_link = None
-    myframework = None
-    if "http" not in links_url:
-        browser.get("https://paperswithcode.com"+links_url)
+        self.path_to_chromedriver = self.config.chrome_driver_path
+        self.chrome_options = webdriver.ChromeOptions()
+        self.chrome_options.add_argument('--headless')
+        self.chrome_options.add_argument('--no-sandbox')
+
+        self.reporter = PWCReporter(config.cred_path)
+        self.database = Database()
+
+        self.papers = []
+
+        self.delay = 2
+
+        # queue of tf papers
+        self.tf_papers = Queue()
+
+    def scrape_papers_from_index(self, condition: dict = {}):
+        '''
+            scrape the papers from the index page and related metadata.
+        '''
+        self.browser.get(self.paperswithcode_url)
         try:
-            myElem = WebDriverWait(browser, delay).until(
+            WebDriverWait(self.browser, self.delay).until(
                 EC.presence_of_element_located((By.ID, 'div')))
-            pass
-        except TimeoutException:
-            pass
-        links_html_source = browser.page_source
-        links_soup = BeautifulSoup(links_html_source, "lxml")
+        except TimeoutException as e:
+            print(e)
 
-        paper_link = links_soup.find('a', {'class': 'badge badge-light'})
-        # print(paper_link['href'])
-        code_link = links_soup.find('a', {'class': 'code-table-link'})
-        # print(code_link['href'])
+        soup = BeautifulSoup(self.browser.page_source, "lxml")
 
-        framework = links_soup.find('div', {'class': 'col-md-2'})
-        if framework:
-            img = framework.find('img')
-            if img:
-                myframework = img['src'].split('/')[3].split('.')[0]
+        paper_list = soup.find_all('div', {'class': 'col-lg-9 item-col'})
 
-    if title:
-        write_metadata(paper_directory, "title", title.text)
-    if abstract:
-        write_metadata(paper_directory, "abstract", abstract.text)
-    if mystar:
-        write_metadata(paper_directory, "stars", mystar)
-    if date:
-        date_text = date.string.strip()
-        print(date_text)
-        if condition:
-            if "year" in condition:
-                if date_text.split(" ")[-1] == condition['year']:
-                    stop = True
-        write_metadata(paper_directory, "date", date_text)
-    if tags:
-        # comma seperated tags
-        cs_tags = ','.join(x.string for x in tags)
-        write_metadata(paper_directory, "tags", cs_tags)
-    else:
-        write_metadata(paper_directory, "tags", "None")
+        tot_paper_to_get = self.config.tot_paper_to_scrape_per_shot
+        limit = len(paper_list) if (
+            tot_paper_to_get == -1) else tot_paper_to_get
 
-    # TODO: currently grabbing dataset not working, have to use queries
-    metadata = paper.find('div', {'class': 'metadata'})
-    mydatasets = []
-    if metadata:
-        datasets_banner = metadata.find('b')
-        if "Datasets" in datasets_banner.text:
-            dsets = metadata.findAll('a')
-            for d in range(len(dsets)):
-                mydatasets.append(dsets[d].text)
-                # print(dsets[d].text, dsets[d]['href'])
+        for paper_num, paper in enumerate(paper_list[:limit]):
+            print("============")
+            print("Processing the %dth paper (in total %d papers) ..." %
+                  (paper_num, limit))
+            try:
+                paper_dict = {}
+                paper_dict['title'] = paper.find('h1').text.strip()
+                paper_dict["abstract"] = paper.find(
+                    'p', {'class': 'item-strip-abstract'}).text.strip()
+                paper_dict["stars"] = paper.find(
+                    'div', {'class': 'entity-stars'}).text.strip()
+                paper_dict["date"] = paper.find(
+                    'div', {'class': 'stars-accumulated text-center'}).text.strip()
+
+                if paper_dict["date"]:
+                    try:
+                        # check if date is valid
+                        parser.parse(paper_dict["date"])
+                    except ValueError:
+                        paper_dict["date"] = None
+
+                # url where paper and code links are located
+                paper_dict["url"] = paper.find('a')['href']
+
+                # store using the hash tag of this paper.
+                paper_dict["stored_dir_name"] = paper_dict["url"].split(
+                    '/')[-1]
+                paper_dict["stored_dir_path"] = self.config.storage_path / \
+                    paper_dict["stored_dir_name"]
+
+                paper_dict["tags"] = []
+                tags_list = paper.findAll(
+                    'span', {'class': 'badge badge-primary'})
+
+                for tag in tags_list:
+                    paper_dict["tags"].append(tag.text.strip())
+
+                pprint(paper_dict)
+                self.papers.append(paper_dict)
+
+            except Exception as e:
+                print(e)
+
+            print("============")
+
+    def scrape_papers_from_profile(self):
+        '''
+            scrape the code link and framework and paper link from paper profile page.
+        '''
+        for paper_idx, paper in enumerate(self.papers):
+
+            if not paper['url'].startswith('http'):
+                self.browser.get(self.paperswithcode_base_url+paper['url'])
+
+                try:
+                    WebDriverWait(self.browser, self.delay).until(
+                        EC.presence_of_element_located((By.ID, 'div')))
+                except TimeoutException as e:
+                    print(e)
+
+                links_html_source = self.browser.page_source
+                links_soup = BeautifulSoup(links_html_source, "lxml")
+
+                paper['paper'] = links_soup.find(
+                    'a', {'class': 'badge badge-light'})['href']
+                # might be multiple code_link, what to do?
+                paper['code'] = links_soup.find(
+                    'a', {'class': 'code-table-link'})['href']
+                paper['framework'] = None
+
+                # scrape the filename of framework to judge which framework is adopted.
+                framework = links_soup.find('div', {'class': 'col-md-2'})
+                if framework:
+                    img = framework.find('img')
+                    if img:
+                        paper['framework'] = img['src'].split(
+                            '/')[3].split('.')[0]
+
+    def scrape(self):
+
+        self.browser = webdriver.Chrome(
+            self.path_to_chromedriver, options=self.chrome_options)
+
+        self.scrape_papers_from_index()
+        self.scrape_papers_from_profile()
+
+        self.browser.close()
+
+        self.store_result()
+
+        self.update_database()
+
+    def update_database(self):
+        values_list = []
+        for paper in self.papers:
+            values = (paper['stored_dir_name'], paper['title'], paper['framework'],
+                      'N/A', 'N/A', paper['date'], ','.join(paper['tags']),
+                      int(paper['stars'].replace(",", "")),
+                      paper['code'], paper['paper'])
+            values_list.append(values)
+        self.database.upsert_query(values_list)
+
+    def store_result(self):
+
+        self.config.storage_path.mkdir(exist_ok=True)
+
+        for paper_index, paper in enumerate(self.papers):
+            paper_directory = paper['stored_dir_path'].resolve()
+            if paper_directory.resolve().exists():
+                print(paper['title']+": Already downloaded.\n")
+                continue
+            paper_directory.mkdir(exist_ok=True)  # create directory
+
+            self.write_to_file(paper['title'], paper_directory / "title.txt")
+            self.write_to_file(paper['abstract'],
+                               paper_directory / "abstract.txt")
+            self.write_to_file(paper['stars'], paper_directory / "stars.txt")
+            self.write_to_file(paper['date'], paper_directory / "date.txt")
+            # if date:
+            #     date_text = date.string.strip()
+            #     # print(date_text)
+            #     if condition:
+            #         if "year" in condition:
+            #             if date_text.split(" ")[-1] == condition['year']:
+            #                 stop = True
+            #     self.write_metadata_(paper_directory, "date", date_text)
+
+            if len(paper['tags']) == 0:
+                self.write_to_file("None", paper_directory / "tags.txt")
+            else:
+                self.write_to_file(
+                    ','.join(paper['tags']), paper_directory / "tags.txt")
+            self.write_to_file(paper['paper'],
+                               paper_directory / "paper.txt")
+
+            wget.download(paper['paper'], out=str(
+                paper['stored_dir_path']/(paper['stored_dir_name']+'.pdf')))
+
+            self.write_to_file(paper['code'],
+                               paper_directory / "code.txt")
+
+            try:
+                self.fetch_code(paper['code'], paper_directory)
+            except:
+                continue
+
+            self.write_to_file(paper['framework'],
+                               paper_directory / "framework.txt")
+
+            if paper['framework'] is not None and 'tf' in paper['framework']:
+                message = (
+                    "New TensorFlow paper scraped from Paperswithcode.com.\r\n" + pformat(paper))
+                title = "Paperswithcode: New TensorFlow paper:%s!" % paper['title']
+
+                print("Sending TensorFlow Notification Email...")
+                self.reporter.send_email(subject=title, body=message)
+
+                self.tf_papers.put(paper)
+
+    def write_to_file(self, data, path):
+        with open(str(path), 'w') as myfile:
+            if data is not None:
+                myfile.write(data)
+            else:
+                myfile.write("None")
+
+    def fetch_code(self, code_link, path):
+        decomposed = code_link.split('/')
+        assert len(decomposed) == 5
+        if 'github' in decomposed[2]:
+            decomposed.append('archive/master.zip')
+            reconstructed = decomposed[0] + "//" + decomposed[2] + "/" + \
+                decomposed[3] + "/" + decomposed[4] + "/" + decomposed[5]
+            wget.download(reconstructed, out=str(path))
+            # print(reconstructed)
         else:
-            # Conference
-            mydatasets = None
-            # print('None')
-    else:
-        # print('None')
-        mydatasets = None
-
-    if isinstance(mydatasets, list):
-        write_metadata(paper_directory, "datasets", ''.join(mydatasets))
-    else:
-        write_metadata(paper_directory, "datasets", 'None')
-
-    if paper_link:
-        # Fetch paper from arxiv
-        fetch_paper(paper_link['href'], paper_directory)
-        write_metadata(paper_directory, "paper", paper_link['href'])
-    
-    if "github" in links_url:
-        # get framework from original soup
-        framework = paper.find('img')
-        if framework:
-            myframework = framework['src'].split('/')[3].split('.')[0]
-        
-        fetch_code(links_url, paper_directory)
-        write_metadata(paper_directory, "code", links_url)
-
-    elif code_link:
-        # Fetch zip file from github
-        fetch_code(code_link['href'], paper_directory)
-        write_metadata(paper_directory, "code", code_link['href'])
-
-    if myframework:
-        write_metadata(paper_directory, "framework", myframework)
-    else:
-        write_metadata(paper_directory, "framework", 'None')
-
-    # print('- paper %s -' % paper_directory)
-    return stop
-
-if __name__ == "__main__":
-    fetch_metadata('./chromedriver', "https://paperswithcode.com/latest", 1)
+            print("Don't know how to fetch %s" % code_link)

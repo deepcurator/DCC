@@ -1,0 +1,1255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Diving into the shallows: a computational perspective on large-scale shallow learning</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Siyuan</forename><surname>Ma</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science and Engineering</orgName>
+								<orgName type="institution">The Ohio State University</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikhail</forename><surname>Belkin</surname></persName>
+							<email>mbelkin@cse.ohio-state.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science and Engineering</orgName>
+								<orgName type="institution">The Ohio State University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Diving into the shallows: a computational perspective on large-scale shallow learning</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Remarkable recent success of deep neural networks has not been easy to analyze theoretically. It has been particularly hard to disentangle relative significance of architecture and optimization in achieving accurate classification on large datasets. On the flip side, shallow methods (such as kernel methods) have encountered obstacles in scaling to large data, despite excellent performance on smaller datasets, and extensive theoretical analysis. Practical methods, such as variants of gradient descent used so successfully in deep learning, seem to perform below par when applied to kernel methods. This difficulty has sometimes been attributed to the limitations of shallow architecture. In this paper we identify a basic limitation in gradient descent-based optimization methods when used in conjunctions with smooth kernels. Our analysis demonstrates that only a vanishingly small fraction of the function space is reachable after a polynomial number of gradient descent iterations. That drastically limits the approximating power of gradient descent leading to over-regularization. The issue is purely algorithmic, persisting even in the limit of infinite data. To address this shortcoming in practice, we introduce EigenPro iteration, a simple and direct preconditioning scheme using a small number of approximately computed eigenvectors. It can also be viewed as learning a kernel optimized for gradient descent. Injecting this small, computationally inexpensive and SGD-compatible, amount of approximate second-order information leads to major improvements in convergence. For large data, this leads to a significant performance boost over the state-of-the-art kernel methods. In particular, we are able to match or improve the results reported in the literature at a small fraction of their computational budget. For complete version of this paper see https://arxiv.org/abs/1703.10622.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>In recent years we have witnessed remarkable advances in many areas of artificial intelligence. Much of this progress has been due to machine learning methods, notably deep neural networks, applied to very large datasets. These networks are typically trained using variants of stochastic gradient descent (SGD), allowing training on large data with modern GPU hardware. Despite intense recent research and significant progress on SGD and deep architectures, it has not been easy to understand the underlying causes of that success. Broadly speaking, it can be attributed to (a) the structure of the function space represented by the network or (b) the properties of the optimization algorithms used. While these two aspects of learning are intertwined, they are distinct and may be disentangled.</p><p>As learning in deep neural networks is still largely resistant to theoretical analysis, progress can be made by exploring the limits of shallow methods on large datasets. Shallow methods, such as kernel methods, are a subject of an extensive and diverse literature, both theoretical and practical. In particular, kernel machines are universal learners, capable of learning nearly arbitrary functions given a sufficient number of examples <ref type="bibr" target="#b34">[STC04,</ref><ref type="bibr" target="#b30">SC08]</ref>. Still, while kernel methods are easily implementable and show state-of-the-art performance on smaller datasets (see <ref type="bibr">[</ref> ] for some comparisons with DNN's) there has been significantly less progress in applying these methods to large modern data. The goal of this work is to make a step toward understanding the subtle interplay between architecture and optimization and to take practical steps to improve performance of kernel methods on large data.</p><p>The paper consists of two main parts. First, we identify a basic underlying limitation in using gradient descent-based methods in conjunction with smooth (infinitely differentiable) kernels typically used in machine learning, showing that only very smooth functions can be approximated after polynomially many steps of gradient descent. This phenomenon is a result of fast spectral decay of smooth kernels and can be readily understood in terms of the spectral structure of the gradient descent operator in the least square regression/classification setting, which is the focus of our discussion. Slow convergence leads to severe over-regularization (over-smoothing) and suboptimal approximation for less smooth functions, which are arguably very common in practice, at least in the classification setting, where we expect fast transitions near the class boundaries.</p><p>This shortcoming of gradient descent is purely algorithmic and is not related to the sample complexity of the data. It is also not an intrinsic flaw of the kernel architecture, which is capable of approximating arbitrary functions but potentially requiring a very large number of gradient descent steps. The issue is particularly serious for large data, where direct second order methods cannot be used due to the computational constraints. While many approximate second-order methods are available, they rely on low-rank approximations and, as we discuss below, lead to over-regularization (approximation bias).</p><p>In the second part of the paper we propose EigenPro iteration (see http://www.github.com/EigenPro for the code), a direct and simple method to alleviate slow convergence resulting from fast eigen-decay for kernel (and covariance) matrices. EigenPro is a preconditioning scheme based on approximately computing a small number of top eigenvectors to modify the spectrum of these matrices. It can also be viewed as constructing a new kernel, specifically optimized for gradient descent. While EigenPro uses approximate second-order information, it is only employed to modify first-order gradient descent, leading to the same mathematical solution as gradient descent (without introducing a bias). EigenPro is also fully compatible with SGD, using a low-rank preconditioner with a low overhead per iteration. We analyze the step size in the SGD setting and provide a range of experimental results for different kernels and parameter settings showing five to 30-fold acceleration over the standard methods, such as Pegasos <ref type="bibr" target="#b33">[SSSSC11]</ref>. For large data, when the computational budget is limited, that acceleration translates into significantly improved accuracy. In particular, we are able to improve or match the state-of-the-art results reported for large datasets in the kernel literature with only a small fraction of their computational budget.</p><p>2 Gradient descent for shallow methods Shallow methods. In the context of this paper, shallow methods denote the family of algorithms consisting of a (linear or non-linear) feature map φ : R N → H to a (finite or infinite-dimensional) Hilbert space H followed by a linear regression/classification algorithm. This is a simple yet powerful setting amenable to theoretical analysis. In particular, it includes the class of kernel methods, where H is a Reproducing Kernel Hilbert Space (RKHS). Linear regression. Consider n labeled data points {(x 1 , y 1 ), ..., (x n , y n ) ∈ H × R}. To simplify the notation let us assume that the feature map has already been applied to the data, i.e., x i = φ(z i ). Least square linear regression aims to recover the parameter vector α * that minimize the empirical</p><formula xml:id="formula_0">loss such that α * = arg min α∈H L(α) where L(α) def = 1 n n i=1 ( α, x i H − y i ) 2 .</formula><p>When α * is not uniquely defined, we can choose the smallest norm solution.</p><p>Minimizing the empirical loss is related to solving a linear system of equations. Define the data matrix X def = (x 1 , ..., x n )</p><p>T and the label vector y def = (y 1 , ..., y n ) T , as well as the (non-centralized)</p><formula xml:id="formula_1">covariance matrix/operator, H def = 1 n n i=1 x i x T i . Rewrite the loss as L(α) = 1 n Xα − y 2 2 . Since ∇L(α) | α=α * = 0, minimizing L(α)</formula><p>is equivalent to solving the linear system Hα − b = 0 (1) with b = X T y. When d = dim(H) &lt; ∞, the time complexity of solving the linear system in Eq. 1 directly (using Gaussian elimination or other methods typically employed in practice) is O(d 3 ). For kernel methods we frequently have d = ∞. Instead of solving Eq. 1, one solves the dual n × n system Kα − y = 0 where</p><formula xml:id="formula_2">K def = [k(z i , z j )] i,j=1,.</formula><p>..,n is the kernel matrix . The solution can be written as </p><formula xml:id="formula_3">n i=1 k(z i , ·)α(z i ). A direct solution would require O(n 3 ) operations.</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Gradient descent (GD</head><formula xml:id="formula_4">α (t+1) = α (t) − η(Hα (t) − b)<label>(2)</label></formula><p>It is easy to see that for convergence of α t to α * as t → ∞ we need to ensure that I − ηH &lt; 1, and hence 0 &lt; η &lt; 2/λ 1 (H). The explicit formula is</p><formula xml:id="formula_5">α (t+1) − α * = (I − ηH) t (α (1) − α * )<label>(3)</label></formula><p>We can now describe the computational reach of gradient descent CR t , i.e. the set of vectors which can be -approximated by gradient descent after t steps, CR t ( )</p><formula xml:id="formula_6">def = {v ∈ H, s.t. (I − ηH) t v &lt; v }.</formula><p>It is important to note that any α * / ∈ CR t ( ) cannot be -approximated by gradient descent in less than t + 1 iterations. Note that we typically care about the quality of the solution Hα (t) − b , rather than the error estimating the parameter vector α (t) − α * which is reflected in the definition. We will assume that the initialization α</p><p>(1) = 0. Choosing a different starting point does not change the analysis unless second order information is incorporated in the initialization conditions. To get a better idea of the space CR t ( ) consider the eigendecomposition of H. Let λ 1 ≥ λ 2 ≥ . . . be its eigenvalues and e 1 , e 2 , . . . the corresponding eigenvectors/eigenfunctions. We have H = λ i e i e T i . Writing Eq. 3 in terms of eigendirection yields α</p><formula xml:id="formula_7">(t+1) − α * = (1 − ηλ i ) t e i , α (1) − α * e i . Hence putting a i def = e i , v gives CR t ( ) = {v, s.t. (1 − ηλ i ) 2t a 2 i &lt; 2 v 2 }.</formula><p>Recalling that η &lt; 2/λ 1 and using the fact that (1 − 1/z) z ≈ 1/e, we see that a necessary condition for v ∈ CR t is</p><formula xml:id="formula_8">1 3 i,s.t.λi&lt; λ 1 2t a 2 i &lt; i (1 − ηλ i ) 2t a 2 i &lt; 2 v</formula><p>2 . This is a convenient characterization, we will denote CR t ( )</p><formula xml:id="formula_9">def = {v, s.t. i,s.t.λi&lt; λ 1 2t a 2 i &lt; 2 v 2 } ⊃ CR t ( ).</formula><p>Another convenient but less precise necessary condition for v ∈ CR t is that</p><formula xml:id="formula_10">(1 − 2λ i /λ 1 ) t e i , v &lt; v .</formula><p>Noting that log(1 − x) &lt; −x and assuming λ 1 &gt; 2λ i , we have</p><formula xml:id="formula_11">t &gt; λ 1 (2λ i ) −1 log | e i , v | −1 v −1 (4)</formula><p>The condition number. We are primarily interested in the case when d is infinite or very large and the corresponding operators/matrices are extremely ill-conditioned with infinite or approaching infinity condition number. In that case instead of a single condition number, one should consider the properties of eigenvalue decay. Gradient descent, smoothness and kernel methods. We now proceed to analyze the computational reach for kernel methods. We will start by discussing the case of infinite data (the population case).</p><p>It is both easier to analyze and allows us to demonstrate the purely computational (non-statistical) nature of limitations of gradient descent. We will see that when the kernel is smooth, the reach of gradient descent is limited to very smooth, at least infinitely differentiable functions. Moreover, to approximate a function with less smoothness within some accuracy in the L 2 norm one needs a super-polynomial (or even exponential) in 1/ number of iterations of gradient descent. Let the data be sampled from a probability with a smooth density µ on a compact domain Ω ⊂ R p . In the case of infinite data H becomes an integral operator corresponding to a positive definite kernel</p><formula xml:id="formula_12">k(·, ·) such that Kf (x) def = Ω k(x, z)f (z)dµ z .</formula><p>This is a compact self-adjoint operator with an infinite positive spectrum λ 1 , λ 2 , . . ., lim i→∞ λ i = 0. We have (see the full paper for discussion and references): Theorem 1. If k is an infinitely differentiable kernel, the rate of eigenvalue decay is super-polynomial, i.e. λ i = O(i −P ) ∀P ∈ N. Moreover, if k is the Gaussian kernel, there exist constants C, C &gt; 0 such that for large enough i, λ i &lt; C exp −Ci 1/p .</p><p>The computational reach of kernel methods. Consider the eigenfunctions of K, Ke i = λ i e i , which form an orthonormal basis for</p><formula xml:id="formula_13">L 2 (Ω). We can write a function f ∈ L 2 (Ω) as f = ∞ i=1 a i e i . We have f 2 L 2 = ∞ i=1 a 2 i .</formula><p>We can now describe the reach of kernel methods with smooth kernel (in the infinite data setting). Specifically, functions which can be approximated in a polynomial number of iterations must have super-polynomial coefficient decay.</p><formula xml:id="formula_14">Theorem 2. Suppose f ∈ L 2 (Ω)</formula><p>is such that it can be approximated within using a polynomial in 1/ number of gradient descent iterations, i.e. ∀ &gt;0 f ∈ CR −M ( ) for some M ∈ N. Then any N ∈ N and i large enough |a i | &lt; i −N . Corollary 1. Any f ∈ L 2 (Ω) which can be -approximated with polynomial in 1/ number of steps of gradient descent is infinitely differentiable. In particular, f function must belong to the intersection of all Sobolev spaces on Ω. Gradient descent for periodic functions on R. Let us now consider a simple but important special case, where the reach can be analyzed very explicitly. Let Ω be a circle with the uniform measure, or, equivalently, consider periodic functions on the interval [0, 2π]. Let k s (x, z) be the heat kernel on the circle <ref type="bibr" target="#b26">[Ros97]</ref>. This kernel is very close to the Gaussian kernel</p><formula xml:id="formula_15">k s (x, z) ≈ 1 √ 2πs exp − (x−z) 2 4s</formula><p>. The eigenfunctions e j of the integral operator K corresponding to k s (x, z) are simply the Fourier harmonics sin jx and cos jx. </p><formula xml:id="formula_16">a 2 i &lt; 3 2 v 2 .</formula><p>We see that the space f ∈ CR t ( ) is "frozen" as √ 2 ln 2ts grows extremely slowly as the number of iterations t increases. As a simple example consider the Heaviside step function f (x) (on a circle), taking 1 and −1 values for x ∈ (0, π] and x ∈ (π, 2π], respectively. The step function can be written as f (x) = 4 π j=1,3,...</p><formula xml:id="formula_17">1 j sin(jx)</formula><p>. From the analysis above, we need O(exp( s 2 )) iterations of gradient descent to obtain an -approximation to the function. It is important to note that the Heaviside step function is a rather natural example, especially in the classification setting, where it represents the simplest two-class classification problem. The situation is not much better for functions with more smoothness unless they happen to be extremely smooth with super-exponential Fourier component decay. In contrast, a direct computation of inner products f, e i yields exact function recovery for any function in L 2 ([0, 2π]) using the amount of computation equivalent to just one step of gradient descent. Thus, we see that the gradient descent is an extremely inefficient way to recover Fourier series for a general periodic function. The situation is only mildly improved in dimension d, where the span of at most O * (log t) d/2 eigenfunctions of a Gaussian kernel or O t 1/p eigenfunctions of an arbitrary p-differentiable kernel can be approximated in t iterations. The discussion above shows that the gradient descent with a smooth kernel can be viewed as a heavy regularization of the target function. It is essentially a band-limited approximation no more than O(ln t) Fourier harmonics. While regularization is often desirable from a generalization/finite sample point of view , especially when the number of data points is small, the bias resulting from the application of the gradient descent algorithm cannot be overcome in a realistic number of iterations unless target functions are extremely smooth or the kernel itself is not infinitely differentiable. Remark: Rate of convergence vs statistical fit. Note that we can improve convergence by changing the shape parameter of the kernel, i.e. making it more "peaked" (e.g., decreasing the bandwidth s in the definition of the Gaussian kernel) While that does not change the exponential nature of the asymptotics of the eigenvalues, it slows their decay. Unfortunately improved convergence comes at the price of overfitting. In particular, for finite data, using a very narrow Gaussian kernel results in an approximation to the 1-NN classifier, a suboptimal method which is up to a factor of two inferior to the Bayes optimal classifier in the binary classification case asymptotically. Finite sample effects, regularization and early stopping. It is well known (e.g., [B + 05, RBV10]) that the top eigenvalues of kernel matrices approximate the eigenvalues of the underlying integral operators. Therefore computational obstructions encountered in the infinite case persist whenever the data set is large enough. Note that for a kernel method, t iterations of gradient descent for n data points require t · n 2 operations. Thus, gradient descent is computationally pointless unless t n. That would allow us to fit only about O(log t) eigenvectors. In practice we need t to be much smaller than n, say, t &lt; 1000. At this point we should contrast our conclusions with the important analysis of early stopping for gradient descent provided in <ref type="bibr" target="#b42">[YRC07]</ref> (see also <ref type="bibr" target="#b29">[RWY14,</ref><ref type="bibr" target="#b8">CARR16]</ref>). The authors analyze gradient descent for kernel methods obtaining the optimal number of iterations of the form t = n θ , θ ∈ (0, 1). That seems to contradict our conclusion that a very large, potentially exponential, number of iterations may be needed to guarantee convergence. The apparent contradiction stems from the assumption in <ref type="bibr" target="#b42">[YRC07]</ref> that the regression function f * belongs to the range of some power of the kernel operator K. For an infinitely differentiable kernel, that implies super-polynomial spectral decay (a i = O(λ N i ) for any N &gt; 0). In particular, it implies that f * belongs to any Sobolev space. We do not typically expect such high degree of smoothness in practice, particularly in classification problems, where the Heaviside step function seems to be a reasonable model. In particular, we expect sharp transitions of label probabilities across class boundaries to be typical for many classifications datasets. These areas of near-discontinuity will necessarily result in slow decay of Fourier coefficients and require many iterations of gradient descent to approximate 1 . <ref type="table">Number of iterations  1  80  1280  10240  81920</ref> MNIST-10k L2 loss train 4.07e-1 9.61e-2 2.60e-2 2.36e-3 2.17e-5 test 4.07e-1 9.74e-2 4.59e-2 3.64e-2 3.55e-2 c-error (test) 38.50% 7.60% 3.26% 2.39% 2.49%</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Dataset Metric</head><p>HINT-M-10k L2 loss train 8.25e-2 4.58e-2 3.08e-2 1.83e-2 4.21e-3 test 7.98e-2 4.24e-2 3.34e-2 3.14e-2 3.42e-2</p><p>To illustrate this point, we show (right table) the results of gradient descent for two datasets of 10000 points (see Section 6). The regression error on the training set is roughly inverse to the number of iterations, i.e. every extra bit of precision requires twice the number of iterations for the previous bit. For comparison, we see that the minimum regression (L 2 ) error on both test sets is achieved at over 10000 iterations. This results is at least cubic computational complexity equivalent to that of a direct method. Regularization. Note that typical regularization, e.g., adding λ f , results in discarding information along the directions with small eigenvalues (below λ). While this improves the condition number it comes at a high cost in terms of over-regularization. In the Fourier analysis example this is similar to considering band-limited functions with ∼ log(1/λ)/s Fourier components. Even for λ = 10 −16</p><p>(limit of double precision) and s = 1 we can only fit about 10 Fourier components. We argue that there is little need for explicit regularization for most iterative methods in the big data regimes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Extending the reach of gradient descent: EigenPro iteration</head><p>We will now propose practical measures to alleviate the over-regularization of linear regression by gradient descent. As seen above, one of the key shortcomings of shallow learning methods based on smooth kernels (and their approximations, e.g., Fourier and RBF features) is their fast spectral decay. That suggests modifying the corresponding matrix H by decreasing its top eigenvalues, enabling the algorithm to approximate more target functions in the same number of iterations. Moreover, this can be done in a way compatible with stochastic gradient descent thus obviating the need to materialize full covariance/kernel matrices in memory. Accurate approximation of top eigenvectors can be obtained from a subsample of the data with modest computational expenditure. Combining these observations we propose EigenPro, a low overhead preconditioned Richardson iteration. Preconditioned (stochastic) gradient descent. We will modify the linear system in Eq. 1 with an invertible matrix P , called a left preconditioner. P Hα − P b = 0. Clearly, this modified system and the original system in Eq. 1 have the same solution. The Richardson iteration corresponding to the modified system (preconditioned Richardson iteration) is</p><formula xml:id="formula_18">α (t+1) = α (t) − ηP (Hα (t) − b)<label>(5)</label></formula><p>It is easy to see that as long as η P H &lt; 1 it converges to α * , the solution of the original linear system. Preconditioned SGD can be defined similarly by x. This is a convenient point of view as the transformed data can be stored for future use. It also shows that preconditioning is compatible with most computational methods both in practice and, potentially, in terms of analysis. Linear EigenPro. We will now discuss properties desired to make preconditioned GD/SGD methods effective on large scale problems. Thus for the modified iteration in Eq. 5 we would like to choose P to meet the following targets: (Acceleration) The algorithm should provide high accuracy in a small number of iterations. (Initial cost) The preconditioning matrix P should be accurately computable, without materializing the full covariance matrix. (Cost per iteration) Preconditioning by P should be efficient per iteration in terms of computation and memory. The convergence of the preconditioned algorithm with the along the i-th eigendirection is dependent on the ratio of eigenvalues λ i (P H)/λ 1 (P H). This leads us to choose the preconditioner P to maximize the ratio λ i (P H)/λ 1 (P H) for each i. We see that modifying the top eigenvalues of H makes the most difference in convergence. For example, decreasing λ 1 improves convergence along all directions, while decreasing any other eigenvalue only speeds up convergence in that direction. However, decreasing λ 1 below λ 2 does not help unless λ 2 is decreased as well. Therefore it is natural to decrease the top k eigenvalues to the maximum amount, i.e. to λ k+1 , leading to Algorithm: EigenPro(X, y, k, m, η, τ, M ) input training data (X, y), number of eigendirections k, mini-batch size m, step size η, damping factor τ , subsample size M output weight of the linear model α α ← α − ηP g 8: end while</p><formula xml:id="formula_19">α ← α − ηP (H m α − b m )<label>(6)</label></formula><formula xml:id="formula_20">P def = I − k i=1 (1 − λ k+1 /λ i )e i e T i (7)</formula><p>We see that P -preconditioned iteration increases convergence by a factor λ 1 /λ k . However, exact construction of P involves computing the eigendecomposition of the d × d matrix H, which is not feasible for large data. Instead we use subsampled randomized SVD <ref type="bibr" target="#b15">[HMT11]</ref> to obtain an approximate preconditionerP τ</p><formula xml:id="formula_21">def = I − k i=1 (1 − τλ k+1 /λ i )ê iê T i .</formula><p>Here algorithm RSVD (detailed in the full paper ) computes the approximate top eigenvectors E ← (ê 1 , . . . ,ê k ) and eigenvalues Λ ← diag(λ 1 , . . . ,λ k ) and λ k+1 for subsample covariance matrix H M . We introduce the parameter τ to counter the effect of approximate top eigenvectors "spilling" into the span of the remaining eigensystem. Using τ &lt; 1 is preferable to the obvious alternative of decreasing the step size η as it does not decrease the step size in the directions nearly orthogonal to the span of (ê 1 , . . . ,ê k ). That allows the iteration to converge faster in those directions. In particular, when (ê 1 , . . . ,ê k ) are computed exactly, the step size in other eigendirections will not be affected by the choice of τ . We call SGD with the preconditioner P τ (Eq. 6) EigenPro iteration. See Algorithm EigenPro for details. Moreover, the key step size parameter η can be selected in a theoretically sound way discussed below. Kernel EigenPro. We will now discuss modifications needed to work directly in the RKHS (primal) setting. A positive definite kernel k(·, ·) : R N × R N → R implies a feature map from X to an RKHS space H. The feature map can be written as φ : x → k(x, ·), R N → H. This feature map leads to the learning problem f</p><formula xml:id="formula_22">* = arg min f ∈H 1 n n i=1 ( f, k(x i , ·) H − y i ) 2 . Using properties of RKHS, EigenPro iteration in H becomes f ← f − η P(K(f ) − b) where b def = 1 n n i=1 y i k(x i , ·) and covariance operator K = 1 n n i=1 k(x i , ·) ⊗ k(x i , ·). The top eigensystem of K forms the preconditioner P def = I − k i=1 (1 − τ λ k+1 (K)/λ i (K)) e i (K) ⊗ e i (K).</formula><p>By the Representer theorem <ref type="bibr" target="#b2">[Aro50]</ref>, f * admits a representation of the form n i=1 α i k(x i , ·). Parameterizing the above iteration accordingly and applying some linear algebra lead to the following iteration in a finitedimensional vector space, α ← α−ηP (Kα−y) where</p><formula xml:id="formula_23">K def = [k(x i , x j )] i,j=1,.</formula><p>..,n is the kernel matrix and EigenPro preconditioner P is defined using the top eigensystem of K (assume Ke i = λ i e i ), P</p><formula xml:id="formula_24">def = I − k i=1 λ i −1 (1 − τ λ k+1 /λ i )e i e T i</formula><p>. This differs from that for the linear case (Eq. 7) (with an extra factor of 1/λ i ) due to the difference between the parameter space of α and the RKHS space. EigenPro as kernel learning. Another way to view EigenPro is in terms of kernel learning. Assuming that the preconditioner is computed exactly, EigenPro is equivalent to computing the (distributiondependent) kernel,</p><formula xml:id="formula_25">k EP (x, z) def = k i=1 λ k+1 e i (x)e i (z) + ∞ i=k+1 λ i e i (x)e i (z).</formula><p>Notice that the RKHS spaces corresponding to k EP and k contain the same functions but have different norms. The norm in k EP is a finite rank modification of the norm in the RKHS corresponding to k, a setting reminiscent of <ref type="bibr" target="#b32">[SNB05]</ref> where unlabeled data was used to "warp" the norm for semi-supervised learning. However, in our paper the "warping" is purely for computational efficiency. Acceleration. EigenPro can obtain acceleration factor of up to λ1 λ k+1 over the standard gradient descent. That factor assumes full gradient descent and exact computation of the preconditioner. See below for an acceleration analysis in the SGD setting. Initial cost. To construct the preconditioner P , we perform RSVD to compute the approximate top eigensystem of covariance H. RSVD has time complexity O(M d log k +(M +d)k 2 ) (see <ref type="bibr" target="#b15">[HMT11]</ref>). The subsample size M can be much smaller than the data size n while preserving the accuracy of estimation. In addition, extra kd memory is needed to store the eigenvectors. Cost per iteration. For standard SGD using d kernel centers (or random Fourier features) and mini-batch of size m, the computational cost per iteration is O(md). In comparison, EigenPro iteration using top-k eigen-directions costs O(md + kd). Specifically, applying preconditioner P in EigenPro requires left multiplication by a matrix of rank k. This involves k vector-vector dot products resulting in k · d additional operations per iteration. These can be implemented efficiently on a GPU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Step Size Selection for EigenPro Preconditioned Methods</head><p>We will now discuss the key issue of the step size selection for EigenPro iteration. For iteration involving covariance matrix H, λ 1 (H) −1 = H −1 results in optimal (within a factor of 2) convergence. This suggests choosing the corresponding step size η = P H −1 = λ −1 k+1 . In practice this will lead to divergence due to (1) approximate computation of eigenvectors (2) the randomness inherent in SGD. One (costly) possibility is to compute P H m at every step. As the mini-batch can be assumed to be chosen at random, we propose using a lower bound on H m −1 (with high probability) as the step size to guarantee convergence at each iteration. Linear EigenPro. Consider the EigenPro preconditioned SGD in Eq. 6. For this analysis assume that P is formed by the exact eigenvectors.Interpreting P 2 ≤ κ for any x ∈ X and λ k+1 = λ k+1 (H), with probability at least 1 − δ, P H m ≤ λ k+1 + 2(λ k+1 + κ)(3m) −1 (ln 2dδ −1 ) + 2λ k+1 κm −1 (ln 2dδ −1 ).</p><p>Kernel EigenPro. For EigenPro iteration in RKHS, we can bound P •K m with a very similar result based on operator Bernstein <ref type="bibr" target="#b21">[Min17]</ref>. Note that dimension d in Theorem 3 is replaced by the intrinsic dimension <ref type="bibr" target="#b38">[Tro15]</ref>. See the arXiv version of this paper for details.</p><p>Choice of the step size. In the spectral norm bounds λ k+1 is the dominant term when the mini-batch size m is large. However, in most large-scale settings, m is small, and 2λ k+1 κ/m becomes the dominant term. This suggests choosing step size η ∼ 1/ λ k+1 leading to acceleration on the order of λ 1 / λ k+1 over the standard (unpreconditioned) SGD. That choice works well in practice.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">EigenPro and Related Work</head><p>Large scale machine learning imposes fairly specific limitations on optimization methods. The computational budget allocated to the problem must not exceed O(n 2 ) operations, a small number of matrix-vector multiplications. That rules out most direct second order methods which require O(n 3 ) operations. Approximate second order methods are far more efficient. However, they typically rely on low rank matrix approximation, a strategy which (similarly to regularization) in conjunction with smooth kernels discards information along important eigen-directions with small eigenvalues. On the other hand, first order methods can be slow to converge along eigenvectors with small eigenvalues. An effective method must thus be a hybrid approach using approximate second order information in a first order method. EigenPro is an example of such an approach as the second order information is used in conjunction with a first order method. The things that make EigenPro effective are as follows: 1. The second order information (eigenvalues and eigenvectors) is computed efficiently from a subsample of the data. Due to the quadratic loss function, that computation needs to be conducted only once. Moreover, the step size can be fixed throughout the iterations. 2. Preconditioning by a low rank modification of the identity matrix results in low overhead per iteration. The update is computed without materializing the full preconditioned covariance matrix. 3. EigenPro iteration converges (mathematically) to the same result even if the second order approximation is not accurate. That makes EigenPro relatively robust to errors in the second order preconditioning term P , in contrast to most approximate second order methods. Related work: First order optimization methods. Gradient based methods, such as gradient descent (GD), stochastic gradient descent (SGD), are classical methods <ref type="bibr" target="#b31">[She94,</ref><ref type="bibr" target="#b12">DJS96,</ref><ref type="bibr" target="#b7">BV04,</ref><ref type="bibr" target="#b6">Bis06]</ref>. Recent success of neural networks had drawn significant attention to improving and accelerating these methods. Methods like SAGA <ref type="bibr" target="#b28">[RSB12]</ref> and SVRG <ref type="bibr" target="#b16">[JZ13]</ref> improve stochastic gradient by periodically evaluating full gradient to achieve variance reduction.  <ref type="bibr" target="#b14">[GOSS16]</ref> analyses a hybrid method designed to accelerate SGD convergence for ridge regression. The data are preprocessed by rescaling points along the top singular vectors of the data matrix. Another second order method PCG <ref type="bibr" target="#b1">[ACW16]</ref> accelerates the convergence of conjugate gradient for large kernel ridge regression using a preconditioner which is the inverse of an approximate covariance generated with random Fourier features. <ref type="bibr" target="#b39">[TRVR16]</ref> achieves similar preconditioning effects by solving a linear system involving a subsampled kernel matrix every iteration. While not strictly a preconditioner Nyström with gradient descent(NYTRO) <ref type="bibr" target="#b8">[CARR16]</ref> also improves the condition number. Compared to many of these methods EigenPro directly addresses the underlying issues of slow convergence without introducing a bias in directions with small eigenvalues. Additionally EigenPro incurs only a small overhead per iteration both in memory and computation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Experimental Results</head><p>Computing Resource/Data/Metrics. Experiments were run on a workstation with 128GB main memory, two Intel Xeon(R) E5-2620 CPUs, and one GTX Titan X (Maxwell) GPU. For multiclass datasets, we report classification error (c-error) for binary valued labels and mean squared error  Acceleration for different kernels. The table on the right presents the number of epochs needed by EigenPro and Pegasos to reach the error of the optimal kernel classifier. We see that EigenPro provides acceleration of 6 to 35 times in terms of the number of epochs required without any loss of accuracy. The actual acceleration is about 20% less due to the overhead of maintaining and applying a preconditioner.</p><p>Comparisons on large datasets. ≈ 20% 0.6 hours on IBM POWER8 † The result is produced by EigenPro-RF using 1 × 10 6 data points.</p><p>‡ Our TIMIT training set (1 × 10 6 data points) was generated following a standard practice in the speech community [PGB + 11] by taking 10ms frames and dropping the glottal stop 'q' labeled frames in core test set (1.2% of total test set). [HAS + 14] adopts 5ms frames, resulting in 2 × 10 6 data points, and keeping the glottal stop 'q'. In the worst case scenario EigenPro, if we mislabel all glottal stops, the corresponding frame-level error increases from 31.7% to 32.5%.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>m using sampled mini-batch (X m , y m ). Preconditioning as a linear feature map. It is easy to see that the preconditioned iteration is in fact equivalent to the standard Richardson iteration in Eq. 2 on a dataset transformed with the linear feature map, φ P (x)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>1 :</head><label>1</label><figDesc>[E, Λ,λ k+1 ] = RSVD(X, k + 1, M ) 2: P def = I − E(I − τλ k+1 Λ −1 )E T 3: Initialize α ← 0 4: while stopping criteria is False do 5: (X m , y m ) ← m rows sampled from (X,</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>(mse) for real valued labels. See the arXiv version for details and more experimental results. Kernel methods/Hyperparameters. For smaller datasets direct solution of kernel regularized least squares (KRLS) is used to obtain the reference error. We compare with the primal method Pe- gasos [SSSSC11]. For even larger datasets, we use Random Fourier Features [RR07] (RF) with SGD as in [DXH + 14, TRVR16]. The results of these methods are presented as baselines. For consistent comparison, all iterative methods use mini-batch of size m = 256. EigenPro pre- conditioner is constructed using the top k = 160 eigenvectors of a subsampled dataset of size M = 4800. For EigenPro-RF, we set the damping factor τ = 1/4. For primal EigenPro τ = 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>much more manageable task. Moreover, these methods can typically be used in a stochastic setting, reducing computational requirements and allowing for efficient GPU implementations. These schemes are adopted in popular kernel methods implementations such as NORMA [KSW04],</figDesc><table>). While linear systems of equations can be solved by direct methods, such as 
+Gaussian elimination, their computational demands make them impractical for large data. Gradient 
+descent-type methods potentially require a small number of O(n 
+2 ) matrix-vector multiplications, 
+a SDCA [HCL 
++ 08], Pegasos [SSSSC11], and DSGD [DXH 
++ 14]. For linear systems of equations 
+gradient descent takes a simple form known as the Richardson iteration [Ric11]. It is given by 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>2 s , . . .}. Given a function f on [0, 2π], we can write its Fourier series f = ∞ j=0 a j e j . A direct computation shows that for any f ∈ CR t ( ), we have</figDesc><table>The corresponding eigenvalues 
+are {1, e 
+−s , e 
+−s , e 
+−4s , e 
+−4s , . . . , e 
+
+− j/2+1 
+
+i&gt; 
+
+√ 
+2 ln 2t 
+s 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Algorithms in [DHS11, TH12, KB14] compute adaptive step size for each gradient coordinate. Scalable kernel methods. There is a significant literature on scalable kernel methods includ- ing [KSW04, HCL + 08, SSSSC11, TBRS13, DXH + 14] Most of these are first order optimization methods. To avoid the O(n 2 ) computation and memory requirement typically involved in construct- ing the kernel matrix, they often adopt approximations like RBF features [WS01, QB16, TRVR16] or random Fourier features [RR07, LSS13, DXH + 14, TRVR16]. Second order/hybrid optimization methods. Second order methods use the inverse of the Hessian matrix or its approximation to accelerate convergence [SYG07, BBG09, MNJ16, BHNS16, ABH16]. These methods often need to compute the full gradient every iteration [LN89, EM15, ABH16] making less suitable for large data. [EM15] analyzed a hybrid first/second order method for general convex optimization with a rescaling term based on the top eigenvectors of the Hessian. That can be viewed as preconditioning the Hessian at every GD iteration. A related recent work</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head>Table below compares</head><label>below</label><figDesc>EigenPro to Pegasos/SGD-RF on several large datasets for 10 epochs. We see that EigenPro consistently outperforms Pegasos/SGD-RF within a fixed computational budget. Note that we adopt Gaussian kernel and 2 · 10 5 random features.Comparisons to state-of-the-art. In the below table, we provide a comparison to several large scale kernel results reported in the literature. EigenPro improves or matches performance on each dataset at a much lower computational budget. We note that [MGL + 17] achieves error 30.9% on TIMIT using an AWS cluster. The method uses a novel supervised feature selection method, hence is not directly comparable. EigenPro can plausibly further improve the training error using this new feature set.</figDesc><table>Dataset 
+Size 
+Metric 
+EigenPro 
+Pegasos 
+EigenPro-RF 
+SGD-RF 
+result 
+GPU hours result GPU hours 
+result GPU hours result GPU hours 
+HINT-S 
+2 · 10 
+
+5 
+
+c-error 
+
+10.0% 
+0.1 
+11.7% 
+0.1 
+10.3% 
+0.2 
+11.5% 
+0.1 
+TIMIT 
+1 · 10 
+
+6 
+
+31.7% 
+3.2 
+33.0% 
+2.2 
+32.6% 
+1.5 
+33.3% 
+1.0 
+
+MNIST-8M 
+1 · 10 
+
+6 
+
+0.8% 
+3.0 
+1.1% 
+2.7 
+0.8% 
+0.8 
+1.0% 
+0.7 
+8 · 10 
+
+6 
+
+-
+-
+0.7% 
+7.2 
+0.8% 
+6.0 
+
+HINT-M 
+1 · 10 
+
+6 
+
+mse 
+2.3e-2 
+1.9 
+2.7e-2 
+1.5 
+2.4e-2 
+0.8 
+2.7e-2 
+0.6 
+7 · 10 
+
+6 
+
+-
+-
+2.1e-2 
+5.8 
+2.4e-2 
+4.1 
+
+Dataset 
+Size 
+EigenPro (use 1 GTX Titan X) 
+Reported results 
+error 
+GPU hours epochs 
+source 
+error 
+description 
+
+MNIST 
+1 · 10 
+
+6 
+
+0.70% 
+4.8 
+16 
+[ACW16] 
+0.72% 1.1 hours/189 epochs/1344 AWS vCPUs 
+6.7 · 10 
+
+6 
+
+0.80% 
+
+ † 
+
+0.8 
+10 
+[LML 
++ 14] 0.85% 
+less than 37.5 hours on 1 Tesla K20m 
+
+TIMIT 
+2 · 10 
+
+6 
+
+31.7% 
+(32.5%) 
+
+ ‡ 
+
+3.2 
+10 
+[HAS 
++ 14] 33.5% 
+512 IBM BlueGene/Q cores 
+[TRVR16] 33.5% 
+7.5 hours on 1024 AWS vCPUs 
+SUSY 
+4 · 10 
+
+6 
+
+19.8% 
+0.1 
+0.6 
+[CAS16] 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Interestingly they can lead to lower sample complexity for optimal classifiers (cf. Tsybakov margin condition [Tsy04]).</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. We thank Adam Stiff, Eric Fosler-Lussier, Jitong Chen, and Deliang Wang for providing TIMIT and HINT datasets. This work is supported by NSF IIS-1550757 and NSF CCF-1422830. Part of this work was completed while the second author was at the Simons Institute at Berkeley. In particular, he thanks Suvrit Sra, Daniel Hsu, Peter Bartlett, and Stefanie Jegelka for many discussions and helpful suggestions.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Second order stochastic optimization in linear time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Naman</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Bullins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Elad</forename><surname>Hazan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.03943</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Faster kernel ridge regression using sketching and preconditioning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Avron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Clarkson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Woodruff</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.03220</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Theory of reproducing kernels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nachman</forename><surname>Aronszajn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the American mathematical society</title>
+		<imprint>
+			<biblScope unit="volume">68</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="337" to="404" />
+			<date type="published" when="1950" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Spectral properties of the kernel matrix and their relation to kernel methods in machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mikio Ludwig Braun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+		<respStmt>
+			<orgName>University of Bonn</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">SGD-QN: Careful quasi-newton stochastic gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antoine</forename><surname>Bordes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Léon</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Gallinari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page" from="1737" to="1754" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A stochastic quasi-newton method for large-scale optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Byrd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoram</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Optimization</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="1008" to="1031" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bishop</surname></persName>
+		</author>
+		<title level="m">Pattern recognition. Machine Learning</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">128</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lieven</forename><surname>Vandenberghe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>Cambridge university press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">NYTRO: When subsampling meets early stopping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raffaello</forename><surname>Camoriano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomás</forename><surname>Angles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Rudi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lorenzo</forename><surname>Rosasco</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1403" to="1411" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jie</forename><surname>Chen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.00860</idno>
+		<title level="m">Haim Avron, and Vikas Sindhwani. Hierarchically compositional kernels for scalable nonparametric learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Arccosine kernels: Acoustic modeling with infinite neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chih-Chieh</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Kingsbury</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ICASSP</title>
+		<imprint>
+			<biblScope unit="page" from="5200" to="5203" />
+			<date type="published" when="2011" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Elad</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoram</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Numerical methods for unconstrained optimization and nonlinear equations. SIAM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">E</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dennis</forename><genName>Jr</genName></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Schnabel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">;</forename><forename type="middle">B</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Raj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Balcan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Song</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page" from="3041" to="3049" />
+		</imprint>
+	</monogr>
+	<note>Scalable kernel methods via doubly stochastic gradients</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Convergence rates of sub-sampled newton methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Erdogdu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Montanari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Solving ridge regression using sketched preconditioned svrg</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alon</forename><surname>Gonen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Francesco</forename><surname>Orabona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shai Shalev-Shwartz ; Po-Sen</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Haim</forename><surname>Avron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tara</forename><forename type="middle">N</forename><surname>Sainath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vikas</forename><surname>Sindhwani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bhuvana</forename><surname>Ramabhadran</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 25th international conference on Machine learning</title>
+		<editor>Cho-Jui Hsieh, Kai-Wei Chang, Chih-Jen Lin, S Sathiya Keerthi, and Sellamanickam Sundararajan</editor>
+		<meeting>the 25th international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="408" to="415" />
+		</imprint>
+	</monogr>
+	<note>ICASSP</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><surname>Halko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><forename type="middle">A</forename><surname>Per-Gunnar Martinsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tropp</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM review</title>
+		<imprint>
+			<biblScope unit="volume">53</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="217" to="288" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Accelerating stochastic gradient descent using predictive variance reduction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rie</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tong</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="315" to="323" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Online learning with kernels. Signal Processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jyrki</forename><surname>Kivinen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert C Williamson ; Zhiyun</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Avner</forename><surname>May</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kuan</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alireza</forename><surname>Bagheri Garakani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dong</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aurélien</forename><surname>Bellet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Linxi</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Kingsbury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Picheny</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.4000</idno>
+	</analytic>
+	<monogr>
+		<title level="m">How to scale up kernel methods to be as good as deep neural nets</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">52</biblScope>
+			<biblScope unit="page" from="2165" to="2176" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+	<note>LML + 14</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">On the limited memory bfgs method for large scale optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nocedal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mathematical programming</title>
+		<imprint>
+			<date type="published" when="1989" />
+			<biblScope unit="page" from="503" to="528" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Fastfood-approximating kernel expansions in loglinear time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tamás</forename><surname>Sarlós</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Smola ; Avner May</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alireza</forename><surname>Bagheri Garakani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiyun</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dong</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kuan</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aurélien</forename><surname>Bellet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Linxi</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Kingsbury</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.03577</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the international conference on machine learning</title>
+		<meeting>the international conference on machine learning</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+	<note>Kernel approximation methods for speech recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">On some extensions of bernstein&apos;s inequality for self-adjoint operators</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stanislav</forename><surname>Minsker</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Statistics &amp; Probability Letters</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">A linearly-convergent stochastic l-bfgs algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nishihara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jordan ; D. Povey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ghoshal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Boulianne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Burget</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Glembek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Goel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hannemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Motlicek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Schwarz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+	<note>ASRU</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Back to the future: Radial basis function networks revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qichao</forename><surname>Que</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikhail</forename><surname>Belkin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1375" to="1383" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">On learning with integral operators</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lorenzo</forename><surname>Rosasco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikhail</forename><surname>Belkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ernesto</forename><forename type="middle">De</forename><surname>Vito</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="905" to="934" />
+			<date type="published" when="2010-02" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">The approximate arithmetical solution by finite differences of physical problems involving differential equations, with an application to the stresses in a masonry dam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lewis</forename><surname>Fry Richardson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Philosophical Transactions of the Royal Society of London. Series A</title>
+		<imprint>
+			<biblScope unit="volume">210</biblScope>
+			<biblScope unit="page" from="307" to="357" />
+			<date type="published" when="1911" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">The Laplacian on a Riemannian manifold: an introduction to analysis on manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Steven</forename><surname>Rosenberg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+			<publisher>Cambridge University Press</publisher>
+			<biblScope unit="volume">31</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Random features for large-scale kernel machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rahimi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Recht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1177" to="1184" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A stochastic gradient method with an exponential convergence _rate for finite training sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Nicolas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Francis R</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bach</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="2663" to="2671" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Early stopping and non-parametric regression: an optimal data-dependent stopping rule</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Raskutti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="335" to="366" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ingo</forename><surname>Steinwart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><surname>Christmann</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>Springer Science &amp; Business Media</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">An introduction to the conjugate gradient method without the agonizing pain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">Richard</forename><surname>Shewchuk</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Beyond the point cloud: from transductive to semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vikas</forename><surname>Sindhwani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Partha</forename><surname>Niyogi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikhail</forename><surname>Belkin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22nd international conference on Machine learning</title>
+		<meeting>the 22nd international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="824" to="831" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Pegasos: Primal estimated sub-gradient solver for SVM. Mathematical programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shai</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoram</forename><surname>Singer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><surname>Srebro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Cotter</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">127</biblScope>
+			<biblScope unit="page" from="3" to="30" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Kernel methods for pattern analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Shawe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">-</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nello</forename><surname>Cristianini</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>Cambridge university press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">A stochastic quasi-newton method for online convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Nicol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jin</forename><surname>Schraudolph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Simon</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Günter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="436" to="443" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Mini-batch primal and dual methods for SVMs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Takác</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Avleen</forename><surname>Singh Bijral</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Richtárik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nati</forename><surname>Srebro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML (3)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1022" to="1030" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tijmen</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">COURSERA: Neural Networks for Machine Learning</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">An introduction to matrix concentration inequalities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tropp</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1501.01571</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Large scale kernel learning using block coordinate descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Roelofs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Venkataraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Recht</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.05310</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Optimal aggregation of classifiers in statistical learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Alexandre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tsybakov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Annals of Statistics</title>
+		<imprint>
+			<biblScope unit="page" from="135" to="166" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Using the Nyström method to speed up kernel machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Seeger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="682" to="688" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">On early stopping in gradient descent learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lorenzo</forename><surname>Rosasco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrea</forename><surname>Caponnetto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Constructive Approximation</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page" from="289" to="315" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

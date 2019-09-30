@@ -36,7 +36,7 @@ class TextDetectFullIm:
         return imgCV, grayIm
 
 
-    def read_text(self, fileName, imgCV, grayIm, cfig):
+    def read_text(self, fileName, imgCV, grayIm, cfig, fig_text):
         
         spellcorr = sc()
         output_dict = pytesseract.image_to_data(grayIm, lang='eng', config=cfig, output_type='dict')
@@ -51,14 +51,14 @@ class TextDetectFullIm:
         final_results = []   
         for index in range(len(text_list)):
             
-            op = re.sub(r'^[^()+*-<>#={}[\]/\0-9a-zA-Z]*', '', re.sub(r'[^()+*-<>#={}[\]/\0-9a-zA-Z]*$', '', text_list[index]))
+            op = re.sub(r'^[^()+*-<>#=&{}[\]/\0-9a-zA-Z]*', '', re.sub(r'[^()+*-<>#=&{}[\]/\0-9a-zA-Z]*$', '', text_list[index]))
             op = re.sub('\W+','', op)
             size = box_pos_width[index] * box_pos_height[index]
 #            if not op:
 #                print("")
             if op and (size < (np.size(imgCV, 0)*np.size(imgCV, 1)*self.size_th) and prob_list[index] > self.min_conf_thresh):
                 
-                op_cor = spellcorr.correctWord(op)
+                op_cor = spellcorr.correctWord(op, fig_text)
                 #print("Full IM: op = %s, op_cor %s"%(op, op_cor))
                 if box_pos_left_corner[index] > 0 and box_pos_left_corner[index] < width:
                     posx = box_pos_left_corner[index]
@@ -89,7 +89,7 @@ class TextDetectFullIm:
         # cv2.waitKey(0)
         return final_results
 
-    def getText(self, fileName, image, cfig):
+    def getText(self, fileName, image, cfig, fig_text):
         imgCV, grayIm = self.preprocessImage(image)
-        output_dict = self.read_text(fileName, imgCV, grayIm, cfig)
+        output_dict = self.read_text(fileName, imgCV, grayIm, cfig, fig_text)
         return output_dict

@@ -1,0 +1,1328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:36+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">End-to-End Instance Segmentation with Recurrent Attention</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mengye</forename><surname>Ren</surname></persName>
+							<email>mren@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+							<email>zemel@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">End-to-End Instance Segmentation with Recurrent Attention</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+					<note>1 , Canadian Institute for Advanced Research 2</note>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>While convolutional neural networks have gained impressive success recently in solving structured prediction problems such as semantic segmentation, it remains a challenge to differentiate individual object instances in the scene. Instance segmentation is very important in a variety of applications, such as autonomous driving, image captioning, and visual question answering. Techniques that combine large graphical models with low-level vision have been proposed to address this problem; however, we propose an end-to-end recurrent neural network (RNN) architecture with an attention mechanism to model a human-like counting process, and produce detailed instance segmentations. The network is jointly trained to sequentially produce regions of interest as well as a dominant object segmentation within each region. </p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Instance segmentation is a fundamental computer vision problem, which aims to assign pixel-level instance labeling to a given image. While the standard semantic segmentation problem entails assigning class labels to each pixel in an image, it says nothing about the number of instances of each class in the image. Instance segmentation is considerably more difficult than semantic segmentation because it necessitates distinguishing nearby and occluded object instances. Segmenting at the instance level is useful for many tasks, such as highlighting the outline of objects for improved recognition and allowing robots to delineate and grasp individual objects; it plays a key role in autonomous driving as well. Obtaining instance level pixel labels is also an important step towards general machine understanding of images.</p><p>Instance segmentation has been rapidly gaining in popularity, with a spurt of research papers in the past two years, and a new benchmark competition, based on the Cityscapes dataset <ref type="bibr" target="#b7">[8]</ref>.</p><p>A sensible approach to instance segmentation is to formulate it as a structured output problem. A key challenge here is the dimensionality of the structured output, which can be on the order of the number of pixels times the number of objects. Standard fully convolutional networks (FCN) <ref type="bibr" target="#b25">[26]</ref> will have trouble directly outputting all instance labels in a single shot. Recent work on instance segmentation <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b43">44]</ref> proposes complex graphical models, which results in a complex and time-consuming pipeline. Furthermore, these models cannot be trained in an end-to-end fashion.</p><p>One of the main challenges in instance segmentation, as in many other computer vision tasks such as object detection, is occlusion. For a bottom-up approach to handle occlusion, it must sometimes merge two regions that are not connected, which becomes very challenging at a local scale. Many approaches to handle occlusion utilize a form of non-maximal suppression (NMS), which is typically difficult to tune. In cluttered scenes, NMS may suppress the detection results for a heavily occluded object because it has too much overlap with foreground objects. One motivation of this work is to introduce an iterative procedure to perform dynamic NMS, reasoning about occlusion in a top-down manner.</p><p>A related problem of interest entails counting the instances of an object class in an image. On its own this problem is also of practical value. For instance, counting provides useful population estimates in medical imaging and aerial imaging. General object counting is fundamental to image understanding, and our basic arithmetic intelligence. Studies in applications such as image question answering <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b33">34]</ref> reveal that counting, especially on everyday objects, is a very challenging task on its own <ref type="bibr" target="#b6">[7]</ref>. Counting has been formulated in a task-specific setting, either by detection followed by regression, or by learning discriminatively with a counting error metric <ref type="bibr" target="#b21">[22]</ref>.</p><p>To tackle these challenges, we propose a new model based on a recurrent neural network (RNN) that utilizes visual attention, to perform instance segmentation. We consider the problem of counting jointly with instance segmentation. Our system addresses the dimensionality issue by using a temporal chain that outputs a single instance at a time. It also performs dynamic NMS, using an object that is already segmented to aid in the discovery of an occluded object later in the sequence. Using an RNN to segment one instance at a time is also inspired by human-like iterative and attentive counting processes. For real-world cluttered scenes, iterative counting with attention will likely perform better than a regression model that operates on the global image level. Incorporating joint training on counting and segmentation allows the system to automatically determine a stopping criterion in the recurrent formulation we formulate here.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Recurrent attention model</head><p>Our proposed model has four major components: A) an external memory that tracks the state of the segmented objects; B) a box proposal network responsible for localizing objects of interest; C) a segmentation network for segmenting image pixels within the box; and D) a scoring network that determines if an object instance has been found, and also decides when to stop. See <ref type="figure" target="#fig_1">Figure 2</ref> for an illustration of these components.</p><p>Notation. We use the following notation to describe the model architecture: x 0 ∈ R H×W ×C is the input image (H, W denotes the dimension, and C denotes the color channel); t indexes the iterations of the model, and τ indexes the glimpses of the box network's inner RNN; y = {y t |y t ∈ [0, 1]</p><formula xml:id="formula_0">H×W } T t=1 , y * = {y * t |y * t ∈ {0, 1} H×W } T t=1</formula><p>are the output/ground-truth segmentation sequences;</p><formula xml:id="formula_1">s = {s t |s t ∈ [0, 1]} T t=1 , s * = {s * t |s * t ∈ {0, 1}} T t=1</formula><p>are the output/groundtruth confidence score sequences. h = CNN(I) denotes passing an image I through a CNN and returning the hidden activation h. I ′ = D-CNN(h) denotes passing an activation map h through a de-convolutional network (D-CNN) and returning an image I ′ . h t = LSTM(h t−1 , x t ) denotes unrolling the long short-term memory (LSTM) by one timestep with the previous hidden state h t−1 and current input x t , and returning the current hidden state h t . h = MLP(x) denotes passing an input x through a multi-layer perceptron (MLP) and returning the hidden state h.</p><p>Input pre-processing. We pre-train a FCN <ref type="bibr" target="#b25">[26]</ref> to perform input pre-processing. This pre-trained FCN has two output components. The first is a 1-channel pixel-level foreground segmentation, produced by a variant of the DeconvNet <ref type="bibr" target="#b28">[29]</ref> with skip connections. In addition to predicting this foreground mask, as a second component we followed the work of Uhrig et al. <ref type="bibr" target="#b39">[40]</ref> by producing an angle map for each object. For each foreground pixel, we calculate its relative angle towards the centroid of the object, and quantize the angle into 8 different classes, forming 8 channels, as shown in <ref type="figure" target="#fig_2">Figure 3</ref>. Predicting the angle map forces the model to encode more detailed information about object boundaries. The architecture and training of these components are detailed in the Appendix. We denote x 0 as the original image (3 channel RGB), and x as the pre-processed image (9 channels: 1 for foreground and 8 for angles).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Part A: External memory</head><p>To decide where to look next based on the already segmented objects, we incorporate an external memory, which provides object boundary details from all previous steps. We hypothesize that providing information of the completed segmentation helps the network reason about occluded objects and determine the next region of interest. The canvas has 10 channels in total: the first channel of the canvas keeps adding new pixels from the output of the previous time step, and the other channels store the input image.</p><formula xml:id="formula_2">c t = 0, if t = 0 max(c t−1 , y t−1 ), otherwise<label>(1)</label></formula><formula xml:id="formula_3">d t = [c t , x]<label>(2)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Part B: Box network</head><p>The box network plays a critical role, localizing the next object of interest. The CNN in the box network outputs a  width; L is the feature dimension). CNN activation based on the entire image is too complex and inefficient to process simultaneously. Simple pooling does not preserve location; instead we employ a "soft-attention" (dynamic pooling) mechanism here to extract useful information along spatial dimensions, weighted by α h,w t</p><formula xml:id="formula_4">H ′ × W ′ × L feature map u t (H ′ is the height; W ′ is the</formula><p>. Since a single glimpse may not give the upper network enough information to decide where exactly to draw the box, we allow the glimpse LSTM to look at different locations by feeding a dimension L vector each time. α is initialized to be uniform over all locations, and τ indexes the glimpses.</p><formula xml:id="formula_5">u t = CNN(d t ) (3) z t,τ =    0, if τ = 0 LSTM(z t,τ −1 , h,w α h,w t,τ −1 u h,w,l t ) otherwise (4) α h,w t,τ = 1/(H ′ × W ′ ), if τ = 0 MLP(z t,τ ), otherwise<label>(5)</label></formula><p>We pass the LSTM's hidden state through a linear layer to obtain predicted box coordinates. We parameterize the box by its normalized center (g X ,g Y ), and size (logδ X , logδ Y ). A scaling factor γ is also predicted by the linear layer, and used when re-projecting the patch to the original image size.</p><formula xml:id="formula_6">[g X,Y , logδ X,Y , log σ X,Y , γ] = w ⊤ b z t,end + w b0 (6) g X = (g X + 1)W/2 (7) g Y = (g Y + 1)H/2 (8) δ X =δ X W (9) δ Y =δ Y H (10)</formula><p>Extracting a sub-region. We follow DRAW <ref type="bibr" target="#b15">[16]</ref> and use a Gaussian interpolation kernel to extract anH ×W patch from thex, a concatenation of the original image with d t . We further allow the model to output rectangular patches to account for different shapes of the object. i, j index the location in the patch of dimensionH ×W , and a, b index the location in the original image. F X and F Y are matrices of dimension W ×W and H ×H, which indicates the contribution of the location (a, b) in the original image towards the location (i, j) in the extracted patch. µ X,Y and σ X,Y are mean and variance of the Gaussian interpolation kernel, predicted by the box network.</p><formula xml:id="formula_7">µ i X = g X + (δ X + 1) · (i −W /2 + 0.5)/W (11) µ j Y = g Y + (δ Y + 1) · (j −H/2 + 0.5)/H (12) F a,i X = 1 √ 2πσ X exp − (a − µ i X ) 2 2σ 2 X (13) F b,j Y = 1 √ 2πσ Y exp − (b − µ j Y ) 2 2σ 2 Y (14) x t = [x 0 , d t ]<label>(15)</label></formula><formula xml:id="formula_8">p t = Extract(x t , F Y , F X ) ≡ F ⊤ Yxt F X<label>(16)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Part C: Segmentation network</head><p>The remaining task is to segment out the pixels that belong to the dominant object within the window. The segmentation network first utilizes a convolution network to produce a feature map v t . We then adopt a variant of the DeconvNet <ref type="bibr" target="#b28">[29]</ref> with skip connections, which appends deconvolution (or convolution transpose) layers to upsample the low-resolution feature map to a full-size segmentation. After the fully convolutional layers we get a patch-level segmentation prediction heat mapỹ t . We then re-project this patch prediction to the original image using the transpose of the previously computed Gaussian filters; the learned γ magnifies the signal within the bounding box, and a constant β suppresses the pixels outside the box. Applying the sigmoid function produces segmentation values between 0 and 1.</p><formula xml:id="formula_9">v t = CNN(p t ) (17) y t = D-CNN(v t )<label>(18)</label></formula><formula xml:id="formula_10">y t = sigmoid γ · Extract(ỹ t , F ⊤ Y , F ⊤ X ) − β<label>(19)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Part D: Scoring network</head><p>To estimate the number of objects in the image, and to terminate our sequential process, we incorporate a scoring network, similar to the one presented in <ref type="bibr" target="#b34">[35]</ref>. Our scoring network takes information from the hidden states of both the box network (z t ) and segmentation network (v t ) to produce a score between 0 and 1.</p><formula xml:id="formula_11">s t = sigmoid(w ⊤ zs z t,end + w ⊤ vs v t + w s0 )<label>(20)</label></formula><p>Termination condition. We train the entire model with a sequence length determined by the maximum number of objects plus one. During inference, we cut off iterations once the output score goes below 0.5. The score loss function (described below) encourages scores to decrease monotonically.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5.">Loss functions</head><p>Joint loss. The total loss function is a sum of three losses: the segmentation matching IoU loss L y ; the box IoU loss L b ; and the score cross-entropy loss L s :</p><formula xml:id="formula_12">L(y, b, s) = L y (y, y * ) + λ b L b (b, b * ) + λ s L s (s, s * ) (21)</formula><p>We fix the loss coefficients λ b and λ s to be 1 for all of our experiments.</p><p>(a) Matching IoU loss (mIOU). A primary challenge of instance segmentation involves matching model and groundtruth instances. We compute a maximum-weighted bipartite graph matching between the output instances and groundtruth instances (c.f., <ref type="bibr" target="#b38">[39]</ref> and <ref type="bibr" target="#b34">[35]</ref>). Matching makes the loss insensitive to the ordering of the ground-truth instances. Unlike coverage scores proposed in <ref type="bibr" target="#b37">[38]</ref> it directly penalizes both false positive and false negative segmentations. The matching weight M i,j is the IoU score between a pair of segmentations. We use the Hungarian algorithm to compute the matching; we do not back-propagate the network gradients through this algorithm.</p><formula xml:id="formula_13">M i,j = softIOU(y i , y * j ) ≡ y i · y * j y i + y * j − y i · y * j (22) L y (y, y * ) = −mIOU(y, y * ) (23) ≡ − 1 N i,j M i,j ✶[match(y i ) = y * j ]<label>(24)</label></formula><p>(b) Soft box IoU loss. Although the exact IoU can be derived from the 4-d box coordinates, its gradient vanishes when two boxes do not overlap, which can be problematic for gradient-based learning. Instead, we propose a soft version of the box IoU. We use the same Gaussian filter to re-project a constant patch on the original image, pad the ground-truth boxes, and then compute the mIOU between the predicted box and the matched padded ground-truth bounding box that is scaled proportionally in both height and width.</p><formula xml:id="formula_14">b t = sigmoid(γ · Extract(1, F ⊤ Y , F ⊤ X ) − β)<label>(25)</label></formula><formula xml:id="formula_15">L b (b, b * ) = −mIOU(b, Pad(b * ))<label>(26)</label></formula><p>(c) Monotonic score loss. To facilitate automatic termination, the network should output more confident objects first. We formulate a loss function that encourages monotonically decreasing values in the score output. Iterations with target score 1 are compared to the lower bound of preceding scores, and 0 targets to the upper bound of subsequent scores.</p><formula xml:id="formula_16">L s (s, s * ) = 1 T t − s * t log min t ′ ≤t {s t ′ } − (1 − s * t ) log 1 − max t ′ ≥t {s t ′ }<label>(27)</label></formula><p>2.6. Training procedure Bootstrap training. The box and segmentation networks rely on the output of each other to make decisions for the next time-step. Due to the coupled nature of the two networks, we propose a bootstrap training procedure: these networks are pre-trained with ground-truth segmentation and boxes, respectively, and in later stages we replace the ground-truth with the model predicted values.</p><p>Scheduled sampling. To smooth out the transition between stages, we explore the idea of "scheduled sampling" <ref type="bibr" target="#b3">[4]</ref>, where we gradually remove the reliance on ground-truth segmentation at the input of the network. As shown in <ref type="figure" target="#fig_1">Figure 2</ref>, during training there is a stochastic switch (θ t ) in the input of the external memory, to utilize either the maximally overlapping ground-truth instance segmentation, or the output of the network from the previous time step. By the end of the training, the model completely relies on its own output from the previous step, which matches the test-time inference procedure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Related Work</head><p>Instance segmentation has recently received a burst of research attention, as it provides higher level of precision of image understanding compared to object detection and semantic segmentation.</p><p>Detector-based approaches. Early work on object segmentation <ref type="bibr" target="#b4">[5]</ref> starts from a trained class detectors, which provide a bottom-up merging criterion based on top-down detections. <ref type="bibr" target="#b41">[42]</ref> extends this approach with a DPM detector, and uses layered graphical models to reason about instance separation and occlusion. Besides boxes, models can also leverage region proposals and region descriptors <ref type="bibr" target="#b5">[6]</ref>. Simultaneous detection and segmentation (SDS) methods <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b22">23]</ref> apply newer CNN-based detectors such as RCNN <ref type="bibr" target="#b13">[14]</ref>, and perform segmentation using the bounding boxes as starting point. <ref type="bibr" target="#b22">[23]</ref> proposes a trainable iterative refining procedure. Dai et al. <ref type="bibr" target="#b9">[10]</ref> propose a pipeline-based approach which first predicts bounding box proposals and then performs segmentation within each ROI. Similarly, we jointly learn a detector and a segmentor; however, we introduce a direct feedback loop in the sequence of predictions. In addition, we learn the sequence ordering.</p><p>Graphical model approaches. Another line of research is to use generative graphical model to express the dependency structure among instances and pixels. Eslami et al. <ref type="bibr" target="#b10">[11]</ref> proposes a restricted Boltzmann machine to capture high-order pixel interactions for shape modelling. A multistage pipeline proposed by Silberman et al. <ref type="bibr" target="#b37">[38]</ref> is composed of patch-wise features based on deep learning, combined into a segmentation tree. More recently, Zhang et al. <ref type="bibr" target="#b43">[44]</ref> formulate a dense CRF for instance segmentation; they apply a CNN on dense image patches to make local predictions, and construct a dense CRF to produce globally consistent labellings. Their key contribution is a shifting-label potential that encourages consistency across different patches. The graphical model formulation entails long running times, and their energy functions are dependent on instances being connected and having a clear depth ordering.</p><p>Fully convolutional approaches. Fully convolutional networks <ref type="bibr" target="#b25">[26]</ref> has emerged as a powerful tool to directly predict dense pixel labellings. Pinheiro et al. <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b32">33]</ref> train a CNN to generate object segmentation proposals, which runs densely on all windows at multiple scales, a nd Dai et al. <ref type="bibr" target="#b8">[9]</ref> uses relative location as additional pixel labels. The output of both systems are object proposals, which require further processing to get final segmentations. Other approaches using FCNs are proposal-free, but rely on a bottom-up merging process. Liang et al. <ref type="bibr" target="#b24">[25]</ref> predict dense pixel prediction of object location and size, using clustering as a post-processing step. Uhrig et al. <ref type="bibr" target="#b39">[40]</ref> present another approach based on FCNs, which is trained to produces a semantic segmentation as well as an instance-aware angle map, encoding the instance centroids. Post-processing based on template matching and instance fusion produces the instance identities. Importantly, they also used ground-truth depth labels in training. Concurrent work <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b20">21]</ref> also explores a similar idea of using FCNs to output instance-sensitive embeddings.</p><p>RNN approaches. Another recent line of research, e.g., <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b34">35]</ref> employs end-to-end recurrent neural networks (RNN) to perform object detection and segmentation. The sequential decomposition idea for structured prediction is also explored in <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b2">3]</ref>. A permutation agnostic loss function based on maximum weighted bipartite matching was proposed by <ref type="bibr" target="#b38">[39]</ref>. To process an entire image, they treat each element of a CNN feature map individually. Similarly, our box proposal network also uses an RNN to generate box proposals: instead of running hundreds of RNN iterations, we only run it for a small number of iterations using a soft attention mechanism <ref type="bibr" target="#b40">[41]</ref>. Romera-Paredes and Torr <ref type="bibr" target="#b34">[35]</ref> use convolutional LSTM (ConvLSTM) <ref type="bibr" target="#b36">[37]</ref> to produce instance segmentation directly. However, since their ConvLSTM is required to handle object detection, inhibition, and segmentation all convolutionally on a global scale,and it is hard for their model to inhibit far apart instances. In contrast, our architecture incorporates direct feedback from the prediction of the previous instance, providing precise boundary inhibition, and our box network confines the instance-wise segmentation within a local window.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We refer readers to the Appendix for hyper-parameters and other training details of the experiments 1 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets &amp; Evaluation</head><p>CVPPP leaf segmentation. One instance segmentation benchmark is the CVPPP plant leaf dataset <ref type="bibr" target="#b26">[27]</ref>, which was developed due to the importance of instance segmentation in plant phenotyping. We ran the A1 subset of CVPPP plant leaf segmentation dataset. We trained our model on 128 labeled images, and report results on the 33 test images. We compare our performance to <ref type="bibr" target="#b34">[35]</ref>, and other top approaches that were published with the CVPPP conference; see the collation study <ref type="bibr" target="#b35">[36]</ref> for details of these other approaches.</p><p>KITTI car segmentation. Instance segmentation also provides rich information in the context of autonomous driving. Following <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b39">40]</ref>, we also evaluated the model performance on the KITTI car segmentation dataset. We trained the model with 3,712 training images, and report performance on 120 validation images and 144 test images.</p><p>Cityscapes. Cityscapes provides multi-class instancelevel annotation and is currently the most comprehensive benchmark for instance segmentation, containing 2,975 training images, 500 validation images, and 1,525 test images, with 8 semantic classes (person, rider, car, truck, bus, train, motorcycle, bicycle). We train our instance segmentation network as a class-agnostic model for all classes, and apply a semantic segmentation mask obtained from <ref type="bibr" target="#b12">[13]</ref> on top of our instance output. Since "car" is the most common class, we report both average score on all classes, and individual score on the "car" class.</p><p>MS-COCO. To test the effectiveness and portability of our algorithm, we train our model on a subset of MS-COCO. As an initial study we select images of zebras, and train on 1000 images. Since there are no methods that are directly comparable, we leave the quantatitive results for Appendix.</p><p>Ablation studies. We also examine the relative importance of model components via ablation studies, and report validation performance on the KITTI dataset.</p><p>• No pre-processing. This network is trained to take as input raw image pixels, without the foreground segmentation or the angle map.</p><p>• No box net. Instead of predicting segmentation within a box, the output dimension of the segmentation network is the full image.</p><p>• No angles. The pre-processor predicts the foreground segmentation only, without the angle map.</p><p>• No scheduled sampling. This network has the same architecture but trained without scheduled sampling (see Section 2.6), i.e., at training time, always use the maximum overlapped ground-truth.</p><p>• Fewer iterations. The box network has fewer glimpses on the convnet feature map (fewer LSTM iterations).   Evaluation metrics. We evaluate based on the metrics used by the other studies in the respective benchmarks. See Appendix for detailed equations for these metrics.</p><p>For segmentation, symmetric best dice (SBD) is used for leaves. Mean (weighted) coverage (MWCov, MUCov) are used for KITTI car segmentation. The coverage scores measure the instance-wise IoU for each ground-truth instance averaged over the image; MWCov further weights the score by the size of the ground-truth instance segmentation (larger objects get larger weights). The Cityscapes evaluation uses average precision (AP), which counts the precision between a pair of matched prediction and groundtruth, for a range of IoU threshold values. Other scores include AP 50% for a threshold of 0.5, and AP 50m, 100m for a subset of instances within 50m and 100m.</p><p>Counting is measured in absolute difference in count (|DiC|) (i.e., mean absolute error), average false positive (AvgFP), and average false negative (AvgFN). False positive is the number of predicted instances that do not overlap with the ground-truth, and false negative is the number of groundtruth instances that do not overlap with the prediction.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Results &amp; Discussion</head><p>Example results on the leaf segmentation task are shown in <ref type="figure">Figure 4</ref>. On this task, our best model outperforms the previous state-of-the-art by a large margin in both segmentation and counting (see <ref type="table" target="#tab_0">Table 1</ref>). In particular, our method has significant improvement over a previous RNN-based instance segmentation method <ref type="bibr" target="#b34">[35]</ref>. We found that our model with the FCN pre-processor overfit on this task, and we thus utilized the simpler version without input pre-processing. This is not surprising, as the dataset is very small, and including the FCN significantly increases the input dimension and number of parameters.</p><p>On the KITTI task, <ref type="figure" target="#fig_4">Figure 6</ref> row 4-5 shows that our model can segment cars in a wide variety of poses. Our method out-performs <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b43">44]</ref>, but scores lower than <ref type="bibr" target="#b39">[40]</ref> (see <ref type="table" target="#tab_1">Table 2</ref>). One possible explanation is their inclusion of depth information during training, which may help the model disambiguate distant object boundaries. Moreover, their bottom-up "instance fusion" method plays a crucial role (omitting this leads to a steep performance drop); this likely helps segment smaller objects, whereas our box network does not reliably detect distant cars.</p><p>The displayed segmentations demonstrate that our topdown attentional inference is crucial for a good instance recognition model. This allows disconnected components belonging to objects such as a bicycle <ref type="figure" target="#fig_4">(Figure 6</ref> row 2) to be recognized as a whole piece whereas <ref type="bibr" target="#b43">[44]</ref> models the connectedness as their energy potential. Our model also shows impressive results in heavily occluded scenes, when only small proportion of the car is visible <ref type="figure" target="#fig_0">(Figure 6 row 1)</ref>, and when the zebra in the back reveals two disjoint pieces of its body ( <ref type="figure">Figure 5 right)</ref>. Another advantage is that our model directly outputs the final segmentation, eliminating the need for post-processing, which is often required by other methods (e.g. <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b39">40]</ref>).</p><p>Our method also learns to rank the importance of instances through visual attention. During training, the model first attended to objects in a spatial ordering (e.g. left to right), and then gradually shifted to a more sophisticated ordering based on confidence, with larger attentional jumps in between timesteps.</p><p>Some failure cases of our approach, e.g., omitting distant objects and under-segmentation, may be explained by our downsampling factor; to manage training time, we downsample KITTI and Cityscapes by a factor around 4, whereas <ref type="bibr" target="#b39">[40]</ref> does not do any any downsampling. We also observe a lack of higher-order reasoning, e.g., the inclusion of the "third" limb of a person in the bottom of <ref type="figure" target="#fig_4">Figure 6</ref>. As future work, these problems can be addressed by a combination of our method with bottom-up merging methods (e.g. <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b39">40]</ref>) and higher order graphical models (e.g. <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b10">11]</ref>).</p><p>Finally, our ablation studies (see <ref type="table" target="#tab_3">Table 4</ref>) help elucidate the contribution of some model components. The initial foreground segmentation, and the box network both play crucial roles , as seen in the coverage measures. Scheduled sampling results in slightly better performance, by making training resemble testing, gradually forcing the model to carry out a full sequence. Larger numbers of glimpses of the LSTM (Iter-n) helps the model significantly by allowing more information to be considered before outputting the next region of interest. Finally, we note that KITTI has a fairly small validation and test set, so these results are highly variable (see last lines of <ref type="table" target="#tab_1">Table 4 versus Table 2</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this work, we borrow intuition from human counting and formulate instance segmentation as a recurrent attentive process. Our end-to-end recurrent architecture demonstrates significant improvement compared to earlier formulations using RNN on the same tasks, and shows state-of-the-art results on challenging instance segmentation datasets. We address the classic object occlusion problem with an external memory, and the attention mechanism permits segmentation at a fine resolution.</p><p>Our attentional architecture significantly reduces the number of parameters, and the performance is quite strong despite being trained with only 100 leaf images and under 3,000 road scene images. Since our model is end-to-end trainable and does not depend on prior knowledge of the object type (e.g. size, connectedness), we expect our method performance to scale directly with the number of labelled images, which is certain to increase as this task gains in popularity and new datasets become available. As future work, we are currently extending our model to tackle highly multiclass instance segmentation, such as the MS-COCO dataset, and more structured understanding of everyday scenes.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: An illustration of outputs of different components of our end-to-end system, over nine time-steps: Row 1: soft attention at the current glimpse; 2: predicted box; 3: current step segmentation; 4: all segmentations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Left: Detailed network design. Right: Sketch of training, and scheduled sampling; during training, the weighting of ground-truth instance segmentations relative to model predictions (θt) decays to zero.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Illustration of the output of the pretrained FCN. Left: input image. Middle: predicted foreground. Right: predicted angle map.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :Figure 5 :</head><label>45</label><figDesc>Figure 4: Examples of our instance segmentation output on CVPPP leaf dataset. In this paper, instance colors are determined by the order of the model output sequence. Image GT Ours Image GT Ours</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 6 :</head><label>6</label><figDesc>Figure 6: Examples of our instance segmentation output on Cityscapes (row 1-3) and KITTI (row 4-5).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Leaf</figDesc><table>segmentation and counting performance, averaged 
+over all test images, with standard deviation in parentheses 
+
+SBD ↑ 
+|DiC| ↓ 
+
+RIS+CRF [35] 
+66.6 (8.7) 1.1 (0.9) 
+MSU [36] 
+66.7 (7.6) 2.3 (1.6) 
+Nottingham [36] 
+68.3 (6.3) 3.8 (2.0) 
+Wageningen [43] 71.1 (6.2) 2.2 (1.6) 
+IPK [30] 
+74.4 (4.3) 2.6 (1.8) 
+PRIAn [15] 
+-
+1.3(1.2) 
+
+Ours 
+84.9 (4.8) 0.8 (1.0) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 :</head><label>2</label><figDesc>KITTI vehicle segmentation results</figDesc><table>Set MWCov MUCov AvgFP AvgFN 
+
+DepthOrder [45] 
+test 70.9 
+52.2 
+0.597 
+0.736 
+DenseCRF [44] 
+test 74.1 
+55.2 
+0.417 
+0.833 
+AngleFCN+Depth [40] test 79.7 
+75.8 
+0.201 
+0.159 
+
+Ours 
+test 80.0 
+66.9 
+0.764 
+0.201 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Cityscapes instance-level segmentation results</figDesc><table>Set AP 
+AP 
+
+50% 
+
+AP 
+
+50m 
+
+AP 
+
+100m 
+
+MCG+RCNN [8] 
+all 
+4.6 
+12.9 
+7.7 
+10.3 
+AngleFCN+Depth [40] all 
+8.9 
+21.1 
+15.3 
+16.7 
+
+Ours 
+all 
+9.5 
+18.9 
+16.8 
+20.9 
+
+MCG+RCNN [8] 
+car 10.5 26.0 
+17.5 
+21.2 
+AngleFCN+Depth [40] car 22.5 37.8 
+36.4 
+40.7 
+
+Ours 
+car 27.5 41.9 
+46.8 
+54.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 :</head><label>4</label><figDesc>Ablation results on KITTI validation</figDesc><table>Set MWCov MUCov AvgFP AvgFN 
+
+No Pre Proc. 
+val 55.6 
+45.0 
+0.125 
+0.417 
+No Box Net 
+val 57.0 
+49.1 
+0.757 
+0.375 
+No Angle 
+val 71.2 
+63.3 
+0.542 
+0.342 
+No Sched. Samp. val 73.6 
+63.9 
+0.350 
+0.317 
+
+Iter-1 
+val 64.1 
+54.8 
+0.200 
+0.375 
+Iter-3 
+val 71.3 
+63.4 
+0.417 
+0.308 
+
+Full (Iter-5) 
+val 75.1 
+64.6 
+0.375 
+0.283 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Our code is released at: https://github.com/renmengye/ rec-attend-public</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements Supported by Samsung and the Intelligence Advanced Research Projects Activity (IARPA) via Department of Interior/Interior Business Center (DoI/IBC) contract number D16PC00003. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright annotation thereon. Disclaimer: The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the official policies or endorsements, either expressed or implied, of IARPA, DoI/IBC, or the U.S. Government.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">VQA: Visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Antol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Deep watershed transform for instance segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<idno>abs/1611.08303</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Second-order constrained parametric proposals and sequential search-based structured prediction for semantic segmentation in RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Banica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Scheduled sampling for sequence prediction with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Shazeer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Class-specific, top-down segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Borenstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ullman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Freeform region description with second-order pooling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caseiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Batista</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1177" to="1189" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Counting everyday objects in everyday scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Chattopadhyay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vedantam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Ramprasaath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<idno>abs/1604.03505</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">The cityscapes dataset for semantic urban scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cordts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Rehfeld</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enzweiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<idno>abs/1604.01685</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Instance-sensitive fully convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Instance-aware semantic segmentation via multi-task network cascades</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno>abs/1512.04412</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">The shape boltzmann machine: A strong model of object shape</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Winn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">107</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? The KITTI vision benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Laplacian pyramid reconstruction and refinement for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ghiasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Learning to count leaves in rosette plants</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">V</forename><surname>Giuffrida</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Minervini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tsaftaris</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Computer Vision Problems in Plant Phenotyping (CVPPP)</title>
+		<meeting>the Computer Vision Problems in Plant Phenotyping (CVPPP)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">DRAW: A recurrent neural network for image generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Simultaneous detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Hypercolumns for object segmentation and fine-grained localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Shape-aware instance segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hayder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+		<idno>abs/1612.03129</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Search-based structured prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">D</forename><surname>Iii</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Langford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Marcu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">75</biblScope>
+			<biblScope unit="page" from="297" to="325" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">InstanceCut: from edges to instances with multicut</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kirillov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Levinkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Savchynskyy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<idno>abs/1611.08272. 5</idno>
+		<imprint>
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning to count objects in images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Iterative instance segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Reversible recursive instance-level object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Jie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Proposal-free network for instance-level object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<idno>abs/1509.02636</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Finely-grained annotated datasets for image-based plant phenotyping. Pattern Recognition Letters, 2015. Special Issue on Fine-grained Categorization in Ecological Multimedia</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Minervini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fischbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Scharr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Tsaftaris</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Conditional random field with high-order dependencies for sequence labeling and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">C</forename><surname>Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">S</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">L</forename><surname>Chieu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="981" to="1009" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Learning deconvolution network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">3-d histogram-based segmentation and leaf detection for rosette plants</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pape</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Klukas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV Workshops</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning to decompose for object detection and instance segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning to segment object candidates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Learning to refine object segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="75" to="91" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Exploring models and data for image question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Recurrent instance segmentation. CoRR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<idno>abs/1511.08250</idno>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Leaf segmentation in plant phenotyping: A collation study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Scharr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Minervini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>French</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Klukas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Kramer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Luengo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pape</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Polder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vukadinovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Tsaftaris</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mach. Vis. Appl</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="585" to="606" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Convolutional LSTM network: A machine learning approach for precipitation nowcasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yeung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Woo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Instance segmentation of indoor scenes using a coverage loss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sontag</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">End-to-end people detection in crowded scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Stewart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<idno>abs/1506.04878</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Pixel-level encoding and depth layering for instance-level semantic labeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uhrig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cordts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">GCPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Show, attend and tell: Neural image caption generation with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Layered object models for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hallman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1731" to="1743" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Multi-leaf tracking from fluorescence plant videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Kramer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Instance-level segmentation with deep densely connected MRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Monocular object instance segmentation and depth ordering with CNNs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

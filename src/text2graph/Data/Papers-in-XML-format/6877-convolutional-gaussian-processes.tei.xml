@@ -1,0 +1,937 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Convolutional Gaussian Processes</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Van Der Wilk</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+						</author>
+						<author>
+							<affiliation key="aff0">
+								<orgName type="department" key="dep1">Department of Engineering</orgName>
+								<orgName type="department" key="dep2">Department of Engineering</orgName>
+								<orgName type="institution">University of Cambridge</orgName>
+								<address>
+									<country key="GB">UK</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<affiliation key="aff1">
+								<orgName type="institution">University of Cambridge</orgName>
+								<address>
+									<settlement>Cambridge</settlement>
+									<country>UK, UK</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Convolutional Gaussian Processes</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We present a practical way of introducing convolutional structure into Gaussian processes, making them more suited to high-dimensional inputs like images. The main contribution of our work is the construction of an inter-domain inducing point approximation that is well-tailored to the convolutional kernel. This allows us to gain the generalisation benefit of a convolutional kernel, together with fast but accurate posterior inference. We investigate several variations of the convolutional kernel, and apply it to MNIST and CIFAR-10, where we obtain significant improvements over existing Gaussian process models. We also show how the marginal likelihood can be used to find an optimal weighting between convolutional and RBF kernels to further improve performance. This illustration of the usefulness of the marginal likelihood may help automate discovering architectures in larger models.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Gaussian processes (GPs) <ref type="bibr" target="#b0">[1]</ref> can be used as a flexible prior over functions, which makes them an elegant building block in Bayesian nonparametric models. In recent work, there has been much progress in addressing the computational issues preventing GPs from scaling to large problems <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5]</ref>. However, orthogonal to being able to algorithmically handle large quantities of data is the question of how to build GP models that generalise well. The properties of a GP prior, and hence its ability to generalise in a specific problem, are fully encoded by its covariance function (or kernel). Most common kernel functions rely on rather rudimentary and local metrics for generalisation, like the Euclidean distance. This has been widely criticised, notably by Bengio <ref type="bibr" target="#b5">[6]</ref>, who argued that deep architectures allow for more non-local generalisation. While deep architectures have seen enormous success in recent years, it is an interesting research question to investigate what kind of non-local generalisation structures can be encoded in shallow structures like kernels, while preserving the elegant properties of GPs.</p><p>Convolutional structures have non-local influence and have successfully been applied in neural networks to improve generalisation for image data [see e.g. <ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8]</ref>. In this work, we investigate how Gaussian processes can be equipped with convolutional structures, together with accurate approximations that make them applicable in practice. A previous approach by Wilson et al. <ref type="bibr" target="#b8">[9]</ref> transforms the inputs to a kernel using a convolutional neural network. This produces a valid kernel since applying a deterministic transformation to kernel inputs results in a valid kernel [see e.g. <ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b9">10]</ref>, with the (many) parameters of the transformation becoming kernel hyperparameters. We stress that our approach is different in that the process itself is convolved, which does not require the introduction of additional parameters. Although our method does have inducing points that play a similar role to the filters in a convolutional neural network (convnet), these are variational parameters and are therefore more protected from over-fitting. <ref type="bibr">31st</ref> Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.</p><p>Interest in Gaussian processes in the machine learning community started with the realisation that a shallow but infinitely wide neural network with Gaussian weights was a Gaussian process <ref type="bibr" target="#b10">[11]</ref> a nonparametric model with analytically tractable posteriors and marginal likelihoods. This gives two main desirable properties. Firstly, the posterior gives uncertainty estimates, which, combined with having an infinite number of basis functions, results in sensibly large uncertainties far from the data (see Quiñonero-Candela and Rasmussen <ref type="bibr">[12,</ref>  <ref type="figure">fig. 5</ref>] for a useful illustration). Secondly, the marginal likelihood can be used to select kernel hyperparameters. The main drawback is an O N 3 computational cost for N observations. Because of this, much attention over recent years has been devoted to scaling GP inference to large datasets through sparse approximations <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b13">14]</ref>, minibatch-based optimisation <ref type="bibr" target="#b2">[3]</ref>, exploiting structure in the covariance matrix [e.g. <ref type="bibr" target="#b14">15]</ref> and Fourier methods <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b16">17]</ref>.</p><p>In this work, we adopt the variational framework for approximation in GP models, because it can simultaneously give a computational speed-up to O N M 2 (with M N ) through sparse approximations <ref type="bibr" target="#b1">[2]</ref> and approximate posteriors due to non-Gaussian likelihoods <ref type="bibr" target="#b17">[18]</ref>. The variational choice is both elegant and practical: it can be shown that the variational objective minimises the KL divergence across the entire latent process <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b18">19]</ref>, which guarantees that the exact model will be approximated given enough resources. Other methods, such as EP/FITC <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b21">22]</ref>, can be seen as approximate models that do not share this property, leading to behaviour that would not be expected from the model that is to be approximated <ref type="bibr" target="#b22">[23]</ref>. It is worth noting however, that our method for convolutional GPs is not specific to the variational framework, and can be used without modification with other objective functions, such as variations on EP.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Gaussian variational approximation</head><p>We adopt the popular choice of combining a sparse GP approximation with a Gaussian assumption, using a variational objective as introduced in <ref type="bibr" target="#b23">[24]</ref>. We choose our model to be</p><formula xml:id="formula_0">f (·) | θ ∼ GP (0, k(·, ·)) ,<label>(1)</label></formula><formula xml:id="formula_1">y i | f, x i iid ∼ p(y i | f (x i )) ,<label>(2)</label></formula><p>where p(y i | f (x i )) is some non-Gaussian likelihood, for example a Bernoulli distribution through a probit link function for classification. The kernel parameters θ are to be estimated by approximate maximum likelihood, and we drop them from the notation hereon. Following Titsias <ref type="bibr" target="#b1">[2]</ref>, we choose the approximate posterior to be a GP with its marginal distribution specified at M "inducing inputs"</p><formula xml:id="formula_2">Z = {z m } M m=1</formula><p>. Denoting the value of the GP at those points as u = {f (z m )} M m=1 , the approximate posterior process is constructed from the specified marginal and the prior conditional <ref type="bibr" target="#b0">1</ref> :</p><formula xml:id="formula_3">u ∼ N m, S ,<label>(3)</label></formula><formula xml:id="formula_4">f (·) | u ∼ GP k u (·) K −1 uu u, k(·, ·) − k u (·) K −1 uu k u (·) .<label>(4)</label></formula><p>The vector-valued function k u (·) gives the covariance between u and the remainder of f , and is constructed from the kernel:</p><formula xml:id="formula_5">k u (·) = [k(z m , ·)] M m=1</formula><p>. The matrix K uu is the prior covariance of u. The variational parameters m, S and Z are then optimised with respect to the evidence lower bound (ELBO):</p><formula xml:id="formula_6">ELBO = i E q(f (xi)) [log p(y i | f (x i ))] − KL[q(u)||p(u)] .<label>(5)</label></formula><p>Here, q(u) is the density of u associated with equation <ref type="formula" target="#formula_3">(3)</ref>, and p(u) is the prior density from <ref type="bibr" target="#b0">(1)</ref>. Expectations are taken with respect to the marginals of the posterior approximation, given by</p><formula xml:id="formula_7">q(f (x i )) = N µ i , σ 2 i ,<label>(6)</label></formula><formula xml:id="formula_8">µ i = k u (x i ) K −1 uu m ,<label>(7)</label></formula><formula xml:id="formula_9">σ 2 i = k(x i , x i ) + K fu K −1 uu (S − K uu )K −1 uu K uf .<label>(8)</label></formula><p>The matrices K uu and K fu are obtained by evaluating the kernel as k(z m , z m ) and k(x n , z m ) respectively. The KL divergence term of the ELBO is analytically tractable, whilst the expectation term can be computed using one-dimensional quadrature. The form of the ELBO means that stochastic optimisation using minibatches is applicable. A full discussion of the methodology is given by Matthews <ref type="bibr" target="#b18">[19]</ref>. We optimise the ELBO instead of the marginal likelihood to find the hyperparameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Inter-domain variational GPs</head><p>Inter-domain Gaussian processes <ref type="bibr" target="#b24">[25]</ref> work by replacing the variables u, which we have above assumed to be observations of the function at the inducing inputs Z, with more complicated variables made by some linear operator on the function. Using linear operators ensures that the inducing variables u are still jointly Gaussian with the other points on the GP. Implementing inter-domain inducing variables can therefore be a drop-in replacement to inducing points, requiring only that the appropriate (cross-)covariances K fu and K uu are used.</p><p>The key advantage of the inter-domain approach is that the approximate posterior mean's (7) effective basis functions k u (·) can be manipulated by the linear operator which constructs u. This can make the approximation more flexible, or give other computational benefits. For example, Hensman et al. <ref type="bibr" target="#b16">[17]</ref> used the Fourier transform to construct u such that the K uu matrix becomes easier to invert.</p><p>Inter-domain inducing variables are usually constructed using a weighted integral of the GP:</p><formula xml:id="formula_10">u m = φ(x; z m )f (x) dx ,<label>(9)</label></formula><p>where the weighting function φ depends on some parameters z m . The covariance between the inducing variable u m and a point on the function is then</p><formula xml:id="formula_11">cov(u m , f (x n )) = k(z m , x n ) = φ(x; z m )k(x, x n ) dx ,<label>(10)</label></formula><p>and the covariance between two inducing variables is</p><formula xml:id="formula_12">cov(u m , u m ) = k(z m , z m ) = φ(x; z m )φ(x ; z m )k(x, x ) dx dx .<label>(11)</label></formula><p>Using inter-domain inducing variables in the variational framework is straightforward if the above integrals are tractable. The results are substituted for the kernel evaluations in equations <ref type="formula" target="#formula_8">(7)</ref> and (8).</p><p>Our proposed method will be an inter-domain approximation in the sense that the inducing input space is different from the input space of the kernel. However, instead of relying on an integral transformation of the GP, we construct the inducing variables u alongside the new kernel such that the effective basis functions contain a convolution operation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Additive GPs</head><p>We would like to draw attention to previously studied additive models <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b26">27]</ref>, in order to highlight the similarity with the convolutional kernels we will introduce later. Additive models construct a prior GP as a sum of functions over subsets of the input dimensions, resulting in a kernel with the same additive structure. For example, summing over each input dimension i, we get</p><formula xml:id="formula_13">f (x) = i f i (x[i]) =⇒ k(x, x ) = i k i (x[i], x [i]) .<label>(12)</label></formula><p>This kernel exhibits some non-local generalisation, as the relative function values along one dimension will be the same regardless of the input along other dimensions. In practice, this specific additive model is rather too restrictive to fit data well, since it assumes that all variables affect the response y independently. At the other extreme, the popular squared exponential kernel allows interactions between all dimensions, but this turns out to be not restrictive enough: for high-dimensional problems we need to impose some restriction on the form of the function.</p><p>In this work, we build an additive kernel inspired by the convolution operator found in convnets. The same function is applied to patches from the input, which allows adjacent pixels to interact, but imposes an additive structure otherwise.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Convolutional Gaussian Processes</head><p>We begin by constructing the exact convolutional Gaussian process model, highlighting its connections to existing neural network models, and challenges in performing inference.</p><p>Convolutional kernel construction Our aim is to construct a GP prior on functions on images of size D = W × H to real valued responses: f : R D → R. We start with a patch-response function, g : R E → R, mapping from patches of size E. We use a stride of 1 to extract all patches, so for patches of size E = w × h, we get a total of P = (W − w + 1) × (H − h + 1) patches. We can start by simply making the overall function f the sum of all patch responses. If g(·) is given a GP prior, a GP prior will also be induced on f (·):</p><formula xml:id="formula_14">g ∼ GP (0, k g (z, z )) , f (x) = p g x [p] ,<label>(13)</label></formula><formula xml:id="formula_15">=⇒ f ∼ GP   0, P p=1 P p =1 k g x [p] , x [p ]   ,<label>(14)</label></formula><p>where</p><formula xml:id="formula_16">x [p]</formula><p>indicates the p th patch of the image x. This construction is reminiscent of the additive models discussed earlier, since a function is applied to subsets of the input. However, in this case, the same function g(·) is applied to all input subsets. This allows all patches in the image to inform the value of the patch-response function, regardless of their location.</p><p>Comparison to convnets This approach is similar in spirit to convnets. Both methods start with a function that is applied to each patch. In the construction above, we introduce a single patch-response function g(·) that is non-linear and nonparametric. Convnets, on the other hand, rely on many linear filters, followed by a non-linearity. The flexibility of a single convolutional layer is controlled by the number of filters, while depth is important in order to allow for enough non-linearity. In our case, adding more non-linear filters to the construction of f (·) does not increase the capacity to learn. The patch responses of the multiple filters would be summed, resulting in simply a summed kernel for the prior over g.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Computational issues</head><p>Similar kernels have been proposed in various forms <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b28">29]</ref>, but have never been applied directly in GPs, probably due to the prohibitive costs. Direct implementation of a GP using k f would be infeasible not only due to the usual cubic cost w.r.t. the number of data points, but also due to it requiring P 2 evaluations of k g per element of K ff . For MNIST with patches of size 5, P 2 ≈ 3.3 · 10 5 , resulting in the kernel evaluations becoming a significant bottleneck. Sparse inducing point methods require M 2 + N M kernel evaluations of k f . As an illustration, the K uu matrix for 750 inducing points (which we use in our experiments) would require ∼ 700 GB of memory for backpropagation. Luckily, this can largely be avoided.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Inducing patch approximations</head><p>In the next few sections, we will introduce several variants of the convolutional Gaussian process, and illustrate their properties using toy and real datasets. Our main contribution is showing that convolutional structure can be embedded in kernels, and that they can be used within the framework of nonparametric Gaussian process approximations. We do so by constructing the kernel in tandem with a suitable domain in which to place the inducing variables. Implementation 2 requires minimal changes to existing implementations of sparse variational GP inference, and can leverage GPU implementations of convolution operations (see appendix). In the appendix we also describe how the same inference method can be applied to kernels with general invariances.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Translation invariant convolutional GP</head><p>Here we introduce the simplest version of our method. We start with the construction from section 3, with an RBF kernel for k g . In order to obtain a tractable method, we want to approximate the  true posterior using a small set of inducing points. The main idea is to place these inducing points in the input space of patches, rather than images. This corresponds to using inter-domain inducing points. In order to use this approximation we simply need to find the appropriate inter-domain (cross-) covariances K uu and K fu , which are easily found from the construction of the convolutional kernel in equation 14:</p><formula xml:id="formula_17">k f u (x, z) = E g [f (x)g(z)] = E g p g(x [p] )g(z) = p k g x [p] , z ,<label>(15)</label></formula><formula xml:id="formula_18">k uu (z, z ) = E g [g(z)g(z )] = k g (z, z ) .<label>(16)</label></formula><p>This improves on the computation from the standard inducing point method, since only covariances between the image patches and inducing patches are needed, allowing K fu to be calculated with N M P instead of N M P 2 kernel evaluations. Since K uu now only requires the covariances between inducing patches, its cost is M 2 instead of M 2 P 2 evaluations. However, evaluating diag [K ff ] does still require N P 2 evaluations, although N can be small when using minibatch optimisation. This brings the cost of computing the kernel matrices down significantly compared to the O N M 2 cost of the calculation of the ELBO.</p><p>In order to highlight the capabilities of the new kernel, we now consider two toy tasks: classifying rectangles and distinguishing zeros from ones in MNIST.</p><p>Toy demo: rectangles The rectangles dataset is an artificial dataset containing 1200 images of size 28 × 28. Each image contains the outline of a randomly generated rectangle, and is labelled according to whether the rectangle has larger width or length. Despite its simplicity, the dataset is tricky for standard kernel-based methods, including Gaussian processes, because of the high dimensionality of the input, and the strong dependence of the label on multiple pixel locations.</p><p>To tackle the rectangles dataset with the convolutional GP, we used a patch size of 3 × 3 and 16 inducing points initialised with uniform random noise. We optimised using Adam <ref type="bibr" target="#b30">[31]</ref> (0.01 learning rate &amp; 100 data points per minibatch) and obtained 1.4% error and a negative log predictive probability (nlpp) of 0.055 on the test set. For comparison, an RBF kernel with 1200 optimally placed inducing points, optimised with BFGS, gave 5.0% error and an nlpp of 0.258. Our model is both better in terms of performance, and uses fewer inducing points. The model works because it is able to recognise and count vertical and horizontal bars in the patches. The locations of the inducing points quickly recognise the horizontal and vertical lines in the images -see <ref type="figure" target="#fig_1">Figure 1a</ref>.</p><p>Illustration: Zeros vs ones MNIST We perform a similar experiment for classifying MNIST 0 and 1 digits. This time, we initialise using patches from the training data and use 50 inducing features, shown in figure 1b. Features in the top left are in favour of classifying a zero, and tend to be diagonal or bent lines, while features for ones tend to be blank space or vertical lines. We get 0.3% error.</p><p>Full MNIST Next, we turn to the full multi-class MNIST dataset. Our setup follows Hensman et al. <ref type="bibr" target="#b4">[5]</ref>, with 10 independent latent GPs using the same convolutional kernel, and constraining q(u) to a Gaussian (see section 2). It seems that this translation invariant kernel is too restrictive for this task, since the error rate converges at around 2.1%, compared to 1.9% for the RBF kernel.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Weighted convolutional kernels</head><p>We saw in the previous section that although the translation invariant kernel excelled at the rectangles task, it under-performed compared to the RBF on MNIST. Full translation invariance is too strong a constraint, which makes intuitive sense for image classification, as the same feature in different locations of the image can imply different classes. This can be remedied without leaving the family of Gaussian processes by relaxing the constraint of requiring each patch to give the same contribution, regardless of its position in the image. We do so by introducing a weight for each patch. Denoting again the underlying patch-based GP as g, the image-based GP f is given by</p><formula xml:id="formula_19">f (x) = p w p g(x [p] ) .<label>(17)</label></formula><p>The weights {w p } P p=1 adjust the relative importance of the response for each location in the image. Only k f and k f u differ from the invariant case, and can be found to be:</p><formula xml:id="formula_20">k f (x, x) = pq w p w q k g (x [p] , x q ) ,<label>(18)</label></formula><formula xml:id="formula_21">k f u (x, z) = p w p k g (x [p] , z) .<label>(19)</label></formula><p>The patch weights w ∈ R P are now kernel hyperparameters, and we optimise them with respect the the ELBO in the same fashion as the underlying parameters of the kernel k g . This introduces P hyperparameters into the kernel -slightly less than the number of input pixels, which is how many hyperparameters an automatic relevance determination kernel would have.</p><p>Toy demo: rectangles The errors in the previous section were caused by rectangles along the edge of the image, which contained bars which only contribute once to the classification score. Bars in the centre contribute to multiple patches. The weighting allows some up-weighting of patches along the edge. This results in near-perfect classification, with no classification errors and an nlpp of 0.005.</p><p>Full MNIST The weighting causes a significant reduction in error over the translation invariant and RBF kernels (table 1 &amp; <ref type="figure" target="#fig_2">figure 2</ref>). The weighted convolutional kernel obtains 1.22% error -a significant improvement over 1.9% for the RBF kernel <ref type="bibr" target="#b4">[5]</ref>. Krauth et al. <ref type="bibr" target="#b31">[32]</ref> report 1.55% error using an RBF kernel, but using a leave-one-out objective for finding the hyperparameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Does convolution capture everything?</head><p>As discussed earlier, the additive nature of the convolutional kernel places constraints on the possible functions in the prior. While these constraints have been shown to be useful for classifying MNIST, we lose the guarantee (that e.g. the RBF provides) of being able to model any continuous function arbitrarily well in the large-data limit. This is because convolutional kernels are not universal <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b33">34]</ref> in the image input space, despite being nonparametric. This places convolutional kernels in a middle ground between parametric and universal kernels (see the appendix for a discussion). A kernel that is universal and has some amount of convolutional structure can be obtained by summing an RBF component: k(x, x ) = k rbf (x, x ) + k conv (x, x ). Equivalently, the GP is constructed by the sum f (x) = f conv (x) + f rbf (x). This allows the universal RBF to model any residuals that the convolutional structure cannot explain. We use the marginal likelihood estimate to automatically weigh how much of the process should be explained by each of the components, in the same way as is done in other additive models <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b34">35]</ref>.</p><p>Inference in such a model is straightforward under the usual inducing point framework -it only requires evaluating the sum of kernels. The case considered here is more complicated since we want the inducing inputs for the RBF to lie in the space of images, while we want to use inducing patches for the convolutional kernel. This forces us to use a slightly different form for the approximating GP, representing the inducing inputs and outputs separately, as</p><formula xml:id="formula_22">u conv u rbf ∼ N µ conv µ rbf , S ,<label>(20)</label></formula><formula xml:id="formula_23">f (·) | u = f conv (·) | u conv + f rbf (·) | u rbf .<label>(21)</label></formula><p>The variational lower bound changes only through the equations <ref type="formula" target="#formula_8">(7)</ref> and <ref type="formula" target="#formula_9">(8)</ref>, which must now contain contributions of the two component Gaussian processes. If covariances in the posterior between f conv and f rbf are to be allowed, S must be a full-rank 2M × 2M matrix. A mean-field approximation can be chosen as well, in which case S can be M × M block-diagonal, saving some parameters. Note that regardless of which approach is chosen, the largest matrix to be inverted is still M × M , as u conv and u rbf are independent in the prior (see the appendix for more details).</p><p>Full MNIST By adding an RBF component, we indeed get an extra reduction in error and nlpp from 1.22% to 1.17% and 0.048 to 0.039 respectively (table 1 &amp; <ref type="figure" target="#fig_2">figure 2</ref>). The variances for the convolutional and RBF kernels are 14.3 and 0.011 respectively, showing that the convolutional kernel explains most of the variance in the data.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4">Convolutional kernels for colour images</head><p>Our final variants of the convolutional kernel handle images with multiple colour channels. The addition of colour presents an interesting modelling challenge, as the input dimensionality increases significantly, with a large amount of redundant information. As a baseline, the weighted convolutional kernel from section 4.2 can be used by taking all patches from each colour channel together, resulting in C times more patches, where C is the number of colour channels. This kernel can only account for linear interactions between colour channels through the weights, and is also constrained to give the same patch response regardless of the colour channel. A step up in flexibility would be to define g(·)</p><p>to take a w × h × C patch with all C colour channels. This trades off increasing the dimensionality of the patch-response function input with allowing it to learn non-linear interactions between the colour channels. We call this the colour-patch variant. A middle ground that does not increase the dimensionality as much, is to use a different patch-response function g c (·) for each colour channel.</p><p>We will refer to this as the multi-channel convolutional kernel. We construct the overall function f as</p><formula xml:id="formula_24">f (x) = P p=1 C c=1 w pc g c x [pc] .<label>(22)</label></formula><p>For this variant, inference becomes similar to section 4.3, although for a different reason. While all g c (·)s can use the same inducing patch inputs, we need access to each g c (x <ref type="bibr">[pc]</ref> ) separately in order to fully specify f (x). This causes us to require separate inducing outputs for each g c . In our approximation, we share the inducing inputs, while, as was done in section 4.3, representing the inducing outputs separately. The equations for f (·)|u are changed only through the matrices K fu and K uu being N × M C and M C × M C respectively. Given that the g c (·) are independent in the prior, and the inducing inputs are constrained to be the same, K uu is a block-diagonal repetition of k g (z m , z m ). All the elements of K fu are given by</p><formula xml:id="formula_25">k f gc (x, z) = E {gc} C c=1 p w pc g c x [pc] g c (z) = p w pc k g (x [pc] , z) .<label>(23)</label></formula><p>As in section 4.3, we have the choice to represent a full CM × CM covariance matrix for all inducing variables u, or go for a mean-field approximation requiring only C M × M matrices. Again, both versions require no expensive matrix operations larger than M × M (see appendix).</p><p>Finally, a simplification can be made in order to avoid representing C patch-response functions. If the weighting of each of the colour channels is constant w.r.t. the patch location (i.e. w pc = w p w c ), the model is equivalent to using a patch-response function with an additive kernel:</p><formula xml:id="formula_26">f (x) = p w p c w c g c (x [pc] ) = p w pg (x [pc] ) ,<label>(24)</label></formula><formula xml:id="formula_27">g(·) ∼ GP 0, c w c k c (·, ·) .<label>(25)</label></formula><p>CIFAR-10 We conclude the experiments by an investigation of CIFAR-10 <ref type="bibr" target="#b35">[36]</ref>, where 32 × 32 sized RGB images are to be classified. We use a similar setup to the previous MNIST experiments, by using 5 × 5 patches. Again, all latent functions share the same kernel for the prior, including the patch weights. We compare an RBF kernel to 4 variants of the convolutional kernel: the baseline "weighted", the colour-patch, the colour-patch variant with additive structure (equation <ref type="bibr" target="#b23">24)</ref>, and the multi-channel with mean-field inference. All models use 1000 inducing inputs and are trained using Adam. Due to memory constraints on the GPU, a minibatch size of 40 had to be used for the weighted, additive and multi-channel models.</p><p>Test errors and nlpps during training are shown in <ref type="figure" target="#fig_3">figure 3</ref>. Any convolutional structure significantly improves classification performance, with colour interactions seeming particularly important, as the best performing model is the multi-channel GP. The final error rate of the multi-channel kernel was 35.4%, compared to 48.6% for the RBF kernel. While we acknowledge that this is far from state of the art using deep nets, it is a significant improvement over existing Gaussian process models, including the 44.95% error reported by Krauth et al. <ref type="bibr" target="#b31">[32]</ref>, where an RBF kernel was used together with their leave-one-out objective for the hyperparameters. This improvement is orthogonal to the use of a new kernel.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>We introduced a method for efficiently using convolutional structure in Gaussian processes, akin to how it has been used in neural nets. Our main contribution is showing how placing the inducing inputs in the space of patches gives rise to a natural inter-domain approximation that fits in sparse GP approximation frameworks. We discuss several variations of convolutional kernels and show how they can be used to push the performance of Gaussian process models on image datasets. Additionally, we show how the marginal likelihood can be used to assess to what extent a dataset can be explained with only convolutional structure. We show that convolutional structure is not sufficient, and that performance can be improved by adding a small amount of "fully connected" (RBF). The ability to do this, and automatically tune the hyperparameters is a real strength of Gaussian processes. It would be great if this ability could be incorporated in larger or deeper models as well. </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: The optimised inducing patches for the translation invariant kernel. The inducing patches are sorted by the value of their corresponding inducing output, illustrating the evidence each patch has in favour of a class.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Test error (left) and negative log predictive probability (nlpp, right) for MNIST, using RBF (blue), translation invariant convolutional (orange), weighted convolutional (green) and weighted convolutional + RBF (red) kernels.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Test error (left) and nlpp (right) for CIFAR-10, using RBF (blue), baseline weighted convolutional (orange), full-colour weighted convolutional (green), additive (red), and multi-channel (purple).</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The construction of the approximate posterior can alternatively be seen as a GP posterior to a regression problem, where the q(u) indirectly specifies the likelihood. Variational inference will then adjust the inputs and likelihood of this regression problem to make the approximation close to the true posterior in KL divergence.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Ours can be found on https://github.com/markvdw/convgp, together with code for replicating the experiments, and trained models. It is based on GPflow [30], allowing utilisation of GPUs.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>CER gratefully acknowledges support from EPSRC grant EP/J012300. MvdW is generously supported by a Qualcomm Innovation Fellowship.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Gaussian Processes for Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>MIT Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Variational learning of inducing variables in sparse Gaussian processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Michalis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Titsias</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 12th International Conference on Artificial Intelligence and Statistics</title>
+		<meeting>the 12th International Conference on Artificial Intelligence and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="567" to="574" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Gaussian processes for big data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolò</forename><surname>Fusi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neil</forename><forename type="middle">D</forename><surname>Lawrence</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 29th Conference on Uncertainty in Artificial Intelligence (UAI)</title>
+		<meeting>the 29th Conference on Uncertainty in Artificial Intelligence (UAI)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="282" to="290" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">On sparse variational methods and the Kullback-Leibler divergence between stochastic processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">E</forename><surname>Turner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 19th International Conference on Artificial Intelligence and Statistics</title>
+		<meeting>the 19th International Conference on Artificial Intelligence and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="231" to="238" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">MCMC for variationally sparse Gaussian processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maurizio</forename><surname>Filippone</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="1639" to="1647" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Learning deep architectures for AI. Foundations and Trends in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno>1935-8237</idno>
+		<imprint>
+			<date type="published" when="2009-01" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1" to="127" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Léon</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="page" from="1097" to="1105" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Stochastic variational deep kernel learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">G</forename><surname>Wilson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiting</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2586" to="2594" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Manifold gaussian processes for regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roberto</forename><surname>Calandra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Peters</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><forename type="middle">Peter</forename><surname>Deisenroth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2016 International Joint Conference on Neural Networks (IJCNN)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3338" to="3345" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Bayesian learning for neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Neal</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1996" />
+			<publisher>Springer</publisher>
+			<biblScope unit="volume">118</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A unifying view of sparse approximate Gaussian process regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joaquin</forename><surname>Quiñonero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">-</forename><surname>Candela</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="1939" to="1959" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Fast forward selection to speed up sparse Gaussian process regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Seeger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">I</forename><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neil</forename><forename type="middle">D</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lawrence</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Ninth International Workshop on Artificial Intelligence and Statistics</title>
+		<meeting>the Ninth International Workshop on Artificial Intelligence and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Sparse Gaussian processes using pseudo-inputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Snelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="page" from="1257" to="1264" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Kernel interpolation for scalable structured Gaussian processes (KISS-GP)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Wilson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hannes</forename><surname>Nickisch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 32nd International Conference on Machine Learning (ICML)</title>
+		<meeting>the 32nd International Conference on Machine Learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1775" to="1784" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Sparse spectrum Gaussian process regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Lázaro-Gredilla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joaquin</forename><surname>Quiñonero-Candela</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="1865" to="1881" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Variational fourier features for gaussian processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Durrande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arno</forename><surname>Solin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.06740</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">The variational Gaussian approximation revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Manfred</forename><surname>Opper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cédric</forename><surname>Archambeau</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="786" to="792" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Scalable Gaussian Process Inference Using Variational Methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Matthews</surname></persName>
+		</author>
+		<ptr target="http://mlg.eng.cam.ac.uk/matthews/thesis.pdf" />
+		<imprint>
+			<date type="published" when="2016" />
+			<pubPlace>Cambridge, UK</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>University of Cambridge</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Scalable gaussian process classification via expectation propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Hernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">-Lobato</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José Miguel Hernández-Lobato</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="168" to="176" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">A unifying framework for sparse gaussian process approximation using power expectation propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josiah</forename><surname>Bui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">E</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Turner</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.07066</idno>
+		<imprint>
+			<date type="published" when="2016-05" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Scalable multi-class Gaussian process classification using expectation propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carlos</forename><surname>Villacampa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">-</forename><surname>Calvo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 34th International Conference on Machine Learning</title>
+		<meeting>the 34th International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">70</biblScope>
+			<biblScope unit="page" from="3550" to="3559" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Understanding probabilistic sparse gaussian process approximations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><forename type="middle">Stephan</forename><surname>Bauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Van Der Wilk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">Edward</forename><surname>Rasmussen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Scalable variational Gaussian process classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Hensman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 18th International Conference on Artificial Intelligence and Statistics</title>
+		<meeting>the 18th International Conference on Artificial Intelligence and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="351" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Inter-domain Gaussian processes for sparse inference using inducing features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anibal</forename><surname>Figueiras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">-</forename><surname>Vidal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Lázaro-Gredilla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="1087" to="1095" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Additive covariance kernels for highdimensional Gaussian process modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Durrande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Ginsbourger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olivier</forename><surname>Roustant</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Annales de la Faculté de Sciences de Toulouse</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="page">481</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Additive Gaussian processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">K</forename><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hannes</forename><surname>Nickisch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><forename type="middle">E</forename><surname>Rasmussen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="226" to="234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Convolutional kernel networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julien</forename><surname>Mairal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Piotr</forename><surname>Koniusz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zaid</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cordelia</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="page" from="2627" to="2635" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Learning by stretching deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gaurav</forename><surname>Pandey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ambedkar</forename><surname>Dukkipati</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 31st International Conference on Machine Learning (ICML-14)</title>
+		<editor>Tony Jebara and Eric P. Xing</editor>
+		<meeting>the 31st International Conference on Machine Learning (ICML-14)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1719" to="1727" />
+		</imprint>
+	</monogr>
+	<note>JMLR Workshop and Conference Proceedings</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">GPflow: A Gaussian process library using TensorFlow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>De</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Van Der</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Wilk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nickson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Keisuke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexis</forename><surname>Fujii</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pablo</forename><surname>Boukouvalas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>León-Villagrá</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hensman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">40</biblScope>
+			<biblScope unit="page" from="1" to="6" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">AutoGP: Exploring the capabilities and limitations of Gaussian process models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karl</forename><surname>Krauth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edwin</forename><forename type="middle">V</forename><surname>Bonilla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kurt</forename><surname>Cutajar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maurizio</forename><surname>Filippone</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">On the Influence of the Kernel on the Consistency of Support Vector Machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ingo</forename><surname>Steinwart</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="67" to="93" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Universality, characteristic kernels and rkhs embedding of measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bharath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kenji</forename><surname>Sriperumbudur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gert</forename><forename type="middle">R G</forename><surname>Fukumizu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lanckriet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2389" to="2410" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Structure discovery in nonparametric regression through compositional kernel search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">K</forename><surname>Duvenaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">R</forename><surname>Lloyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><forename type="middle">B</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joshua</forename><forename type="middle">B</forename><surname>Tenenbaum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zoubin</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML (3)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1166" to="1174" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinod</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<ptr target="http://www.cs.toronto.edu/~kriz/cifar.html" />
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+		<respStmt>
+			<orgName>University of Toronto</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">Technical report</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
