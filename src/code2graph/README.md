@@ -77,7 +77,7 @@ Refer to the [jupyter notebook](testScript/computational_graph_based.ipynb).
 Refer to the [jupyter notebook](testScript/light_weight.ipynb).
 
 ### Generate RDF Graph from Code Repository 
-Refer to the [juupyter notebook](testScript/demo.ipynb).
+Refer to the [jupyter notebook](testScript/demo.ipynb).
 
 ## Dataset
 
