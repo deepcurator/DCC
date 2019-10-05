@@ -69,11 +69,15 @@ pip install -r requirements.txt
 * apscheduler==3.6.1 => Scheduler for web crawler.
  
 ## Usage Examples
+
 ### Running Computation-Based Approach
-Refer to the [notebook](testScript/computational_graph_based.ipynb).
+Refer to the [jupyter notebook](testScript/computational_graph_based.ipynb).
 
 ### Running Lightweight Approach
-Refer to the [notebook](testScript/light_weight.ipynb).
+Refer to the [jupyter notebook](testScript/light_weight.ipynb).
+
+### Generate RDF Graph from Code Repository 
+Refer to the [juupyter notebook](testScript/demo.ipynb).
 
 ## Dataset
 

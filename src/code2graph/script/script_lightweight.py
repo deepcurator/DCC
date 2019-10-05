@@ -12,9 +12,9 @@ from dateutil import parser
 import sys
 sys.path.append('../')
 
-from core.database import Database
-from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
 from core.graphlightweight import TFTokenExplorer
+from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
+from core.database import Database
 
 cols = ['Folder Name', 'Title', 'Framework', 'Lightweight',
         'Error Msg', 'Date', 'Tags', 'Stars', 'Code Link', 'Paper Link']
@@ -22,8 +22,8 @@ metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
 
 
 def extract_data(data_path: Path) -> list:
-    """ Preprocessing of raw data to make it ready for lightweight graph construction. 
-        The raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format. 
+    """ Preprocessing of raw data to make it ready for lightweight graph construction.
+        The raw data crawled from the PWCscraper consist of zip file and some metadata stored in text format.
 
     Creates a dictionary with metadata for each paper and extracts the zip file.
 
@@ -39,29 +39,8 @@ def extract_data(data_path: Path) -> list:
     dataset = []
 
     for subdir in subdirs:
-        repo = {}
-        for meta_prefix in metas:
-            try:
-                with open(str(subdir / (meta_prefix + '.txt')), 'r') as f:
-                    if meta_prefix == 'title':
-                        repo[meta_prefix] = ' '.join(
-                            [line.strip() for line in f.readlines()])
-                    else:
-                        repo[meta_prefix] = f.read().strip()
-                    if repo[meta_prefix] == "" or repo[meta_prefix] == "None":
-                        repo[meta_prefix] = None
-            except:
-                repo[meta_prefix] = None
 
-        repo['stars'] = int(repo['stars'].replace(",", ""))
-        repo['stored_dir_name'] = subdir.name
-
-        if repo['date']:
-            try:
-                # check if date is valid
-                parser.parse(repo['date'])
-            except ValueError:
-                repo['date'] = None
+        repo = fetch_meta_info(subdir)
 
         repo['code_path'] = None
         if repo['framework'] and 'tf' in repo['framework']:
@@ -83,6 +62,44 @@ def extract_data(data_path: Path) -> list:
 
     return dataset
 
+
+def fetch_meta_info(subdir: Path) -> dict:
+    """Fetches meta information of the code repository.
+
+    Arguments:
+        subdir {pathlib.Path} -- Path to code repository.
+    """
+
+    repo = {}
+
+    for meta_prefix in metas:
+        try:
+            with open(str(subdir / (meta_prefix + '.txt')), 'r') as f:
+                if meta_prefix == 'title':
+                    repo[meta_prefix] = ' '.join(
+                        [line.strip() for line in f.readlines()])
+                else:
+                    repo[meta_prefix] = f.read().strip()
+                
+                if repo[meta_prefix] == "" or repo[meta_prefix] == "None":
+                    repo[meta_prefix] = None
+        except:
+            repo[meta_prefix] = None
+    
+    if repo['stars']:
+        repo['stars'] = int(repo['stars'].replace(",", ""))
+    
+    repo['stored_dir_name'] = subdir.name
+
+    if repo['date']:
+        try:
+            # check if date is valid
+            parser.parse(repo['date'])
+        except ValueError:
+            repo['date'] = None
+    
+    return repo
+        
 
 def preprocess(code_path: str):
     """Preprocess a code repository by checking if the code is python3 compatible.
@@ -228,7 +245,7 @@ def pipeline_the_lightweight_approach(args):
         tasks, metadata = recursive(config.input_path, config)
 
     else:
-        task = {'code_path': config.input_path, 'meta': {}}
+        task = {'code_path': config.input_path, 'meta': fetch_meta_info(config.input_path.parent)}
         tasks.append(task)
 
     for task in tasks:
