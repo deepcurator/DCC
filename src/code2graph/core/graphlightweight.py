@@ -453,10 +453,10 @@ class TFTokenExplorer:
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
-                file_name = om.dcc_prefix + self.repo_name + '/' + Path(file).name
-                graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
+                file_name = URIRef(om.dcc_prefix + self.repo_name + '/' + Path(file).name)
+                graph.add((self.repo_name_uri, om.has_file, file_name))
                 # String Literal cannot be the subject
-                # graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
+                graph.add(file_name, om.part_of, self.repo_name_uri)
             
             self.rdf_graphs['metadata'] = graph
 
