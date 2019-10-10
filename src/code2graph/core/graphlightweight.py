@@ -455,7 +455,8 @@ class TFTokenExplorer:
             for file in self.all_py_files:
                 file_name = om.dcc_prefix + self.repo_name + '/' + Path(file).name
                 graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
-                graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
+                # String Literal cannot be the subject
+                # graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
             
             self.rdf_graphs['metadata'] = graph
 
