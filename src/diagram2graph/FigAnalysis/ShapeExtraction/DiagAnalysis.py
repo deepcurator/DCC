@@ -41,7 +41,7 @@ def preprocessImage(image_path, resize):
         
 if __name__ == '__main__':
     
-    imdir_path = 'InputImage'
+    imdir_path = 'Input'
     op_dir = "Output"
         
     print("[INFO] loading images ...")

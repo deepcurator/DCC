@@ -6,8 +6,8 @@ from ArrowDetect import ArrowDetect as ad
 import re
 import difflib
 
-from text_detect.rectangle import Rectangle
-from text_detect.rectangle_merger import RectangleMerger as Merger
+from Rectangle import Rectangle
+from RectangleMerger import RectangleMerger as Merger
 
 class Diag2Graph:
     
@@ -427,7 +427,7 @@ class Diag2Graph:
             connected_comps = []
             
             for ((startx, starty, endx, endy), start_comp_found, end_comp_found, start_text_found, end_text_found) in line_connect:
-                print("Diag2Graph:  start_comp_found = %s, end_comp_found = %s, start_text_found = %s, end_text_found = %s"%(start_comp_found, end_comp_found, start_text_found, end_text_found))
+                #print("Diag2Graph:  start_comp_found = %s, end_comp_found = %s, start_text_found = %s, end_text_found = %s"%(start_comp_found, end_comp_found, start_text_found, end_text_found))
 
                 if (start_comp_found != -1 and end_comp_found != -1):
                     s, e, conn = self.nodeSequence(start_comp_found, end_comp_found, node_list, start_node_type = "Comp", end_node_type = "Comp") 
@@ -463,7 +463,7 @@ class Diag2Graph:
             op_file.write(":%s hasFlow %s \n"% (FigureID, flow_dir_updated))   
         
         
-        cv2.imwrite(op_image_name, final_graph_im)
+        #cv2.imwrite(op_image_name, final_graph_im)
         op_file.close()       
             
         
