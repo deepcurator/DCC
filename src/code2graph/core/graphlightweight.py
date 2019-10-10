@@ -456,7 +456,7 @@ class TFTokenExplorer:
                 file_name = URIRef(om.dcc_prefix + self.repo_name + '/' + Path(file).name)
                 graph.add((self.repo_name_uri, om.has_file, file_name))
                 # String Literal cannot be the subject
-                graph.add(file_name, om.part_of, self.repo_name_uri)
+                graph.add((file_name, om.part_of, self.repo_name_uri))
             
             self.rdf_graphs['metadata'] = graph
 
