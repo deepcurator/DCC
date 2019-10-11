@@ -444,7 +444,7 @@ class TFTokenExplorer:
         graph = Graph()
         if self.metadata:
             if self.metadata['paper']:
-                pub_id = '.'.join(self.metadata['paper'].split('/')[-1].split('.')[:-1])
+                pub_id = self.metadata['paper'].split('/')[-1].replace('.pdf', '')
                 publication_id_uri = URIRef(om.dcc_prefix + pub_id)
             else:
                 publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
