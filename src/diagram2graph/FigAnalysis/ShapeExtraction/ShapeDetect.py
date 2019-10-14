@@ -247,7 +247,7 @@ class ShapeDetect:
         gray_imcvcpy = gray_imcv.copy()
         
         ################################################ Find components from line drawing ##########################################
-        (cnts, _) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
+        (_, cnts, h) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
         final_component = []
         final_conf = []
         line_component = []
