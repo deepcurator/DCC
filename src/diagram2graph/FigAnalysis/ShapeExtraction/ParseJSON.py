@@ -65,8 +65,12 @@ class ParseJSON:
 
 
 	def isResult(self, caption):
+<<<<<<< HEAD
 		if (caption.lower().find('result') != -1 or caption.lower().find('plot') != -1 or caption.lower().find('graph') != -1 or caption.lower().find('image') != -1 
 			or caption.lower().find('dataset') != -1): 
+=======
+		if (caption.lower().find('result') != -1 or caption.lower().find('plot') != -1 or caption.lower().find('graph') != -1 or caption.lower().find('image') != -1 ): 
+>>>>>>> 2c4e01309d416d82fa689262d3e84ddaeec1fc74
 			return True
 		return False
 

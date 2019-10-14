@@ -68,7 +68,11 @@ class FigTypeDetect:
 	def detectFigType(self, img):
 
 		
+<<<<<<< HEAD
 		#print("[INFO] loading and pre-processing image...")
+=======
+		print("[INFO] loading and pre-processing image...")
+>>>>>>> 2c4e01309d416d82fa689262d3e84ddaeec1fc74
 		
 		# resize image
 		image = cv2.resize(img, self.inputShape, interpolation = cv2.INTER_AREA)

@@ -444,7 +444,7 @@ class TFTokenExplorer:
         graph = Graph()
         if self.metadata:
             if self.metadata['paper']:
-                pub_id = '.'.join(self.metadata['paper'].split('/')[-1].split('.')[:-1])
+                pub_id = self.metadata['paper'].split('/')[-1].replace('.pdf', '')
                 publication_id_uri = URIRef(om.dcc_prefix + pub_id)
             else:
                 publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
@@ -453,9 +453,10 @@ class TFTokenExplorer:
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
-                file_name = om.dcc_prefix + self.repo_name + '/' + Path(file).name
-                graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
-                graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
+                file_name = URIRef(om.dcc_prefix + self.repo_name + '/' + Path(file).name)
+                graph.add((self.repo_name_uri, om.has_file, file_name))
+                # String Literal cannot be the subject
+                graph.add((file_name, om.part_of, self.repo_name_uri))
             
             self.rdf_graphs['metadata'] = graph
 
