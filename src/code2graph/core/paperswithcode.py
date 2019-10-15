@@ -97,7 +97,7 @@ class PWCScraper:
         soup = BeautifulSoup(self.browser.page_source, "lxml")
 
         paper_list = soup.find_all('div', {'class': 'col-lg-9 item-col'})
-
+        
         tot_paper_to_get = self.config.tot_paper_to_scrape_per_shot
         limit = len(paper_list) if (
             tot_paper_to_get == -1) else tot_paper_to_get
@@ -113,8 +113,11 @@ class PWCScraper:
                     'p', {'class': 'item-strip-abstract'}).text.strip()
                 paper_dict["stars"] = paper.find(
                     'div', {'class': 'entity-stars'}).text.strip()
-                paper_dict["date"] = paper.find(
-                    'div', {'class': 'stars-accumulated text-center'}).text.strip()
+                try:
+                    paper_dict["date"] = paper.find(
+                        'div', {'class': 'stars-accumulated text-center'}).text.strip()
+                except Exception as e:
+                    paper_dict["date"] = None
 
                 if paper_dict["date"]:
                     try:
@@ -168,8 +171,11 @@ class PWCScraper:
                 paper['paper'] = links_soup.find(
                     'a', {'class': 'badge badge-light'})['href']
                 # might be multiple code_link, what to do?
-                paper['code'] = links_soup.find(
-                    'a', {'class': 'code-table-link'})['href']
+                try:
+                    paper['code'] = links_soup.find(
+                        'a', {'class': 'code-table-link'})['href']
+                except Exception as e:
+                    paper['code'] = None
                 paper['framework'] = None
 
                 # scrape the filename of framework to judge which framework is adopted.
@@ -245,8 +251,9 @@ class PWCScraper:
 
             try:
                 self.fetch_code(paper['code'], paper_directory)
-            except:
-                continue
+            except Exception as e:
+                print(e)
+                pass
 
             self.write_to_file(paper['framework'],
                                paper_directory / "framework.txt")
