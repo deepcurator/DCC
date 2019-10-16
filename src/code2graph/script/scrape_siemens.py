@@ -61,7 +61,7 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
                      output_types=[6], show_arg=True, show_url=True)
     config = LightWeightMethodConfig(args)
 
-    success, error_msg = run_lightweight_method(code_path, config, paper)
+    success, error_msg = run_lightweight_method(code_path, paper, config)
     for filetype in out_types:
         copy_files(code_path, out_path, filetype)
         
