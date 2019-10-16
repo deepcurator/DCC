@@ -79,7 +79,6 @@ def scrape_from_csv_file(path):
     success_list = []
 
     for index, paper in df.iterrows():
-        import pdb; pdb.set_trace()
         if paper['Platform'] == 'tensorflow':
             success = "Error"
 
