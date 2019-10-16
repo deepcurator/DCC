@@ -229,7 +229,10 @@ def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
             metadata[task['id']][3] = task['success']
             metadata[task['id']][4] = task['err_msg']
             paper = metadata[task['id']]
-            database.update_query(paper[0], paper[3], paper[4])
+            try:
+                database.update_query(paper[0], paper[3], paper[4])
+            except Exception as e:
+                continue
         config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
         move_output_files(config)
