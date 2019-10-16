@@ -11,7 +11,7 @@ class OntologyManager:
 
         # self.g stores the template owl file acquired from Siemens.
         self.g = Graph()
-        self.g.parse('../core/123.owl', format="turtle")
+        self.g.parse('../core/DeepSciKG.nt', format="turtle")
 
         self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
         # Namespace('https://github.com/deepcurator/DCC/')
