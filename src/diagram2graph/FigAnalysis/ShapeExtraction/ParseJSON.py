@@ -22,11 +22,11 @@ class ParseJSON:
 
 		image_file_name = os.path.splitext(os.path.basename(fileWithPath))[0]
 		abspath = os.path.abspath(fileWithPath)
-		parent_dir = os.path.dirname(os.path.dirname(abspath))
+		parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(abspath)))
 		csv_file_path = os.path.join(parent_dir, "pwc_edited_tensorflow_pytorch_image_final.csv")
 		paper_title, paper_file_name, paper_conf, paper_year = self.getPaperTitle(image_file_name, csv_file_path)
 
-		jsonFilePath = os.path.join(parent_dir, "data\data_"+ paper_file_name + ".json")
+		jsonFilePath = os.path.join(os.path.dirname(abspath), paper_file_name + ".json")
 		
 		fp = open(jsonFilePath, 'r')
 		json_value = fp.read()
@@ -62,4 +62,19 @@ class ParseJSON:
 		paper_title = reader[match_index][1]
 		paper_file_name = (reader[match_index][2].split('/')[-1]).replace(".html", "").replace(".pdf", "")
 		return paper_title, paper_file_name, reader[match_index][3], reader[match_index][4]
+
+
+	def isResult(self, caption):
+
+		if (caption.lower().find('result') != -1 or caption.lower().find('plot') != -1 or caption.lower().find('graph') != -1 or caption.lower().find('image') != -1 
+			or caption.lower().find('dataset') != -1): 
+			return True
+		return False
+
+	def isDiag(self, caption):
+		if (caption.lower().find('diagram') != -1 or caption.lower().find('network') != -1 or caption.lower().find('framework') != -1 or 
+			caption.lower().find('flowchart') != -1 or caption.lower().find('flow chart') != -1 or caption.lower().find('architecture') != -1) : 
+			return True
+		return False
+
 
