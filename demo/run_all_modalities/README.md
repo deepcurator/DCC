@@ -22,7 +22,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 - At this point, Gradle server is built. Before running the demo, make sure to run "gradle run" in the grobid-0.5.5 folder to start the server.
 
 ### Grobid Client
-Download [Grobid client](https://github.com/kermitt2/grobid-client-python) and extract it to the demo folder (demo\grobid-client-python).
+Download [Grobid client](https://github.com/kermitt2/grobid-client-python) and extract it to the demo folder (dcc\demo\grobid-client-python).
 
 ## Tesseract
 [Tesseract](https://github.com/tesseract-ocr/tesseract) is used by the image2graph module.
