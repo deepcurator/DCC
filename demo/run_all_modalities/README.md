@@ -1,6 +1,6 @@
 # Deep Code Curator Demo Installation
 
-We provide instructions on how to install the demo requirements on a Windows machine.
+We provide instructions on the installation of the demo requirements.
 
 ## Python Environment
 
