@@ -1,4 +1,3 @@
-
 # Deep Code Curator Demo Installation
 
 ## python Environment
@@ -8,20 +7,19 @@ Use dcc.yml](dcc.yml)
 
 ## Other dependencies
 
-### Grobid Server
+### Grobid
+[Grobid](https://github.com/kermitt2/grobid) is used by the text2graph module to extract text from PDF files.
 
-We have tested it using gradle version 4.10 and Grobid version 0.5.5. Below instructions make use of 
-Needed by text2graph
+#### Grobid Server
+ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and Grobid 0.5.5 works smoothly together, and hence recommend using these versions.
 
-- Install gradle-4.10 [https://gradle.org/next-steps/?version=4.10&format=bin] using the instructions: https://docs.gradle.org/current/userguide/installation.html
-- Download and extract grobid-0.5.5 [https://github.com/kermitt2/grobid/archive/0.5.5.zip]
-- "gradle clean install"
+- Install [gradle-4.10](https://gradle.org/next-steps/?version=4.10&format=bin) using the instructions [here] (https://docs.gradle.org/current/userguide/installation.html)
+- Download and extract [grobid-0.5.5](https://github.com/kermitt2/grobid/archive/0.5.5.zip)
+- cd into grobid-0.5.5, and run the command "gradle clean install"
+- At this point, Gradle server is built. Before running the demo, make sure to run "gradle run" in the grobid-0.5.5 folder to start the server.
 
-To run the server
-- "gradle run"
+#### Grobid Client
 
-### Grobid Client
-Needed by text2graph
 Download Grobid client from https://github.com/kermitt2/grobid-client-python and extract it to the demo folder. The resulting folder structure will be: demo\grobid-client-python
 
 ### Tesseract
