@@ -5,7 +5,8 @@ We provide instructions on the installation of the demo requirements.
 ## Python Environment
 
 You may use [dcc.yml](dcc.yml) to create the Python environment following the below steps:
-- Run `conda env create -f dcc.yml` in a **Windows Command** window.
+- Run `conda env create -f dcc.yml` in a **Windows Command** window. The reason we recommend to use Windows Command window is that some versions of Conda Command window has a bug installing 'pip' requirements. If you get the error 'conda not found', add the following lines (or corresponding locations from your computer) into your 'path' system variable: `C:\Users\YOUR_USERNAME\AppData\Local\Continuum\anaconda3`, `C:\Users\YOUR_USERNAME\AppData\Local\Continuum\anaconda3\Scripts`.
+
 - Switch to Anaconda Command window and activate the new environment: `activate dcc`
 - Add your new environment to Python ipykernel by running the following command `python -m ipykernel install --user --name=dcc`
 - Try running jupyter notebook using: `jupyter-notebook`. If you run into a "DLL not found" error, run the following commands: `pip uninstall pyzmq`, `pip install pyzmq` and then start the notebook again.
