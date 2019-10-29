@@ -2,7 +2,7 @@
 
 We provide instructions on how to install the demo requirements on a Windows machine.
 
-## python Environment
+## Python Environment
 
 You may use [dcc.yml](dcc.yml) to create the Python environment following the below steps:
 - Run `conda env create -f dcc.yml` in a **Windows Command** window.
