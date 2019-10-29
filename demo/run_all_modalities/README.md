@@ -9,7 +9,9 @@ You may use [dcc.yml](dcc.yml) to create the Python environment following the be
 
 - Switch to Anaconda Command window and activate the new environment: `activate dcc`
 - Add your new environment to Python ipykernel by running the following command `python -m ipykernel install --user --name=dcc`
-- Try running jupyter notebook using: `jupyter-notebook`. If you run into a "DLL not found" error, run the following commands: `pip uninstall pyzmq`, `pip install pyzmq` and then start the notebook again.
+- Try running jupyter notebook using: `jupyter-notebook`.
+
+- Note: If you run into a "DLL not found" error during the above steps, run the following commands: `pip uninstall pyzmq`, `pip install pyzmq` and then try the step again.
 
 ## Grobid
 [Grobid](https://github.com/kermitt2/grobid) is used by the text2graph module to extract text from PDF files.
