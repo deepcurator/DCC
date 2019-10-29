@@ -1,8 +1,14 @@
 # Deep Code Curator Demo Installation
 
+We provide instructions on how to install the demo requirements in a Windows machine.
+
 ## python Environment
 
-Use dcc.yml](dcc.yml) 
+You may use [dcc.yml](dcc.yml) to create the Python environment following the below steps:
+- Run `conda env create -f dcc.yml` in a **Windows Command** window.
+- Switch to Anaconda Command window and activate the new environment: `activate dcc`
+- Add your new environment to Python ipykernel by running the following command `python -m ipykernel install --user --name=dcc`
+- Try running jupyter notebook using: `jupyter-notebook`. If you run into a "DLL not found" error, run the following commands: `pip uninstall pyzmq`, `pip install pyzmq` and then start the notebook again.
 
 ## Grobid
 [Grobid](https://github.com/kermitt2/grobid) is used by the text2graph module to extract text from PDF files.
