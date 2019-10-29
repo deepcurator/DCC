@@ -35,7 +35,7 @@ Please make sure that the following line of code is uncommented in the notebook,
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 ## Other Files
-We provide some additional files through the demo folder in the corresponding [OSF project](https://osf.io/jdhw8/).
+We provide some additional files through the demo folder in the corresponding [OSF project](https://osf.io/jdhw8/). You can click on the "demo" folder and then download it as a zip to download all required files at once.
 
 ### PDFFigures 2.0
 [PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be extracted into the dcc/demo folder.
