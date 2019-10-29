@@ -1,10 +1,6 @@
 
 # Deep Code Curator Demo Installation
 
-tested on Windows
-
-also requirements?
-
 ## python Environment
 
 Use dcc.yml](dcc.yml) 
