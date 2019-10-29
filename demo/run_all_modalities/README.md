@@ -1,6 +1,6 @@
 # Deep Code Curator Demo Installation
 
-We provide instructions on the installation of the demo requirements.
+We provide instructions on the installation of the [demo](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb) requirements.
 
 ## Python Environment
 
@@ -41,10 +41,10 @@ We provide some additional files through the demo folder in the corresponding [O
 [PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed into the dcc/demo folder.
 
 ### Models
-Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders, and their paths need to be updated in the demo notebook.
+Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders, and their paths need to be updated in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 ### Ontology
-Download the ontology file named DeepSciKG.nt and update its path in the demo notebook.
+Download the ontology file named DeepSciKG.nt and update its path in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 # Acknowledgement
 
