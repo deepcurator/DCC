@@ -1,6 +1,6 @@
 # Deep Code Curator Demo Installation
 
-We provide instructions on how to install the demo requirements in a Windows machine.
+We provide instructions on how to install the demo requirements on a Windows machine.
 
 ## python Environment
 
@@ -14,7 +14,7 @@ You may use [dcc.yml](dcc.yml) to create the Python environment following the be
 [Grobid](https://github.com/kermitt2/grobid) is used by the text2graph module to extract text from PDF files.
 
 ### Grobid Server
-Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and Grobid 0.5.5 works smoothly together, and hence recommend using these versions.
+Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and Grobid 0.5.5 works smoothly together, and hence we recommend using these versions.
 
 - Install [gradle-4.10](https://gradle.org/next-steps/?version=4.10&format=bin) using the instructions [here](https://docs.gradle.org/current/userguide/installation.html)
 - Download and extract [grobid-0.5.5](https://github.com/kermitt2/grobid/archive/0.5.5.zip)
@@ -33,12 +33,14 @@ Please make sure that the following line of code is uncommented in the notebook,
 ```
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
+## Other Files
+We provide some additional files through the [OSF project](https://osf.io/jdhw8/) of DCC.
 
-## pdffigures files
-Needed by image2graph
+### PDFFigures 2.0
+[PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be extracted into the dcc/demo folder.
 
-## Models
-
+### Models
+Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders, and their paths need to be updated in the demo notebook.
 
 
 # Acknowledgement
