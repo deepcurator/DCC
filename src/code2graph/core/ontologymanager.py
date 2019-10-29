@@ -1,6 +1,7 @@
 from rdflib import Graph, RDFS, RDF, URIRef, Namespace
 from .scraper_tf_voc import TFVocScraper
-
+import os
+import sys
 
 class OntologyManager:
 
@@ -11,7 +12,10 @@ class OntologyManager:
 
         # self.g stores the template owl file acquired from Siemens.
         self.g = Graph()
-        self.g.parse('../core/123.owl', format="turtle")
+        # self.g.parse(ontology_file, format="turtle")
+        base_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        self.g.parse(base_dir + '/core/123.owl', format="turtle")
+        # self.g.parse('../core/123.owl', format="turtle")
 
         self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
         # Namespace('https://github.com/deepcurator/DCC/')
@@ -150,7 +154,7 @@ class OntologyManager:
 
 
 def test_ontology_manager():
-    ontology_manager = OntologyManager()
+    ontology_manager = OntologyManager('../core/123.owl')
 
     print("Fuzzy Search:")
     print(ontology_manager.search("Dense"))

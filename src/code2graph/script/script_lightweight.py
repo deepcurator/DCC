@@ -9,8 +9,12 @@ import subprocess
 import traceback
 from dateutil import parser
 
+# import sys
+# sys.path.append('../')
+
+import os
 import sys
-sys.path.append('../')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from core.graphlightweight import TFTokenExplorer
 from config.config import LightWeightMethodArgParser, LightWeightMethodConfig
