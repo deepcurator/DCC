@@ -54,7 +54,7 @@ image2graph_models_dir = "YOUR_PATH_TO_THE_IMAGE2GRAPH_MODELS_DIR"
 Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the corresponding line (given below) from the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb) .
 
 ```
-ontology_file = "YOUR_PATH_TO_THE_ONTOLOGY_DIR/DeepSciKG.nt"
+ontology_file = "YOUR_PATH_TO_THE_ONTOLOGY_DIR\DeepSciKG.nt"
 ```
 
 # Acknowledgement
