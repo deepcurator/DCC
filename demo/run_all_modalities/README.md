@@ -43,7 +43,7 @@ We provide some additional files through the demo folder in the corresponding [O
 [PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed **directly under the dcc\demo\run_all_modalities folder**, without any additional folders e.g. `dcc\demo\run_all_modalities\pdffigures2_2.12-0.1.0.jar`
 
 ### Models
-Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the corresponding lines from the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb#input) as shown below:
+Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the corresponding lines from the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb) as shown below:
 
 ```
 text2graph_models_dir = "YOUR_PATH_TO_THE_TEXT2GRAPH_MODELS_DIR"
