@@ -7,16 +7,22 @@ from os.path import isfile, join
 from .xml2txt_no_sents import TEIFile
 from .text_rdf_generator import createTextRDF
 
-def run(input_dir, output_dir, ontology_file, model_dir):
+def run(input_dir, output_dir, ontology_file, model_dir, grobid_client):
     # output_dir = "C:/aske-2/dcc/grobid-workspace/output"
     
     # ontology = "C:/dcc_test/demo/DeepSciKG.nt"
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+        
+    t2g_output_dir = output_dir + "/text2graph"
+    
+    if not os.path.exists(t2g_output_dir):
+        os.makedirs(t2g_output_dir)
     
     # command = "python grobid-client-python/grobid-client.py --config grobid-client-python/config.json --input C:/aske-2/dcc/grobid-workspace/input --output C:/aske-2/dcc/grobid-workspace/output processFulltextDocument"
-    command = "python grobid-client-python/grobid-client.py --config grobid-client-python/config.json --input " + input_dir + " --output " + output_dir + " processFulltextDocument"
+    # command = "python grobid-client-python/grobid-client.py --config grobid-client-python/config.json --input " + input_dir + " --output " + t2g_output_dir + " processFulltextDocument"
+    command = "python " + grobid_client + "/grobid-client.py --config grobid-client-python/config.json --input " + input_dir + " --output " + t2g_output_dir + " processFulltextDocument"
 
     #process = Popen(command, shell=True)
     #stdout, stderr = process.communicate()
@@ -38,13 +44,13 @@ def run(input_dir, output_dir, ontology_file, model_dir):
     print("[Info] Extracting abstracts from XML's...")
     
     # mypath = "C:/aske-2/dcc/grobid-workspace/output"
-    onlyXMLfiles = [f for f in listdir(output_dir) if isfile(join(output_dir, f))]
+    onlyXMLfiles = [f for f in listdir(t2g_output_dir) if isfile(join(t2g_output_dir, f))]
     
     for i, f in enumerate(onlyXMLfiles):
         if f.endswith("xml"):
             # print('Processing paper ', i)
-            # tei_file = join(output_dir, f)
-            tei_file = output_dir + "/" + f
+            # tei_file = join(t2g_output_dir, f)
+            tei_file = t2g_output_dir + "/" + f
             paper = TEIFile(tei_file)
         
         
@@ -55,7 +61,7 @@ def run(input_dir, output_dir, ontology_file, model_dir):
             new_f = new_f.replace('.xml', '')
         
         
-            outfile = join(output_dir, new_f + '.txt')
+            outfile = join(t2g_output_dir, new_f + '.txt')
             with open(outfile, 'w', encoding='utf8') as of:
                 of.write(paper_body)
     
@@ -64,8 +70,8 @@ def run(input_dir, output_dir, ontology_file, model_dir):
     # inputFolder = 'C:/aske-2/dcc/grobid-workspace/output/'
     # outputFolder = 'C:/aske-2/dcc/grobid-workspace/output/'
     # rdf_folder = mypath + "/"
-    rdf_input_dir = output_dir + "/"
-    rdf_output_dir = output_dir + "/"
+    rdf_input_dir = t2g_output_dir + "/"
+    rdf_output_dir = t2g_output_dir + "/"
     createTextRDF(rdf_input_dir, rdf_output_dir, ontology_file, model_dir)
     
     print("[Info] Completed text2graph pipeline!")
