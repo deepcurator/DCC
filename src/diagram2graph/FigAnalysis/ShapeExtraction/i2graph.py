@@ -58,10 +58,16 @@ def preprocessImage(image_path, resize):
 
 def run(input_path, op_path, ontology_file, model_dir):
     
-    op_path_all = op_path + "/all_images"
+    i2g_output_dir = op_path + "/image2graph"
+    
+    if not os.path.exists(i2g_output_dir):
+        os.makedirs(i2g_output_dir)
+        
+    op_path_all = i2g_output_dir + "/all_images"
     
     if not os.path.exists(op_path_all):
         os.makedirs(op_path_all)
+
     
     # command = 'java -cp "pdffigures2_2.12-0.1.0.jar;pdffigures2-assembly-0.1.0-deps.jar;scala-library.jar" org.allenai.pdffigures2.FigureExtractorBatchCli Input/ -s stat_file.json -m out/ -d out/'
     command = 'java -cp "pdffigures2_2.12-0.1.0.jar;pdffigures2-assembly-0.1.0-deps.jar;scala-library.jar" org.allenai.pdffigures2.FigureExtractorBatchCli ' + input_path + '/ -s stat_file.json -m ' + op_path_all + '/ -d ' + op_path_all + '\\'
@@ -108,17 +114,17 @@ def run(input_path, op_path, ontology_file, model_dir):
                 binType, mcType = figtypedetector.detectFigType(im)
                     
                 if mcType < 3:
-                    # print(os.path.join(op_path, paper_file_name))
-                    if not os.path.isdir(os.path.join(op_path, paper_file_name)):
-                        os.mkdir(os.path.join(op_path, paper_file_name))
-                        os.mkdir(os.path.join(op_path, paper_file_name, "diag2graph"))
-                        os.mkdir(os.path.join(op_path, paper_file_name, "Figures"))
+                    # print(os.path.join(i2g_output_dir, paper_file_name))
+                    if not os.path.isdir(os.path.join(i2g_output_dir, paper_file_name)):
+                        os.mkdir(os.path.join(i2g_output_dir, paper_file_name))
+                        os.mkdir(os.path.join(i2g_output_dir, paper_file_name, "diag2graph"))
+                        os.mkdir(os.path.join(i2g_output_dir, paper_file_name, "Figures"))
     
-                    cv2.imwrite(os.path.join(op_path, paper_file_name+ "/Figures/" + os.path.basename(filename)), im)        
+                    cv2.imwrite(os.path.join(i2g_output_dir, paper_file_name+ "/Figures/" + os.path.basename(filename)), im)        
     
     
                     shapedetector = sd()
-                    component, flow_dir = shapedetector.find_component(filename, op_path, im, thresh_im, gray_imcv)
+                    component, flow_dir = shapedetector.find_component(filename, i2g_output_dir, im, thresh_im, gray_imcv)
     
                     textdetector = tda()
                     text_list = textdetector.combinedTextDetect(filename, im, component, fig_text)
@@ -128,7 +134,7 @@ def run(input_path, op_path, ontology_file, model_dir):
     
                     graphcreator = tgv2()
                     # createDiag2Graph(self, op_dir, filename, img, thresh_im, comp, flow_dir, text_list, line_list, paper_title, paper_file_name, paper_conf, paper_year, fig_caption)
-                    graphcreator.createDiag2Graph(op_path, filename, im, thresh_im, component, flow_dir, text_list, line_connect, None, paper_file_name, None, None, fig_caption)
+                    graphcreator.createDiag2Graph(i2g_output_dir, filename, im, thresh_im, component, flow_dir, text_list, line_connect, None, paper_file_name, None, None, fig_caption)
     
     #else:
     
@@ -143,7 +149,7 @@ def run(input_path, op_path, ontology_file, model_dir):
     # image_triple_dir = "C:/dcc_test/src/diagram2graph/FigAnalysis/ShapeExtraction/out/"
     # image_output_dir = "C:/dcc_test/src/diagram2graph/FigAnalysis/ShapeExtraction/out/"
     
-    runI2G(input_path, op_path, op_path_all, ontology_file)
+    runI2G(input_path, i2g_output_dir, op_path_all, ontology_file)
     
     print("[Info] Completed image2graph pipeline!")
 
