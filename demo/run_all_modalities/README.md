@@ -25,7 +25,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 - At this point, Gradle server is built. Before running the demo, make sure to run "gradle run" in the grobid-0.5.5 folder to start the server.
 
 ### Grobid Client
-Download [Grobid client](https://github.com/kermitt2/grobid-client-python) and extract it to the demo folder (dcc\demo\run_all_modalities\grobid-client-python).
+Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the demo notebook.
 
 ## Tesseract
 [Tesseract](https://github.com/tesseract-ocr/tesseract) is used by the image2graph module.
@@ -40,13 +40,13 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 We provide some additional files through the demo folder in the corresponding [OSF project](https://osf.io/jdhw8/). You can click on the "demo" dcc\demo\run_all_modalities\ and then download it as a zip to download all required files at once.
 
 ### PDFFigures 2.0
-[PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed into the dcc\demo\run_all_modalities folder.
+[PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed directly under the dcc\demo\run_all_modalities folder, without any additional folders e.g. dcc\demo\run_all_modalities\pdffigures2_2.12-0.1.0.jar
 
 ### Models
-Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders, and their paths need to be updated in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
+Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 ### Ontology
-Download the ontology file named DeepSciKG.nt and update its path in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
+Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 # Acknowledgement
 
