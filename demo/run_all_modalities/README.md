@@ -22,7 +22,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 - Install [gradle-4.10](https://gradle.org/next-steps/?version=4.10&format=bin) using the instructions [here](https://docs.gradle.org/current/userguide/installation.html)
 - Download and extract [grobid-0.5.5](https://github.com/kermitt2/grobid/archive/0.5.5.zip)
 - cd into grobid-0.5.5, and run the command "gradle clean install"
-- At this point, Gradle server is built. Before running the demo, make sure to run "gradle run" in the grobid-0.5.5 folder to start the server.
+- At this point, Gradle server is built. Before running the demo, make sure to run `gradle run` in the grobid-0.5.5 folder to start the server.
 
 ### Grobid Client
 Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the demo notebook.
