@@ -40,7 +40,7 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 We provide some additional files through the demo folder in the corresponding [OSF project](https://osf.io/jdhw8/). You can click on the "demo" dcc\demo\run_all_modalities\ and then download it as a zip to download all required files at once.
 
 ### PDFFigures 2.0
-[PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed **directly under** the dcc\demo\run_all_modalities folder, without any additional folders e.g. `dcc\demo\run_all_modalities\pdffigures2_2.12-0.1.0.jar`
+[PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed **directly under the dcc\demo\run_all_modalities folder**, without any additional folders e.g. `dcc\demo\run_all_modalities\pdffigures2_2.12-0.1.0.jar`
 
 ### Models
 Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the corresponding lines from the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb) as shown below:
