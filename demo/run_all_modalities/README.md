@@ -1,6 +1,6 @@
 # Deep Code Curator Demo Installation
 
-We provide instructions on the installation of the [demo](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb) requirements.
+In this page we provide instructions on the installation of the Deep Code Curator [demo](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 ## Python Environment
 
