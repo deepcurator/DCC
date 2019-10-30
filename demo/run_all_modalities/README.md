@@ -25,7 +25,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 - At this point, Gradle server is built. Before running the demo, make sure to run `gradle run` in the grobid-0.5.5 folder to start the server.
 
 ### Grobid Client
-Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the demo notebook.
+Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the [demo notebook](https://github.com/deepcurator/DCC/blob/new_demo/demo/run_all_modalities/Deep%20Code%20Curator%20(DCC).ipynb).
 
 ## Tesseract
 [Tesseract](https://github.com/tesseract-ocr/tesseract) is used by the image2graph module.
