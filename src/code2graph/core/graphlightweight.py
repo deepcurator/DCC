@@ -444,7 +444,7 @@ class TFTokenExplorer:
         graph = Graph()
         if self.metadata:
             if self.metadata['paper']:
-                pub_id = '.'.join(self.metadata['paper'].split('/')[-1].split('.')[:-1])
+                pub_id = self.metadata['paper'].split('/')[-1].replace('.pdf', '')
                 publication_id_uri = URIRef(om.dcc_prefix + pub_id)
             else:
                 publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
@@ -453,9 +453,10 @@ class TFTokenExplorer:
             graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
-                file_name = om.dcc_prefix + self.repo_name + '/' + Path(file).name
-                graph.add((self.repo_name_uri, om.has_file, Literal(file_name, datatype=XSD.string)))
-                graph.add((Literal(file_name, datatype=XSD.string), om.part_of, self.repo_name_uri))
+                file_name = URIRef(om.dcc_prefix + self.repo_name + '/' + Path(file).name)
+                graph.add((self.repo_name_uri, om.has_file, file_name))
+                # String Literal cannot be the subject
+                graph.add((file_name, om.part_of, self.repo_name_uri))
             
             self.rdf_graphs['metadata'] = graph
 
@@ -652,6 +653,7 @@ class TFTokenExplorer:
         for root in self.rdf_graphs:
             self.pyvis_draw(self.rdf_graphs[root], str(
                 self.code_repo_path/root.split('/')[-1].replace('.', '')))
+        self.dump_rdf()
 
     def dump_tfsequences(self):
         pprint.pprint(self.tfsequences)
@@ -696,7 +698,7 @@ class TFTokenExplorer:
         cnames = ['blue', 'green', 'red', 'cyan', 'orange',
                   'black', 'purple', 'purple', 'purple']
 
-        G = Network(height="800px", width="70%", directed=True)
+        G = Network(height="800px", width="100%", directed=True)
 
         for src, edge, dst in graph:
 
@@ -734,5 +736,5 @@ class TFTokenExplorer:
                      spring_strength=0.01,
                      damping=0.09)
 
-        G.show_buttons(filter_=['physics'])
+        # G.show_buttons(filter_=['physics'])
         G.save_graph("%s.html" % name)

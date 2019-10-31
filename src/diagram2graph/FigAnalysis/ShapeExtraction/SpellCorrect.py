@@ -1,11 +1,11 @@
 from __future__ import print_function
 from spellchecker import SpellChecker
-
+import os
 
 class SpellCorrect:
     
     def __init__(self):
-        self.text_file_path = "./DLWords.txt"
+        self.text_file_path = os.path.dirname(os.path.abspath(__file__)) + "/DLWords.txt"
     
     
     def correctDLWord(self, misspelled):

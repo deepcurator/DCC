@@ -2,6 +2,7 @@ import requests
 import json
 import networkx as nx
 from bs4 import BeautifulSoup
+import os
 
 try:
     from pathlib import Path
@@ -17,14 +18,19 @@ class TFVocScraper:
 
         # print(self.tf_types_root_url)
         self.root = {}
+        
+        code2graph_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        self.cached_json_path = Path(
-            '..')/"tmp"/("tf_types_%s.json" % self.version)
+         # self.cached_json_path = Path('..')/"tmp"/("tf_types_%s.json" % self.version)
+        self.cached_json_path = code2graph_dir + "/tmp/tf_types_" + str(self.version) + ".json"
+        
         # '../tmp/graphs/test.graphml'
-        self.cached_graph_path = Path(
-            '..')/"tmp"/("tf_types_%s.graphml" % self.version)
+        # self.cached_graph_path = Path('..')/"tmp"/("tf_types_%s.graphml" % self.version)
+        self.cached_graph_path = code2graph_dir + "/tmp/tf_types_" + str(self.version) + ".graphml"
 
-        if self.cached_json_path.exists():
+        # if self.cached_json_path.exists():
+        if os.path.isfile(self.cached_json_path):
+            print("Reading cached tf types file")
             with open(str(self.cached_json_path), 'r') as f:
                 self.root = json.load(f)
         else:
@@ -63,8 +69,7 @@ class TFVocScraper:
                 self.root['children'].append(
                     self.recur_scrape_tf_itemlist(data, name))
 
-        print("saving to the cached file: %s" %
-              str(self.cached_json_path.absolute()))
+        print("saving to the cached file: %s" % str(self.cached_json_path))
 
         with open(str(self.cached_json_path), 'w') as f:
             json.dump(self.root, f)

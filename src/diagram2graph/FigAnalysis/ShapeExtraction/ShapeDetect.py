@@ -57,8 +57,8 @@ class ShapeDetect:
                 i = 1
             # construct the list of bounding boxes and sort them from top to bottom
             boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-            print(len(cnts))
-            print(len(boundingBoxes))
+            # print(len(cnts))
+            # print(len(boundingBoxes))
             (cnts_new, boundingBoxes_new) = zip(*sorted(zip(cnts, boundingBoxes),
                                                 key=lambda b: b[1][i], reverse=reverse))
             # return the list of sorted contours
@@ -247,7 +247,8 @@ class ShapeDetect:
         gray_imcvcpy = gray_imcv.copy()
         
         ################################################ Find components from line drawing ##########################################
-        (cnts, _) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
+        # (_, cnts, h) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
+        (cnts, h) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
         final_component = []
         final_conf = []
         line_component = []
