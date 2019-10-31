@@ -2,7 +2,7 @@
 
 In this page we provide instructions on the installation of the Deep Code Curator [demo](Deep%20Code%20Curator%20(DCC).ipynb).
 
-## Python Environment
+## Setup Python Environment
 
 You may use [dcc.yml](dcc.yml) to create the Python environment following the below steps:
 - Run `conda env create -f dcc.yml` in a **Windows Command** window. The reason we recommend to use Windows Command window is that some versions of Conda Command window has a bug installing 'pip' requirements. If you get the error 'conda not found', add the following lines (or corresponding locations from your computer) into your 'path' system variable: `C:\Users\YOUR_USERNAME\AppData\Local\Continuum\anaconda3`, `C:\Users\YOUR_USERNAME\AppData\Local\Continuum\anaconda3\Scripts`.
@@ -13,7 +13,7 @@ You may use [dcc.yml](dcc.yml) to create the Python environment following the be
 
 - Note: If you run into a "DLL not found" error during the above steps, run the following commands: `pip uninstall pyzmq`, `pip install pyzmq` and then try the step again.
 
-## Grobid
+## Install Grobid
 [Grobid](https://github.com/kermitt2/grobid) is used by the text2graph module to extract text from PDF files.
 
 ### Grobid Server
@@ -27,7 +27,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 ### Grobid Client
 Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the [demo notebook](Deep%20Code%20Curator%20(DCC).ipynb).
 
-## Tesseract
+## Install Tesseract
 [Tesseract](https://github.com/tesseract-ocr/tesseract) is used by the image2graph module.
 
 For Windows only: Tesseract needs to be installed using the installer from the following link: https://github.com/UB-Mannheim/tesseract/wiki 
@@ -36,7 +36,7 @@ Please make sure that the following line of code is uncommented in the notebook,
 ```
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
-## Other Files
+## Download Other Files
 We provide some additional files through the demo folder in the corresponding [OSF project](https://osf.io/jdhw8/). You can click on the "demo" and then download it as a zip to download all required files at once.
 
 ### PDFFigures 2.0
