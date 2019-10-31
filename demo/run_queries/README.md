@@ -22,7 +22,7 @@ Virtuoso is the database used to store the graph data for DCC. Below we provide 
 
 ## Download and Import Data
 We provide sthe data file `consolidated.ttl` through the `demo_queries` folder in the corresponding [OSF project](https://osf.io/jdhw8/). After you download this file into your computer, following steps will guide you to import it to the Virtuoso:
-- Open http://localhost:8890 in your Web browser. If you do not use your localhost for Virtuoso, or if you use another port, update the address accordingly.
+- Open http://localhost:8890/conductor in your Web browser. If you do not use your localhost for Virtuoso, or if you use another port, update the address accordingly.
 - Enter account username `dba` and password `dba` to login.
 - Navigate to the window Linked Data → Quad Store Upload
 - Choose the downloaded `consolidated.ttl` file to upload, and specify the Named Graph IRI as `https://github.com/deepcurator/DCC/`. Then click 'Upload".
