@@ -32,14 +32,11 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 ## How to run? 
 
-We provide Jupyter notebooks to test main functionalities of the following sub-modules:
+We provide two Jupyter notebooks to run main functionalities and to analyze results:
 
-- [Code2Graph](src/code2graph/)
+- [The first notebook](demo/run_all_modalities/DCC.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files.
 
-- [Image2Graph](src/diagram2graph/)
-
-- [Text2Graph](src/text2graph/text2graph.ipynb)
-
+- [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and their corresponding source code repositories.
 
 
 ## Acknowledgement
