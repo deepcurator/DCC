@@ -34,7 +34,7 @@ In the second component (at the bottom of the overall architecture) we show how 
 
 We provide two Jupyter notebooks to run main functionalities and to analyze results:
 
-- [The first notebook](demo/run_all_modalities/Deep Code Curator (DCC).ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and generates output RDF files.
+- [The first notebook](demo/run_all_modalities/DCC.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and generates output RDF files.
 
 - [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and corresponding code repositories.
 
