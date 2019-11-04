@@ -80,7 +80,7 @@ class TextDetectEast:
         rH = height / float(new_height)
         
         layerNames = [	"feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]     
-        net = cv2.dnn.readNet("frozen_east_text_detection.pb")
+        net = cv2.dnn.readNet(os.path.dirname(os.path.abspath(__file__)) + "/frozen_east_text_detection.pb")
         blob = cv2.dnn.blobFromImage(im_resize, 1.0, (new_width, new_height), (123.68, 116.78, 103.94), swapRB=True, crop=False)
         net.setInput(blob)
         (scores, geometry) = net.forward(layerNames)

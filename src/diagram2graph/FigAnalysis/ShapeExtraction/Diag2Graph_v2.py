@@ -343,17 +343,18 @@ class Diag2Graph:
         return cnts
 
     def createDiag2Graph(self, op_dir, filename, img, thresh_im, comp, flow_dir, text_list, line_list, paper_title, paper_file_name, paper_conf, paper_year, fig_caption):
-        
-        print(filename)
+        # paper_conf and paper_year not used?
+        # print(filename)
         op_image_name = os.path.join(op_dir, paper_file_name + "/diag2graph/"+ os.path.basename(filename))
         op_file_name = os.path.join(op_dir, paper_file_name + "/diag2graph/" + os.path.splitext(os.path.basename(filename))[0] + '.txt')
         
 
-        op_file = open(op_file_name, "w")
+        op_file = open(op_file_name, "w", encoding="utf-8")
         FigureID = os.path.splitext(os.path.basename(filename))[0] #+"_"+paper_conf+"_"+paper_year
         
         op_file.write(":%s isA Figure \n"% (FigureID))
-        op_file.write(":%s foundIn %s \n"% (FigureID, paper_title))
+        if (paper_title):
+            op_file.write(":%s foundIn %s \n"% (FigureID, paper_title))
         op_file.write(":%s hasCaption %s \n"% (FigureID, fig_caption))
         final_graph_im = img.copy()
         (compWithText, TextWOComp, compWOText) =  self.getTextCompTag(comp, text_list, line_list)  

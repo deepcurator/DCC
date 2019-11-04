@@ -22,13 +22,14 @@ import json
 
 class FigTypeDetect:
     
-	def __init__(self):
+	def __init__(self, model_dir):
     	# define a dictionary that maps model names to their classes inside Keras
 		self.MODELS = { "vgg16": VGG16, "vgg19": VGG19, "inception": InceptionV3, "xception": Xception, "resnet": ResNet50 }
 
 		self.inputShape = (224, 224)
 		# saved model path
-		self.model_path = 'Models'
+		# self.model_path = 'Models'
+		self.model_path = model_dir
 
 		self.Binaryclass_loaded_model = []
 		self.Multiclass_loaded_model = []
