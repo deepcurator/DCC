@@ -1,0 +1,1477 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:19+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Stacked Cross Attention for Image-Text Matching</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kuang-Huei</forename><surname>Lee</surname></persName>
+							<email>kualee@microsoft.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft AI and Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Chen</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft AI and Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gang</forename><surname>Hua</surname></persName>
+							<email>ganghua@microsoft.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft AI and Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Houdong</forename><surname>Hu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaodong</forename><surname>He</surname></persName>
+							<email>xiaodong.he@jd.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Microsoft AI and Research</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">JD AI Research</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Stacked Cross Attention for Image-Text Matching</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>
+					<term>Attention</term>
+					<term>Multi-modal</term>
+					<term>Visual-semantic embedding</term>
+				</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. In this paper, we study the problem of image-text matching. Inferring the latent semantic alignment between objects or other salient stuff (e.g. snow, sky, lawn) and the corresponding words in sentences allows to capture fine-grained interplay between vision and language, and makes image-text matching more interpretable. Prior work either simply aggregates the similarity of all possible pairs of regions and words without attending differentially to more and less important words or regions, or uses a multi-step attentional process to capture limited number of semantic alignments which is less interpretable. In this paper, we present Stacked Cross Attention to discover the full latent alignments using both image regions and words in a sentence as context and infer image-text similarity. Our approach achieves the state-of-the-art results on the MS-COCO and Flickr30K datasets. On Flickr30K, our approach outperforms the current best methods by 22.1% relatively in text retrieval from image query, and 18.2% relatively in image retrieval with text query (based on Recall@1). On MS-COCO, our approach improves sentence retrieval by 17.8% relatively and image retrieval by 16.6% relatively (based on Recall@1 using the 5K test set). Code has been made available at: https: //github.com/kuanghuei/SCAN.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>In this paper we study the problem of image-text matching, central to imagesentence cross-modal retrieval (i.e. image search for given sentences with visual descriptions and the retrieval of sentences from image queries).</p><p>When people describe what they see, it can be observed that the descriptions make frequent reference to objects and other salient stuff in the images, as well as their attributes and actions (as shown in <ref type="figure" target="#fig_0">Figure 1</ref>). In a sense, sentence descriptions are weak annotations, where words in a sentence correspond to some particular, but unknown regions in the image. Inferring the latent correspondence between image regions and words is a key to more interpretable image-text matching by capturing the fine-grained interplay between vision and language.</p><p>A few people riding bikes next to a dog on a leash. Similar observations motivated prior work on image-text matching <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b31">32]</ref>. These models often detect image regions at object/stuff level and simply aggregate the similarity of all possible pairs of image regions and words in sentence to infer the global image-text similarity; e.g. Karpathy and Fei-Fei <ref type="bibr" target="#b18">[19]</ref> proposed taking the maximum of the region-word similarity scores with respect to each word and averaging the results corresponding to all words. It shows the effectiveness of inferring the latent region-word correspondences, but such aggregation does not consider the fact that the importance of words can depend on the visual context.</p><p>We strive to take a step towards attending differentially to important image regions and words with each other as context for inferring the image-text similarity. We introduce a novel Stacked Cross Attention that enables attention with context from both image and sentence in two stages. In the proposed ImageText formulation, given an image and a sentence, it first attends to words in the sentence with respect to each image region, and compares each image region to the attended information from the sentence to decide the importance of the image regions (e.g. mentioned in the sentence or not). Likewise, in the proposed Text-Image formulation, it first attends to image regions with respect to each word and then decides to pay more or less attention to each word.</p><p>Compared to models that perform fixed-step attentional reasoning and thus only focus on limited semantic alignments (one at a time) <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b15">16]</ref>, Stacked Cross Attention discovers all possible alignments simultaneously. Since the number of semantic alignments varies with different images and sentences, the correspondence inferred by our method is more comprehensive and thus making image-text matching more interpretable.</p><p>To identify the salient regions in image, we follow Anderson et al. <ref type="bibr" target="#b0">[1]</ref> to analogize the detection of salient regions at object/stuff level to the spontaneous bottom-up attention in the human vision system <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b20">21]</ref>, and practically imple-ment bottom-up attention using Faster R-CNN <ref type="bibr" target="#b33">[34]</ref>, which represents a natural expression of a bottom-up attention mechanism.</p><p>To summarize, our primary contribution is the novel Stacked Cross Attention mechanism for discovering the full latent visual-semantic alignments. To evaluate the performance of our approach in comparison to other architectures and perform comprehensive ablation studies, we look at the MS-COCO <ref type="bibr" target="#b28">[29]</ref> and Flickr30K <ref type="bibr" target="#b42">[43]</ref> datasets. Our model, Stacked Cross Attention Network (SCAN) that uses the proposed attention mechanism, achieves the state-of-the-art results. On Flickr30K, our approach outperforms the current best methods by 22.1% relatively in text retrivel from image query, and 18.2% relatively in image retrieval with text query (based on Recall@1). On MS-COCO, it improves sentence retrieval by 17.8% relatively and image retrieval by 16.6% relatively (based on Recall@1 using the 5K test set).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>A rich line of studies have explored mapping whole images and full sentences to a common semantic vector space for image-text matching <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b10">11]</ref>. Kiros et al. <ref type="bibr" target="#b21">[22]</ref> made the first attempt to learn cross-view representations with a hinge-based triplet ranking loss using deep Convolutional Neural Networks (CNN) to encode images and Recurrent Neural Networks (RNN) to encode sentences. Faghri et al. <ref type="bibr" target="#b9">[10]</ref> leveraged hard negatives in the triplet loss function and yielded significant improvement. Peng et al. <ref type="bibr" target="#b32">[33]</ref> and Gu et al. <ref type="bibr" target="#b12">[13]</ref> suggested incorporating generative objectives into the crossview feature embedding learning. As opposed to our proposed method, the above works do not consider the latent vision-language correspondence at the level of image regions and words. Specifically, we discuss two lines of research addressing this problem using attention mechanism as follows.</p><p>Image-text matching with bottom-up attention. Bottom-up attention is a terminology that Anderson et al. <ref type="bibr" target="#b0">[1]</ref> proposed in their work on image captioning and Visual Question-Answering (VQA), referring to purely visual feed-forward attention mechanisms in analogy to the spontaneous bottom-up attention in human vision system <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b20">21]</ref> (e.g. human attention tends to be attracted to salient instances like objects instead of background). Similar observation had motivated this study and several other works <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b16">17]</ref>.  proposed detecting and encoding image regions at object level with R-CNN <ref type="bibr" target="#b11">[12]</ref>, and then inferring the image-text similarity by aggregating the similarity scores of all possible region-word pairs. Niu et al. <ref type="bibr" target="#b31">[32]</ref> presented a model that maps noun phrases within sentences and objects in images into a shared embedding space on top of full sentences and whole images embeddings. Huang et al. <ref type="bibr" target="#b16">[17]</ref> combined image-text matching and sentence generation for model learning with an improved image representation including objects, properties, actions, etc. In contrast to our model, these studies do not use the conventional attention mechanism (e.g. <ref type="bibr" target="#b39">[40]</ref>) to learn to focus on image regions for given semantic context.</p><p>Conventional attention-based methods. The attention mechanism focuses on certain aspects of data with respect to a task-specific context (e.g. looking for something). In computer vision, visual attention aims to focus on specific images or subregions <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b25">26]</ref>. Similarly, attention methods for natural language processing adaptively select and aggregate informative snippets to infer results <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b27">28]</ref>. Recently, attention-based models have been proposed for the image-text matching problem. Huang et al. <ref type="bibr" target="#b15">[16]</ref> developed a context-modulated attention scheme to selectively attend to a pair of instances appearing in both the image and sentence. Similarly, Nam et al. <ref type="bibr" target="#b30">[31]</ref> proposed Dual Attentional Network to capture fine-grained interplay between vision and language through multiple steps. However, these models adopt multi-step reasoning with a predefined number of steps to look at one semantic matching (e.g. an object in the image and a phrase in the sentence) at a time, despite the number of semantic matchings change for different images and sentence descriptions. In contrast, our proposed model discovers all latent alignments, thus is more interpretable.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Learning Alignments with Stacked Cross Attention</head><p>In this section, we describe the Stacked Cross Attention Network (SCAN). Our objective is to map words and image regions into a common embedding space to infer the similarity between a whole image and a full sentence. We begin with bottom-up attention to detect and encode image regions into features. Also, we map words in sentence along with the sentence context to features. We then apply Stacked Cross Attention to infer the image-sentence similarity by aligning image region and word features. We first introduce Stacked Cross Attention in Section 3.1 and the objective of learning alignments in Section 3.2. Then we detail image and sentence representations in Section 3.3 and Section 3.4, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Stacked Cross Attention</head><p>Stacked Cross Attention expects two inputs: a set of image features V = {v 1 , ..., v k }, v i ∈ R D , such that each image feature encodes a region in an image; a set of word features E = {e 1 , ..., e n }, e i ∈ R D , in which each word feature encodes a word in a sentence. The output is a similarity score, which measures the similarity of an image-sentence pair. In a nutshell, Stacked Cross Attention attends differentially to image regions and words using both as context to each other while inferring the similarity. We define two complimentary formulations of Stacked Cross Attention below: Image-Text and Text-Image. Image-Text Stacked Cross Attention. This formulation is illustrated in <ref type="figure" target="#fig_1">Figure 2</ref>, entailing two stages of attention. First, it attends to words in the sentence with respect to each image region. In the second stage, it compares each image region to the corresponding attended sentence vector in order to determine the importance of the image regions with respect to the sentence. Specifically, given an image I with k detected regions and a sentence T with n A cat is sitting in the bathroom sink</p><formula xml:id="formula_0">Sentence !:</formula><p>A cat is sitting in the bathroom sink.</p><p>A cat is sitting in the bathroom sink.</p><p>A cat is sitting in the bathroom sink.</p><p>A cat is sitting in the bathroom sink. words, we first compute the cosine similarity matrix for all possible pairs, i.e.</p><formula xml:id="formula_1">s ij = v T i e j ||v i ||||e j || , i ∈ [1, k], j ∈ [1, n].<label>(1)</label></formula><p>Here, s ij represents the similarity between the i-th region and the j-th word. We empirically find it beneficial to threshold the similarities at zero <ref type="bibr" target="#b19">[20]</ref> and normalize the similarity matrix ass ij = [</p><formula xml:id="formula_2">s ij ] + / k i=1 [s ij ] 2 + , where [x] + ≡ max(x, 0)</formula><p>. To attend on words with respect to each image region, we define a weighted combination of word representations (i.e. the attended sentence vector a t i , with respect to the i-th image region)</p><formula xml:id="formula_3">a t i = n j=1 α ij e j ,<label>(2)</label></formula><p>where</p><formula xml:id="formula_4">α ij = exp(λ 1sij ) n j=1 exp(λ 1sij ) ,<label>(3)</label></formula><p>and λ 1 is the inversed temperature of the softmax function <ref type="bibr" target="#b4">[5]</ref> (Eq. <ref type="formula" target="#formula_4">(3)</ref>). This definition of attention weights is a variant of dot product attention <ref type="bibr" target="#b29">[30]</ref>.</p><p>To determine the importance of each image region given the sentence context, we define relevance between the i-th region and the sentence as cosine similarity between the attended sentence vector a t i and each image region feature v i , i.e. Inspired by the minimum classification error formulation in speech recognition <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b14">15]</ref>, the similarity between image I and sentence T is calculated by LogSumExp pooling (LSE), i.e.</p><formula xml:id="formula_5">R(v i , a t i ) = v T i a t i ||v i ||||a t i || .<label>(4)</label></formula><formula xml:id="formula_6">S LSE (I, T ) = log( k i=1 exp(λ 2 R(v i , a t i ))) (1/λ2) ,<label>(5)</label></formula><p>where λ 2 is a factor that determines how much to magnify the importance of the most relevant pairs of image region feature v i and attended sentence vector a t i . As λ 2 → ∞, S(I, T ) approximates to max</p><formula xml:id="formula_7">k i=1 R(v i , a t i</formula><p>). Alternatively, we can summarize R(v i , a t i ) with average pooling (AVG), i.e.</p><formula xml:id="formula_8">S AV G (I, T ) = k i=1 R(v i , a t i ) k .<label>(6)</label></formula><p>Essentially, if region i is not mentioned in the sentence, its feature v i would not be similar to the corresponding attended sentence vector a t i since it would not be able to collect good information while computing a t i . Thus, comparing a t i and v i determines how important region i is with respect to the sentence. Text-Image Stacked Cross Attention. Likewise, we can first attend to image regions with respect to each word, and compare each word to the corresponding attended image vector to determine the importance of each word. We call this formulation Text-Image, which is depicted in <ref type="figure" target="#fig_2">Figure 3</ref>. Specifically, we normalize cosine similarity s i,j between the i-th region and the j-th word as</p><formula xml:id="formula_9">s ′ i,j = [s i,j ] + / n j=1 [s i,j ] 2</formula><p>+ . To attend on image regions with respect to each word, we define a weighted combination of image region features (i.e. the attended image vector a v j with respect to j-th word):</p><formula xml:id="formula_10">a v j = k i=1 α ′ ij v i , where α ′ ij = exp(λ 1s ′ i,j )/ k i=1 exp(λ 1s ′ i,j ).</formula><p>Using the cosine similarity between the attended image vector a v j and the word feature e j , we measure the relevance between the j-th word and the image as</p><formula xml:id="formula_11">R ′ (e j , a v j ) = (e T j a v j )/(||e j ||||a v j ||).</formula><p>The final similarity score between image I and sentence T is summarized by LogSumExp pooling (LSE), i.e.</p><formula xml:id="formula_12">S ′ LSE (I, T ) = log( n j=1 exp(λ 2 R ′ (e j , a v j ))) (1/λ2) ,<label>(7)</label></formula><p>or alternatively by average pooling (AVG)</p><formula xml:id="formula_13">S ′ AV G (I, T ) = n j=1 R ′ (e j , a v j ) n .<label>(8)</label></formula><p>In prior work, Karpathy and Fei-Fei <ref type="bibr" target="#b18">[19]</ref> defined region-word similarity as a dot product between v i and e j , i.e. s ij = v T i e j and image-text similarity by aggregating all possible pairs without attention as</p><formula xml:id="formula_14">S ′ SM (I, T ) = n j=1 max i (s ij ).<label>(9)</label></formula><p>We revisit this formulation in our ablation studies in Section 4.4, dubbed SumMax Text-Image, and also the symmetric form, dubbed Sum-Max Image-Text</p><formula xml:id="formula_15">S SM (I, T ) = k i=1 max j (s ij ).<label>(10)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Alignment Objective</head><p>Triplet loss is a common ranking objective for image-text matching. Previous approaches <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b36">37]</ref> have employed a hinge-based triplet ranking loss with margin α, i.e.</p><formula xml:id="formula_16">l(I, T ) = T [α − S(I, T ) + S(I,T )] + + Î [α − S(I, T ) + S(Î, T )] + ,<label>(11)</label></formula><p>where [x] + ≡ max(x, 0) and S is a similarity score function (e.g. S LSE ). The first sum is taken over all negative sentencesT given an image I; the second sum considers all negative imagesÎ given a sentence T . If I and T are closer to one another in the joint embedding space than to any negatives pairs, by the margin α, the hinge loss is zero. In practice, for computational efficiency, rather than summing over all the negative samples, it usually considers only the hard negatives in a mini-batch of stochastic gradient descent. In this study, we focus on the hardest negatives in a mini-batch following Fagphri et al. <ref type="bibr" target="#b9">[10]</ref>. For a positive pair (I, T ), the hardest negatives are given bŷ</p><formula xml:id="formula_17">I h = argmax m =I S(m, T ) andT h = argmax d =T S(I, d).</formula><p>We therefore define our triplet loss as</p><formula xml:id="formula_18">l hard (I, T ) = [α − S(I, T ) + S(I,T h )] + + [α − S(I, T ) + S(Î h , T )] + .<label>(12)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Representing images with Bottom-Up Attention</head><p>Given an image I, we aim to represent it with a set of image features V = {v 1 , ..., v k }, v i ∈ R D , such that each image feature encodes a region in an image. The definition of an image region is generic. However, in this study, we focus on regions at the level of object and other entities. Following Anderson et al. <ref type="bibr" target="#b0">[1]</ref>. we refer to detection of salient regions as bottom-up attention and practically implement it with a Faster R-CNN <ref type="bibr" target="#b33">[34]</ref> model.</p><p>Faster R-CNN is a two-stage object detection framework. In the first stage of Region Proposal Network (RPN), a grid of anchors tiled in space, scale and aspect ratio are used to generate bounding boxes, or Region Of Interests (ROIs), with high objectness scores. In the second stage the representations of the ROIs are pooled from the intermediate convolution feature map for region-wise classification and bounding box regression. A multi-task loss considering both classification and localization are minimized in both the RPN and final stages.</p><p>We adopt the Faster R-CNN model in conjunction with ResNet-101 <ref type="bibr" target="#b13">[14]</ref> pre-trained by Anderson et al. <ref type="bibr" target="#b0">[1]</ref> on Visual Genomes <ref type="bibr" target="#b23">[24]</ref>. In order to learn feature representations with rich semantic meaning, instead of predicting the object classes, the model predicts attribute classes and instance classes, in which instance classes contain objects and other salient stuff that is difficult to localize (e.g. stuff like 'sky', 'grass', 'building' and attributes like 'furry').</p><p>For each selected region i, f i is defined as the mean-pooled convolutional feature from this region, such that the dimension of the image feature vector is 2048. We add a fully-connect layer to transform f i to a h-dimensional vector</p><formula xml:id="formula_19">v i = W v f i + b v .<label>(13)</label></formula><p>Therefore, the complete representation of an image is a set of embedding vectors v = {v 1 , ..., v k }, v i ∈ R D , where each v i encodes an salient region and k is the number of regions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Representing Sentences</head><p>To connect the domains of vision and language, we would like to map language to the same h-dimensional semantic vector space as image regions. Given a sentence T , the simplest approach is mapping every word in it individually. However, this approach does not consider any semantic context in the sentence. Therefore, we employ an RNN to embed the words along with their context.</p><p>For the i-th word in the sentence, we represent it with an one-hot vector showing the index of the word in the vocabulary, and embed the word into a 300-dimensional vector through an embedding matrix W e . x i = W e w i , i ∈ [1, n]. We then use a bi-directional GRU <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b35">36]</ref> to map the vector to the final word feature along with the sentence context by summarizing information from both directions in the sentence. The bi-directional GRU contains a forward GRU which reads the sentence T from w 1 to w n</p><formula xml:id="formula_20">− → h i = − −− → GRU (x i ), i ∈ [1, n]<label>(14)</label></formula><p>and a backward GRU which reads from w n to w 1</p><formula xml:id="formula_21">← − h i = ← −− − GRU (x i ), i ∈ [1, n].<label>(15)</label></formula><p>The final word feature e i is defined by averaging the forward hidden state − → h i and backward hidden state ← − h i , which summarizes information of the sentence centered around w i</p><formula xml:id="formula_22">e i = ( − → h i + ← − h i ) 2 , i ∈ [1, n].<label>(16)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We carry out extensive experiments to evaluate Stacked Cross Attention Network (SCAN), and compare various formulations of SCAN to other state-of-the-art approaches. We also conduct ablation studies to incrementally verify our approach and thoroughly investigate the behavior of SCAN. As is common in information retreival, we measure performance of sentence retrieval (image query) and image retrieval (sentence query) by recall at K (R@K) defined as the fraction of queries for which the correct item is retrieved in the closest K points to the query. The hyperparameters of SCAN, such as λ 1 and λ 2 , are selected on the validation set. Details of training and the bottom-up attention implementation are presented in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Datasets</head><p>We evaluate our approach on the MS-COCO and Flickr30K datasets. Flickr30K contains 31,000 images collected from Flickr website with five captions each. Following the split in <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b9">10]</ref>, we use 1,000 images for validation and 1,000 images for testing and the rest for training. MS-COCO contains 123,287 images, and each image is annotated with five text descriptions. In <ref type="bibr" target="#b18">[19]</ref>, the dataset is split into 82,783 training images, 5,000 validation images and 5,000 test images. We follow <ref type="bibr" target="#b9">[10]</ref> to add 30,504 images that were originally in the validation set of MS-COCO but have been left out in this split into the training set. Each image comes with 5 captions. The results are reported by either averaging over 5 folds of 1K test images or testing on the full 5K test images. Note that some early works such as <ref type="bibr" target="#b18">[19]</ref> only use a training set containing 82,783 images.  t-i and i-t models by averaging their predicted similarity scores. The best result of model ensembles is achieved by combining t-i AVG and i-t LSE, selected on the validation set. The combined model gives 48.6 at R@1 for image retrieval, which is a 18.2% relative improvement from the current state-of-the-art, SCO <ref type="bibr" target="#b16">[17]</ref>. Our assumption is that different formulations of Stacked Cross Attention (t-i and i-t; AVG/LSE pooling) approach different aspects of data, such that the model ensemble further improves the results. <ref type="table" target="#tab_2">Table 2</ref> lists the experimental results on MS-COCO and a comparison with prior work. On the 1K test set, the single SCAN t-i AVG achieves comparable results to the current state-of-the-art, SCO. Our best result on 1K test set is achieved by combining t-i LSE and i-t AVG which improves 4.0% on image query and 8.0% relatively comparing to SCO. On the 5K test set, we choose to list the best single model and ensemble selected on the validation set due to space limitation. Both models outperform SCO on all metrics, and SCAN t-i AVG + i-t LSE improves 17.8% on sentence retrieval (R@1) and 16.6% on image retrieval (R@1) relatively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Results on Flickr30K</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Results on MS-COCO</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4">Ablation Studies</head><p>To begin with, we would like to incrementally validate our approach by revisiting a basic formulation of inferring the latent alignments between image regions and words without attention; i.e. the Sum-Max Text-Image proposed in <ref type="bibr" target="#b18">[19]</ref> and its  <ref type="formula" target="#formula_1">(9) (10)</ref>). Our Sum-Max models adopt the same learning objectives with hard negatives sampling, bottom-up attention-based image representation, and sentence representation as SCAN. The only difference is that it simply aggregates the similarity scores of all possible pairs of image regions and words. The results and a comparison are presented in <ref type="table">Table 3</ref>. VSE++ <ref type="bibr" target="#b9">[10]</ref> matches whole images and full sentences on a single embedding vector. It uses pre-defined ResNet-152 trained on ImageNet <ref type="bibr" target="#b6">[7]</ref> to extract one feature per image for training (single crop) and also leveraged hard negatives sampling, same as SCAN. Essentially, it represents the case without considering the latent correspondence but keeping other configurations similar to our Sum-Max models. The comparison between Sum-Max and VSE++ shows the effectiveness of inferring the latent alignments. With a better bottom-up attention model (compared to R-CNN in <ref type="bibr" target="#b18">[19]</ref>), Sum-Max t-i even outperforms the current state-of-the-art. By comparing SCAN and Sum-Max models, we show that Stacked Cross Attention can further improve the performance significantly. We further investigate in several different configurations with SCAN i-t AVG as our baseline model, and present the results in <ref type="table">Table 4</ref>. Each experiment is performed with one alternation. It is observed that the gain we obtain from hard negatives in the triplet loss is very significant for our model, improving the model by 48.2% in terms of sentence retrieval R@1. Not normalizing the image embedding (See Eq. <ref type="formula" target="#formula_1">(1)</ref>) changes the importance of image sample <ref type="bibr" target="#b9">[10]</ref>, but SCAN is not significantly affected by this factor. Using summation (SUM) or maximum (MAX) instead of average or LogSumExp as the final pooling function yields weaker results. Finally, we find that using bi-directional GRU improves sentence retrieval R@1 by 4.3 and image retrieval R@1 by 0.7.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Visualization and Analysis</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Visualizing Attention</head><p>By visualizing the attention component learned by the model, we are able to showcase the interpretablity of our model. In <ref type="figure">Figure 4</ref>, we qualitatively present <ref type="figure">Fig. 4</ref>. Visualization of the attended image regions with respect to each word in the sentence description, outlining the region with the maximum attention weight in red. The regional brightness represents the attention strength, which considers the importance of both region and word estimated by our model. Our model generates interpretable focus shift and stresses on words like "boy" and "tennis racket", as well as the attributes (young) and actions (holding). (Best viewed in color) the attention changes predicted by our Text-Image model. For the selected image, we visualize the attention weights with respect to each word in the sentence description "A young boy is holding a tennis racket." in different sub-figures. The regional brightness represents the attention weights which considers both importance of the region and the word corresponding to the sub-figure. We can observe that "boy", "holding", "tennis" and "racket" receive strong and focused attention on the relatively precise locations, while attention weights corresponding to "a" and "is" are weaker and less focused. This shows that our attention component learns interpretable alignments between image regions and words, and is able to generate reasonable focus shift and attention strength to weight regions and words by their importance while inferring image-text similarity. <ref type="figure">Figure 5</ref> shows the qualitative results of sentence retrieval given image queries on Flickr30K. For each image query, we show the top-5 retrieved sentences ranked by the similarity scores predicted by our model. <ref type="figure" target="#fig_4">Figure 6</ref> illustrates the qualitative results of image retrieval given sentence queries on Flickr30K. Each sentence corresponds to a ground-truth image. For each sentence query we show the top-3 retrieved images, ranking from left to right. We outline the true matches in green and false matches in red.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Image and Sentence Retrieval</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusions</head><p>We propose Stacked Cross Attention that gives the state-of-the-art performance on the Flickr30K and MS-COCO datasets in all measures. We carry out comprehensive ablation studies to verify that Stacked Cross Attention is essential to  the performance of image-text matching, and revisit prior work to confirm the importance of inferring the latent correspondence between image regions and words. Furthermore, we show how the learned Stacked Cross Attention can be leveraged to give more interpretablity to such vision-language models.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 .</head><label>1</label><figDesc>Fig. 1. Sentence descriptions make frequent reference to some particular but unknown salient regions in images, as well as their attributes and actions. Reasoning the underlying correspondence is a key to interpretable image-text matching.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Image-Text Stacked Cross Attention: At stage 1, we first attend to words in the sentence with respect to each image region feature vi to generate an attended sentence vector a t i for i-th image region. At stage 2, we compare a t i and vi to determine the importance of each image region, and then compute the similarity score.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. Text-Image Stacked Cross Attention: At stage 1, we first attend to image regions with respect to each word feature ei to generate an attended image vector a v j for j-th word in the sentence (The images above the symbol a v n represent the attended image vectors). At stage 2, we compare a v j and ej to determine the importance of each image region, and then compute the similarity score.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>1 :Fig. 5 .</head><label>15</label><figDesc>Fig. 5. Qualitative results of sentence retrieval given image queries on Flickr30K dataset. For each image query we show the top-5 ranked sentences. We observe that our Stacked Cross Attention model retrieves the correct results in the top ranked sentences even for image queries of complex and cluttered scenes. The model outputs some reasonable mismatches, e.g. (b.5). On the other hand, there are incorrect results such as (c.4), which is possibly due to a poor detection of action in static images. (Best viewed in color when zoomed in.)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 6 .</head><label>6</label><figDesc>Fig. 6. Qualitative results of image retrieval given sentence queries on Flickr30K. For each sentence query, we show the top-3 ranked images, ranking from left to right. We outline the true matches in green boxes and false matches in red boxes. In the examples we show, our model retrieves the ground truth image in the top-3 list. Note that other results are also reasonable outputs. (Best viewed in color.)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1</head><label>1</label><figDesc></figDesc><table>presents the quantitative results on Flickr30K where all formulations of 
+our proposed method outperform recent approaches in all measures. We denote 
+the Text-Image formulation by t-i, Image-Text formulation by i-t, LogSumExp 
+pooling by LSE, and average pooling by AVG. The best R@1 of sentence re-
+trieval given an image query is 67.9, achieved by SCAN i-t AVG, where we see a 
+22.1% relative improvement comparing to DPC [44]. Furthermore, we combine </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Comparison of the cross-modal retrieval restuls in terms of Recall@K(R@K) on Flickr30K. t-i denotes Text-Image. i-t denotes Image-Text. AVG and LSE denotes average and LogSumExp pooling respectively.</figDesc><table>Sentence Retrieval 
+Image Retrieval 
+Method 
+R@1 R@5 R@10 R@1 R@5 R@10 
+
+DVSA (R-CNN, AlexNet) [19] 
+22.2 
+48.2 
+61.4 
+15.2 
+37.7 
+50.5 
+HM-LSTM (R-CNN, AlexNet) [32] 38.1 
+-
+76.5 
+27.7 
+-
+68.8 
+SM-LSTM (VGG) [16] 
+42.5 
+71.9 
+81.5 
+30.2 
+60.4 
+72.3 
+2WayNet (VGG) [9] 
+49.8 
+67.5 
+-
+36.0 
+55.6 
+-
+DAN (ResNet) [31] 
+55.0 
+81.8 
+89.0 
+39.4 
+69.2 
+79.1 
+VSE++ (ResNet) [10] 
+52.9 
+-
+87.2 
+39.6 
+-
+79.5 
+DPC (ResNet) [44] 
+55.6 
+81.9 
+89.5 
+39.1 
+69.2 
+80.9 
+SCO (ResNet) [17] 
+55.5 
+82.0 
+89.3 
+41.1 
+70.5 
+80.1 
+Ours (Faster R-CNN, ResNet): 
+SCAN t-i LSE (λ1 = 9, λ2 = 6) 
+61.1 
+85.4 
+91.5 
+43.3 
+71.9 
+80.9 
+SCAN t-i AVG (λ1 = 9) 
+61.8 
+87.5 
+93.7 
+45.8 
+74.4 
+83.0 
+SCAN i-t LSE (λ1 = 4, λ2 = 5) 
+67.7 
+88.9 
+94.0 
+44.0 
+74.2 
+82.6 
+SCAN i-t AVG (λ1 = 4) 
+67.9 89.0 
+94.4 
+43.9 
+74.2 
+82.8 
+SCAN t-i AVG + i-t LSE 
+67.4 
+90.3 95.8 48.6 77.7 85.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Comparison</figDesc><table>of the cross-modal retrieval restuls in terms of Recall@K(R@K) 
+on MS-COCO. t-i denotes Text-Image. i-t denotes Image-Text. AVG and LSE denotes 
+average and LogSumExp pooling respectively. 
+
+Sentence Retrieval 
+Image Retrieval 
+Method 
+R@1 R@5 R@10 R@1 R@5 R@10 
+
+1K Test Images 
+DVSA (R-CNN, AlexNet) [19] 
+38.4 
+69.9 
+80.5 
+27.4 
+60.2 
+74.8 
+HM-LSTM (R-CNN, AlexNet) [32] 43.9 
+-
+87.8 
+36.1 
+-
+86.7 
+Order-embeddings (VGG) [38] 
+46.7 
+-
+88.9 
+37.9 
+-
+85.9 
+SM-LSTM (VGG) [16] 
+53.2 
+83.1 
+91.5 
+40.7 
+75.8 
+87.4 
+2WayNet (VGG) [9] 
+55.8 
+75.2 
+-
+39.7 
+63.3 
+-
+VSE++ (ResNet) [10] 
+64.6 
+-
+95.7 
+52.0 
+-
+92.0 
+DPC (ResNet) [44] 
+65.6 
+89.8 
+95.5 
+47.1 
+79.9 
+90.0 
+GXN (ResNet) [13] 
+68.5 
+-
+97.9 
+56.6 
+-
+94.5 
+SCO (ResNet) [17] 
+69.9 
+92.9 
+97.5 
+56.7 
+87.5 
+94.8 
+Ours (Faster R-CNN, ResNet): 
+SCAN t-i LSE (λ1 = 9, λ2 = 6) 
+67.5 
+92.9 
+97.6 
+53.0 
+85.4 
+92.9 
+SCAN t-i AVG (λ1 = 9) 
+70.9 
+94.5 
+97.8 
+56.4 
+87.0 
+93.9 
+SCAN i-t LSE (λ1 = 4, λ2 = 20) 
+68.4 
+93.9 
+98.0 
+54.8 
+86.1 
+93.3 
+SCAN i-t AVG (λ1 = 4) 
+69.2 
+93.2 
+97.5 
+54.4 
+86.0 
+93.6 
+SCAN t-i LSE + i-t AVG 
+72.7 94.8 98.4 58.8 88.4 94.8 
+5K Test Images 
+Order-embeddings (VGG) [38] 
+23.3 
+-
+84.7 
+31.7 
+-
+74.6 
+VSE++ (ResNet) [10] 
+41.3 
+-
+81.2 
+30.3 
+-
+72.4 
+DPC (ResNet) [44] 
+41.2 
+70.5 
+81.1 
+25.3 
+53.4 
+66.4 
+GXN (ResNet) [13] 
+42.0 
+-
+84.7 
+31.7 
+-
+74.6 
+SCO (ResNet) [17] 
+42.8 
+72.3 
+83.0 
+33.1 
+62.9 
+75.5 
+Ours (Faster R-CNN, ResNet): 
+SCAN i-t LSE 
+46.4 
+77.4 
+87.2 
+34.4 
+63.7 
+75.7 
+SCAN t-i AVG + i-t LSE 
+50.4 82.2 90.0 38.6 69.3 80.4 
+
+Table 3. Effect of inferring the latent vision-language alignment at the level of regions 
+and words. Results are reported in terms of Recall@K(R@K). Refer to Eqs. (9) (10) 
+for the definition of Sum-Max. t-i denotes Text-Image. i-t denotes Image-Text. 
+
+Sentence Retrieval 
+Image Retrieval 
+Method 
+R@1 R@5 R@10 R@1 R@5 R@10 
+
+VSE++ (fixed ResNet, 1 crop) [10] 31.9 
+-
+68.0 
+23.1 
+-
+60.7 
+Sum-Max t-i 
+59.6 
+85.2 
+92.9 
+44.1 
+70.0 
+79.0 
+Sum-Max i-t 
+56.7 
+83.5 
+89.7 
+36.8 
+65.6 
+74.9 
+SCO [17] (current state-of-the-art) 55.5 
+82.0 
+89.3 
+41.1 
+70.5 
+80.1 
+SCAN t-i AVG (λ1 = 9) 
+61.8 
+87.5 
+93.7 
+45.8 
+74.4 
+83.0 
+SCAN i-t AVG (λ1 = 10) 
+67.9 
+89.0 
+94.4 
+43.9 
+74.2 
+82.8 </table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">⋆ Work performed while working at Microsoft Research.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgement. The authors would like to thank Po-Sen Huang and Yokesh Kumar for helping the manuscript. We also thank Li Huang, Arun Sacheti, and Bing Multimedia team for supporting this work. Gang Hua is partly supported by National Natural Science Foundationof China under Grant 61629301.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Bottom-up and top-down attention for image captioning and VQA</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Buehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Teney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.06450</idno>
+		<title level="m">Layer normalization</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Neural machine translation by jointly learning to align and translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ICLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Top-down versus bottom-up control of attention in the prefrontal and posterior parietal cortices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">J</forename><surname>Buschman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">K</forename><surname>Miller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">315</biblScope>
+			<biblScope unit="issue">5820</biblScope>
+			<biblScope unit="page" from="1860" to="1862" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Attention-based models for speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Chorowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Serdyuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Control of goal-directed and stimulus-driven attention in the brain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Corbetta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">L</forename><surname>Shulman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Reviews Neuroscience</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">201</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">ImageNet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Language models for image captioning: The quirks and what works</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Devlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Zweig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Linking image and text with 2-way nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Eisenschtat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Faghri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.05612</idno>
+		<title level="m">VSE++: Improved visual-semantic embeddings</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Platt</surname></persName>
+		</author>
+		<title level="m">From captions to visual concepts and back</title>
+		<imprint>
+			<publisher>CVPR</publisher>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Look, imagine and match: Improving textual-visual cross-modal retrieval with generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Joty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Niu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Discriminative learning in sequential pattern recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Signal Processing Magazine</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Instance-aware image and sentence matching with selective multimodal LSTM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Learning semantic concepts and order for image and sentence matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Minimum classification error rate methods for speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">H</forename><surname>Juang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Speech and Audio processing</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="257" to="265" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Deep visual-semantic alignments for generating image descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Deep fragment embeddings for bidirectional image sentence mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Bottom-up and top-down attention: Different processes and overlapping neural systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Katsuki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Constantinidis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Neuroscientist</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="509" to="521" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Unifying visual-semantic embeddings with multimodal neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.2539</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Associating neural word embeddings with deep image representations using fisher vectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sadeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Visual Genome: Connecting language and vision using crowdsourced dense image annotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Krishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Groth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kravitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kalantidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Shamma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">123</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="32" to="73" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Ask me anything: Dynamic memory networks for natural language processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Irsoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ondruska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Iyyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bradbury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Gulrajani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Zhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Paulus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">ICML</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">CleanNet: Transfer learning for scalable image classifier training with label noise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">RNN fisher vectors for action recognition and image annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sadeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">A hierarchical neural autoencoder for paragraphs and documents</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">T</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jurafsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<title level="m">Microsoft COCO: Common objects in context</title>
+		<imprint>
+			<publisher>ECCV</publisher>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Effective approaches to attention-based neural machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">T</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>EMNLP</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Dual attention networks for multimodal reasoning and matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Nam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Hierarchical multimodal LSTM for dense visual-semantic embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Niu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yuan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1710.05106</idno>
+		<title level="m">CM-GANs: Cross-modal generative adversarial networks for common representation learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Faster R-CNN: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>NIPS</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">A neural attention model for abstractive sentence summarization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Rush</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>EMNLP</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Bidirectional recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">K</forename><surname>Paliwal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Signal Processing</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2673" to="2681" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Grounded compositional semantics for finding and describing images with sentences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Order-embeddings of images and language</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Vendrov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ICLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Learning deep structure-preserving image-text embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Show, attend and tell: Neural image caption generation with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhudinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">ICML</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">AttnGAN: Fine-grained text to image generation with attentional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Hierarchical attention networks for document classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hovy</surname></persName>
+		</author>
+		<editor>NAACL-HLT</editor>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Garrett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">D</forename><surname>Shen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.05535</idno>
+		<title level="m">Dual-path convolutional image-text embedding</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

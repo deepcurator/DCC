@@ -1,0 +1,971 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Pose Partition Networks for Multi-Person Pose Estimation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">ECE Department</orgName>
+								<orgName type="institution">National University of Singapore</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junliang</forename><surname>Xing</surname></persName>
+							<email>jlxing@nlpr.ia.ac.cn</email>
+							<affiliation key="aff1">
+								<orgName type="department">Institute of Automation</orgName>
+								<orgName type="institution">Chinese Academy of Sciences</orgName>
+								<address>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+							<email>yanshuicheng@360.cn</email>
+							<affiliation key="aff0">
+								<orgName type="department">ECE Department</orgName>
+								<orgName type="institution">National University of Singapore</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="department">Qihoo 360 AI Institute</orgName>
+								<address>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Pose Partition Networks for Multi-Person Pose Estimation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>Multi-Person Pose Estimation · Pose Partition · Dense Re- gression</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. This paper proposes a novel Pose Partition Network (PPN) to address the challenging multi-person pose estimation problem. The proposed PPN is favorably featured by low complexity and high accuracy of joint detection and partition. In particular, PPN performs dense regressions from global joint candidates within a specific embedding space, which is parameterized by centroids of persons, to efficiently generate robust person detection and joint partition. Then, PPN infers body joint configurations through conducting graph partition for each person detection locally, utilizing reliable global affinity cues. In this way, PPN reduces computation complexity and improves multi-person pose estimation significantly. We implement PPN with the Hourglass architecture as the backbone network to simultaneously learn joint detector and dense regressor. Extensive experiments on benchmarks MPII Human Pose Multi-Person, extended PASCAL-Person-Part, and WAF show the efficiency of PPN with new state-of-the-art performance.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Multi-person pose estimation aims to localize body joints of multiple persons captured in a 2D monocular image <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b21">22]</ref>. Despite extensive prior research, this problem remains very challenging due to the highly complex joint configuration, partial or even complete joint occlusion, significant overlap between neighboring persons, unknown number of persons and more critically the difficulties in allocating joints to multiple persons. These challenges feature the uniqueness of multi-person pose estimation compared with the simpler single-person setting <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b26">27]</ref>. To tackle these challenges, existing multi-person pose estimation approaches usually perform joint detection and partition separately, mainly following two different strategies. The top-down strategy <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b22">23]</ref> first detects The bottom-up strategy <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b21">22]</ref>, in contrast, generates all joint candidates at first, and then tries to partition them to corresponding person instances. The top-down approaches directly leverage existing person detection models <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b23">24]</ref> and single-person pose estimation methods <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b26">27]</ref>. Thus they effectively avoid complex joint partitions. However, their performance is critically limited by the quality of person detections. If the employed person detector fails to detect a person instance accurately (due to occlusion, overlapping or other distracting factors), the introduced errors cannot be remedied and would severely harm performance of the following pose estimation. Moreover, they suffer from high joint detection complexity, which linearly increases with the number of persons in the image, because they need to run the single-person joint detector for each person detection sequentially.</p><p>In contrast, the bottom-up approaches detect all joint candidates at first by globally applying a joint detector for only once and then partition them to corresponding persons according to joint affinities. Hence, they enjoy lower joint detection complexity than the top-down ones and better robustness to errors from early commitment. However, they suffer from very high complexity of partitioning joints to corresponding persons, which usually involves solving NP-hard graph partition problems <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b21">22]</ref> on densely connected graphs covering the whole image.</p><p>In this paper, we propose a novel solution, termed the Pose Partition Network (PPN), to overcome essential limitations of the above two types of approaches and meanwhile inherit their strengths within a unified model for efficiently and effectively estimating poses of multiple persons in a given image. As shown in <ref type="figure" target="#fig_0">Fig. 1</ref>, PPN solves multi-person pose estimation problem by simultaneously 1) modeling person detection and joint partition as a regression process over all joint candidates and 2) performing local inference for obtaining joint categorization and association conditioned on the generated person detections.</p><p>In particular, PPN introduces a dense regression module to generate person detections with partitioned joints via votes from joint candidates in a carefully designed embedding space, which is efficiently parameterized by person centroids. This pose partition model produces joint candidates and partitions by running a joint detector for only one feed-forward pass, offering much higher efficiency than top-down approaches. In addition, the produced person detections from PPN are robust to various distracting factors, e.g., occlusion, overlapping, deformation, and large pose variation, benefiting the following pose estimation. PPN also introduces a local greedy inference algorithm by assuming independence among person detections for producing optimal multi-person joint configurations. This local optimization strategy reduces the search space of the graph partition problem for finding optimal poses, avoiding high joint partition complexity challenging the bottom-up strategy. Moreover, the local greedy inference algorithm exploits reliable global affinity cues from the embedding space for inferring joint configurations within robust person detections, leading to performance improvement.</p><p>We implement PPN based on the Hourglass network <ref type="bibr" target="#b17">[18]</ref> for learning joint detector and dense regressor, simultaneously. Extensive experiments on MPII Human Pose Multi-Person <ref type="bibr" target="#b0">[1]</ref>, extended PASCAL-Person-Part <ref type="bibr" target="#b27">[28]</ref> and WAF <ref type="bibr" target="#b6">[7]</ref> benchmarks evidently show the efficiency and effectiveness of the proposed PPN. Moreover, PPN achieves new state-of-the-art on all these benchmarks.</p><p>We make following contributions. 1) We propose a new one feed-forward pass solution to multi-person pose estimation, totally different from previous top-down and bottom-up ones. 2) We propose a novel dense regression module to efficiently and robustly partition body joints into multiple persons, which is the key to speeding up multi-person pose estimation. 3) In addition to high efficiency, PPN is also superior in terms of robustness and accuracy on multiple benchmarks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Top-Down Multi-Person Pose Estimation Existing approaches following top-down strategy sequentially perform person detection and single-person pose estimation. In <ref type="bibr" target="#b8">[9]</ref>, Gkioxari et al. proposed to adopt the Generalized Hough Transform framework to first generate person proposals and then classify joint candidates based on the poselets. Sun et al. <ref type="bibr" target="#b24">[25]</ref> presented a hierarchical partbased model for jointly person detection and pose estimation. Recently, deep learning techniques have been exploited to improve both person detection and single-person pose estimation. In <ref type="bibr" target="#b12">[13]</ref>, Iqbal and Gall adopted Faster-RCNN <ref type="bibr" target="#b23">[24]</ref> based person detector and convolutional pose machine <ref type="bibr" target="#b26">[27]</ref> based joint detector for this task. Later, Fang et al. <ref type="bibr" target="#b7">[8]</ref> utilized spatial transformer network <ref type="bibr" target="#b13">[14]</ref> and Hourglass network <ref type="bibr" target="#b17">[18]</ref> to further improve the quality of joint detections and partitions. Despite remarkable success, they suffer from limitations from early commitment and high joint detection complexity. Differently, the proposed PPN adopts a one feed-forward pass regression process for efficiently producing person detections with partitioned joint candidates, offering robustness to early commitment as well as low joint detection complexity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Bottom-Up Multi-Person Pose Estimation</head><p>The bottom-up strategy provides robustness to early commitment and low joint detection complexity. Previous bottom-up approaches <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b21">22]</ref> mainly focus on improving either the joint detector or joint affinity cues, benefiting the following joint partition and configuration inference. For joint detector, fully convolutional neural networks, e.g., Residual networks <ref type="bibr" target="#b9">[10]</ref> and Hourglass networks <ref type="bibr" target="#b17">[18]</ref>, have been widely exploited. As for joint affinity cues, Insafutdinov et al. <ref type="bibr" target="#b10">[11]</ref> explored geometric and appearance constraints among joint candidates. Cao et al. <ref type="bibr" target="#b2">[3]</ref> proposed part affinity fields to encode location and orientation of limbs. Newell and Deng <ref type="bibr" target="#b18">[19]</ref> presented the associative embedding for grouping joint candidates. Nevertheless, all these approaches partition joints based on partitioning the graph covering the whole image, resulting in high inference complexity. In contrast, PPN performs local inference with robust global affinity cues which is efficiently generated by dense regressions from the centroid embedding space, reducing complexity for joint partitions and improving pose estimation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Approach</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Pose Partition Model</head><p>The overall pipeline for the proposed Pose Partition Network (PPN) model is shown in <ref type="figure" target="#fig_1">Fig. 2</ref>. Throughout the paper, we use following notations. Let I denote an image containing multiple persons, p={p 1 , p 2 , . . . , p N } denote spatial coordinates of N joint candidates from all persons in I with p v =(x v , y v ) ⊤ , ∀v=1, . . . , N , and u={u 1 , u 2 , . . . , u N } denote the labels of corresponding joint candidates, in which u v ∈{1, 2, . . . , K} and K is the number of joint categories. For allocating joints via local inference, we also consider the proximities between joints, denoted as b∈R N ×N . Here b (v,w) encodes the proximity between the vth joint candidate (p v , u v ) and the wth joint candidate (p w , u w ), and gives the probability for them to be from the same person.</p><p>The proposed PPN with learnable parameters Θ aims to solve the multiperson pose estimation task through learning to infer the conditional distribution P(p, u, b|I, Θ). Namely, given the image I, PPN infers the joint locations p, labels u and proximities b providing the largest likelihood probability. To this end, PPN adopts a regression model to simultaneously produce person detections with joint partitions implicitly and infers joint configuration p and u for each person detection locally. In this way, PPN reduces the difficulty and complexity of multiperson pose estimation significantly. Formally, PPN introduces latent variables g={g 1 , g 2 , . . . , g M } to encode joint partitions, and each g i is a collection of joint candidates (without labels) belonging to a specific person detection, and M is the number of joint partitions. With these latent variables g, P(p, u, b|I, Θ) can be factorized into</p><formula xml:id="formula_0">P(p, u, b|I, Θ) = g P(p, u, b, g|I, Θ) = g P(p|I, Θ)P(g|I, Θ, p) partition generation P(u, b|I, Θ, p, g) joint configuration ,<label>(1)</label></formula><p>where P(p|I, Θ)P(g|I, Θ, p) models the joint partition generation process within person detections based on joint candidates. Maximizing the above likelihood probability gives optimal pose estimation for multiple persons in I.</p><p>However, directly maximizing the above likelihood is computationally intractable. Instead of maximizing w.r.t. all possible partitions g, we propose to maximize its lower bound induced by a single "optimal" partition, inspired by the EM algorithm <ref type="bibr" target="#b5">[6]</ref>. Such approximation could reduce the complexity significantly without harming performance. Concretely, based on Eqn. (1), we have</p><formula xml:id="formula_1">P(p, u, b|I, Θ) ≥ P(p|I, Θ) max g P(g|I, Θ, p) P(u, b|I, Θ, p, g).<label>(2)</label></formula><p>Here, we find the optimal solution by maximizing the above induced lower bound P(p, u, b, g|I, Θ), instead of maximizing the summation. The joint partitions g disentangle independent joints and reduce inference complexity-only the joints falling in the same partition have non-zero proximities b. Then P(p, u, b, g|I, Θ) is further factorized as</p><formula xml:id="formula_2">P(p, u, b, g|I, Θ) = P(p, g|I, Θ) × gi∈g P(u gi |I, Θ, p, g i )P(b gi |I, Θ, p, g i , u),<label>(3)</label></formula><p>where u gi denotes the labels of joints falling in the partition g i and b gi denotes their proximities. In the above probabilities, we define P(p, u, b, g|I, Θ) as a Gibbs distribution: where E(p, u, b, g) is the energy function for the joint distribution P(p, u, b, g|I, Θ). Its explicit form is derived from Eqn. <ref type="formula" target="#formula_2">(3)</ref> accordingly:</p><formula xml:id="formula_3">P(p, u, b, g|I, Θ) ∝ exp{−E(p, u, b, g)},<label>(4)</label></formula><formula xml:id="formula_4">E(p, u, b, g) = −ϕ(p, g) − gi∈g pv∈gi ψ(p v , u v ) + pv,pw∈gi φ(p v , u v , p w , u w ) .</formula><p>(5) Here, ϕ(p, g) scores the quality of joint partitions g generated from joint candidates p for the input image I, ψ(p v , u v ) scores how the position p v is compatible with label u v , and φ(p v , u v , p w , u w ) represents how likely the positions p v with label u v and p w with label u w belong to the same person, i.e., characterizing the proximity b (v,w) . In the following subsections, we will give details for detecting joint candidates p, generating optimal joint partitions g, inferring joint configurations u and b along with the algorithm to optimize the energy function.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Joint Candidate Detection</head><p>To reliably detect human body joints, we use confidence maps to encode probabilities of joints presenting at each position in the image. The joint confidence maps are constructed by modeling the joint locations as Gaussian peaks, as shown in <ref type="figure" target="#fig_1">Fig. 2 (a)</ref>. We use C j to denote the confidence map for the jth joint with C i j being the confidence map of the jth joint for the ith person. For a position p v in the given image,</p><formula xml:id="formula_5">C i j (p v ) is calculated by C i j (p v )= exp − p v −p i j 2</formula><p>2 /σ 2 , where p i j denotes the groundtruth position of the jth joint of the ith person, and σ is an empirically chosen constant to control variance of the Gaussian distribution and set as 7 in the experiments. The target confidence map, which the proposed PPN model learns to predict, is an aggregation of peaks of all the persons in a single map. Here, we choose to take the maximum of confidence maps rather than average to remain distinctions between close-by peaks <ref type="bibr" target="#b2">[3]</ref>, i.e.</p><formula xml:id="formula_6">C j (p v )= max i C i j (p v )</formula><p>. During testing, we first find peaks with confidence scores greater than a given threshold τ (set as 0.1) on predicted confidence mapsC for all types of joints. Then we perform Non-Maximum Suppression (NMS) to find the joint candidate setp={p 1 , p 2 , . . . , p N }.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Pose Partition via Dense Regression</head><p>Our proposed pose partition model performs dense regression over all the joint candidates to localize centroids of multiple persons and partitions joints into different person instances accordingly, as shown in <ref type="figure" target="#fig_1">Fig. 2 (b)</ref> and (c). It learns to transform all the pixels belonging to a specific person to an identical single point in a carefully designed embedding space, where they are easy to cluster into corresponding persons. Such a dense regression framework enables partitioning joints by one single feed-forward pass, reducing joint detection complexity that troubles top-down solutions.</p><p>To this end, we propose to parameterize the joint candidate embedding space by the human body centroids, as they are stable and reliable to discriminate difference person instances even in presence of some extreme poses. We denote the constructed embedding space as H. In H, each person corresponds to a single point (i.e., the centroid), and each point h * ∈H represents a hypothesis about centroid location of a specific person instance. An example is given in the left image of <ref type="figure" target="#fig_2">Fig. 3 (a)</ref>.</p><p>Joint candidates are densely transformed into H and can collectively determine the centroid hypotheses of their corresponding person instances, since they are tightly related with articulated kinematics, as shown in <ref type="figure" target="#fig_1">Fig. 2 (c)</ref>. For instance, a candidate of the head joint would add votes for the presence of a person's centroid to the location just below it. A single candidate does not necessarily provide sufficient evidence for the exact centroid of a person instance, but the population of joint candidates can vote for the correct centroid with large probability and determine the joint partitions correctly. In particular, the probability of generating joint partition g * at location h * is calculated by summing the votes from different joint candidates together, i.e.</p><formula xml:id="formula_7">P(g * |h * ) ∝ j w j pv∈p ✶[C j (p v ) ≥ τ ] exp{− f j (p v ) − h * 2 2 } ,<label>(6)</label></formula><p>where ✶[·] is the indicator function and w j is the weight for the votes from jth joint category. We set w j =1 for all joints assuming all kinds of joints equally contribute to the localization of person instances in view of unconstrained shapes of human body and uncertainties of presence of different joints. The function f j : p → H learns to densely transform every pixel in the image to the embedding space H. For learning f j , we build the target regression map T i j for the jth joint of the ith person as follows:</p><formula xml:id="formula_8">T i j (p v ) = o i j,v /Z if p v ∈ N i j , 0 otherwise, o i j,v = (p i c − p v ) = (x i c − x v , y i c − y v ),<label>(7)</label></formula><p>where p i c denotes the centroid position of the ith person, Z= √ H 2 + W 2 is the normalization factor, H and W denote the height and width of image I,</p><formula xml:id="formula_9">N i j ={p v | p v −p i j 2</formula><p>≤r} denotes the neighbor positions of the jth joint of the ith person, and r is a constant to define the neighborhood size, set as 7 in our experiments. An example is shown in right image of <ref type="figure" target="#fig_2">Fig. 3 (a)</ref> for construction of a regression target of a pixel in a given image. Then, we define the target regression map T j for the jth joint as the average for all persons by</p><formula xml:id="formula_10">T j (p v ) = 1 N v i T i j (p v ),<label>(8)</label></formula><p>where N v is the number of non-zero vectors at position p v across all persons. During testing, after predicting the regression mapT j , we define transformation function f j for position p v as f j (p v )=p v + ZT j (p v ). After generating P(g * |h * ) for each point in the embedding space, we calculate the score ϕ(p, g) as ϕ(p, g)= i log P(g i |h i ). Then the problem of joint partition generation is converted to finding peaks in the embedding space H. As there are no priors on the number of persons in the image, we adopt the Agglomerative Clustering <ref type="bibr" target="#b1">[2]</ref> to find peaks by clustering the votes, which can automatically determine the number of clusters. We denote the vote set as h={h v |h v =f j (p v ),C j (p v )≥τ, p v ∈p}, and use C={C 1 , . . . , C M } to denote the clustering result on h, where C i represents the ith cluster and M is the number of clusters. We assume the set of joint candidates casting votes in each cluster corresponds to a joint partition g i , defined by</p><formula xml:id="formula_11">g i = {p v |p v ∈p,C j (p v ) ≥ τ, f j (p v ) ∈ C i }.<label>(9)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Local Greedy Inference for Pose Estimation</head><p>According to Eqn. (4), we maximize the conditional probability P(p, u, b, g|I, Θ) by minimizing energy function E(p, u, b, g) in Eqn. (5). We optimize E(p, u, b, g) in two sequential steps: 1) generate joint partition set based on joint candidates; 2) conduct joint configuration inference in each joint partition locally, which reduces the joint configuration complexity and overcomes the drawback of bottom-up approaches. After getting joint partition according to Eqn. (9), the score ϕ(p, g) becomes a constant. Letg denote the generated partition set. The optimization is then simplified as</p><formula xml:id="formula_12">u,b = arg min u,b − gi∈g pv∈gi ψ(p v , u v ) + pv,pw∈gi φ(p v , u v , p w , u w ) . (10)</formula><p>Pose estimation in each joint partition is independent, thus inference over different joint partitions becomes separate. We propose the following local greedy inference algorithm to solve Eqn. (10) for multi-person pose estimation. Given a joint partition g i , the unary term ψ(p v , u v ) is the confidence score at p v from the u v th joint detector:</p><formula xml:id="formula_13">ψ(p v , u v )=C uv (p v ). The binary term φ(p v , u v , p w , u w )</formula><p>Algorithm 1: Local greedy inference for multi-person pose estimation input : joint candidatesp, joint partitionsg, joint confidence mapsC, dense regression mapsT, τ . output: multi-person pose estimation R initialization: R ← ∅ for gi ∈g do while gi = ∅ do Initialize single-person pose estimation P ← ∅ for jth joint category, j = 1 to K do if P = ∅ then Find root joint candidate in gi for P by: p * ← arg maxp v ∈g iC j (pv) else Find joint candidate closest to centroid c:</p><formula xml:id="formula_14">p * ← arg maxp v ∈g i ✶[C j (pv )≥τ ] exp{ f j (pv )−c 2 2 } end ifCj(p * ) ≥ τ then</formula><p>Update P←P∪{(p * , j)}, gi←gi\{p * } Update c by averaging the person centroid hypotheses: c ← (pv ,n)∈P fn(pv)/|P| end end Update R ← R ∪ {P} end end is the similarity score of votes of two joint candidates based on the global affinity cues in the embedding space:</p><formula xml:id="formula_15">φ(p v , u v , p w , u w ) = ✶[C uv (p v ) ≥ τ ]✶[C uw (p w ) ≥ τ ] exp{− h v − h w 2 2 }, (11)</formula><p>where h v =p v +ZT uv (p v ) and h w =p w +ZT uw (p w ).</p><p>For efficient inference in Eqn. <ref type="formula" target="#formula_0">(10)</ref>, we adopt a greedy strategy which guarantees the energy monotonically decreases and eventually converges to a lower bound. Specifically, we iterate through each joint one by one, first considering joints around torso and moving out to limb. We start the inference with neck. For a neck candidate, we use its embedding point in H to initialize the centroid of its person instance. Then, we select the head top candidate closest to the person centroid and associate it with the same person as the neck candidate. After that, we update person centroid by averaging the derived hypotheses. We loop through all other joint candidates similarly. Finally, we get a person instance and its associated joints. After utilizing neck as root for inferring joint configurations of person instances, if some candidates remain unassigned, we utilize joints from torso, then from limbs, as the root to infer the person instance. After all candidates find their associations to persons, the inference terminates. See details in Algorithm 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Learning Joint Detector and Dense Regressor with CNNs</head><p>PPN is a generic model and compatible with various CNN architectures. Extensive architecture engineering is out of the scope of this work. We simply choose the state-of-the-art Hourglass network <ref type="bibr" target="#b17">[18]</ref> as the backbone of PPN. Hourglass network consists of a sequence of Hourglass modules. As shown in <ref type="figure" target="#fig_2">Fig. 3 (b)</ref>, each Hourglass module first learns down-sized feature maps from the input image, and then recovers full-resolution feature maps through up-sampling for precise joint localization. In particular, each Hourglass module is implemented as a fully convolutional network. Skipping connections are added between feature maps with the same resolution symmetrically to capture information at every scale. Multiple Hourglass modules are stacked sequentially for gradually refining the predictions via reintegrating the previous estimation results. Intermediate supervision is applied at each Hourglass module. Hourglass network was proposed for single-person pose estimation. PPN extends it to multi -person cases. PPN introduces modules enabling simultaneous joint detection (Sec. 3.2) and dense joint-centroid regression (Sec. 3.3), as shown in <ref type="figure" target="#fig_2">Fig. 3 (b)</ref>. In particular, PPN utilizes the Hourglass module to learn image representations and then separates into two branches: one produces the dense regression maps for detecting person centroids, via one 3×3 convolution on feature maps from the Hourglass module and another 1×1 convolution for classification; the other branch produces joint detection confidence maps. With this design, PPN obtains joint detection and partition in one feed-forward pass. When using multi-stage Hourglass modules, PPN feeds the predicted dense regression maps at every stage into the next one through 1×1 convolution, and then combines intermediate features with features from the previous stage.</p><p>For training PPN, we use ℓ 2 loss to learn both joint detection and dense regression branches with supervision at each stage. The losses are defined as</p><formula xml:id="formula_16">L t joint j v C t j (p v ) − C j (p v ) 2 2 L t regression j v T t j (p v ) − T j (p v ) 2 2 ,<label>(12)</label></formula><p>whereC t j andT t j represent predicted joint confidence maps and dense regression maps at the tth stage, respectively. The groundtruth C j (p v ) and T j (p v ) are constructed as in Sec. 3.2 and 3.3 respectively. The total loss is given by L= T t=1 (L t joint + αL t regression ), where T =8 is the number of Hourglass modules (stages) used in implementation and weighting factor α is empirically set as 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Experimental Setup</head><p>Datasets We evaluate the proposed PPN on three widely adopted benchmarks: MPII Human Pose Multi-Person (MPII) dataset <ref type="bibr" target="#b0">[1]</ref>, extended PASCAL-Person- Part dataset <ref type="bibr" target="#b27">[28]</ref>, and "We Are Family" (WAF) dataset <ref type="bibr" target="#b6">[7]</ref>. We resize each training sample to 256×256 pixels with padding.</p><p>Implementation For MPII dataset, we reserve 350 images randomly selected from the training set for validation. We use the rest training images and all the provided single-person samples to train the PPN for 250 epochs. For evaluation on the other two datasets, we follow the common practice and finetune the PPN model pretrained on MPII for 30 epochs. To deal with some extreme cases where centroids of persons are overlapped, we slightly perturb the centroids by adding small offset to separate them. We implement our model with PyTorch <ref type="bibr" target="#b20">[21]</ref> and adopt the RMSProp <ref type="bibr" target="#b25">[26]</ref> for optimization. The initial learning rate is 0.0025 and decreased by multiplying 0.5 at the 150th, 170th, 200th, 230th epoch. In testing, we follow conventions to crop image patches using the given position and average person scale of test images, and resize and pad the cropped samples to 384×384 as input to PPN. We search for suitable image scales over 5 different choices. Specially, when testing on MPII, following previous works <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b18">19]</ref>, we apply a single-person model <ref type="bibr" target="#b17">[18]</ref> trained on MPII to refine the estimations. We use the standard Average Precision (AP) as performance metric on all the datasets, as suggested by <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b27">28]</ref>. Our codes and pre-trained models will be made available. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Results and Analysis</head><p>MPII <ref type="table" target="#tab_0">Table 1</ref> shows the evaluation results on the full testing set of MPII.</p><p>We can see that the proposed PPN achieves overall 80.4% AP and significantly outperforms previous state-of-the-art achieving 77.5% AP <ref type="bibr" target="#b18">[19]</ref>. In addition, the proposed PPN improves the performance for localizing all the joints consistently.</p><p>In particular, it brings remarkable improvement over rather difficult joints mainly caused by occlusion and high degrees of freedom, including wrists (74.4% vs 69.8% AP), ankles (69.3% vs 64.7% AP), and knees (with absolute 4.8% AP increase over <ref type="bibr" target="#b18">[19]</ref>), confirming the robustness of the proposed pose partition model and global affinity cues to these distracting factors. These results clearly show PPN is outstandingly effective for multi-person pose estimation. We also report the computational speed of PPN 1 in <ref type="table" target="#tab_0">Table 1</ref>. PPN is about 2 times faster than the bottom-up approach <ref type="bibr" target="#b2">[3]</ref> with state-of-the-art speed for multi-person pose estimation. This demonstrates the efficiency of performing joint detection and partition simultaneously in our model. <ref type="table" target="#tab_1">Table 2</ref> shows the evaluation results. PPN provides absolute 7.4% AP improvement (46.6% vs 39.2% AP) over the state-of-the-art <ref type="bibr" target="#b27">[28]</ref>. Moreover, the proposed PPN brings significant improvement on difficult joints, such as wrist (48.9% vs 37.2% AP). These results further demonstrate the effectiveness and robustness of our model for multi-person pose estimation. WAF As shown in <ref type="table">Table 3</ref>, PPN achieves overall 84.8% AP, bringing 3.4% improvement over the best bottom-up approach <ref type="bibr" target="#b10">[11]</ref>. PPN achieves the best performance for all upper-body joints. In particular, it gives the most significant performance improvement on the elbow, about 10.3% higher than previous best Qualitative Results Visualization examples of pose partition, local inference, and multi-person pose estimation by the proposed PPN on these three datasets are provided in the supplemental materials.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>PASCAL-Person-Part</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3">Ablation Analysis</head><p>We conduct ablation analysis for the proposed PPN model using the MPII validation set. We evaluate multiple variants of our proposed PPN model by removing certain components from the full model ("PPN-Full"). "PPN-w/o-Partition" performs inference on the whole image without using obtained joint partition information, which is similar to the pure bottom-up approaches. "PPN-w/o-LGI" removes the local greedy inference phase. It allocates joint candidates to persons through finding the most activated position for each joint in each joint partition. This is similar to the top-down approaches. "PPN-w/o-Refinement" does not perform refinement by using single-person pose estimator. We use "PPN-256×256" to denote testing over 256×256 images and "PPN-Vanilla" to denote single scale testing without refinement. From <ref type="table" target="#tab_2">Table 4</ref>, "PPN-Full" achieves 79.0% AP and the joint partition inference only costs 1.9ms, which is very efficient. "PPN-w/o-Partition" achieves slightly lower AP (78.6%) with slower inference speed (3.4ms). The results confirm effectiveness of generating joint partitions by PPN-inference within each joint partition individually reduces complexity and improves pose estimation over multi-persons. Removing the local greedy inference phase as in "PPN-w/o-LGI" decreases the performance to 77.8% AP, showing local greedy inference is beneficial to pose estimation by effectively handling false alarms of joint candidate detection based on global affinity cues in the embedding space. Comparison of "PPN-w/o-Refinement"(76.4% AP) with the full model demonstrates that single-person pose estimation can refine joint localization. "PPN-Vanilla" achieves 74.8% AP, verifying the stableness of our approach for multi-person pose estimation even in the case of removing refinement and multi-scale testing.</p><p>We also evaluate the pose estimation results from 4 different stages of the PPN model and plot the results in <ref type="figure" target="#fig_4">Fig. 4 (a)</ref>. The performance increases monotonically when traversing more stages. The final results achieved at the 8th stage give about 23.4% improvement comparing with the first stage (79.0% vs 64.0% . This is because the proposed PPN can recurrently correct errors on the dense regression maps along with the joint confidence maps conditioned on previous estimations in the multi-stage design, yielding gradual improvement on the joint detections and partitions for multi-person pose estimation. Finally, we evaluate the effectiveness of pose partition model for partition person instances. In particular, we evaluate how its produced partitions match the real number of persons. The confusion matrix is shown in <ref type="figure" target="#fig_4">Fig. 4 (b)</ref>. We can observe the proposed pose partition model can predict very close number of persons with the groundtruth, with mean square error as small as 0.203.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusion</head><p>We presented the Pose Partition Network (PPN) to efficiently and effectively address the challenging multi-person pose estimation problem. PPN solves the problem by simultaneously detecting and partitioning joints for multiple persons. It introduces a new approach to generate partitions through inferring over joint candidates in the embedding space parameterized by person centroids. Moreover, PPN introduces a local greedy inference approach to estimate poses for person instances by utilizing the partition information. We demonstrate that PPN can provide appealing efficiency for both joint detection and partition, and it can significantly overcome limitations of pure top-down and bottom-up solutions on three benchmarks multi-person pose estimation datasets.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 .</head><label>1</label><figDesc>Fig. 1. Pose Partition Networks for multi-person pose estimation. (a) Input image. (b) Pose partition. PPN models person detection and joint partition as a regression process inferred from joint candidates. (c) Local inference. PPN performs local inference for joint configurations conditioned on generated person detections with joint partitions</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Overview of the proposed Pose Partition Network for multi-person pose estimation. Given an image, PPN first uses a CNN to predict (a) joint confidence maps and (b) dense joint-centroid regression maps. Then, PPN performs (c) centroid embedding for all joint candidates in the embedding space via dense regression, to produce (d) joint partitions within person detections. Finally, PPN conducts (e) local greedy inference to generate joint configurations for each joint partition locally, giving pose estimation results of multiple persons</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. (a) Centroid embedding via dense joint regression. Left image shows centroid embedding results for persons and right one illustrates construction of the regression target for a pixel (Sec. 3.3). (b) Architecture of Pose Partition Network. Its backbone is an Hourglass module (in blue block), followed by two branches: joint detection (in green block) and dense regression for joint partition (in yellow block)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>The MPII dataset consists of 3,844 and 1,758 groups of multiple interacting persons for training and testing respectively. Each person in the image is annotated for 16 body joints. It also provides more than 28,000 training samples for single-person pose esti- mation. The extended PASCAL-Person-Part dataset contains 3,533 challenging images from the original PASCAL-Person-Part dataset [4], which are split into 1,716 for training and 1,817 for testing. Each person is annotated with 14 body joints shared with MPII dataset, without pelvis and thorax. The WAF dataset contains 525 web images (350 for training and 175 for testing). Each person is annotated with 6 line segments for the upper-body. Data Augmentation We follow conventional ways to augment training samples by cropping original images based on the person center. In particular, we aug- ment each training sample with rotation degrees sampled in [−40 • , 40 • ], scaling factors in [0.7, 1.3], translational offset in [−40px, 40px] and horizontally mirror.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. (a) Ablation study on multi-stage Hourglass network. (b) Confusion matrix on person number inferred from pose partition (Sec. 3.3) with groundtruth. Mean square error is 0.203. Best viewed in color and 2× zoom</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Comparison with state-of-the-arts on the full testing set of MPII Human Pose Multi-Person dataset (AP)</figDesc><table>Method 
+Head Shoulder Elbow Wrist Hip Knee Ankle Total Time [s] 
+
+Iqbal and Gall [13] 
+58.4 
+53.9 
+44.5 
+35.0 42.2 36.7 
+31.1 
+43.1 
+10 
+Insafutdinov et al. [11] 78.4 
+72.5 
+60.2 
+51.0 57.2 52.0 
+45.4 
+59.5 
+485 
+Levinkov et al. [16] 
+89.8 
+85.2 
+71.8 
+59.6 71.1 63.0 
+53.5 
+70.6 
+-
+Insafutdinov et al. [12] 88.8 
+87.0 
+75.9 
+64.9 74.2 68.8 
+60.5 
+74.3 
+-
+Cao et al. [3] 
+91.2 
+87.6 
+77.7 
+66.8 75.4 68.9 
+61.7 
+75.6 
+1.24 
+Fang et al. [8] 
+88.4 
+86.5 
+78.6 
+70.4 74.4 73.0 
+65.8 
+76.7 
+1.5 
+Newell and Deng [19] 
+92.1 
+89.3 
+78.9 
+69.8 76.2 71.6 
+64.7 
+77.5 
+-
+
+PPN (Ours) 
+92.2 
+89.7 
+82.1 74.4 78.6 76.4 69.3 80.4 
+0.77 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Comparison with state-of-the-arts on the testing set of the extended PASCAL-Person-Part dataset (AP)</figDesc><table>Method 
+Head Shoulder Elbow Wrist Hip Knee Ankle Total 
+
+Chen and Yuille [5] 
+45.3 
+34.6 
+24.8 
+21.7 
+9.8 
+8.6 
+7.7 
+21.8 
+Insafutdinov et al. [11] 41.5 
+39.3 
+34.0 
+27.5 16.3 21.3 
+20.6 
+28.6 
+Xia et at. [28] 
+58.0 
+52.1 
+43.1 
+37.2 22.1 30.8 
+31.1 
+39.2 
+
+PPN (Ours) 
+66.9 
+60.0 
+51.4 48.9 29.2 36.4 33.5 46.6 
+
+Table 3. Comparison with state-of-the-arts on testing set of WAF dataset (AP) 
+
+Method 
+Head Shoulder Elbow Wrist Total 
+
+Chen and Yuile [5] 
+83.3 
+56.1 
+46.3 
+35.5 
+55.3 
+Pishchulin et al. [22] 
+76.6 
+80.8 
+73.7 
+73.6 
+76.2 
+Insafutdinov et al. [11] 
+92.6 
+81.1 
+75.7 
+78.8 
+82.0 
+
+PPN (Ours) 
+93.1 
+82.9 
+83.5 
+79.9 
+84.8 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 4 .</head><label>4</label><figDesc>Ablation experiments on MPII validation set (AP) Method Head Shoulder Elbow Wrist Hip Knee Ankle Total InferTime [ms]results. These results verify the effectiveness of the proposed PPN for tackling the multi-person pose estimation problem.</figDesc><table>PPN-Full 
+94.4 
+90.0 
+81.3 
+72.1 77.8 72.7 
+64.7 
+79.0 
+1.9 
+
+PPN-w/o-Partition 
+93.2 
+89.3 
+79.9 
+70.1 78.8 73.1 
+65.7 
+78.6 
+3.4 
+PPN-w/o-LGI 
+93.1 
+89.1 
+79.5 
+68.5 79.0 71.4 
+64.4 
+77.8 
+-
+PPN-w/o-Refinement 90.4 
+86.8 
+79.3 
+69.8 77.5 69.3 
+61.9 
+76.4 
+-
+PPN-256×256 
+91.0 
+87.1 
+78.6 
+70.2 76.7 70.5 
+60.0 
+76.3 
+-
+PPN-Vanilla 
+90.5 
+86.4 
+77.1 
+69.4 72.2 67.7 
+60.2 
+74.8 
+-
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The runtime time is measured on CPU Intel I7-5820K 3.3GHz and GPU TITAN X (Pascal). The time is counted with 5 scale testing, not including the refinement time by single-person pose estimation.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>Jiashi Feng was partially supported by NUS IDS R-263-000-C67-646, ECRA R-263-000-C87-133 and MOE Tier-II R-263-000-D17-112.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">2d human pose estimation: New benchmark and state of the art analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">10</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Poselets: Body part detectors trained using 3d human pose annotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Realtime multi-person 2d pose estimation using part affinity fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR (2017) 2, 4</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Detect what you can: Detecting and representing objects using holistic models and body parts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Parsing occluded people by flexible compositions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Maximum likelihood from incomplete data via the em algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Dempster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">M</forename><surname>Laird</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Rubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Royal Stat. Soc. B</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">We are family: Joint pose estimation of multiple persons</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Eichner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">RMPE: Regional multi-person pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Using k-poselets for detecting people and localizing their keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Deepercut: A deeper, stronger, and faster multi-person pose estimation model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Insafutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+	<note>In: ECCV (2016) 2, 4</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Articulated multi-person tracking in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Insafutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Multi-person pose estimation with local joint-to-person associations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Iqbal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<title level="m">Spatial transformer networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+	<note>NIPS</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Human pose estimation using a joint pixelwise and part-wise formulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Joint graph decomposition &amp; node labeling: Problem, algorithms, applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Levinkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uhrig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Insafutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kirillov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Ssd: Single shot multibox detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Y</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Stacked hourglass networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+	<note>In: ECCV (2016) 1, 2, 3, 4</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Associative embedding: End-to-end learning for joint detection and grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Towards accurate multi-person pose estimation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kanazawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>Pytorch</publisher>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deepcut: Joint subset partition and labeling for multi person pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Insafutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR (2016) 1</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Articulated people detection and pose estimation: Reshaping the future</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Thormählen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Articulated part-based model for joint object detection and pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">COURSERA: Neural Networks for Machine Learning</title>
+		<imprint>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramakrishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+		<title level="m">Convolutional pose machines</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+	<note>CVPR</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Joint multi-person pose estimation and semantic part segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

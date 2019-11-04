@@ -1,0 +1,1414 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:18+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Input Convex Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brandon</forename><surname>Amos</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lei</forename><surname>Xu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zico Kolter</surname></persName>
+						</author>
+						<title level="a" type="main">Input Convex Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>This paper presents the input convex neural network architecture. These are scalar-valued (potentially deep) neural networks with constraints on the network parameters such that the output of the network is a convex function of (some of) the inputs. The networks allow for efficient inference via optimization over some inputs to the network given others, and can be applied to settings including structured prediction, data imputation, reinforcement learning, and others. In this paper we lay the basic groundwork for these models, proposing methods for inference, optimization and learning, and analyze their representational power. We show that many existing neural network architectures can be made inputconvex with a minor modification, and develop specialized optimization algorithms tailored to this setting. Finally, we highlight the performance of the methods on multi-label prediction, image completion, and reinforcement learning problems, where we show improvement over the existing state of the art in many cases.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In this paper, we propose a new neural network architecture that we call the input convex neural network (ICNN).These are scalar-valued neural networks f (x, y; θ) where x and y denotes inputs to the function and θ denotes the parameters, built in such a way that the network is convex in (a subset of) inputs y.</p><p>3 The fundamental benefit to these ICNNs is that we can optimize over the convex inputs to the network given some fixed value for other inputs. That is, given some fixed x (and possibly some fixed elements of y) we can globally and efficiently (because the problem is convex) solve the optimization problem argmin y f (x, y; θ).</p><p>(1)</p><p>Fundamentally, this formalism lets us perform inference in the network via optimization. That is, instead of making predictions in a neural network via a purely feedforward process, we can make predictions by optimizing a scalar function (which effectively plays the role of an energy function) over some inputs to the function given others. There are a number of potential use cases for these networks.</p><p>Structured prediction As is perhaps apparent from our notation above, a key application of this work is in structured prediction. Given (typically high-dimensional) structured input and output spaces X × Y, we can build a network over (x, y) pairs that encodes the energy function for this pair, following typical energy-based learning formalisms <ref type="bibr" target="#b21">(LeCun et al., 2006)</ref>. Prediction involves finding the y ∈ Y that minimizes the energy for a given x, which is exactly the argmin problem in (1). In our setting, assuming that Y is a convex space (a common assumption in structured prediction), this optimization problem is convex. This is similar in nature to the structured prediction energy networks (SPENs) <ref type="bibr" target="#b2">(Belanger &amp; McCallum, 2016)</ref>, which also use deep networks over the input and output spaces, with the difference being that in our setting f is convex in y, so the optimization can be performed globally.</p><p>Data imputation Similar to structured prediction but slightly more generic, if we are given some space Y we can learn a network f (y; θ) (removing the additional x inputs, though these can be added as well) that, given an example with some subset I missing, imputes the likely values of these variables by solving the optimization problem as aboveŷ I = argmin y I f (y I , yĪ; θ) This could be used e.g., in image inpainting where the goal is to fill in some arbitrary set of missing pixels given observed ones.</p><p>Continuous action reinforcement learning Given a reinforcement learning problem with potentially continuous state and action spaces S × A, we can model the (negative) Q function, −Q(s, a; θ) as an input convex neural network. In this case the action selection procedure can be formulated as a convex optimization problem a (s) = argmin a −Q(s, a; θ).</p><p>This paper lays the foundation for optimization, inference, and learning in these input convex models, and explores their performance in the applications above. Our main contributions are: we propose the ICNN architecture and a partially convex variant; we develop efficient optimization and inference procedures that are well-suited to the complexity of these specific models; we propose techniques for training these models, based upon either max-margin structured prediction or direct differentiation of the argmin operation; and we evaluate the system on multi-label prediction, image completion, and reinforcement learning domains; in many of these settings we show performance that improves upon the state of the art.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background and related work</head><p>Energy-based learning The interplay between inference, optimization, and structured prediction has a long history in neural networks. Several early incarnations of neural networks were explicitly trained to produce structured sequences (e.g. <ref type="bibr" target="#b34">(Simard &amp; LeCun, 1991)</ref>), and there was an early appreciation that structured models like hidden Markov models could be combined with the outputs of neural networks <ref type="bibr" target="#b3">(Bengio et al., 1994)</ref>. Much of this earlier work is surveyed and synthesized by <ref type="bibr" target="#b21">(LeCun et al., 2006)</ref>, who give a tutorial on these energy based learning methods. In recent years, there has been a strong push to further incorporate structured prediction methods like conditional random fields as the "last layer" of a deep network architecture <ref type="bibr" target="#b28">(Peng et al., 2009;</ref><ref type="bibr" target="#b44">Zheng et al., 2015;</ref><ref type="bibr" target="#b9">Chen et al., 2015)</ref>. Several methods have proposed to build general neural networks over joint input and output spaces, and perform inference over outputs using generic optimization techniques such as Generative Adversarial Networks (GANs) <ref type="bibr" target="#b12">(Goodfellow et al., 2014)</ref> and Structured Prediction Energy Networks (SPENs) <ref type="bibr" target="#b2">(Belanger &amp; McCallum, 2016)</ref>. SPENs provide a deep structure over input and output spaces that performs the inference in (1) as a nonconvex optimization problem.</p><p>The current work is highly related to these past approaches, but also differs in a very particular way. To the best of our knowledge, each of these structured prediction methods based upon energy-based models operates in one of two ways, either: 1) the architecture is built in a very particular way such that optimization over the output is guaranteed to be "easy" (e.g. convex, or the result of running some inference procedure), usually by introducing a structured linear objective at the last layer of the network; or 2) no attempt is made to make the architecture "easy" to run inference over, and instead a general model is built over the output space. In contrast, our approach lies somewhere in between: by ensuring convexity of the resulting decision space, we are constraining the inference problem to be easy in some respect, but we specify very little about the architecture other than the constraints required to make it convex. In particular, as we will show, the network architecture over the variables to be optimized over can be deep and involve multiple non-linearities. The goal of the proposed work is to allow for complex functions over the output without needing to specify them manually (exactly analogous to how current deep neural networks treat their input space).</p><p>Structured prediction and MAP inference Our work also draws some connection to MAP-inference-based learning and approximate inference. There are two broad classes of learning approaches in structured prediction: method that use probabilistic inference techniques (typically exploiting the fact that the gradient of log likelihood is given by the actual feature expectations minus their expectation under the learned model <ref type="bibr">(Koller &amp; Friedman, 2009, Ch 20)</ref>), and methods that rely solely upon MAP inference (such as max-margin structured prediction <ref type="bibr" target="#b38">(Taskar et al., 2005;</ref><ref type="bibr" target="#b40">Tsochantaridis et al., 2005)</ref>). MAP inference in particular also has close connections to optimization, as various convex relaxations of the general MAP inference problem often perform well in theory and practice. The proposed methods can be viewed as an extreme case of this second class of algorithm, where inference is based solely upon a convex optimization problem that may not have any probabilistic semantics at all. Finally, although it is more abstract, we feel there is a philosophical similarity between our proposed approach and sum-product networks <ref type="bibr" target="#b30">(Poon &amp; Domingos, 2011)</ref>; both settings define networks where inference is accomplished "easily" either by a sum-product message passing algorithm (by construction) or via convex optimization.</p><p>Fitting convex functions Finally, the proposed work relates to a topic less considered in the machine learning literature, that of fitting convex functions to data <ref type="bibr">(Boyd &amp; Vandenberghe, 2004, pg. 338)</ref>. Indeed our learning problem can be viewed as parameter estimation under a model that is guaranteed to be convex by its construction. The most similar work of which we are aware specifically fits sums of rectified half-planes to data <ref type="bibr" target="#b23">(Magnani &amp; Boyd, 2009)</ref>, which is similar to one layer of our rectified linear units. However, the actual training scheme is much differ- ent, and our deep network architecture allows for a much richer class of representations, while still maintaining convexity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Convex neural network architectures</head><p>Here we more formally present different ICNN architectures and prove their convexity properties given certain constraints on the parameter space. Our chief claim is that the class of (full and partial) input convex models is rich and lets us capture complex joint models over the input to a network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Fully input convex neural networks</head><p>To begin, we consider a fully convex, k-layer, fully connected ICNN that we call a FICNN and is shown in <ref type="figure" target="#fig_0">Figure  1</ref>. This model defines a neural network over the input y (i.e., omitting any x term in this function) using the architecture for i = 0, . . . , k − 1</p><formula xml:id="formula_0">z i+1 = g i W (z) i z i + W (y) i y + b i , f (y; θ) = z k (2)</formula><p>where z i denotes the layer activations (with z 0 , W The proof is simple and follows from the fact that nonnegative sums of convex functions are also convex and that the composition of a convex and convex non-decreasing function is also convex (see e.g. <ref type="bibr">Boyd &amp; Vandenberghe (2004, 3.2.4)</ref>). The constraint that the g i be convex nondecreasing is not particularly restrictive, as current nonlinear activation units like the rectified linear unit or maxpooling unit already satisfy this constraint. The constraint that the W (z) terms be non-negative is somewhat restrictive, but because the bias terms and W (y) terms can be negative, the network still has substantial representation power, as we will shortly demonstrate empirically.</p><formula xml:id="formula_1">(z) 0 ≡ 0), θ = {W</formula><p>One notable addition in the ICNN are the "passthrough" layers that directly connect the input y to hidden units in deeper layers. Such layers are unnecessary in traditional feedforward networks because previous hidden units can always be mapped to subsequent hidden units with the identity mapping; however, for ICNNs, the non-negativity constraint subsequent W (z) weights restricts the allowable use of hidden units that mirror the identity mapping, and so we explicitly include this additional passthrough. Some passthrough layers have been recently explored in the deep residual networks <ref type="bibr" target="#b14">(He et al., 2015)</ref> and densely connected convolutional networks <ref type="bibr" target="#b15">(Huang et al., 2016)</ref>, though these differ from those of an ICNN as they pass through hidden layers deeper in the network, whereas to maintain convexity our passthrough layers can only apply to the input directly.</p><p>Other linear operators like convolutions can be included in ICNNs without changing the convexity properties. Indeed, modern feedforward architectures such as AlexNet <ref type="bibr" target="#b20">(Krizhevsky et al., 2012)</ref>, VGG <ref type="bibr" target="#b35">(Simonyan &amp; Zisserman, 2014)</ref>, and GoogLeNet  with ReLUs <ref type="bibr" target="#b25">(Nair &amp; Hinton, 2010)</ref> can be made input convex with Proposition 1. In the experiment that follow, we will explore ICNNs with both fully connected and convolutional layers, and we provide more detail about these additional architectures in Section A of the supplement.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Partially input convex architectures</head><p>The FICNN provides joint convexity over the entire input to the function, which indeed may be a restriction on the allowable class of models. Furthermore, this full joint convexity is unnecessary in settings like structured prediction where the neural network is used to build a joint model over an input and output example space and only convexity over the outputs is necessary.</p><p>In this section we propose an extension to the pure FICNN, the partially input convex neural network (PICNN), that is convex over only some inputs to the network (in general ICNNs will refer to this new class). As we will show, these networks generalize both traditional feedforward networks and FICNNs, and thus provide substantial representational benefits. We define a PICNN to be a network over (x, y) pairs f (x, y; θ) where f is convex in y but not convex in x. <ref type="figure" target="#fig_2">Figure 2</ref> illustrates one potential k-layer PICNN architec-ture defined by the recurrences</p><formula xml:id="formula_2">u i+1 =g i (W i u i +b i ) z i+1 = g i W (z) i z i • [W (zu) i u i + b (z) i ] + + W (y) i y • (W (yu) i u i + b (y) i ) + W (u) i u i + b i f (x, y; θ) = z k , u 0 = x<label>(3)</label></formula><p>where u i ∈ R ni and z i ∈ R mi denote the hidden units for the "x-path" and "y-path", where y ∈ R p , and where • denotes the Hadamard product, the elementwise product between two vectors. The crucial element here is that unlike the FICNN, we only need the W (z) terms to be nonnegative, and we can introduce arbitrary products between the u i hidden units and the z i hidden units. The following proposition highlights the representational power of the PICNN.</p><p>Proposition 2. A PICNN network with k layers can represent any FICNN with k layers and any purely feedforward network with k layers.</p><p>Proof. To recover a FICNN we simply set the weights over the entire x path to be zero and set b (z) = b (y) = 1. We can recover a feedforward network by noting that a traditional feedforward networkf (x; θ) where f : X → Y, can be viewed as a network with an inner product f (x; θ)</p><p>T y in its last layer (see e.g. <ref type="bibr" target="#b21">(LeCun et al., 2006)</ref> for more details). Thus, a feedforward network can be represented as a PICNN by setting the x path to be exactly the feedforward component, then having the y path be all zero except W (yu)</p><formula xml:id="formula_3">k−1 = I and W (y) k−1 = 1 T .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Inference in ICNNs</head><p>Prediction in ICNNs (which we also refer to as inference), requires solving the convex optimization problem</p><formula xml:id="formula_4">minimize y∈Y f (x, y; θ)<label>(4)</label></formula><p>While the resulting tasks are convex optimization problems (and thus "easy" to solve in some sense), in practice this still involves the solution of a potentially very complex optimization problem. We discuss here several approaches for approximately solving these optimization problems. We can usually obtain reasonably accurate solutions in many settings using a procedure that only involves a small number of forward and backward passes through the network, and which thus has a complexity that is at most a constant factor worse than that for feedforward networks. The same consideration will apply to training such networks, which we will discuss in Section 5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Exact inference in ICNNs</head><p>Although it is not a practical approach for solving the optimization tasks, the inference problem for the networks presented above (where the nonlinear are either ReLU or linear units) can be posed as as linear program. We show how to do this in Section B.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Approximate inference in ICNNs</head><p>Because of the impracticality of exact inference, we focus on approximate approaches to optimizing over the inputs to these networks, but ideally ones that still exploit the convexity of the resulting problem. We specifically focus on gradient-based approaches, which use the fact that we can easily compute the gradient of an ICNN with respect to its inputs, ∇ y f (x, y; θ), using backpropagation.</p><p>Gradient descent. The simplest gradient-based methods for solving (4) is just (projected sub-) gradient descent, or modifications such as those that use a momentum term <ref type="bibr" target="#b29">(Polyak, 1964;</ref><ref type="bibr" target="#b32">Rumelhart et al., 1988)</ref>, or spectral step size modifications <ref type="bibr" target="#b1">(Barzilai &amp; Borwein, 1988;</ref><ref type="bibr" target="#b5">Birgin et al., 2000)</ref>. That is, we start with some initialŷ and repeat the updateŷ</p><formula xml:id="formula_5">← P Y (ŷ − α∇ y f (x,ŷ; θ))<label>(5)</label></formula><p>This method is appealing in its simplicity, but suffers from the typical problems of gradient descent on non-smooth objectives: we need to pick a step size and possibly use a sequence of decreasing step sizes, and don't have an obvious method to assess how accurate of a current solution we have obtained (since an ICNN with ReLUs is piecewise linear, it will not have zero gradient at the solution). The method is also more challenging to integrate with some learning procedures, as we often need to differentiate through an entire chain of the gradient descent algorithm <ref type="bibr" target="#b10">(Domke, 2012)</ref>. Thus, while the method can sometimes work in practice, we have found that other approaches typically far outperform this method, and we will focus on alternative approximate approaches for the remainder of this section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Approximate inference via the bundle entropy method</head><p>An alternative approach to gradient descent is the bundle method <ref type="bibr" target="#b36">(Smola et al., 2008)</ref>, also known as the epigraph cutting plane approach, which iteratively optimizes a piecewise lower bound on the function given by the maximum over a set of first-order approximations. However, as, the traditional bundle method is not well suited to our setting (we need to evaluate a number of gradients equal to the dimension of x, and solve a complex optimization problem at each step) we have developed a new optimization algorithm for this domain that we term the bundle entropy method. This algorithm specifically applies to the (common) case where Y is bounded, which we assume to be Y = [0, 1] n (other upper or lower bounds can be attained through scaling). The method is also easily extensible to the setting where elements of Y belong to a higher-dimensional probability simplex as well.</p><p>For this approach, we consider adding an additional "barrier" function to the optimization in the form of the negative entropy −H(y), where</p><formula xml:id="formula_6">H(y) = − n i=1 (y i log y i + (1 − y i ) log(1 − y i )).<label>(6)</label></formula><p>In other words, we instead want to solve the optimization problem argmin y f (x, y; θ)−H(y) (with a possible additional scaling term). The negative entropy is a convex function, with the limits of lim y→0 H(y) = lim y→1 H(y) = 0, and negative values in the interior of this range. The function acts as a barrier because, although it does not approach infinity as it reaches the barrier of the feasible set, its gradient does approach infinity as it reaches the barrier, and thus the optimal solution will always lie in the interior of the unit hypercube Y.</p><p>An appealing feature of the entropy regularization comes from its close connection with sigmoid units in typical neural networks. It follows easily from first-order optimality conditions that the optimization problem</p><formula xml:id="formula_7">minimize y c T y − H(y)<label>(7)</label></formula><p>is given by y = 1/(1 + exp(c)). Thus if we consider the "trivial" PICNN mentioned in Section 3.2, which simply consists of the function f (x, y; θ) = y Tf (x; θ) for some purely feedforward networkf (x; θ), then the entropy-regularized minimization problem gives a solution that is equivalent to simply taking the sigmoid of the neural network outputs. Thus, the move to ICNNs can be interpreted as providing a more structured joint energy functional over the linear function implicitly used by sigmoid layers.</p><p>At each iteration of the bundle entropy method, we solve the optimization problem</p><formula xml:id="formula_8">y k+1 , t k+1 := argmin y,t {t − H(y) | Gy + h ≤ t1} (8)</formula><p>where G ∈ R k×n has rows equal to</p><formula xml:id="formula_9">g T i = ∇ y f (x, y i ; θ) T<label>(9)</label></formula><p>and h ∈ R k has entries equal to</p><formula xml:id="formula_10">h i = f (x, y i ; θ) − ∇ y f (x, y i ; θ) T y i .<label>(10)</label></formula><p>The Lagrangian of the optimization problem is</p><formula xml:id="formula_11">L(y, t, λ) = t − H(y) + λ T (Gy + h − t1)<label>(11)</label></formula><p>and differentiating with respect to y and t gives the optimality conditions</p><formula xml:id="formula_12">∇ y L(y, t, λ) = 0 =⇒ y = 1 1 + exp(G T λ) ∇ t L(y, t, λ) = 0 =⇒ 1 T λ = 1<label>(12)</label></formula><p>which in turn leads to the dual problem</p><formula xml:id="formula_13">maximize λ (G1 + h) T λ − 1 T log(1 + exp(G T λ)) subject to λ ≥ 0, 1 T λ = 1.<label>(13)</label></formula><p>This is a smooth optimization problem over the unit simplex, and can be solved using a method like the Projected Newton method of <ref type="bibr">(Bertsekas, 1982, pg. 241, eq. 97)</ref>. A complete description of the bundle entropy method is given in Section D. For lower dimensional problems, the bundle entropy method often attains an exact solution after a relatively small number of iterations. And even for larger problems, we find that the approximate solutions generated by a very small number of iterations (we typically use 5 iterations), still substantially outperform gradient descent approaches. Further, because we maintain an explicit lower bound on the function, we can compute an optimality gap of our solution, though in practice just using a fixed number of iterations performs well.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Learning ICNNs</head><p>Generally speaking, ICNN learning shapes the objective's energy function to produce the desired values when optimizing over the relevant inputs. That is, for a given input output pair (x, y ), our goal is to find ICNN parameters θ such that</p><formula xml:id="formula_14">y ≈ argmin yf (x, y; θ)<label>(14)</label></formula><p>where for the entirely of this section, we use the notatioñ f to denote the combination of the neural network function plus the regularization term such as −H(y), if it is included, i.e.f (x, y; θ) = f (x, y; θ) − H(y).</p><p>Although we only discuss the entropy regularization in this work, we emphasize that other regularizers are also possible. Depending on the setting, there are several different approaches we can use to ensure that the ICNN achieves the desired targets, and we consider three approaches below: direct functional fitting, max-margin structured prediction, and argmin differentiation.</p><p>Direct functional fitting. We first note that in some domains, we do not need a specialized procedure for fitting ICNNs, but can use existing approaches that directly fit the ICNN. An example of this is the Q-learning setting. Given some observed tuple (s, a, r, s ), Q learning updates the parameters θ with the gradient</p><formula xml:id="formula_16">Q(s, a) − r − γ max a Q(s , a ) ∇ θ Q(s, a),<label>(16)</label></formula><p>where the maximization step is carried out with gradient descent or the bundle entropy method. These updates can be applied to ICNNs with the only additional requirement that we project the weights onto their feasible sets after this update (i.e., clip or project any W terms that are required to be positive). Section E gives a complete description of deep Q-learning with ICNNs.</p><p>Max-margin structured prediction. Although maxmargin structured prediction is a simple and well-studied approach <ref type="bibr" target="#b40">(Tsochantaridis et al., 2005;</ref><ref type="bibr" target="#b38">Taskar et al., 2005)</ref>, in our experiences using these methods within an ICNN, we had substantial difficulty choosing the proper margin scaling term (especially for domains with continuousvalued outputs), or allowing for losses other than the hinge loss. For this reason, Section F discusses max-margin structured prediction in more detail, but the majority of our experiments here focus on the next approach, which more directly encodes the loss suffered by the full structuredprediction pipeline.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Argmin differentiation</head><p>In our final proposed approach, that of argmin differentiation, we propose to directly minimize a loss function between true outputs and the outputs predicted by our model, where these predictions themselves are the result of an optimization problem. We explicitly consider the case where the approximate solution to the inference problem is attained via the previously-described bundle entropy method, typically run for some fixed (usually small) number of iterations. To simplify notation, in the following we will let y(x; θ) = argmin</p><formula xml:id="formula_17">y min t {t − H(y) | Gy + h ≤ t1} ≈ argmin yf (x, y; θ)<label>(17)</label></formula><p>refer to the approximate minimization over y that results from running the bundle entropy method, specifically at the last iteration of the method.</p><p>Given some example (x, y ), our goal is to compute the gradient, with respect to the ICNN parameters, of the loss between y andŷ(x; θ): (ŷ(x; θ), y ). This is in some sense the most direct analogue to traditional neural network learning, since we typically optimize networks by minimizing some loss between the network's (feedforward) predictions and the true desired labels. Doing this in the predictions-via-optimization setting requires that we differentiate "through" the argmin operator, which can be accomplished via implicit differentiation of the KKT optimality conditions. Although the derivation is somewhat involved, the final result is fairly compact, and is given by the following proposition (for simplicity, we will writeŷ below instead ofŷ(x; θ) when the notation should be clear):</p><p>Proposition 3. The gradient of the neural network loss for predictions generated through the minimization process is</p><formula xml:id="formula_18">∇ θ (ŷ(x; θ), y ) = k i=1 (c λ i ∇ θ f (x, y i ; θ)+ ∇ θ ∇ y f (x, y i ; θ) T λ i c y + c λ i ŷ(x; θ) − y i )<label>(18)</label></formula><p>where y i denotes the solution returned by the ith iteration of the entropy bundle method, λ denotes the dual variable solution of the entropy bundle method, and where the c variables are determined by the solution to the linear system</p><formula xml:id="formula_19">  H G T 0 G 0 −1 0 −1 T 0     c y c λ c t   =   −∇ŷ (ŷ, y ) 0 0   . (19) where H = diag 1 y + 1 1−ŷ .</formula><p>The proof of this proposition is given in Section G, but we highlight a few key points here. The complexity of computing this gradient will be linear in k, which is the number of active constraints at the solution of the bundle entropy method. The inverse of this matrix can also be computed efficiently by just inverting the k × k matrix GH −1 G T via a variable elimination procedure, instead of by inverting the full matrix. The gradients ∇ θ f (x, y i ; θ) are standard neural network gradients, and further, can be computed in the same forward/backward pass as we use to compute the gradients for the bundle entropy method. The main challenge of the method is to compute the terms of the form</p><formula xml:id="formula_20">∇ θ (∇ y f (x, y i ; θ)</formula><p>T v) for some vector v. This quantity can be computed by most autodifferentiation tools (the gradient inner product ∇ y f (x, y i ; θ)</p><p>T v itself just becomes a graph computation than can be differentiated itself), or it can be computed by a finite difference approximation. The complexity of computing this entire gradient is a small constant multiple of computing k gradients with respect to θ.</p><p>Given this ability to compute gradients with respect to an arbitrary loss function, we can fit the parameter using traditional stochastic gradient methods examples. Specifically, given an example (or a minibatch of examples) x i , y i , we compute gradients ∇ θ (ŷ(x i ; θ), y i ) and update the parameters using e.g. the ADAM optimizer <ref type="bibr" target="#b18">(Kingma &amp; Ba, 2014</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>Our experiments study the representational power of ICNNs to better understand the interplay between the model's restrictiveness and accuracy. Specifically, we evaluate the method on multi-label classification on the BibTeX dataset <ref type="bibr" target="#b17">(Katakis et al., 2008)</ref>, image completion using the Olivetti face dataset <ref type="bibr" target="#b33">(Samaria &amp; Harter, 1994)</ref>, and continuous action reinforcement learning in the OpenAI Gym <ref type="bibr" target="#b8">(Brockman et al., 2016)</ref>. We show that the methods compare favorably to the state of the art in many situations. The full source code for all experiments is available in the icml2017 branch at https://github.com/ locuslab/icnn and our implementation is built using Python <ref type="bibr" target="#b42">(Van Rossum &amp; Drake Jr, 1995)</ref> with the numpy <ref type="bibr" target="#b26">(Oliphant, 2006)</ref> and TensorFlow <ref type="bibr" target="#b0">(Abadi et al., 2016)</ref> packages.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Synthetic 2D example</head><p>Though we do not discuss it here, Section I presents a simple synthetic classification experiment comparing FICNN and PICNN decision boundaries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Multi-Label Classification</head><p>We first study how ICNNs perform on multi-label classification with the BibTeX dataset and benchmark presented in <ref type="bibr" target="#b17">(Katakis et al., 2008)</ref>. This benchmark maps text classification from an input space X of 1836 bag-of-works indicator (binary) features to an output space Y of 159 binary labels. We use the train/test split of 4880/2515 from <ref type="bibr" target="#b17">(Katakis et al., 2008)</ref> and evaluate with the macro-F1 score (higher is better). We use the ARFF version of this dataset from Mulan <ref type="bibr" target="#b41">(Tsoumakas et al., 2011)</ref>. Our PICNN architecture for multi-label classification uses fully-connected layers with ReLU activation functions and batch normalization <ref type="bibr" target="#b16">(Ioffe &amp; Szegedy, 2015)</ref> along the input path. As a baseline, we use a fully-connected neural network with batch normalization and ReLU activation functions. Both architectures have the same structure (600 fully connected, 159 (#labels) fully connected). We optimize our PICNN with 30 iterations of gradient descent with a learning rate of 0.1 and a momentum of 0.3.  forms our baseline feedforward network's score of 0.396, which indicates PICNNs have the power to learn a robust structure over the output space. SPENs obtain a macro-F1 score of 0.422 on this task <ref type="bibr" target="#b2">(Belanger &amp; McCallum, 2016)</ref> and pose an interesting comparison point to ICNNs as they have a similar (but not identical) deep structure that is nonconvex over the input space. The difference of 0.007 between ICNNs and SPENs could be due to differences in our experimental setups, architectures, and random experimental noise. More details are included in Section J.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">Image completion on the Olivetti faces</head><p>As a test of the system on a structured prediction task over a much more complex output space Y, we apply a convolutional PICNN to face completion on the sklearn version <ref type="bibr" target="#b27">(Pedregosa et al., 2011)</ref> of the Olivetti data set <ref type="bibr" target="#b33">(Samaria &amp; Harter, 1994)</ref>, which contains 400 64x64 grayscale images. ICNNs for face completion should be invariant to translations and other transformations in the input space. To achieve this invariance, our PICNN is inspired by the DQN architecture in <ref type="bibr" target="#b24">Mnih et al. (2015)</ref>, which preserves this invariance in the different context of reinforcement learning. Specifically, our network is over (x, y) pairs where x (32x64) is the left half and y (32x64) is the right half of the image. The input and output paths are: 32x8x8 conv (stride 4x2), 64x4x4 conv (stride 2x2), 64x3x3 conv, 512 fully connected.</p><p>This experiment uses the same training/test splits and minimizes the mean squared error (MSE) as in <ref type="bibr" target="#b30">Poon &amp; Domingos (2011)</ref> so that our results can be directly compared to (a non-exhaustive list of) other techniques. We also explore the tradeoffs between the bundle entropy method and gradient descent and use a non-convex baseline to better understand the impacts of convexity. We use a learning rate of 0.01 and momentum of 0.9 with gradient descent for the inner optimization in the ICNN.   <ref type="table" target="#tab_3">Table 2</ref> shows the test MSEs for the different approaches. Example image completions are shown in <ref type="figure" target="#fig_3">Figure 3</ref>. These results show that the bundle entropy method can leverage more information from these five iterations than gradient descent, even when the convexity constraint is relaxed. The PICNN trained with back-optimization with the relaxed convexity constraint slightly outperforms the network with the convexity constraint, but not the network trained with the bundle-entropy method. This shows that for image completion with PICNNs, convexity does not seem to inhibit the representational power. Furthermore, this experiment suggests that a small number of inner optimization iterations (five in this case) is sufficient for good performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.4.">Continuous Action Reinforcement Learning</head><p>Finally, we present standard benchmarks in continuous action reinforcement learning from the OpenAI Gym <ref type="bibr" target="#b8">(Brockman et al., 2016)</ref> that use the MuJoCo physics simulator <ref type="bibr" target="#b39">(Todorov et al., 2012)</ref>. We model the (negative) Q function, −Q(s, a; θ) as an ICNN and select actions with the convex optimization problem a (s) = argmin a −Q(s, a; θ). We use Q-learning to optimize the ICNN as described in Section 5 and Section E. At test time, the policy is selected by optimizing Q(s, a; θ). All of our experiments use a PICNN with two fully-connected layers that each have 200 hidden units. We compare to Deep Deterministic Policy Gradient (DDPG) <ref type="bibr" target="#b22">(Lillicrap et al., 2015)</ref> and Normalized Advantage Functions (NAF) <ref type="bibr" target="#b13">(Gu et al., 2016)</ref> as state-of-the-art offpolicy learning baselines. 4 <ref type="table">Table 3</ref> shows the maximum test reward achieved by the different algorithms on these tasks. Although no method strictly dominates the others, the ICNN approach has some clear advantages on tasks like HalfCheetah, Reacher, and HumanoidStandup, and performs comparably on many other tasks, though with also a few notable poor performances in Hopper and Walker2D. Nonetheless, given the strong baseline, and the fact that the method is literally just a drop-in replacement for a function approximator in Q-learning, these results are overall positive. NAF poses a particularly interesting comparison point to ICNNs. In particular, NAF decomposes the Q function in terms of the value function an an advantage function Q(s, a) = V (s) + A(s, a) where the advantage function is restricted to be concave quadratic in the actions, and thus always has a closed-form solution. In a sense, this closely mirrors the setup of the PICNN architecture: like NAF, we have a separate non-convex path for the s variables, and an overall function that is convex in a; however, the distinction is that while NAF requires that the convex portion be quadratic, the ICNN architecture allows any convex functional form. As our experiments show, this representational power does allow for better performance of the resulting system, though the trade-off, of course, is that determining the optimal action in an ICNN is substantially more computationally complex than for a quadratic.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion and future work</head><p>This paper laid the groundwork for the input convex neural network model. By incorporating relatively simple constraints into existing network architectures, we can fit very general convex functions and the apply optimization as an inference procedure. Since many existing models already fit into this overall framework (e.g., CRF models perform an optimization over an output space where parameters are given by the output of a neural network), the proposed method presents an extension where the entire inference procedure is "learned" along with the network itself, without the need for explicitly building typical structured prediction architectures. This work explored only a small subset of the possible applications of these network, and the networks offer promising directions for many additional domains.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. A fully input convex neural network (FICNN).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>b 0:k−1 } are the parameters, and g i are non-linear activation functions. The central result on convexity of the network is the following: Proposition 1. The function f is convex in y provided that all W (z) 1:k−1 are non-negative, and all functions g i are con- vex and non-decreasing.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. A partially input convex neural network (PICNN).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Example test set image completions of the ICNN with bundle entropy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>).Table 1. Comparison of approaches on BibTeX multi-label classi- fication task. (Higher is better.)</figDesc><table>Method 
+Test Macro-F1 
+Feedforward net 
+0.396 
+ICNN 
+0.415 
+SPEN (Belanger &amp; McCallum, 2016) 0.422 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1</head><label>1</label><figDesc>compares several different methods for this prob- lem. Our PICNN's final macro-F1 score of 0.415 outper-</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>Sum-product (Poon &amp; Domingos, 2011) 942</figDesc><table>Method 
+MSE 
+ICNN -Bundle Entropy 
+833.0 
+ICNN -Gradient Decent 
+872.0 
+ICNN -Nonconvex 
+850.9 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Comparisons of reconstruction error on image comple- tion.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Table 3. Maximum test reward for ICNN algorithm versus alter- natives on several OpenAI Gym tasks. (All tasks are v1.)</figDesc><table>Task 
+DDPG 
+NAF 
+ICNN 
+Ant 
+1000.00 
+999.03 
+1056.29 
+HalfCheetah 
+2909.77 
+2575.16 
+3822.99 
+Hopper 
+1501.33 
+1100.43 
+831.00 
+Humanoid 
+524.09 
+5000.68 
+433.38 
+HumanoidStandup 134265.96 116399.05 141217.38 
+InvDoubPend 
+9358.81 
+9359.59 
+9359.41 
+InvPend 
+1000.00 
+1000.00 
+1000.00 
+Reacher 
+-6.10 
+-6.31 
+-5.08 
+Swimmer 
+49.79 
+69.71 
+64.89 
+Walker2d 
+1604.18 
+1007.25 
+298.21 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">We emphasize the term "input convex" since convexity in machine learning typically refers to convexity (of the loss minimization learning problem) in the parameters, which is not the case here. Note that in our notation, f needs only be a convex function in y, and may still be non-convex in the remaining inputs x. Training these neural networks remains a nonconvex problem, and the convexity is only being exploited at inference time.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Because there are not official DDPG or NAF implementations or results on the OpenAI gym tasks, we use the Simon Ramstedt's DDPG implementation from https://github.com/ SimonRamstedt/ddpg and have re-implemented NAF.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>BA is supported by the National Science Foundation Graduate Research Fellowship Program under Grant No. DGE1252522. We also thank David Belanger for helpful discussions.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Tensorflow: Large-scale machine learning on heterogeneous distributed systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martın</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eugene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhifeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Craig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devin</forename><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matthieu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.04467</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Two-point step size gradient methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Barzilai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">M</forename><surname>Borwein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IMA Journal of Numerical Analysis</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="141" to="148" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Structured prediction energy networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Mccallum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Machine Learning</title>
+		<meeting>the International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Globally trained handwritten word recognizer using spatial representation, convolutional neural networks, and hidden markov models. Advances in neural information processing systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Donnie</forename><surname>Henderson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1994" />
+			<biblScope unit="page" from="937" to="937" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Projected newton methods for optimization problems with simple constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitri</forename><forename type="middle">P</forename><surname>Bertsekas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on control and Optimization</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="221" to="246" />
+			<date type="published" when="1982" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Marcos. Nonmonotone spectral projected gradient methods on convex sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ernesto</forename><forename type="middle">G</forename><surname>Birgin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">José</forename><surname>Martínez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raydan</forename><surname>Mario</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Optimization</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1196" to="1211" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lieven</forename><surname>Vandenberghe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>Cambridge university press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Distributed optimization and statistical learning via the alternating direction method of multipliers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eric</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Borja</forename><surname>Peleato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Eckstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Foundations and Trends R in Machine Learning</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="122" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Brockman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vicki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pettersson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ludwig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonas</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jie</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zaremba</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.01540</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Wojciech. Openai gym. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Learning deep structured models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liang-Chieh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Machine Learning</title>
+		<meeting>the International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Generic methods for optimization-based modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Domke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Conference on AI and Statistics</title>
+		<meeting>the Conference on AI and Statistics</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="318" to="326" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Elad</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoram</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mehdi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Warde</forename><forename type="middle">-</forename><surname>Bing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sherjil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2672" to="2680" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Continuous deep q-learning with modelbased acceleration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shixiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Timothy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Levine</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Machine Learning</title>
+		<meeting>the International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.03385</idno>
+		<title level="m">Deep residual learning for image recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gao</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhuang</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Kilian</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.06993</idno>
+		<title level="m">Densely connected convolutional networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 32nd International Conference on Machine Learning</title>
+		<meeting>The 32nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="448" to="456" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Multilabel text classification for automated tag suggestion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Katakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ioannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Grigorios</forename><surname>Tsoumakas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ioannis</forename><surname>Vlahavas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ECML PKDD discovery challenge</title>
+		<imprint>
+			<biblScope unit="volume">75</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Probabilistic graphical models: principles and techniques</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daphne</forename><surname>Koller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nir</forename><surname>Friedman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>MIT press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">A tutorial on energy-based learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sumit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hadsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Raia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Huang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">Predicting structured data</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">P</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">J</forename><surname>Hunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nicolas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tassa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.02971</idno>
+		<title level="m">Continuous control with deep reinforcement learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Convex piecewise-linear fitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Magnani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><forename type="middle">P</forename><surname>Boyd</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Optimization and Engineering</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="17" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volodymyr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Koray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrei</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><forename type="middle">K</forename><surname>Fidjeland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georg</forename><surname>Ostrovski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page" from="529" to="533" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinod</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 27th International Conference on Machine Learning (ICML-10)</title>
+		<meeting>the 27th International Conference on Machine Learning (ICML-10)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="807" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">A guide to NumPy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Travis</forename><forename type="middle">E</forename><surname>Oliphant</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Trelgol Publishing USA</publisher>
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Scikit-learn: Machine learning in python</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fabian</forename><surname>Pedregosa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Varoquaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gaël</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandre</forename><surname>Gramfort</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Thirion</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bertrand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Olivier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blondel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Prettenhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ron</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dubourg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vincent</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2825" to="2830" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Conditional neural fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liefeng</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinbo</forename><surname>Xu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1419" to="1427" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Some methods of speeding up the convergence of iteration methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Boris</forename><forename type="middle">T</forename><surname>Polyak</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">USSR Computational Mathematics and Mathematical Physics</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1" to="17" />
+			<date type="published" when="1964" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Sum-product networks: A new deep architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hoifung</forename><surname>Poon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pedro</forename><surname>Domingos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">UAI 2011, Proceedings of the Twenty-Seventh Conference on Uncertainty in Artificial Intelligence</title>
+		<meeting><address><addrLine>Barcelona, Spain</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="337" to="346" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Martin. (Approximate) subgradient methods for structured prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nathan</forename><forename type="middle">D</forename><surname>Ratliff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bagnell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zinkevich</forename><surname>Andrew</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="380" to="387" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Learning representations by back-propagating errors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">E</forename><surname>Rumelhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Williams</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cognitive modeling</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Parameterisation of a stochastic model for human face identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ferdinando</forename><forename type="middle">S</forename><surname>Samaria</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><forename type="middle">C</forename><surname>Harter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Second IEEE Workshop on</title>
+		<meeting>the Second IEEE Workshop on</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="1994" />
+			<biblScope unit="page" from="138" to="142" />
+		</imprint>
+	</monogr>
+	<note>Applications of Computer Vision</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Reverse tdnn: an architecture for trajectory generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrice</forename><surname>Simard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<publisher>Citeseer</publisher>
+			<date type="published" when="1991" />
+			<biblScope unit="page" from="579" to="588" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Bundle methods for machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">V</forename><surname>Vishwanathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<editor>Platt, J. C., Koller, D., Singer, Y., and Roweis, S. T.</editor>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="page" from="1377" to="1384" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yangqing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pierre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Scott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dragomir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dumitru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Learning structured prediction models: A large margin approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Taskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chatalbashev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vassil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daphne</forename><surname>Koller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carlos</forename><surname>Guestrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22nd International Conference on Machine Learning</title>
+		<meeting>the 22nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="896" to="903" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Mujoco: A physics engine for model-based control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Emanuel</forename><surname>Todorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Erez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuval</forename><surname>Tassa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2012 IEEE/RSJ International Conference on Intelligent Robots and Systems</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="5026" to="5033" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Large margin methods for structured and interdependent output variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tsochantaridis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ioannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Thorsten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yasemin</forename><surname>Altun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="1453" to="1484" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Mulan: A java library for multi-label learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Grigorios</forename><surname>Tsoumakas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Spyromitros-Xioufis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eleftherios</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jozef</forename><surname>Vilcek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ioannis</forename><surname>Vlahavas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2411" to="2414" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Python reference manual. Centrum voor Wiskunde en Informatica Amsterdam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guido</forename><surname>Van Rossum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Drake</forename><surname>Jr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fred</forename><forename type="middle">L</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title level="m" type="main">Primal-dual interior-point methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><forename type="middle">J</forename><surname>Wright</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+			<pubPlace>Siam</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Conditional random fields as recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shuai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sadeep</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bernardino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vibhav</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhizhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dalong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chang</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torr</forename><surname>Philip</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1529" to="1537" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

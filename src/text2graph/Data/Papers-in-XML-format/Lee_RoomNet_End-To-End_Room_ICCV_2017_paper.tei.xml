@@ -1,0 +1,1344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:30+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">RoomNet: End-to-End Room Layout Estimation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chen-Yu</forename><surname>Lee</surname></persName>
+							<email>clee@magicleap.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Magic Leap, Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vijay</forename><surname>Badrinarayanan</surname></persName>
+							<email>vbadrinarayanan@magicleap.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Magic Leap, Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomasz</forename><surname>Malisiewicz</surname></persName>
+							<email>tmalisiewicz@magicleap.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Magic Leap, Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Rabinovich</surname></persName>
+							<email>arabinovich@magicleap.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Magic Leap, Inc</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">RoomNet: End-to-End Room Layout Estimation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Room layout estimation from a monocular image, which aims to delineate a 2D boxy representation of an indoor scene, is an essential step for a wide variety of computer vision tasks, and has recently received great attention from several applications. These include indoor navigation <ref type="bibr" target="#b28">[29]</ref>, scene reconstruction/rendering <ref type="bibr" target="#b18">[19]</ref>, and augmented reality <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b9">10]</ref>.</p><p>The field of room layout estimation has been primarily focused on using bottom-up image features such as local color, texture, and edge cues followed by vanishing point detection. A separate post-processing stage is used to clean up feature outliers and generate/rank a large set of room layout hypotheses with structured SVMs or conditional random fields (CRFs) <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b48">49]</ref>. In principle, the 3D reconstruction of the room layout can be obtained (up to scale) with knowledge of the 2D layout and the vanishing points. However, in practice, the accuracy of the final layout prediction often largely depends on the quality of the extracted low-level image features, which in itself is susceptible to local noise, scene clutter and occlusion. Recently, with the rapid advances in deep convolutional neural networks (CNNs) for semantic segmentation <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b1">2]</ref>, researchers have been exploring the possibility of using such CNNs for room layout estimation. More specifically, Mallya et al. <ref type="bibr" target="#b27">[28]</ref> first train a fully convolutional network (FCN) <ref type="bibr" target="#b26">[27]</ref> model to produce "informative edge maps" that replace hand engineered low-level image feature extraction. The predicted edge maps are then used to sample vanishing lines for layout hypotheses generation and ranking. Dasgupta et al. <ref type="bibr" target="#b6">[7]</ref> use the FCN to learn semantic surface labels such as left wall, front wall, right wall, ceiling, and ground. Then connected components and hole filling techniques are used to refine the raw per pixel prediction of the FCN, followed by the classic vanishing point/line sampling methods to produce room layouts. However, despite the improved results, these methods use CNNs to generate a new set of "low-level" features and fall short of exploiting the end-to-end learning ability of CNNs. In other words, the raw CNN predictions need to be post-processed by an expensive hypotheses testing stage to produce the final layout. This, for example, takes the pipeline of Dasgupta et al. <ref type="bibr" target="#b6">[7]</ref> 30 seconds to process each frame.</p><p>In this work, we address the problem top-down by di-  Figure 2. Definition of room layout types. The type is indexed from 0 to 10 as in <ref type="bibr" target="#b49">[50]</ref>. The number on each keypoint defines the specific order of points saved in the ground truth. For a given room type, the ordering of keypoints specifies their connectivities.</p><p>rectly training CNNs to infer both the room layout corners (keypoints) and room type. Once the room type is inferred and the corresponding set of ordered keypoints are localized, we can connect them in a specific order to obtain the 2D spatial room layout. The proposed method, RoomNet, is direct and simple as illustrated in <ref type="figure" target="#fig_0">Figure 1</ref>: The network takes an input image of size 320 × 320, processes it through a convolutional encoder-decoder architecture, extracts a set of room layout keypoints, and then simply connects the obtained keypoints in a specific order to draw a room layout. The semantic segmentation of the layout surfaces is simply obtainable as a consequence of this connectivity. Overall, we make several contributions in this paper: (1) reformulate the task of room layout estimation as a keypoint localization problem that can be directly addressed using CNNs, (2) a custom designed convolutional encoderdecoder network, RoomNet, for parametrically efficient and effective joint keypoint regression and room layout type classification, and (3) state-of-the-art performance on challenging benchmarks Hedau <ref type="bibr" target="#b14">[15]</ref> and LSUN <ref type="bibr" target="#b49">[50]</ref> along with 200× to 600× speedup compared to the most recent work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">RoomNet</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Keypoint-based room layout representaiton</head><p>To design an effective room layout estimation system, it is important to choose a proper target output representation that is end-to-end trainable and can be inferred efficiently. Intuitively, one can assign geometric context classes (floor, walls, and ceiling) to each pixel, and then try to obtain room layout keypoints and boundaries based on the pixel-wised labels. However, it is non-trivial to derive layout keypoints and boundaries from the raw pixel output. In contrast, if we can design a model that directly outputs a set of ordered room layout keypoint locations, it is then trivial to obtain both keypoint-based and pixel-based room layout representations.</p><p>Another important property of using a keypoint-based representation is that it eliminates the ambiguity in the pixel-based representation. Researchers have shown that CNNs often have difficulty distinguishing between different surface identities. For instance, CNNs can be confused between the front wall class and the right wall class, and thereby output irregular or mixed pixel-wise labels within the same surface -this is well illustrated by <ref type="figure" target="#fig_4">Figure 5</ref> and 6 from <ref type="bibr" target="#b6">[7]</ref>. This phenomenon also largely undermines the overall room layout estimation performance.</p><p>Hence, we propose to use a keypoint-based room layout representation to train our model. <ref type="figure">Figure 2</ref> shows a list of room types with their respective keypoint definition as defined by <ref type="bibr" target="#b49">[50]</ref>. These 11 room layouts cover most of the possible situations under typical camera poses and common cuboid representations under "Manhattan world assumption" <ref type="bibr" target="#b5">[6]</ref>. Once the trained model predicts correct keypoint locations with an associated room type, we can then simply connect these points in a specific order to produce boxy room layout representation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Architecture of RoomNet</head><p>We design a CNN to delineate room layout structure using 2D keypoints. The input to the network is a single RGB image and the output of the network is a set of 2D keypoints in a specific order with an associated room type.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Keypoint estimation</head><p>The base network architecture for keypoint estimation is inspired by the recent successes in the field of semantic segmentation <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b1">2]</ref>. Here we adopt the SegNet architecture proposed by Badrinarayanan et al. <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2]</ref> with modifications. Initially designed for segmentation, the SegNet framework consists of encoder and decoder sub-networks -the encoder of the SegNet maps an input image to lower resolution feature maps, and then the role of the decoder is to upsample the low resolution encoded feature maps to full input resolution for pixel-wise classification. In particular, the decoder uses pooling indices computed in the max-pooling step of the corresponding encoder to perform non-linear upsampling. This eliminates the need for learning to upsample. The upsampled maps are sparse and are convolved with trainable filters to produce dense feature map. This architecture has proven to provide good performance with competitive inference time and efficient memory usage as compared to other recent semantic segmentation architectures.</p><p>The base architecture of RoomNet adopts essentially the same convolutional encoder-decoder network as in SegNet. It takes an image of an indoor scene and directly outputs a set of 2D room layout keypoints to recover the room layout structure. Each keypoint ground truth is represented by a 2D Gaussian heatmap centered at the true keypoint location as one of the channels in the output layer. <ref type="bibr" target="#b0">1</ref> The encoderdecoder architecture processes the information flow through bottleneck layers, enforcing it to implicitly model the rela- Conv.  <ref type="figure">Figure 3</ref>. An illustration of the RoomNet base architecture. A decoder upsamples its input using the transferred pooling indices from its encoder to produce sparse feature maps followed by a several convolutional layers with trainable filter banks to densify the feature responses. The final decoder output keypoint heatmaps are fed to a regressor with Euclidean losses. A side head with 3 fully-connected layers is attached to the bottleneck layer and used to train/predict the room type class label, which is then used to select the associated set of keypoint heatmaps. The full model of RoomNet with recurrent encoder-decoder (center dashed line block) further performs keypoint refinement as shown in <ref type="figure">Figure 4</ref> (b) and 5.</p><p>tionship among the keypoints that encode the 2D structure of the room layout.</p><p>The decoder of the RoomNet upsamples the feature maps from the bottleneck layer with spatial dimension 10 × 10 to 40 × 40 instead of the full resolution 320 × 320 as shown in <ref type="figure">Figure 3</ref>. This is because we empirically found that using the proposed 2D keypoint-based representation can already model the room layout effectively at 40 × 40 scale (results are similar as compared to training decoder sub-network at full resolution). Using this "trimmed" decoder sub-network also significantly reduces the memory/time cost during both training and testing due to the high computation cost of convolution at higher resolutions.</p><p>Extending to multiple room types The aforementioned keypoint estimation framework serves as a basic room layout estimation system for one particular room type. To generalize this approach for multiple room types, one possible solution is to train one network per class as in the Single Image 3D Interpreter Network of Wu et al. <ref type="bibr" target="#b44">[45]</ref>. However, in order to maximize efficiency, we design the RoomNet to be fast from the ground up. Encouraged by the recent object detection works YOLO <ref type="bibr" target="#b36">[37]</ref> and SSD <ref type="bibr" target="#b25">[26]</ref> that utilize a single neural network to predict bounding boxes and class probabilities directly from full images in one evaluation, our proposed RoomNet similarly predicts room layout keypoints and the associated room type with respect to the input image in one forward pass. To achieve this goal, we increase the number of channels in the output layer to match the total number of keypoints for all 11 room types (total 48 keypoints for 11 room types derived from <ref type="figure">Figure 2</ref>), and we also add a side head with fully connected layers to the bottleneck layer (the layer where usually used for image classification) for room type prediction as shown in <ref type="figure">Figure 3</ref>.</p><p>We denote a training example as (I, y, t), where y stands for the ground truth coordinates of the k keypoints with room type t for the input image I. At training stage, we use the Euclidean loss as the cost function for layout keypoint heatmap regression and use the cross-entropy loss for the room type prediction. Given the keypoint heatmap regressor ϕ (output from the decoder sub-network), and the room type classifier ψ (output from the fully-connected side head layer), we can then optimize the following loss function:</p><formula xml:id="formula_0">k ✶ keypoint k,t G k (y) − ϕ k (I) 2 − λ c ✶ room c,t log(ψc(I))<label>(1)</label></formula><p>where ✶ keypoint k,t denotes if keypoint k appears in ground truth room type t, ✶ room c,t denotes if room type index c equals to the ground truth room type t, G is a Gaussian centered at y and the weight term λ is set to 5 by cross validation. The first term in the loss function compares the predicted heatmaps to ground-truth heatmaps synthesized for each keypoint separately. The ground truth for each keypoint heatmap is a 2D Gaussian centered on the true keypoint location with standard deviation of 5 pixels as in the common practice in recent keypoint regression works <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b44">45]</ref>. The second term in the loss function encourages the side head fully-connected layers to produce a high confidence value with respect to the correct room type class label.</p><p>Note that one forward pass of the proposed architecture will produce keypoint heatmaps for all room types. However, the loss function only penalizes Euclidean regression error if the keypoint k is present for the ground truth room type t in the current input image I, effectively using the predicted room type indices to select the corresponding set of keypoint heatmaps to update the regressor. The same strategy applies at the test stage i.e. the predicted room type is used to select the corresponding set of keypoint heatmaps in the final output.</p><p>RoomNet extension for keypoint refinement Recurrent neural networks (RNNs) and its variant Long Short-Term Memory (LSTM) <ref type="bibr" target="#b16">[17]</ref> have proven to be extremely effective models when dealing with sequential data. Since then, researchers have been exploring the use of recurrent structures for static input format as well, such as recurrent convolutional layers <ref type="bibr" target="#b23">[24]</ref> and convLSTM layers <ref type="bibr" target="#b47">[48]</ref>.</p><p>Recently, more sophisticated iterative/recurrent architectures have been proposed for 2D static input, such as FCN with CRF-RNN <ref type="bibr" target="#b51">[52]</ref>, iterative error feedback networks <ref type="bibr" target="#b3">[4]</ref>, recurrent CNNs <ref type="bibr" target="#b2">[3]</ref>, stacked encoder-decoder <ref type="bibr" target="#b30">[31]</ref>, and recurrent encoder-decoder networks <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b21">22]</ref>. These evidence show that adopting the "time series" concept when modeling a static input can also significantly improve the ability of the network to integrate contextual information and to reduce prediction error.</p><p>Motivated by the aforementioned successes, we extend our base RoomNet architecture by making the central encoder-decoder component (see center dashed line block in <ref type="figure">Figure 3</ref>) recurrent. Specifically, we propose a memory augmented recurrent encoder-decoder (MRED) structure (see <ref type="figure">Figure 4</ref> (b)) whose goal is to mimic the behavior of a typical recurrent neural network <ref type="figure">(Figure 4 (a)</ref>) in order to refine the predicted keypoint heatmaps over "time" -the artificial time steps created by the recurrent structure.</p><p>Each layer in this MRED structure shares the same weight matrices through different time steps that convolve (denoted as * symbol) with the incoming feature maps from the previous prediction h l (t − 1) at time step t − 1 in the same layer l and the current input h l−1 (t) at time step t in the previous layer l − 1, generating output at time step t as:</p><formula xml:id="formula_1">h l (t) = σ(w current l * h l−1 (t) + b l ) , t = 0 σ(w current l * h l−1 (t) + w previous l * h l (t − 1) + b l ) , t &gt; 0<label>(2)</label></formula><p>where w current l and w previous l are the input and feed-forward weights for layer l. b l is the bias for layer l. σ is the ReLU activation function <ref type="bibr" target="#b29">[30]</ref>. <ref type="figure">Figure 4</ref> (b) demonstrates the overall process of the information flow during forward-and backward-propagations through depth and time within the recurrent encoderdecoder structure. The advantages of using the proposed MRED architecture are: (1) exploiting the contextual and structural knowledge among keypoints iteratively through hidden/memory units (that have not been explored in recurrent convolutional encoder-decoder structure) and (2) weight sharing of the convolutional layers in the recurrent encoder-decoder, resulting in a much deeper network with a  <ref type="figure">Figure 4</ref>. Illustration of unrolled (3 iterations) version of (a) a RNN and (b) the proposed memory augmented recurrent encoderdecoder architecture that mimics the behavior of a RNN but which is designed for a static input. Both structures have hidden units to store previous activations that help the inference at the current time step. fixed number of parameters. After refinement, the heatmaps of keypoints are much cleaner as shown in <ref type="figure" target="#fig_4">Figure 5</ref>. It is also interesting to observe the mistakes made early on and corrected later by the network (see third and fourth columns in <ref type="figure" target="#fig_4">Figure 5</ref>). We analyze the performance with and without the keypoint refinement step in Section 3.4, and we also evaluate different encoder-decoder variants in Section 4.</p><formula xml:id="formula_2">h l-1 (0) h l-1 (1) h l-1 (2) h l (0) h l (1) h l (2) h l (t) h l-1 (t)</formula><p>Deep supervision through time When applying stacked, iterative, or recurrent convolutional structures, each layer in the network receives gradients across more layers or/and time steps, resulting in models that are much harder to train. For instance, the iterative error feedback network <ref type="bibr" target="#b3">[4]</ref> re-quires multi-stage training and the stacked encoder-decoder structure in <ref type="bibr" target="#b30">[31]</ref> uses intermediate supervision at the end of each encoder-decoder even when batch normalization <ref type="bibr" target="#b17">[18]</ref> is used. Following the practices in <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b41">42]</ref>, we extend the idea by injecting supervision at the end of each time step. The same loss function L is applied to all the time steps as demonstrated in <ref type="figure">Figure 6</ref>. Section 3.4 and <ref type="table">Table 5</ref> provide details of the analysis and effect of the deep supervision through time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Datasets</head><p>We evaluate the proposed RoomNet framework on two challenging benchmark datasets: Hedau <ref type="bibr" target="#b14">[15]</ref> dataset and Large-scale Scene Understanding Challenge (LSUN) room layout dataset <ref type="bibr" target="#b49">[50]</ref>. The Hedau dataset contains 209 training, 53 validation, and 105 test images that are collected from the web and from LabelMe <ref type="bibr" target="#b38">[39]</ref>. The LSUN dataset consists of 4000 training, 394 validation, and 1000 test images that are sampled from SUN database <ref type="bibr" target="#b46">[47]</ref>. We follow the same experimental setup as Dasgupta et al. <ref type="bibr" target="#b6">[7]</ref>. We rescale all input images to 320 × 320 pixels and train our network from scratch on the LSUN training set only. All experimental results are computed using the LSUN room layout challenge toolkit <ref type="bibr" target="#b49">[50]</ref> on the original image scales.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Implementation details</head><p>The input to the network is an RGB image of resolution 320 × 320 and the output is the room layout keypoint heatmaps of resolution 40 × 40 with an associated room type class label. We apply the backpropagation through time (BPTT) algorithm to train the models with batch size 20 SGD, 0.5 dropout rate, 0.9 momentum, and 0.0005 weight decay. Initial learning rate is 0.00001 and decreased by a factor of 5 twice at epoch 150 and 200, respectively. All variants use the same scheme with 225 total epochs. The encoder and decoder weights are all initialized using the technique described in He et al. <ref type="bibr" target="#b12">[13]</ref>. Batch normalization <ref type="bibr" target="#b17">[18]</ref> and ReLU <ref type="bibr" target="#b29">[30]</ref> activation function are also used after each convolutional layer to improve the training process. We apply horizontal flipping of input images during training as the only data augmentation. The system is implemented in the open source deep learning framework Caffe <ref type="bibr" target="#b19">[20]</ref>.</p><p>In addition, a ground truth keypoint heatmap has zero value (background) for most of its area and only a small portion of it corresponds to the Gaussian distribution (foreground associated with actual keypoint location). The output of the network therefore tends to converges to zero due to the imbalance between foreground and background distributions. For this reason, it is crucial to weight the gradients based on the ratio between foreground and background area for each keypoint heatmap. In our experiment, we degrade the gradients of background pixels by multiplying <ref type="figure">Figure 6</ref>. Illustration of the proposed memory augmented recurrent encoder-decoder architecture (a) without deep supervision through time and (b) with deep supervision through time.</p><formula xml:id="formula_3">L x L 0 L 1 L 2 x (a) (b) = L x = L x t=0 t=1 t=2 t=0 t=1 t=2</formula><p>them with a factor of 0.2 and found this makes training significantly more stable.</p><p>Training from scratch takes about 40 hours on 4 NVIDIA Titan X GPUs. One forward inference of the full model (RoomNet recurrent 3-iter) takes 83 ms on a single GPU. For generating final test predictions we run both the original input and a flipped version of the image through the network and average the heatmaps together (accounting for a 0.12% average improvement on keypoint error and a 0.15% average improvement on pixel error) as in <ref type="bibr" target="#b30">[31]</ref>. The keypoint location is chosen to be the max activating location of the corresponding heatmap.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Results</head><p>Two standard room layout estimation evaluation metrices are: (1) pixel error: pixelwise error between the predicted surface labels and ground truth labels, and (2) keypoint error: average Euclidean distance between the predicted keypoint and annotated keypoint locations, normalized by the image diagonal length.</p><p>Accuracy We summarize the performance on both datasets in <ref type="table">Table 1</ref> and 2. The previous best method is the two-step framework (per pixel CNN-based segmentation with a separate hypotheses ranking approach) Dasgupta et al. <ref type="bibr" target="#b6">[7]</ref>. The proposed RoomNet significantly improves upon the previous results on both keypoint error and pixel error, achieving state-of-the-art performance 2 . To decouple the performance gains due to external data, we also prepare results of fine-tuning the RoomNet from a SUN <ref type="bibr" target="#b40">[41]</ref> pre-trained model (on semantic segmentation task) and this achieves 6.09% keypoint error and 9.04% pixel error as compared of method in <ref type="bibr" target="#b37">[38]</ref> 3 with 7.95% keypoint error and 9.31% pixel error on LSUN dataset.</p><p>Runtime and complexity Efficiency evaluation on the input image size of 320 × 320 is shown in <ref type="table">Table 3</ref>. Our full model (RoomNet recurrent 3 iteration) achieves 200× speedup compares to the previous best method in <ref type="bibr" target="#b6">[7]</ref>, and  <ref type="bibr" target="#b7">[8]</ref> 16.30 <ref type="bibr" target="#b10">Gupta et al. (2010)</ref>  <ref type="bibr" target="#b10">[11]</ref> 16.20 <ref type="bibr" target="#b50">Zhao et al. (2013)</ref>  <ref type="bibr" target="#b50">[51]</ref> 14.50 <ref type="bibr" target="#b35">Ramalingam et al. (2013)</ref>  <ref type="bibr" target="#b35">[36]</ref> 13.34 <ref type="bibr" target="#b27">Mallya et al. (2015)</ref>  <ref type="bibr" target="#b27">[28]</ref> 12.83 <ref type="bibr" target="#b39">Schwing et al. (2012)</ref>  <ref type="bibr" target="#b39">[40]</ref> 12.8 Del <ref type="bibr" target="#b8">Pero et al. (2013)</ref>  <ref type="bibr" target="#b8">[9]</ref> 12.7 <ref type="bibr" target="#b6">Dasgupta et al. (2016)</ref>  <ref type="bibr" target="#b6">[7]</ref> 9.73</p><p>RoomNet recurrent 3-iter (ours) 8.36 <ref type="table">Table 1</ref>. Performance on Hedau dataset <ref type="bibr" target="#b14">[15]</ref>. We outperform the previous best result in <ref type="bibr" target="#b6">[7]</ref> using the proposed end-to-end trainable RoomNet.  <ref type="table">Table 2</ref>. Performance on LSUN dataset <ref type="bibr" target="#b49">[50]</ref>. We outperform the previous best result in <ref type="bibr" target="#b6">[7]</ref> on both keypoint and pixel errors using the proposed end-to-end trainable RoomNet.  <ref type="table">Table 3</ref>. Runtime evaluation on an input size of 320×320. The proposed RoomNet full model (3-iter) achieves 200× speedup and the basic RoomNet model achieves 600× speedup than the previous best method in <ref type="bibr" target="#b6">[7]</ref>.</p><p>the base RoomNet without recurrent structure (RoomNet basic) achieves 600× speedup. Note that the timing is for two forward passes as described earlier. Using either one of the proposed architecture can provide significant inference time reduction and an improved accuracy as shown in <ref type="table">Table 4</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Analyzing RoomNet</head><p>In this section, we empirically investigate the effect of each component in the proposed architecture with the LSUN dataset as our running example. <ref type="table">Table 4</ref> shows the effectiveness of extending the RoomNet-basic architecture to a memory augmented recurrent encoder-decoder networks. We observed that more iterations led to lower error rates  <ref type="table">Table 4</ref>. The impact of keypoint refinement step (see Section 2.2) using the proposed memory augmented recurrent encoder-decoder architecture on LSUN dataset <ref type="bibr" target="#b49">[50]</ref>.  <ref type="table">Table 5</ref>. The impact of deep supervision through time on LSUN dataset <ref type="bibr" target="#b49">[50]</ref> for RoomNets with 2 and 3 recurrent iterations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Recurrent vs direct prediction</head><p>on both keypoint error and pixel error: the RoomNet with recurrent structure that iteratively regresses to correct keypoint locations achieves 6.3% keypoint error and 9.86 pixel error as compared to the RoomNet without recurrent structure which achieves 6.95% keypoint error and 10.46 pixel error. No further significant performance improvement is observed after 3 iterations. Notice that the improvement essentially came from the same parametric capacity within the networks since the weights of convolutional layers are shared across iterations.</p><p>Importance of deep supervision through time When applying a recurrent structure with encoder-decoder architectures, each layer in the network receives gradients not only across depth but also through time steps between the input and the final objective function during training. It is therefore of interest to investigate the effect of adding auxiliary loss functions at different time steps. <ref type="table">Table 5</ref> demonstrates the impact of deep supervision through time using RoomNet with 2 and 3 recurrent iterations. We observed immediate reduction in both keypoint error and pixel error by adding auxiliary losses for both cases. This can be understood by the fact that the learning problem with deep supervision is much easier <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b41">42]</ref> through different time steps. It is also interesting to point out that RoomNet 3-iter performs worse than RoomNet 2-iter when deep supervision through time is not applied. This is rectified when deep supervision through time is applied. Overall, we validate that with more iterations in the recurrent structure, there is a stronger need to apply deep supervision through time to successfully train the proposed architecture.</p><p>Qualitative results We show qualitative results of the proposed RoomNet in <ref type="figure">Figure 7</ref>. When the image is clean and</p><formula xml:id="formula_4">Input RoomNet Output Ground Truth (a) (b) (c) (d) (e)<label>(f)</label></formula><p>(g) <ref type="figure">Figure 7</ref>. The RoomNet predictions and the corresponding ground truth on LSUN dataset. The proposed architecture takes a RGB input (first column) and produces room layout keypoint heatmaps (second column). The final keypoints are obtained by extracting the location with maximum response from the heatmaps. The third and fourth columns show a boxy room layout representation by simply connecting obtained keypoints in a specific order as in <ref type="figure">Figure 2</ref>. The fifth and sixth columns show the ground truth. Our algorithm is robust to keypoint occlusion by objects (ex: tables, chairs, beds).</p><p>the room layout boundaries/corners are not occluded, our algorithm can recover the boxy room layout representation with high accuracy. Our framework is also robust to keypoint occlusion by objects (ex: tables, chairs, beds), demonstrated in <ref type="figure">Figure 7</ref>  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Discussion</head><p>Alternative encoder-decoders We provide an evaluation of alternative encoder-decoder architectures for the room layout estimation task including: (a) a vanilla encoderdecoder (RoomNet basic), (b) stacked encoder-decoder, (c) stacked encoder-decoder with skip-connections; (d) encoder-decoder with feedback; (e) memory augmented recurrent encoder-decoder (RoomNet full); (f) memory augmented recurrent encoder-decoder with feedback. <ref type="figure" target="#fig_11">Figure 9</ref> illustrates the 6 different network configurations that are evaluated here. We emphasize that our intention is not to put each encoder-decoder variant in competition, but to provide an illustrative comparison of the relative benefits of different configurations for the task being addressed here. <ref type="table">Table 6</ref> shows the performance of different variants on LSUN dataset. The comparison of (a) and (b) variants indicates that stacking encoder-decoder networks can further improve the performance, as the network is enforced to learn the spatial structure of the room layout keypoints implicitly by placing constraints on multiple bottleneck layers.</p><p>However, adding skip connections <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b30">31]</ref> as in (c) does   not improve the performance for this task. This could be because the size of the training set (thousands) is not as large as other datasets (millions) that have been evaluated on, therefore skipping layers is not necessary for the specific dataset. Adding a feedback loop, implemented as a concatenation of input and previous prediction as a new input <ref type="bibr" target="#b43">[44,</ref><ref type="bibr" target="#b32">33]</ref> for the same encoder-decoder network as in (d) improves the performance. At each iteration, the network has access to the thus-far sub-optimal prediction along with the original input to help inference at the current time step.</p><p>Making an encoder-decoder recurrent with memory units (e) to behave as a RNN obtains the lowest keypoint error and pixel error (our full RoomNet model). The lateral connections in the recurrent encoder-decoder allow the network to carry information forward and help prediction at future time steps. Finally, adding a feedback loop to the memory  <ref type="table">Table 6</ref>. Evaluation of encoder-decoder (enc-dec) variants on LSUN dataset <ref type="bibr" target="#b49">[50]</ref>. Note that recurrent encoder-decoders use 3 iteration time steps.</p><p>augmented recurrent encoder-decoder (f) does not improve the results. It is possible that using the memory augmented structure (e) can already store previous hidden state information well without feedback. Note that weight matrices of the encoder-decoder are not shared in configurations (b) and (c) but shared in configurations (d), (e), and (f), resulting in more parametrically efficient architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We presented a simple and direct formulation of room layout estimation as a keypoint localization problem. We showed that our RoomNet architecture and its extensions can be trained end-to-end to perform accurate and efficient room layout estimation. The proposed approach stands out from a large body of work using geometry inspired multistep processing pipelines. In the future, we would like to adopt gating mechanism <ref type="bibr" target="#b20">[21]</ref> to allow incoming signal to alter the state of recurrent units and extend RoomNet to sequential data for building room layout maps</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. (a) Typical multi-step pipeline for room layout estimation. (b) Room layout estimation with RoomNet is direct and simple: run RoomNet, extract a set of room layout keypoints, and connect the keypoints in a specific order to obtain the layout.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Room layout keypoint estimation from a single image (a) without refinement and (b) with refinement. Keypoint heatmaps from multiple channels are color-coded and shown in a single 2D image for visualization purposes. The keypoint refinement step produces more concentrated and cleaner heatmaps and removes some false positives.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head></head><label></label><figDesc>et al. (2012)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>et al. (2013) [9] 0.001 Dasgupta et al.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head></head><label></label><figDesc>(b)(c)(d)(f). The major failure cases are when room layout boundaries are barely visible (Figure 8 (a)(c)) or when there are more than one plausible room lay- out explanations for a given image of a scene (Figure 8 (b)(d)).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 8 .</head><label>8</label><figDesc>Figure 8. The ambigous cases where the RoomNet predictions do not match the human-annotated ground truth. The first column is the input image, the second column is predicted keypoint heatmaps, the third and fourth columns are obtained boxy representation, and the fifth and sixth columns show the ground truth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_11"><head>Figure 9 .</head><label>9</label><figDesc>Figure 9. Illustration of different encoder-decoder architecture configurations: (a) vanilla encoder-decoder; (b) stacked encoderdecoder; (c) stacked encoder-decoder with skip-connections; (d) encoder-decoder with feedback; (e) memory augmented recurrent encoder-decoder; (f) memory augmented recurrent encoderdecoder with feedback.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Model Keypoint Error (%) Pixel Error (%)</figDesc><table>Vanilla enc-dec (RoomNet basic) 
+6.95 
+10.46 
+Stacked enc-dec 
+6.82 
+10.31 
+Stacked enc-dec with skip connect. 
+7.05 
+10.48 
+Enc-dec w/ feedback 
+6.84 
+10.10 
+Recurrent enc-dec (RoomNet full) 
+6.30 
+9.86 
+Recurrent enc-dec w/ feedback 
+6.37 
+9.88 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">We color-code and visualize multiple keypoint heatmaps in a single 2D image in Figure 3, Figure 5 and the rest of the paper.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">The side head room type classifier obtained 81.5% accuracy on LSUN dataset. 3 The multi-step method in [38] utilizes additional Hedau+ [28] training set and fine-tunes from NYUDv2 RGBD [12] pre-trained models.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Segnet: A deep convolutional encoder-decoder architecture for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.00561</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Segnet: A deep convolutional encoder-decoder architecture for scene segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>TPAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Recurrent human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Belagiannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.02914</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Human pose estimation with iterative error feedback</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fragkiadaki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Semantic image segmentation with deep convolutional nets and fully connected crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The manhattan world assumption: Regularities in scene statistics which enable bayesian inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Coughlan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Delay: Robust spatial layout estimation for cluttered indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dasgupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Bayesian geometric modeling of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bowdish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fried</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kermgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Understanding bayesian rooms using composite 3d object models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bowdish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kermgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Detone</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.03798</idno>
+		<title level="m">Deep image homography estimation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Estimating spatial layout of rooms using volumetric reasoning about objects and surfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Perceptual organization and recognition of indoor scenes from rgb-d images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Delving deep into rectifiers: Surpassing human-level performance on imagenet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Recovering the spatial layout of cluttered rooms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Recovering free space of indoor scenes from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Izadinia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Shan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.05137</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Im2cad. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM MM</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Generalizing pooling functions in convolutional neural networks: Mixed, gated, and tree</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">W</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Recursive recurrent nets with attention modeling for ocr in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deeply-supervised nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">W</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Recurrent convolutional neural network for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Rent3d: Floor-plan priors for monocular layout estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kundu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Ssd: Single shot multibox detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Learning informative edge maps for indoor scene layout prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mallya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Learning to navigate in complex environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mirowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Viola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Soyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ballard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Banino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sifre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Stacked hourglass networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning deconvolution network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Training a feedback loop for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">A recurrent encoder-decoder network for sequential face alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Feris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">N</forename><surname>Metaxas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Flowing convnets for human pose estimation in videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pfister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Manhattan junction catalogue for spatial reasoning of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramalingam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Pillai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taguchi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">You only look once: Unified, real-time object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Divvala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">A coarse-to-fine indoor layout estimation (cfile) method</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><forename type="middle">J</forename><surname>Kuo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Labelme: a database and web-based tool for image annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>IJCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Efficient structured prediction for 3d indoor scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Sun rgb-d: A rgb-d scene understanding benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename><surname>Lichtenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Joint training of a convolutional network and a graphical model for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Auto-context and its application to high-level vision tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Single image 3d interpreter network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">B</forename><surname>Tenenbaum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">Reconstructing the worlds museums. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Sun database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Convolutional lstm network: A machine learning approach for precipitation nowcasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xingjian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-Y</forename><surname>Yeung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-K</forename><surname>Wong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-C</forename><surname>Woo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Estimating the 3d layout of indoor scenes and its clutter from depth sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<monogr>
+		<title level="m" type="main">Largescale scene understanding challenge: Room layout estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Seff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Scene parsing by integrating function, geometry and appearance models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<title level="m">Conditional random fields as recurrent neural networks. In CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

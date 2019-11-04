@@ -1,0 +1,1959 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:12+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning Pose Specific Representations by Predicting Different Views</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georg</forename><surname>Poier</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Institute for Computer Graphics and Vision</orgName>
+								<orgName type="institution">Graz University of Technology</orgName>
+								<address>
+									<country key="AT">Austria</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Schinagl</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Institute for Computer Graphics and Vision</orgName>
+								<orgName type="institution">Graz University of Technology</orgName>
+								<address>
+									<country key="AT">Austria</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Horst</forename><surname>Bischof</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Institute for Computer Graphics and Vision</orgName>
+								<orgName type="institution">Graz University of Technology</orgName>
+								<address>
+									<country key="AT">Austria</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning Pose Specific Representations by Predicting Different Views</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>The labeled data required to learn pose estimation for articulated objects is difficult to provide in the desired quantity, realism, density, and accuracy. To address this issue, we develop a method to learn representations, which are very specific for articulated poses, without the need for labeled training data. We exploit the observation that the object pose of a known object is predictive for the appearance in any known view. That is, given only the pose and shape parameters of a hand, the hand's appearance from any viewpoint can be approximated. To exploit this observation, we train a model that -given input from one view -estimates a latent representation, which is trained to be predictive for the appearance of the object when captured from another viewpoint. Thus, the only necessary supervision is the second view. The training process of this model reveals an implicit pose representation in the latent space. Importantly, at test time the pose representation can be inferred using only a single view. In qualitative and quantitative experiments we show that the learned representations capture detailed pose information. Moreover, when training the proposed method jointly with labeled and unlabeled data, it consistently surpasses the performance of its fully supervised counterpart, while reducing the amount of needed labeled samples by at least one order of magnitude.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In this work we aim to estimate the pose of the hand given a single depth image. For this task, the best performing methods have recently relied heavily on models learned from data <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b46">47]</ref>. Even methods which employ a manually created hand model to search for a good fit with the observation, often employ such a data-driven part as initialization or for error correction <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b48">49,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b65">66]</ref>. Unfortunately, data-driven models require a large amount of labeled data, covering a sufficient part of the pose space, to work well.  <ref type="figure">Figure 1</ref>: Sketch for learning a pose specific representation from unlabeled data. We learn to predict a low-dimensional latent representation and, subsequently, a different view of the input, solely from the latent representation. The error of the view prediction is used as feedback, enforcing the latent representation to capture pose specific information without requiring labeled data. However, for the task of estimating the pose of articulated objects, like the human hand, it is especially expensive to provide accurate annotations for a sufficient amount of real world data. The articulated structure and specific natural movements of the hand frequently cause strong selfocclusions. Together with the many 3D points to be annotated, this makes the annotation procedure a huge effort for human annotators.</p><p>A largely unexplored direction to cope with this challenge is to exploit unlabeled data, which is easy to obtain in large quantities. We make a step towards closing this gap and propose a method that can exploit unlabeled data by making use of a specific property of the pose estimation task. We rely on the observation that pose parameters 1 are predictive for the object appearance of a known object from any viewpoint. That is, given the pose parameters of a hand, the hand's appearance from any viewpoint can be estimated. The observation might not seem helpful upfront, since it assumes the pose -which we want to estimate -to be given. However, the observation becomes helpful if we capture the scene simultaneously from different viewpoints.</p><p>By employing a different camera view, we can guide the training of the pose estimation model (see <ref type="figure">Fig. 1</ref>). The guidance relies on the fact that from any set of pose parameters, which accurately specify the pose and rough shape of the hand, we necessarily need to be able to predict the hand's appearance in any other view. Hence, by capturing another view, this additional view can be used as a target for training a model, which itself guides the training of the underlying pose representation.</p><p>More specifically, the idea is to train a model whichgiven the first camera view -estimates a small number of latent parameters, and subsequently predicts a different view solely from these few parameters. The intuition is that the small number of parameters resemble a parameterization of the pose. By learning to predict a different view from the latent parameters, the latent parameters are enforced to capture pose specific information. Framing the problem in this way, a pose representation can be learned just by capturing the hand simultaneously from different viewpoints and learning to predict one view given the other.</p><p>Given the learned low-dimensional pose representation, a rather simple mapping to a specific target (e.g., joint positions) can be learned from a much smaller number of training samples than required to learn the full mapping from input to target. Moreover, when training jointly with labeled and unlabeled data, the whole process can be learned end-to-end in a semi-supervised fashion, achieving similar performance with one order of magnitude less labeled samples. Thereby, the joint training regularizes the model to ensure that the learned pose representation can be mapped to the target pose space using the specified mapping.</p><p>We show the specificity of the learned representation and its predictiveness for the pose in qualitative and quantitative experiments. Trained in a semi-supervised manner, the proposed method consistently outperforms its fully supervised counterpart, as well as the state-of-the-art in hand pose estimation -even if all available samples are labeled. For the more practical case, where the number of unlabeled samples is larger than the number of labeled samples, we find that the proposed method performs on par with the baseline, even with one order of magnitude less labeled samples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Traditionally, works on hand pose estimation have been divided into model-based and data-driven approaches. Model-based approaches <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b61">62]</ref> search to parameterize a manually created hand model in each frame such that it best fits the observation. These approaches usually need to rely on an initialization, e.g., from previous frames, and thus, have problems to recover if pose estimation fails once. Data-driven approaches <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b47">48]</ref>, on the other hand, learn a mapping from the input frame to a target pose from a usually large number of annotated training samples. These approaches assume that the poses seen at test time are at least roughly covered by the training set and will otherwise fail to deliver a good estimate. With the desire to combine the merits of both strands, researchers have developed hybrid approaches <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b41">42,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b65">66,</ref><ref type="bibr" target="#b72">73]</ref>. But again, the effectiveness of hybrid approaches is crucially affected by the density of the annotations available for training the data-driven part.</p><p>Data annotation To provide a large number of labeled samples, (semi-)automatic methods were employed to construct the relevant publicly available training sets. Most often model-based approaches with the above mentioned issues were used to provide (initial) annotations, which were manually corrected <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b47">48,</ref><ref type="bibr" target="#b54">55]</ref>. Other efforts include the development of an annotation procedure <ref type="bibr" target="#b34">[35]</ref> to propagate annotations to similar frames, or attaching 6D magnetic sensors to the hand <ref type="bibr" target="#b60">[61,</ref><ref type="bibr" target="#b66">67]</ref>, which resulted in the largest dataset to date <ref type="bibr" target="#b66">[67]</ref>. These efforts underline the difficulties to provide sufficient labeled data, hampering novel applications, which might rely on different viewpoints or sensors.</p><p>Learning from unlabeled data At the same time, capturing unlabeled data is easy, and considering the way how we make use of such unlabeled data, several strands of prior work are related to our method. The scheme of predicting another view from the learned latent representation is, e.g., akin to the concept of autoencoders, where the input is reconstructed from the latent representation <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b56">57]</ref>. Instead of reconstructing the input, we learn to predict a different view. This enables the model to capture pose specific representations as the results in §4.3 clearly point out.</p><p>Similarly, our work is also related to a strand of works on representation learning from unlabeled data which split the input data into parts and have the model learn relations between the parts <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b67">68,</ref><ref type="bibr" target="#b69">70]</ref>. For instance, Doersch et al. <ref type="bibr" target="#b5">[6]</ref> learn to predict the relative position of patches sampled from an image, which should be possible if a model has learned to extract semantics. Similarly, this has been targeted by, e.g., relating tracked patches <ref type="bibr" target="#b59">[60]</ref>, solving jigsaw puzzles <ref type="bibr" target="#b31">[32]</ref> or colorizing images <ref type="bibr" target="#b22">[23]</ref>. While our work can be considered similar in spirit, our main objective is to learn a pose specific representation in the latent space, for which a crucial enabler is to employ multiple viewpoints.</p><p>Learning from multiple views An early example for representation learning from multiple views is Canonical Correlation Analysis (CCA) <ref type="bibr" target="#b14">[15]</ref> of which various multilayered, non-linear variants have been proposed <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b58">59]</ref>. The goal of CCA is to relate variables among different views by learning projections which maximize the correlation between different views.</p><p>Researchers have also started to employ multiple camera views to learn depth prediction or 3D object reconstruction from unlabeled data <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b62">63]</ref>. Garg et al. <ref type="bibr" target="#b8">[9]</ref> propose an approach to monocular depth estimation, for which the loss is based on the photo consistency of the projected pixels in the second view of a stereo image pair. Similarly, Xie et al. <ref type="bibr" target="#b62">[63]</ref> target generating a stereo pair from a single view. Several works add upon this line of research, e.g., by incorporating sparse and noisy depth labels <ref type="bibr" target="#b21">[22]</ref>, adding a left-right consistency constraint <ref type="bibr" target="#b9">[10]</ref>, jointly estimating camera pose and depth <ref type="bibr" target="#b70">[71]</ref>, or learning to reconstruct full 3D <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b55">56,</ref><ref type="bibr" target="#b64">65]</ref>.</p><p>In these works the desired target (e.g., depth or disparity) can directly be linked to the training loss via geometric relations and, therefore, only the intermediate latent representations have to encode some kind of semantics of the scene and objects therein. In our case, the target itself is more explicit semantic (e.g., joint positions or labels, resp.) and we show how to formulate the task such that our learned latent representation closely resembles what we are targeting, namely the pose. The formulation also clearly differentiates our method from CCA and its variants.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Semi-supervised learning for hand pose estimation</head><p>Little work has exploited unlabeled samples for hand pose estimation. To the best of our knowledge, there are only some notable exceptions <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b49">50,</ref><ref type="bibr" target="#b57">58]</ref>: Tang et al. <ref type="bibr" target="#b49">[50]</ref> built a discriminative approach which relies on a large synthetic training set and correspondences between synthetic and real samples. Similarly, Neverova et al. <ref type="bibr" target="#b30">[31]</ref> establish correspondences via an intermediate representation of part segmentations. For their approach, they do not need pixelwise labels for real samples, but still require joint annotations. On the contrary, Wan et al. <ref type="bibr" target="#b57">[58]</ref> incorporate entirely unlabeled data by drawing from advances in generative modeling within a semi-supervised approach. While elegant and well set up, neither of these approaches exploit the observation that the pose is predictive for the appearance from any known view.</p><p>View synthesis for hand pose estimation Another notable work on hand pose estimation, we draw inspiration from, is the work of Oberweger et al. <ref type="bibr" target="#b36">[37]</ref>. They aim to reconstruct the input view of the hand from previously estimated joint positions, and subsequently learn to generate an update for the pose estimate based on the discrepancy between the input and the reconstruction (akin to supervised descent methods <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b63">64]</ref>).</p><p>In contrast to our work, however, they aim to reconstruct the same view directly from previous estimates of the joint positions (without capturing shape information). Consequently, their approach is fully supervised, i.e., it requires joint annotations for each sample. In our work, we do not require pose annotations, but exploit the information we get from an additional view point, which is crucial for the training process, as we will show in our experiments. Nevertheless, inference is straight forward with our method, i.e., we neither require an iterative procedure and generate images as in <ref type="bibr" target="#b36">[37]</ref>, nor need a second view at test time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Learning pose specific representations</head><p>Our work is based on the observation that a hand pose representation, θ, which includes parameters for the hand's size and shape, is predictive for the hand's appearance, x (i) , from any known view i. Let T ⊂ R d T denote the set of possible poses or pose representations of dimensionality d T , i.e., θ ∈ T , and similarly, X ⊂ R d X be the set of possible input images of dimensionality d X , i.e., x (i) ∈ X . Then -based on our observation -we assume that there exists a view specific mapping, g *</p><formula xml:id="formula_0">i : R d T → R d X , such that x (i) = g * i (θ), ∀θ ∈ T .<label>(1)</label></formula><p>Nevertheless, for our task we do not know the pose. The pose is what we are searching for. Given an image of a hand x (i) we want to find the pose of the hand. That is, we search for a mapping f *</p><formula xml:id="formula_1">i : R d X → R d T from the input image to the pose 2 : θ = f * i (x (i) ), ∀x ∈ X .<label>(2)</label></formula><p>Given these two mappings, f * and g * , we can see that by subsequently applying them, we can directly map from one view to the other. That is, given an input image of the hand,</p><formula xml:id="formula_2">x (i)</formula><p>, from view i, we can use the mappings to compute the hand's appearance x (j) , from any known view j:</p><formula xml:id="formula_3">x (j) = g * j f * i (x (i) ) .<label>(3)</label></formula><p>In our case, the mappings f * and g * are unknown. We can, however, capture the scene simultaneously from two different views i and j. Given the data from two views, x (i) and x (j) , we can formulate our problem as finding a mapping from one view to another. Hence, we use the task of learning a mapping from one view to the other as a "proxy task" for finding a latent representation, which resembles the pose.</p><p>Note, for i = j, Eqn. <ref type="formula" target="#formula_3">(3)</ref> essentially specifies an autoencoder. In this case it is difficult to ensure that the model learns a latent representation, which resembles the pose. Hence, the crucial case, which we are investigating in this work, is the case i = j. From our empirical investigation (see §4.3) we find that for i = j and a sufficient amount of (unlabeled) data it is easy to constrain the model such that the latent representation captures pose information.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Implementation of the observations</head><p>To implement our observations we want to learn the two mappings, f * and g * , from data. We do so by employing a Convolutional Neural Network (CNN) with an encoderdecoder architecture. To formalize our method, we denote the learned estimates of the "true" mappings f * and g * , f and g, respectively. The encoder f i receives input x (i) from view i and its output represents the desired latent representation θ. The latent representation is at the same time the input for the decoder g j , which produces the view x (j) given θ. Without loss of generality we assume the captured images, x, to be depth images. Note that, while, for color-only input the appearance is affected by additional factors like skin color or illumination, the basic observations still hold.</p><p>In the basic model, we train our system to predict a different view x (j) , which we capture for training. The training loss, ℓ u , for this model can thus be formulated as a reconstruction loss</p><formula xml:id="formula_4">ℓ u = ℓ recon ŷ (j) , x (j) ,<label>(4)</label></formula><p>whereŷ (j) is the model's prediction for view j, given input</p><formula xml:id="formula_5">x (i) from view i, i.e., y (j) = g j f i (x (i) ) .<label>(5)</label></formula><p>For the reconstruction loss ℓ recon the L 1 norm yielded the best results in our experiments.</p><p>Ideally, we want the latent representation, θ = f i (x (i) ), to be very specific for the pose, not capturing any unnecessary information. The loss itself does not constrain the latent representation to fulfill such a requirement. We can, however, constrain the latent representation in a very simple -though effective -way: We assume that the smallest possible representation which is predictive for the appearance of any known view, other than the input, will, crucially, contain a representation resembling the pose.</p><p>A low-dimensional representation of the pose is often given by the joint positions. However, since there are many dependencies between the joints, the pose can even be represented by a lower-dimensional subspace. While works on hand modeling <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b24">25]</ref> give an indication for the size of such a low-dimensional subspace, we investigate the size best matching our requirements in the experimental section ( §4.3). The representation should contain only little additional information which could obfuscate the pose representation and, thus, hamper learning a mapping to any target pose representation as discussed in the next section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Learning from labeled and unlabeled data</head><p>To map from the latent representation space to the desired target space (e.g., joint positions) we add a single linear layer to our encoder-decoder architecture. We enforce (1) , is mapped to the latent representation, θ, by the encoder f1. Solely based on θ, the decoder g2 is required to generate a different view 2 of the input. At the same time the latent representation is ensured to suffice a linear mapping, g l , to the 3D joint positions by employing labeled samples. This is illustrated by the green paths depicting the gradient flow to the latent representation and, consequently, to the encoder.</p><p>the latent representation to suffice this linear map by training the encoder, which maps from input to the latent representation, jointly with labeled and unlabeled data in a semisupervised manner. That is, labeled samples guide the training of the latent representation such that it suffices the linear mapping.</p><p>The architecture for semi-supervised training is depicted in <ref type="figure" target="#fig_1">Fig. 2</ref>. The parameters of the linear layer from the latent pose representation to the joint positions are only trained using labeled samples. All other parameters are trained using both labeled and unlabeled samples.</p><p>The semi-supervised loss function, ℓ semi , is a combination of the loss from unlabeled and labeled data:</p><formula xml:id="formula_6">ℓ semi = ℓ u + λ l ℓ l ,<label>(6)</label></formula><p>where λ l is a weighting factor, which is set to zero for unlabeled samples. For robustness, we employ the sum of the Huber loss <ref type="bibr" target="#b15">[16]</ref> for individual joint errors, which is different from the standard use of the Huber loss. That is,</p><formula xml:id="formula_7">ℓ l = k ℓ Huber y J k −ŷ J k 2 ,<label>(7)</label></formula><p>where . 2 denotes the L 2 -norm,ŷ J k the estimated position of the k-th joint, y J k the corresponding ground truth position and</p><formula xml:id="formula_8">ℓ Huber (d) = 0.5 d 2 if d &lt; ǫ ǫ (d − 0.5 ǫ) otherwise.<label>(8)</label></formula><p>Note that d, the input to the Huber loss, is always positive in our case. Additionally, an adversarial loss can be added to the training objective <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b28">29]</ref>. We describe this approach and experiments in the supplemental material, but omit it from the main paper since results are only slightly improved in some cases, whereas the adversarial loss imposes a computational overhead and requires a very sensible adjustment of meta-parameters for training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Implementation details</head><p>Similar to other works <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b47">48]</ref> we assume the hand to be the closest object to the camera, and compute its center of mass (CoM), which is also provided as additional input to the decoder, g. We then crop a region with equal side length in each direction around the CoM, resize it to 64×64 pixels and normalize the depth values within a fixed range to be between −1 and 1. These crops form the input to our method.</p><p>Our method does not rely on a specific choice of the network architecture. For our experiments, we implemented our encoder and decoder networks based on the architecture developed for DCGAN <ref type="bibr" target="#b42">[43]</ref>, since it is a well developed architecture, which is comparably "lightweight" and designed for image synthesis. We base our encoder f on the discriminator and our decoder g on the generator of the original publicly available implementation. We only interchange the positions of the ReLUs <ref type="bibr" target="#b7">[8]</ref> and leakyReLUs <ref type="bibr" target="#b25">[26]</ref> since we want to ease gradient flow through the decoder, put a hyperbolic tangent (Tanh) activation function at the end of the decoder to ensure that the output can range between −1 and 1, and adapt the input and output dimensions accordingly.</p><p>We train our model with Adam <ref type="bibr" target="#b18">[19]</ref> for 100 epochs using a batch size of 128 and a learning rate of 10 −4 . For semi-supervised learning we obtained the best results with λ l = 10. Our PyTorch implementation is publicly available 3 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>To prove the applicability of the proposed method we perform qualitative and quantitative experiments on different datasets. We investigate the representations learned from unlabeled data (c.f . §3.1) in §4.3. Subsequently, we present the results for semi-supervised learning (c.f . §3.2), compare to the state-of-the-art in hand pose estimation, and provide evidence for the effectiveness of our training procedure in an ablation study ( §4.4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets</head><p>We evaluate on two different datasets. Firstly, we test on the NYU hand pose dataset <ref type="bibr" target="#b54">[55]</ref>, which, to the best of our knowledge, is the only public dataset providing multiple views for the training and test set. For a broader empirical analysis of our approach we additionally provide a novel multi-view dataset 3 .</p><p>3 https://poier.github.io/PreView NYU hand pose dataset The NYU dataset provides a training set with 72,757 frames from a single actor and a test set with 8,252 frames from two actors. It was captured with structured light based RGBD cameras. The additional cameras captured the scene from side views. Originally, the additional cameras were employed to mitigate issues with self-occlusions during annotation; for our work the additional camera views enable us to compare our approach on a standard dataset. Unfortunately, the side view camera locations were changed several times during training set acquisition and no camera pose information is provided. Therefore, we searched for a part of the training set with approximately similar camera setup and found 43,641 frames (∼60% of the original training set), which we used as a training set for our experiments. For validation and testing, we use the full sets from the original dataset. We denote the reduced training set with consistent setup by NYU-CS.</p><p>Multi-view hand pose dataset We captured the dataset for typical user interaction scenarios in front of a large screen with a Time-of-Flight camera mounted at each of the two top corners of the screen. We captured the two cameras synchronously and captured poses needed for typical gestures like swiping, pointing or waving. While the set of poses is restricted, we aimed to capture each pose in all possible hand orientations and ended up with 63,701 frames from 14 different actors. Since the goal of our novel dataset is to investigate semi-supervised learning where only a small fraction of the available samples is labeled, we only labeled a representative subset from a few actors. To this we employed the method in <ref type="bibr" target="#b34">[35]</ref>, which tries to find a subset of frames covering the pose space well. Overall 526 frames from 7 out of the 14 actors were manually annotated. We split the labeled data in 289 frames for training and validation (189/100) and 237 for testing. We denote the resulting multi-view hand pose dataset MV-Hands.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Metrics</head><p>For the evaluation, we employ three commonly used metrics: the mean joint error (ME) as well as the joint-and frame-based success rate (JS/FS). The ME denotes the average distance between the estimated and ground truth joint positions in millimeter (mm). The JS is the fraction of joints which were estimated within a certain distance to the ground truth joint position. The FS is stricter and gives the fraction of frames for which all joints have been estimated within a certain distance to the ground truth position <ref type="bibr" target="#b52">[53]</ref>.</p><p>For hand pose estimation researchers often employ curves of the success rates over different distance thresholds. To express these curves with a single number, we compute the area under the curve (AUC) up to a specified threshold. We denote the AUC of the JS and FS up to a distance threshold of 80 mm by JS80, and FS80, respectively.  <ref type="table">Table 1</ref>: Pre-training from unlabeled data. Mean joint error and standard deviation on the NYU-CS dataset for different pretraining methods and numbers of labeled samples, n.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Pre-training from unlabeled data</head><p>In the following, we perform several experiments to investigate the effectiveness of representations learned from unlabeled data.</p><p>Linear mapping to joint positions To quantitatively analyze the predictability of the pose given the learned latent representations, we follow the standard procedure for testing representations learned in an un-/self-supervised manner <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b68">69]</ref>: We train the network using the respective pre-training method, i.e., without pose annotations, freeze all layers up to the latent pose representation and train a linear mapping from the latent representation to the target joint positions using annotated samples.</p><p>The results on the NYU-CS dataset are shown in Tab. 1. We compare our method to pre-training using an autoencoder because of its close relation. In particular, the autoencoder's target is the input view, whereas our method aims to predict a different view. For a fair comparison, we use the same architecture, i.e., the same number of parameters and training algorithm for the autoencoder and the proposed method for predicting different views (PreView).</p><p>Here, we also investigate how the respective methods behave when the number of labeled samples, n, is smaller than the number of unlabeled samples, i.e., only a subset of labeled samples is provided. In this case, we use a random subset of the data, which is the same for each method. For the case where the training set is small, the size of the validation set will -for a realistic scenario -be similarly small. To account for this, we also subsample the validation data. We fix the size of the validation set, |V|, as a fraction of the size of the sub-sampled training set, |L|. That is, we sample at most |V| ≤ 0.3 |L| samples from the original validation set. We repeat this experiment 10 times with different random samples to investigate the effect of the sampling and report the average and standard deviation of the results in Tab. 1.</p><p>The results show that pre-training for view prediction yields a latent representation which is significantly more predictive for the pose than pre-training using an autoencoder. The improvement is consistent -independent of the ratio between labeled and unlabeled samples -and ranges between 30 and 40 percent.</p><p>On the other hand, qualitative inspection shows that the autoencoder yields cleaner reconstructions of the inputs, compared to the predictions of the second view of our method. Obviously, reconstructing the input is an easier task, and can be done more accurately, even without knowledge about the pose, as the results in Tab. 1 suggest. We show some exemplary view predictions and input reconstructions in the supplemental material.</p><p>We believe that there are several reasons for this large improvement in pose predictability: For example, our model is enforced to not just capture pixel statistics as can be sufficient to reconstruct the input <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b40">41]</ref> since the prediction of a different viewpoint requires the model to actually reason about the pose. More specifically, our model needs to reason about how the appearance affects the pose and thus the appearance in the other view.</p><p>Size of the latent representation We expect the size of the latent representation to be an important constraint for the specificity of the learned pose representation (c.f . <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b53">54]</ref>). Hence, we investigate how the size of the representation affects the results, i.e., the predictability of the pose. For this hyper-parameter evaluation we employ the NYU validation set. We compare the results for representations of size d T ∈ {10, 20, 30, 40, 50, 80} in <ref type="figure" target="#fig_2">Fig. 3</ref>. It shows that the mean joint error is reduced by a large margin when increasing d T from 20 to 30, but the improvement diminishes if d T ∼ 40. It seems that, when trained in the proposed way, a size of 20 and below is too small to capture the pose and shape parameters reasonably well. However, if the size of the representation is increased above 50 the predictability of the pose is not improved anymore. This is interesting, since the size of the parameter space, which was identified by works on hand modeling <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b24">25]</ref> is usually very similar. The size identified in these works is indeed slightly smaller when representing the pose alone. In our case, however, the learned latent representation also needs to capture the size and shape of the hand.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Neuron activations</head><p>We also aimed to investigate what each neuron in the latent space has learned. When we search for the samples from the validation set, which activate a single neuron most, we can observe that many of the neurons are activated most for very specific poses. That is, the samples, which activate a neuron most, clearly show similar poses. We include these qualitative samples in the supplemental material.</p><p>Nearest neighbors To obtain further insights into the learned representation, we visualize nearest neighbors in the latent representation space. More specifically, given a query image from the validation set, we find the closest samples from the training set according to the Euclidean distance in the latent representation space. <ref type="figure" target="#fig_3">Fig. 4b</ref> visualizes some randomly sampled query images (i.e., no "cherry picking") and their corresponding nearest neighbors. We see that the nearest neighbors most often exhibit a very similar pose as the query image, even if the detection (i.e., hand crop) is not always accurate. This is in contrast to the nearest neighbors in the latent representation learned using autoencoders, which often show a completely different pose (see <ref type="figure" target="#fig_3">Fig. 4a</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Semi-supervised training</head><p>In a final set of experiments we test the proposed method for jointly leveraging labeled and unlabeled data (c.f . §3.2) during end-to-end training. Similar to the previous setup, we consider the case where the number of labeled samples is smaller or equal than the number of unlabeled samples, and evaluate different ratios. For a small number of labeled samples we obtained the best results by sampling the minibatches such that there is an equal amount of labeled and unlabeled samples in each batch (c.f ., <ref type="bibr" target="#b71">[72]</ref>).</p><p>Comparison to the state-of-the-art To evaluate the competitiveness of the employed architecture, we compare against the state-of-the-art in data-driven hand pose estimation. Since the NYU-CS set contains about 60% of the original training set, we need to re-train the state-of-the-art approaches on the same subset for a fair comparison. We compare to Crossing Nets <ref type="bibr" target="#b57">[58]</ref>, DeepPrior <ref type="bibr" target="#b35">[36]</ref> and DeepPrior++ <ref type="bibr" target="#b33">[34]</ref>. We selected DeepPrior, since its results are still in the range of the state-of-the-art for the NYU dataset (as shown in a recent independent evaluation <ref type="bibr" target="#b66">[67]</ref>), the PCA based "prior" makes the approach suffer less from a reduced training set, and finally, it has about the same number of model parameters as our model. The improved variant DeepPrior++, on the other hand, has very recently been shown to be top-performing on different datasets <ref type="bibr" target="#b33">[34]</ref>.</p><p>To train the state-of-the-art approaches, we use the publicly available source code provided by the authors. Note, Wan et al. <ref type="bibr" target="#b57">[58]</ref> used different models for the experiments on the NYU dataset than the ones used in their publicly available code. For a fair comparison we use the same (metric) crop size when cropping the hand for the entire training and test set, and fix the training and validation subsets to the same subsets as for the evaluation of our method.</p><p>The results in Tab. 2 and 3 show that -by leveraging unlabeled data -our method consistently improves the performance, independent of the number of labeled samples, and improves the state-of-the-art approaches by a large margin for a small number of labeled samples. Note that the NYU dataset does not provide additional unlabeled samples, i.e., when all labeled samples are used, our method can not draw from any additional information.</p><p>Ablation experiments Finally, we focus the quantitative evaluation on the main contribution of this work. We exclude disturbing factors like the model architecture or the n 100 1,000 10,000 43,640</p><p>Metric (see §4.2) ME FS80 JS80 ME FS80 JS80 ME FS80 JS80 ME FS80 JS80   training procedure by training a baseline for which we keep everything the same but do not exploit any unlabeled data.</p><p>In Tab. 3 we compare the results on the MV-Hands dataset. We see that our semi-supervised training improves the results of supervised training for all metrics. <ref type="figure" target="#fig_5">Fig. 5</ref> compares the results on the NYU-CS dataset, where our method (Semi-superv.) also improves results for a high number of labeled samples. That is, semi-supervised training consistently outperforms supervised training, even if all samples are labeled. For the more realistic case, where only a subset of the data is labeled, our method improves the performance of the fully supervised approach by a large margin. In fact, our method achieves similar or improved results even when it is trained with one to two orders of magnitude less labeled samples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>Learning from unlabeled data has long been recognized as an important direction for machine learning and appears especially desirable for tasks with high labeling effort, such as estimation of articulated poses. However, traditionally the representations learned from unlabeled data are most often generic. While in this way the representations are amenable for transfer learning to novel tasks, concrete applications benefit from task specific representations.  In this work, we showed a way how to learn task specific representations for pose estimation without labels. Additionally, the proposed method can be trained end-to-end in a semi-supervised manner. Our method consistently surpasses the performance of standard supervised training, even when all available training samples are labeled. Moreover, the results of supervised training are already improved with one order of magnitude less labeled training samples.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Architecture sketch for semi-supervised learning. The input view, x (1) , is mapped to the latent representation, θ, by the encoder f1. Solely based on θ, the decoder g2 is required to generate a different view 2 of the input. At the same time the latent representation is ensured to suffice a linear mapping, g l , to the 3D joint positions by employing labeled samples. This is illustrated by the green paths depicting the gradient flow to the latent representation and, consequently, to the encoder.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Pose predictability. How the size of the latent representation, dT , affects the predictability of the pose (from pre-trained, frozen representations). Results on the NYU validation set.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Nearest neighbors in latent space. Comparison of nearest neighbors in the latent representation space for representations learned using an autoencoder (a) and our method (b). Query images (same queries shown for both methods) -randomly sampled from the validation set -are shown in the marked, leftmost column of (a) and (b), the remaining columns are the respective nearest neighbors.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: Ablation experiments. Comparison of purely supervised training (Supervised), with the proposed method which can exploit unlabeled samples (Semi-superv.) for different numbers of labeled samples n on the NYU-CS dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Semi-s. PreView (Ours) 29.35 0.31 0.63 22.83 0.43 0.71 19.81 0.50 0.75 19.60 0.51 0.75</figDesc><table>DeepPrior [36] 
+44.99 
+0.11 
+0.45 
+36.99 
+0.20 
+0.55 
+30.31 
+0.31 
+0.63 
+27.97 
+0.35 
+0.66 
+Crossing Nets [58] 
+67.65 
+0.00 
+0.25 
+36.35 
+0.16 
+0.55 
+28.97 
+0.29 
+0.64 
+25.57 
+0.34 
+0.68 
+DeepPrior++ [34] 
+38.07 
+0.14 
+0.53 
+31.01 
+0.23 
+0.61 
+24.14 
+0.37 
+0.69 
+20.87 
+0.44 
+0.73 
+
+Semi-s. Autoenc. 
+31.58 
+0.27 
+0.60 
+24.05 
+0.41 
+0.70 
+21.32 
+0.47 
+0.73 
+20.74 
+0.49 
+0.74 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Comparison to the state-of-the-art. Results on the NYU-CS dataset for different metrics and different numbers of labeled samples n. For the mean joint error (ME) smaller values are better, while for the success rates (FS80 and JS80) higher values are better. Best results in boldface.Semi-superv. PreView (Ours) 24.14 0.39 0.69</figDesc><table>n 
+289 
+
+Metric (see  §4.2) 
+ME 
+FS80 JS80 
+
+DeepPrior++ [34] 
+34.17 
+0.22 0.57 
+
+Supervised 
+26.35 
+0.36 0.67 
+Semi-superv. Autoencoder 
+25.20 
+0.38 0.68 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Comparison to the state-of-the-art and ablation ex- periments. Results for different metrics on the MV-hands dataset.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">For the sake of clarity, here, pose parameters denote the parameters defining the skeleton, including its size, as well as a rough shape</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">To avoid cluttering the notation, we ignore that such a mapping is not always unique, given only a single view. In theory, we could formulate θ as a random variable, describing a distribution, we could sample from.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements We thank the anonymous reviewers for their effort and valuable feedback, Samuel Schulter, Peter Roth, Michael Opitz and Horst Possegger for feedback on an early draft of this manuscript, Martin Oswald, Andreas Bean and colleagues at IGT Unterpremstätten for the fruitful cooperation and lending their hands for the dataset, and Anna Micheler-Hofer, Stefan Ainetter and Florian Ziessler for manually labeling hand poses. We also thank NVIDIA Corporation for awarding a Titan Xp GPU without which less experiments would have been possible.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Construction and animation of anatomically based human hand models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Albrecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Haber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-P</forename><surname>Seidel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. SCA</title>
+		<meeting>SCA</meeting>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Deep Canonical Correlation Analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Arora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bilmes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Livescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Self-organizing neural network that discovers surfaces in random-dot stereograms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Becker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">355</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="161" to="163" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">An analysis of singlelayer networks in unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. AISTATS</title>
+		<meeting>AISTATS</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Model-based 3d hand pose estimation from monocular video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>De La Gorce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1793" to="1805" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Unsupervised visual representation learning by context prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Discriminative unsupervised feature learning with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Neocognitron: a self organizing neural network model for a mechanism of pattern recognition unaffected by shift in position</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fukushima</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biol. Cybern</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="193" to="202" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Unsupervised CNN for single view depth estimation: Geometry to the rescue</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Garg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">G V</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Carneiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">D</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Unsupervised monocular depth estimation with left-right consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Godard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">Mac</forename><surname>Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Towards good practices for deep 3d hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno>abs/1707.07248</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Reducing the dimensionality of data with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">313</biblScope>
+			<biblScope unit="issue">5786</biblScope>
+			<biblScope unit="page" from="504" to="507" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Analysis of a complex of statistical variables into principal components</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hotelling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Educ. Psychol</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="498" to="520" />
+			<date type="published" when="1933" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Relations between two sets of variates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hotelling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biometrika</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">3-4</biblScope>
+			<biblScope unit="page" from="321" to="377" />
+			<date type="published" when="1936" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Robust estimation of a location parameter</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Huber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Ann. Math. Stat</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="73" to="101" />
+			<date type="published" when="1964" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning through one-shot image-based shape reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+		<idno>abs/1709.00505</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Hand pose estimation and hand shape classification using multi-layered randomized decision forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kiraç</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">E</forename><surname>Kara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Akarun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICLR</title>
+		<meeting>ICLR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Application of the KarhunenLoeve procedure for the characterization of human faces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kirby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sirovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="103" to="108" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Guided optimisation through classification and regression for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krejov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gilbert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bowden</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">155</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>CVIU</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Semi-supervised deep learning for monocular depth map prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kuznietsov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Stückler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Learning representations for automatic colorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Larsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Shakhnarovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Multi-view representation learning: A survey from shallow methods to deep methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno>abs/1610.01206</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Modeling the constraints of human hand motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">S</forename><surname>Huang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Workshop on Human Motion</title>
+		<meeting>Workshop on Human Motion</meeting>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Rectifier nonlinearities improve neural network acoustic models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Maas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Hannun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML Workshops</title>
+		<meeting>ICML Workshops</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Smolley. Least squares generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">Y</forename><surname>Lau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Dynamics based 3d skeletal hand tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Melax</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Keselman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Orsten</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. GI</title>
+		<meeting>GI</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Conditional generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints, abs/1411.1784</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Real-time hand tracking under occlusion from an egocentric rgb-d sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Mueller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mehta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Sotnychenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sridhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Casas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Hand pose estimation through weakly-supervised learning of a rich intermediate representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Neverova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wolf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Nebout</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">W</forename><surname>Taylor</surname></persName>
+		</author>
+		<idno>abs/1511.06728</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual representations by solving jigsaw puzzles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Noroozi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Favaro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Representation learning by learning to count</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Noroozi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Favaro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">DeepPrior++: Improving fast and accurate 3d hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV Workshops</title>
+		<meeting>ICCV Workshops</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Efficiently creating 3d training data for fine hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Hands deep in deep learning for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVWW</title>
+		<meeting>CVWW</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Training a feedback loop for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Efficient model-based 3d tracking of hand articulations using Kinect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Oikonomidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kyriazis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Argyros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Ambient sound provides supervision for visual learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Owens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Mcdermott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Context encoders: Feature learning by inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pathak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">On lines and planes of closest fit to systems of points in space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pearson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Philos. Mag</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="559" to="572" />
+			<date type="published" when="1901" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Hybrid one-shot 3d hand pose estimation by exploiting uncertainties</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Poier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Roditakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Schulter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Argyros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICLR</title>
+		<meeting>ICLR</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Generative 3d hand tracking with spatially constrained pose sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Roditakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Makris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Argyros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Non-linear predictors for facial feature tracking across pose and expression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sheerman-Chase</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bowden</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. FG</title>
+		<meeting>FG</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Cascaded hand pose regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Depth-based hand pose estimation: Data, methods, and challenges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Supancic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rogez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Latent regression forest: Structured estimation of 3d articulated hand posture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">J</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tejani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Opening the black box: Hierarchical sampling optimization for estimating human hand pose</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Real-time articulated hand pose estimation using semi-supervised transductive regression forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-H</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Multi-view 3d models from single images with a convolutional network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tatarchenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Efficient and precise interactive hand tracking through joint, continuous optimization of pose and correspondences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bordeaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">J</forename><surname>Cashman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Corish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Soto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sweeney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P C</forename><surname>Valentin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Luff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Topalian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Khamis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Banks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<idno>143:1-143:12</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">The Vitruvian manifold: Inferring dense correspondences for one-shot human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Structured prediction of 3d human pose with deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Tekin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Katircioglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Real-time continuous pose recovery of human hands using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Perlin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Multi-view supervision for single-view reconstruction via differentiable ray consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Extracting and composing robust features with denoising autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-A</forename><surname>Manzagol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Crossing nets: Combining GANs and VAEs with a shared latent space for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Probst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">On deep multi-view representation learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Arora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Livescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bilmes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual representations using videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Rule of thumb: Deep derotation for improved fingertip detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Wetzler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Slossberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kimmel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<analytic>
+		<title level="a" type="main">Capturing natural hand articulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">S</forename><surname>Huang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<analytic>
+		<title level="a" type="main">Deep3d: Fully automatic 2d-to-3d video conversion with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<analytic>
+		<title level="a" type="main">Supervised descent method and its applications to face alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De La</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torre</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b64">
+	<analytic>
+		<title level="a" type="main">Weaklysupervised disentangling with recurrent transformations for 3d view synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b65">
+	<analytic>
+		<title level="a" type="main">Spatial attention deep net with partial pso for hierarchical hybrid hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b66">
+	<analytic>
+		<title level="a" type="main">Big hand 2.2m benchmark: Hand pose data set and state of the art analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Stenger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b67">
+	<analytic>
+		<title level="a" type="main">Generic 3d representation via pose estimation and matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wekel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b68">
+	<analytic>
+		<title level="a" type="main">Colorful image colorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b69">
+	<analytic>
+		<title level="a" type="main">Split-brain autoencoders: Unsupervised learning by cross-channel prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b70">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of depth and ego-motion from video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b71">
+	<analytic>
+		<title level="a" type="main">Towards 3d human pose estimation in the wild: a weakly-supervised approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b72">
+	<analytic>
+		<title level="a" type="main">Modelbased deep hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IJCAI</title>
+		<meeting>IJCAI</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

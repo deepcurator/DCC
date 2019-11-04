@@ -1,0 +1,1091 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:38+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Noisy Natural Gradient as Variational Inference</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guodong</forename><surname>Zhang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shengyang</forename><surname>Sun</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Duvenaud</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><surname>Grosse</surname></persName>
+						</author>
+						<title level="a" type="main">Noisy Natural Gradient as Variational Inference</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Variational Bayesian neural nets combine the flexibility of deep learning with Bayesian uncertainty estimation. Unfortunately, there is a tradeoff between cheap but simple variational families (e.g. fully factorized) or expensive and complicated inference procedures. We show that natural gradient ascent with adaptive weight noise implicitly fits a variational posterior to maximize the evidence lower bound (ELBO). This insight allows us to train full-covariance, fully factorized, or matrix-variate Gaussian variational posteriors using noisy versions of natural gradient, Adam, and K-FAC, respectively, making it possible to scale up to modern-size conv nets. On standard regression benchmarks, our noisy K-FAC algorithm makes better predictions and matches Hamiltonian Monte Carlo's predictive variances better than existing methods. Its improved uncertainty estimates lead to more efficient exploration in active learning, and intrinsic motivation for reinforcement learning.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Combining deep learning with Bayesian uncertainty estimation has the potential to fit flexible and scalable models that are resistant to overfitting <ref type="bibr" target="#b23">(MacKay, 1992b;</ref><ref type="bibr" target="#b26">Neal, 1995;</ref><ref type="bibr" target="#b11">Hinton &amp; Van Camp, 1993)</ref>. Stochastic variational inference is especially appealing because it closely resembles ordinary backprop <ref type="bibr" target="#b7">(Graves, 2011;</ref><ref type="bibr" target="#b4">Blundell et al., 2015)</ref>, but such methods typically impose restrictive factorization assumptions on the approximate posterior, such as fully independent weights. There have been attempts to fit more expressive approximating distributions which capture correlations such as matrix-variate Gaussians <ref type="bibr" target="#b20">(Louizos &amp; Welling, 2016;</ref><ref type="bibr" target="#b38">Sun et al., 2017)</ref> or multiplicative normalizing flows <ref type="bibr">(Louizos</ref> In this work, we introduce and exploit a surprising connection between natural gradient descent <ref type="bibr" target="#b1">(Amari, 1998)</ref> and variational inference. In particular, several approximate natural gradient optimizers have been proposed which fit tractable approximations to the Fisher matrix to gradients sampled during training <ref type="bibr" target="#b16">(Kingma &amp; Ba, 2014;</ref><ref type="bibr" target="#b25">Martens &amp; Grosse, 2015)</ref>. While these procedures were described as natural gradient descent on the weights using an approximate Fisher matrix, we reinterpret these algorithms as natural gradient on a variational posterior using the exact Fisher matrix. Both the weight updates and the Fisher matrix estimation can be seen as natural gradient ascent on a unified evidence lower bound (ELBO), analogously to how Neal and Hinton <ref type="bibr" target="#b27">(Neal &amp; Hinton, 1998)</ref> interpreted the E and M steps of Expectation-Maximization (E-M) as coordinate ascent on a single objective.</p><p>Using this insight, we give an alternative training method for variational Bayesian neural networks. For a factorial Gaussian posterior, it corresponds to a diagonal natural gradient method with weight noise, and matches the performance of Bayes By Backprop <ref type="bibr" target="#b4">(Blundell et al., 2015)</ref>, but converges faster. We also present noisy K-FAC, an efficient and GPUfriendly method for fitting a full matrix-variate Gaussian posterior, using a variant of Kronecker-Factored Approximate Curvature (K-FAC) <ref type="bibr" target="#b25">(Martens &amp; Grosse, 2015)</ref> with correlated weight noise.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Variational Inference for Bayesian Neural Nets</head><p>Given a dataset D = {(x i , y i ) n i=1 }, a Bayesian neural net (BNN) is defined in terms of a prior p(w) on the weights, as well as the likelihood p(D | w). Variational Bayesian methods <ref type="bibr" target="#b11">(Hinton &amp; Van Camp, 1993;</ref><ref type="bibr" target="#b7">Graves, 2011;</ref><ref type="bibr" target="#b4">Blundell et al., 2015)</ref> attempt to fit an approximate posterior q(w) to maximize the evidence lower bound (ELBO):</p><formula xml:id="formula_0">L[q] = E q [log p(D | w)] − λD KL (q(w) p(w))<label>(1)</label></formula><p>where λ is a regularization parameter. Proper Bayesian inference corresponds to λ = 1, but other values may work better in practice on some problems. Normalized precision matrices for Gaussian variational posteriors trained using noisy natural gradient. We used a network with 2 hidden layers of 15 units each, trained on the Boston housing dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Gradient Estimators for Gaussian Distribution</head><p>To optimize the ELBO, we must estimate the derivative of eq.</p><p>(1) w.r.t. variational parameters φ. The standard approach uses the pathwise derivative estimator, also known as the reparameterization trick <ref type="bibr" target="#b39">(Williams, 1992;</ref><ref type="bibr" target="#b4">Blundell et al., 2015;</ref><ref type="bibr" target="#b17">Kingma &amp; Welling, 2013;</ref><ref type="bibr" target="#b33">Rezende et al., 2014)</ref>. However, in the case of Gaussian distribution with parameters φ = {µ, Σ}, there is another estimator given by <ref type="bibr" target="#b29">Opper &amp; Archambeau (2009)</ref>:</p><formula xml:id="formula_1">∇ µ E N (µ,Σ) [f (w)] = E N (µ,Σ) [∇ w f (w)] ∇ Σ E N (µ,Σ) [f (w)] = 1 2 E N (µ,Σ) ∇ 2 w f (w)<label>(2)</label></formula><p>which are due to <ref type="bibr" target="#b5">Bonnet (1964)</ref> and <ref type="bibr" target="#b31">Price (1958)</ref>, respectively. Both equations can be proved through integration by parts. In the case of Gaussian distribution, eq. (2) is equivalent to the pathwise derivative estimator for µ.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Natural Gradient</head><p>Natural gradient descent is a second-order optimization method originally proposed by <ref type="bibr" target="#b0">Amari (1997)</ref>. There are two variants of natural gradient commonly used in machine learning, which do not have standard names, but which we refer to as natural gradient for point estimation (NGPE) and natural gradient for variational inference (NGVI).</p><p>In natural gradient for point estimation (NGPE), we assume the neural network computes a predictive distribution p(y|x; w) and we wish to maximize a cost function h(w), which may be the data log-likelihood. The natural gradient is the direction of steepest ascent in the Fisher information norm, and is given by∇ w h = F −1 ∇ w h, where F = Cov x∼p D ,y∼p <ref type="bibr">(y|x,w)</ref> [∇ w log p(y|x, w)], and the covariance is with respect to x sampled from the data distribution and y sampled from the model's predictions. NGPE is typically justified as a way to speed up optimization; see <ref type="bibr" target="#b24">Martens (2014)</ref> for a comprehensive overview.</p><p>We now describe natural gradient for variational inference (NGVI) in the context of BNNs. We wish to fit the parameters of a variational posterior q(w) to maximize the ELBO (eq. <ref type="formula" target="#formula_0">(1)</ref>). Analogously to the point estimation setting, the natural gradient is defined as∇ φ L = F −1 ∇ φ L; but in this case, F is the Fisher matrix of q, i.e. F = Cov w∼q [∇ φ log q(w; φ)]. Note that in contrast with point estimation, F is a metric on φ, rather than w, and its definition doesn't directly involve the data. Interestingly, because q is chosen to be tractable, the natural gradient can be computed exactly, and in many cases is even simpler than the ordinary gradient.</p><p>In general, NGPE and NGVI need not behave similarly; however, in Section 3, we show that in the case of Gaussian variational posteriors, the two are closely related.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Kronecker-Factored Approximate Curvature</head><p>As modern neural networks may contain millions of parameters, computing and storing the exact Fisher matrix and its inverse is impractical. Kronecker-factored approximate curvature (K-FAC) <ref type="bibr" target="#b25">(Martens &amp; Grosse, 2015)</ref> uses a Kronecker-factored approximation to the Fisher matrix to perform efficient approximate natural gradient updates. Considering the lth layer in the neural network whose input activations are a l ∈ R n1 , weights W l ∈ R n1×n2 , and outputs s l ∈ R n2 , we have s l = W T l a l . For simplicity, we define the following additional notation: Dv = ∇ v log p(y|x, w) and g l = Ds l Therefore, the weight gradient is DW l = a l g T l . With this gradient formula, K-FAC decouples this layer's Fisher matrix F l by approximating a l and g l as independent:</p><formula xml:id="formula_2">F l = E[vec{DW l }vec{DW l } ] = E[g l g l ⊗ a l a l ] ≈ E[g l g l ] ⊗ E[a l a l ] = S l ⊗ A l =F l (3)</formula><p>Furthermore, assuming between-layer independence, the whole Fisher matrix can be approximated as block diagonal consisting of layerwise Fisher matricesF l . DecouplingF l into A l and S l not only avoids the quadratic storage cost of the exact Fisher, but also enables tractable computation of the approximate natural gradient:</p><formula xml:id="formula_3">F −1 l vec{∇ W l h} = (S −1 l ⊗ A −1 l ) vec{∇ W l h} = vec[A −1 l ∇ W l hS −1 l ]<label>(4)</label></formula><p>As shown by eq. (4), computing natural gradient using K-FAC only consists of matrix transformations comparable to size of W l , making it very efficient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Variational Inference using Noisy Natural Gradient</head><p>In this section, we draw a surprising relationship between natural gradient for point estimation (NGPE) of the weights of a neural net, and natural gradient for variational inference (NGVI) of a Gaussian posterior. (These terms are explained in Section 2.3.) In particular, we show that the NGVI updates can be approximated with a variant of NGPE with adaptive weight noise which we term Noisy Natural Gradient (NNG). This insight allows us to train variational posteriors with a variety of structures using noisy versions of existing optimization algorithms (see <ref type="figure" target="#fig_0">Figure 1</ref>).</p><p>In NGVI, our goal is to maximize the ELBO L (eq. <ref type="formula" target="#formula_0">(1)</ref>) with respect to the parameters φ of a variational posterior distribution q(w). We assume q is a multivariate Gaussian parameterized by φ = (µ, Σ). Building on eq. <ref type="formula" target="#formula_1">(2)</ref>, we determine the natural gradient of the ELBO with respect to µ and the precision matrix Λ = Σ −1 (see supplement for details):</p><formula xml:id="formula_4">∇ µ L = Λ −1 E q [∇ w log p(D | w) + λ∇ w log p(w)] (5) ∇ Λ L = −E q ∇ 2 w log p(D | w) + λ∇ 2</formula><p>w log p(w) − λΛ We make several observations. First, the term inside the expectation in eq. (5) is the gradient for MAP estimation of w. Second, the update for µ is preconditioned by Λ −1 , which encourages faster movement in directions of higher posterior uncertainty. Finally, the fixed point equation for Λ is given by</p><formula xml:id="formula_5">Λ = −E q 1 λ ∇ 2 w log p(D | w) + ∇ 2 w log p(w)<label>(6)</label></formula><p>Hence, if λ = 1, Λ will tend towards the expected Hessian of − log p(w, D), so the update rule for µ will somewhat resemble a Newton-Raphson update. For simplicity, we further assume a spherical Gaussian prior w ∼ N (0, ηI), so that ∇ 2 w log p(w) = −η −1 I. In each iteration, we sample (x, y) ∼ p D and w ∼ q and apply a stochastic natural gradient update based on eq. <ref type="formula">(5)</ref>:</p><formula xml:id="formula_6">µ ← µ + αΛ −1 Dw − λ N η w (7) Λ ← 1 − λβ N Λ − β ∇ 2 w log p(y|x, w) − λ N η I</formula><p>where α and β are separate learning rates for µ and Λ, and N is the number of training examples. Roughly speaking, the update rule for Λ corresponds to an exponential moving average of the Hessian, and the update rule for µ is a stochastic Newton step using Λ.</p><p>This update rule has two problems. First, the log-likelihood Hessian may be hard to compute, and is undefined at some points for neural nets which use not-everywheredifferentiable activation functions such as ReLU. Second, if the negative log-likelihood is non-convex (as is the case for neural networks), the Hessian could have negative eigenvalues, so the update may result in Λ which is not positive semidefinite. We circumvent both of these problems by approximating the negative log-likelihood Hessian with the NGPE Fisher matrix F = Cov x∼p D ,y∼p(y|x,w) (Dw):</p><formula xml:id="formula_7">Λ ← 1 − λβ N Λ + β DwDw + λ N η I<label>(8)</label></formula><p>This approximation guarantees that Λ is positive semidefinite, and it allows for tractable approximations such as K-FAC (see below). In the context of BNNs, approximating the log-likelihood Hessian with the Fisher was first proposed by <ref type="bibr" target="#b7">Graves (2011)</ref>, so we refer to it as the Graves approximation. In the case where the output layer of the network represents the natural parameters of an exponential family distribution (as is typical in regression or classification), the Graves approximation can be justified in terms of the generalized Gauss-Newton approximation to the Hessian; see <ref type="bibr" target="#b24">Martens (2014)</ref> for details. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Simplifying the Update Rules</head><p>We have now derived a stochastic natural gradient update rule for Gaussian variational posteriors. In this section, we rewrite the update rules in order to disentangle hyperparameters and highlight relationships with NGPE. First, if the prior variance η is fixed 2 , then Λ is a damped version of the moving average of the Fisher matrix and we can rewrite the update eq. <ref type="formula" target="#formula_7">(8)</ref>:</p><formula xml:id="formula_8">Λ = N λF + η −1 Ī F ← (1 −β)F +βDwDw<label>(9)</label></formula><p>In eq. <ref type="formula" target="#formula_8">(9)</ref>, we avoid an awkward interaction between the KL weight λ and the learning rates α, β by writing the update rules in terms of alternative learning ratesα = αλ/N and β = βλ/N . We also rewrite the update rule for µ:</p><formula xml:id="formula_9">µ ← µ +α F + λ N η I −1 Dw − λ N η w<label>(10)</label></formula><p>Observe that if µ is viewed as a point estimate of the weights, this update rule resembles NGPE with an exponential moving average of the Fisher matrix. The differences are that the Fisher matrix F is damped by adding λ N η I, and that the weights are sampled from q, which is a Gaussian with covariance Σ = ( N λF + η −1 I) −1 . Because our update rule so closely resembles NGPE with correlated weight noise, we refer to this method as Noisy Natural Gradient (NNG).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Damping</head><p>Interestingly, in second-order optimization, it is very common to dampen the updates by adding a multiple of the identity matrix to the curvature before inversion in order to compensate for error in the quadratic approximation to the cost. NNG automatically achieves this effect, with the strength of the damping being λ/N η; we refer to this as intrinsic damping. In practice, it may be advantageous to add additional extrinsic damping for purposes of stability.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Fitting Fully Factorized Gaussian Posteriors with Noisy Adam</head><p>The discussion so far has concerned NGVI updates for a full covariance Gaussian posterior. Unfortunately, the number of parameters needed to represent a full covariance Gaussian is of order (dim w) 2 . Since dim w can be in the millions even for a relatively small network, representing a full covariance Gaussian is impractical. There has been much work on tractable approximations to second-order optimization. In the context of NNG, imposing structure on F also imposes structure on the form of the variational posterior. We now discuss two kinds of structure one can impose.</p><p>Perhaps the simplest approach is to approximate F with a diagonal matrix diag(f ), as done by Adagrad <ref type="bibr" target="#b6">(Duchi et al., 2011)</ref> and Adam <ref type="bibr" target="#b16">(Kingma &amp; Ba, 2014)</ref>. For our NNG approach, this yields the following updates:</p><formula xml:id="formula_10">µ ← µ +α Dw − λ N η w / f + λ N η f ← (1 −β)f +βDw 2 (11)</formula><p>These update rules are similar in spirit to methods such as Adam, but with the addition of adaptive weight noise. We note that these update rules also differ from Adam in some details: (1) Adam keeps exponential moving averages of the gradients, which is equivalent to momentum, and (2) Adam applies the square root to the entries of f in the denominator. We define noisy Adam by adding momentum for consistency with Adam. We regard difference (2) as inessential because the preconditioner may affect optimization performance, but doesn't change the fixed points. I.e., with or without the square root, the algorithm is fitting the same functional form of the variational posterior using the same variational objective. The full procedure is given in Alg. 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Fitting Matrix Variate Gaussian Posteriors with Noisy K-FAC</head><p>There has been much interest in fitting BNNs with matrixvariate Gaussian (MVG) posteriors 3 in order to compactly capture posterior correlations between different weights <ref type="bibr" target="#b20">(Louizos &amp; Welling, 2016;</ref><ref type="bibr" target="#b38">Sun et al., 2017)</ref>. Let W l denote the weights for one layer of a fully connected network. An MVG distribution is a Gaussian distribution whose covariance is a Kronecker product, i.e. MN (W; M, Σ 1 , Σ 2 ) = N (vec(W); vec(M), Σ 2 ⊗ Σ 1 ). MVGs are potentially powerful due to their compact representation 4 of posterior covariances between weights. However, fitting MVG posteriors is difficult, since computing the gradients and enforcing the positive semidefinite constraint for Σ 1 and Σ 2 typically requires expensive matrix operations such as inversion. Therefore, existing methods for fitting MVG posteriors typically impose additional structure such as diagonal covariance <ref type="bibr" target="#b20">(Louizos &amp; Welling, 2016)</ref> or products of Householder transformations  to ensure efficient updates.</p><p>We observe that K-FAC <ref type="bibr" target="#b25">(Martens &amp; Grosse, 2015)</ref> uses a Kronecker-factored approximation to the Fisher matrix for each layer's weights, as in eq. (3). By plugging this approximation in to eq. <ref type="formula" target="#formula_8">(9)</ref>, we obtain an MVG posterior. In more detail, each block obeys the Kronecker factorization S l ⊗ A l , where A l and S l are the covariance matrices of the activations and pre-activation gradients, respectively. K-FAC estimates A l and S l online using exponential moving averages which, conveniently for our purposes, are closely analogous to the exponential moving averages definingF in eq. (9):</p><formula xml:id="formula_11">Ā l ← (1 −β)Ā l +βa l a l S l ← (1 −β)S l +βDs l Ds l<label>(12)</label></formula><p>Conveniently, because these factors are estimated from the empirical covariances, they (and hence also Λ) are automatically positive semidefinite.</p><p>Plugging the above formulas into eq. (9) does not quite yield an MVG posterior due to the addition of the prior Hessian. In general, there may be no compact representation of Λ. However, for spherical Gaussian priors 5 , we can approximate Σ using a trick proposed by <ref type="bibr" target="#b25">Martens &amp; Grosse (2015)</ref> in the context of damping. In this way, the covariance 3 When we refer to a BNN with an "MVG posterior", we mean that the weights in different layers are independent, and the weights for each layer follow an MVG distribution. <ref type="bibr">4</ref> If W is of size m × n, then the MVG covariance requires approximately m 2 /2+n 2 /2 parameters to represent, in contrast with a full covariance matrix over w, which would require m 2 n 2 /2. 5 We consider spherical Gaussian priors for simplicity, but this trick can be extended to any prior whose Hessian is Kroneckerfactored, such as group sparsity. </p><formula xml:id="formula_12">= λ N η , total damping term γ = γ in + γ ex while stopping criterion not met do w ∼ N (µ, λ N diag(f + γ in ) −1 ) v ← ∇ w log p(y|x, w) − γ in · w m ← β 1 · m + (1 − β 1 ) · v (Update momentum) f ← β 2 · f + (1 − β 2 ) · (∇ w log p(y|x, w) 2 m ← m/(1 − β k 1 ) m ←m/(f + γ) µ ← µ + α ·m (Update parameters)</formula><p>end while Σ l decomposes as the Kronecker product of two terms:</p><formula xml:id="formula_13">Σ l = λ N [S γ l ] −1 ⊗ [A γ l ] −1 (13) λ N S l + 1 π l λ N η I −1 ⊗ Ā l + π l λ N η I −1</formula><p>This factorization corresponds to a matrix-variate Gaus-</p><formula xml:id="formula_14">sian posterior MN (W l ; M l , λ N [A γ l ] −1 , [S γ l ] −1 )</formula><p>, where the λ/N factor is arbitrarily assigned to the first factor. We refer to this BNN training method as noisy K-FAC. The full algorithm is given as Alg. 2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Block Tridiagonal Covariance</head><p>Both the fully factorized and MVG posteriors assumed independence between layers. However, in practice the weights in different layers can be tightly coupled. To better capture these dependencies, we propose to approximate F using the block tridiagonal approximation from <ref type="bibr" target="#b25">Martens &amp; Grosse (2015)</ref>. The resulting posterior covariance is block tridiagonal, so it accounts for dependencies between adjacent layers. The noisy version of block tridiagonal K-FAC is completely analogous to the block diagonal version, but since the approximation is rather complicated, we refer the reader to <ref type="bibr" target="#b25">Martens &amp; Grosse (2015)</ref> for details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Related Work</head><p>Variational inference was first applied to neural networks by <ref type="bibr" target="#b30">Peterson (1987)</ref> and <ref type="bibr" target="#b11">Hinton &amp; Van Camp (1993)</ref>. More recently, <ref type="bibr" target="#b7">Graves (2011)</ref> proposed a practical method for variational inference with fully factorized Gaussian posteriors which used a simple (but biased) gradient estimator.</p><p>Algorithm 2 Noisy K-FAC. Subscript l denotes layers, w l = vec(W l ), and µ l = vec(M l ). We assume zero momentum for simplicity. Differences from standard K-FAC are shown in blue. Require: α: stepsize Require: β: exponential moving average parameter Require: λ, η, γ ex : KL weighting, prior variance, extrinsic damping term Require: stats and inverse update intervals T stats and T inv k ← 0 and initialize</p><formula xml:id="formula_15">{µ l } L l=1 , {S l } L l=1 , {A l } L l=1</formula><p>Calculate the intrinsic damping term γ in = λ N η , total damping term γ = γ in + γ ex while stopping criterion not met do</p><formula xml:id="formula_16">k ← k + 1 W l ∼ MN (M l , λ N [A γin l ] −1 , [S γin l ] −1 ) if k ≡ 0 (mod T stats ) then Update the factors {S l } L l=1 , {A l } L−1 l=0 using eq. (12) end if if k ≡ 0 (mod T inv ) then Calculate the inverses {[S γ l ] −1 } L l=1 , {[A γ l ] −1 } L−1 l=0</formula><p>using eq. (13).</p><formula xml:id="formula_17">end if V l = ∇ W l log p(y|x, w) − γ in · W l M l ← M l + α[A γ l ] −1 V l [S γ l ] −1</formula><p>end while Improving on that work, <ref type="bibr" target="#b4">Blundell et al. (2015)</ref> proposed a unbiased gradient estimator using the reparameterization trick of <ref type="bibr" target="#b17">Kingma &amp; Welling (2013)</ref>. <ref type="bibr" target="#b18">Kingma et al. (2015)</ref> observed that variance of stochastic gradients can be significantly reduced by local reparameterization trick where global uncertainty in the weights is translated into local uncertainty in the activations.</p><p>There has also been much work on modeling the correlations between weights using more complex Gaussian variational posteriors. <ref type="bibr" target="#b20">Louizos &amp; Welling (2016)</ref> introduced the matrix variate Gaussian posterior as well as a Gaussian process approximation. <ref type="bibr" target="#b38">Sun et al. (2017)</ref> decoupled the correlations of a matrix variate Gaussian posterior to unitary transformations and factorial Gaussian. Inspired by the idea of normalizing flows in latent variable models <ref type="bibr" target="#b32">(Rezende &amp; Mohamed, 2015)</ref>, <ref type="bibr" target="#b21">Louizos &amp; Welling (2017)</ref> applied normalizing flows to auxiliary latent variables to produce more flexible approximate posteriors.</p><p>Since natural gradient was proposed by <ref type="bibr" target="#b1">Amari (1998)</ref>, there has been much work on tractable approximations. <ref type="bibr" target="#b12">Hoffman et al. (2013)</ref> observed that for exponential family posteriors, the exact natural gradient could be tractably computed using stochastic versions of variational Bayes E-M updates. <ref type="bibr" target="#b25">Martens &amp; Grosse (2015)</ref> proposed K-FAC for performing efficient natural gradient optimization in deep neural networks. Following on that work, K-FAC has been adopted in many tasks to gain optimization benefits, including convolutional networks <ref type="bibr" target="#b8">(Grosse &amp; Martens, 2016)</ref> and reinforcement learning <ref type="bibr" target="#b40">(Wu et al., 2017)</ref>, and was shown to be amenable to distributed computation . <ref type="bibr" target="#b15">Khan et al. (2017)</ref> independently derived a stochastic Newton update similar to eq. (5). Their focus was on variational optimization (VO) <ref type="bibr" target="#b37">(Staines &amp; Barber, 2012)</ref> which one can relate to NNG by omitting the KL term, and they only derived the diagonal version (see Section 3.3). Assuming the variational distribution is Gaussian distribution, we can apply noisy Adam and noisy K-FAC to VO by setting KL weight λ as 0, and keeping a running sum of individual Fisher matrices, rather than an exponential moving average. It can be implemented in the same way as NNG by modifying the update rule of the Fisher matrix.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>In this section, we conducted a series of experiments to investigate the following questions: (1) How does noisy natural gradient (NNG) compare with existing methods in terms of prediction performance? (2) Is NNG able to scale to large datasets and modern-size convolutional neural networks? (3) Can NNG achieve better uncertainty estimates? (4) Does it enable more efficient exploration in active learning and reinforcement learning?</p><p>Our method with a full-covariance multivariate Gaussian, a fully-factorized Gaussian, a matrix-variate Gaussian and block-tridiagonal posterior are denoted as NNG-full, NNG-FFG (noise Adam), NNG-MVG (noisy K-FAC) and NNGBlkTri, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Regression</head><p>We first experimented with regression datasets from the UCI collection <ref type="bibr" target="#b2">(Asuncion &amp; Newman, 2007)</ref>. All experiments used networks with one hidden layer unless stated otherwise. We compared our method with Bayes By Backprop (BBB) <ref type="bibr" target="#b4">(Blundell et al., 2015)</ref> and probabilistic backpropagation (PBP) with a factorial gaussian posterior (Hernández- Lobato &amp; Adams, 2015). The results for PBP MV  and VMG <ref type="bibr" target="#b20">(Louizos &amp; Welling, 2016)</ref> can be found in supplement.</p><p>Following previous work (Hernández-Lobato &amp; Adams, 2015; Louizos &amp; Welling, 2016), we report the standard metrics including root mean square error (RMSE) and test log-likelihood. The results are summarized in <ref type="table" target="#tab_1">Table 1</ref>. As we can see from the results, NNG-FFG performed similarly to BBB <ref type="bibr" target="#b4">(Blundell et al., 2015)</ref>, indicating that the Graves approximation did not cause a performance hit. NNG-MVG achieved substantially better RMSE and log-likelihoods than BBB and PBP due to the more flexible posterior. Moreover, NNG-MVG outperformed PBP MV  on all datasets other than Yacht and Year, even though PBP MV also uses an MVG posterior.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Classification</head><p>To evaluate the scalability of our method to large networks, we applied noisy K-FAC to a modified version of the VGG16 6 network <ref type="bibr" target="#b36">(Simonyan &amp; Zisserman, 2014)</ref> and tested it on CIFAR10 benchmark <ref type="bibr" target="#b19">(Krizhevsky, 2009)</ref>. It is straight- <ref type="bibr">6</ref> We reduced the number of filters in each conv layer by half. The detailed network architecture is 32-32-M-64-64-M-128-128-128-M-256-256-256-M-256-256-256-M-FC10, where each number represents the number of filters in a convolutional layer, and M denotes max-pooling. forward to incorporate noisy K-FAC into convolutional layers using Kronecker Factors for Convolution <ref type="bibr" target="#b8">(Grosse &amp; Martens, 2016)</ref>. We compared our method to SGD with momentum, K-FAC and BBB in terms of test accuracy. Results are shown in <ref type="table" target="#tab_2">Table 2</ref>. Noisy K-FAC achieved the highest accuracy on all configurations except where both data augmentation and batch normalization (BN) <ref type="bibr" target="#b14">(Ioffe &amp; Szegedy, 2015)</ref> are used. When no extra regularization was used, noisy K-FAC showed a gain of 3% (85.52% versus 82.39%).</p><p>We observed that point estimates tend to make poorly calibrated predictions, as shown in <ref type="figure" target="#fig_2">Figure 2</ref>. By contrast, models trained with noisy K-FAC are well-calibrated (i.e. the bars align roughly along the diagonal), which benefits interpretability.</p><p>We note that noisy K-FAC imposes a weight decay term intrinsically. To check that this by itself doesn't explain the performance gains, we modified K-FAC to use weight decay of the same magnitude. K-FAC with this weight decay setting achieved 83.51% accuracy (compared with 82.52% originally). However, as shown in <ref type="table" target="#tab_2">Table 2</ref>, noisy K-FAC achieved 85.52%, demonstrating the importance of adaptive weight noise.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Active Learning</head><p>One particularly promising application of uncertainty estimation is to guiding an agent's exploration towards part of a space which it's most unfamiliar with. We have evaluated our BNN algorithms in two instances of this general approach: active learning, and intrinsic motivation for reinforcement learning. The next two sections present experiments in these two domains, respectively.</p><p>In the simplest active learning setting <ref type="bibr" target="#b35">(Settles, 2010)</ref>, an algorithm is given a set of unlabeled examples and, in each round, chooses one unlabeled example to have labeled. A classic Bayesian approach to active learning is the information gain criterion <ref type="bibr" target="#b22">(MacKay, 1992a)</ref>, which in each step attempts to achieve the maximum reduction in posterior entropy. Under the assumption of i.i.d. Gaussian noise, this is equivalent to choosing the unlabeled example with the largest predictive variance. We first investigated how ac- curately each of the algorithms could estimate predictive variances. In each trial, we randomly selected 20 labeled training examples and 100 unlabeled examples; we then computed each algorithm's posterior predictive variances for the unlabeled examples. 10 independent trials were run. As is common practice, we treated the predictive variance of HMC as the "ground truth" predictive variance. <ref type="table" target="#tab_4">Table 4</ref> reports the average and standard error of Pearson correlations between the predictive variances of each algorithm and those of HMC. In all of the datasets, our two methods NNG-MVG and NNG-BlkTri matched the HMC predictive variances significantly better than the other approaches, and NNG-BlkTri consistently matched them slightly better than NNG-MVG due to the more flexible variational posterior.</p><p>Next, we evaluated the performance of all methods on active learning, following the protocol of Hernández-Lobato &amp; Adams <ref type="bibr">(2015)</ref>. As a control, we evaluated each algorithm with labeled examples selected uniformly at random; this is denoted with the R suffix. Active learning results are denoted with the A suffix. The average test RMSE  for all methods is reported in <ref type="table" target="#tab_3">Table 3</ref>. These results show that NNG-MVG A performed better than NNG-MVG R on most datasets and was closer to HMC A compared to PBP A and NNG-FFG A. However, we note that better predictive variance estimates do not reliably yield better active learning results, and in fact, active learning methods sometimes perform worse than random. Therefore, while information gain is a useful criterion for benchmarking purposes, it is important to explore other uncertainty-based active learning criteria.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Reinforcement Learning</head><p>We next experimented with using uncertainty to provide intrinsic motivation in reinforcement learning. <ref type="bibr" target="#b13">Houthooft et al. (2016)</ref> proposed Variational Information Maximizing Exploration (VIME), which encourages the agent to seek novelty through an information gain criterion. VIME involves training a separate BNN to predict the dynamics, i.e. learn to model the distribution p(s t+1 |s t , a t ; θ). With the idea that surprising states lead to larger updates to the dynamics network, the reward function was augmented with an "intrinsic term" corresponding to the information gain for the BNN. If the history of the agent up until time step t is denoted as ξ = {s 1 , a 1 , ..., s t }, then the modified reward can be written in the following form: r * (s t , a t , s t+1 ) = r(s t , a t ) + ηD KL (p(θ|ξ t , a t , s t+1 ) p(θ|ξ t )) (14)</p><p>In the above formulation, the true posterior is generally intractable. <ref type="bibr" target="#b13">Houthooft et al. (2016)</ref> approximated it using Bayes by Backprop (BBB) <ref type="bibr" target="#b4">(Blundell et al., 2015)</ref>. We experimented with replacing the fully factorized posterior with our NNG-MVG model.</p><p>Following the experimental setup of <ref type="bibr" target="#b13">Houthooft et al. (2016)</ref>, we tested our method in three continuous control tasks with sparsified rewards (see supplement for details). We compared our NNG-MVG dynamics model with a Gaussian noise baseline, as well as the original VIME formulation using BBB. All experiments used TRPO to optimize the policy itself <ref type="bibr" target="#b34">(Schulman et al., 2015)</ref>.</p><p>Performance is measured by the average return (under the original MDP's rewards, not including the intrinsic term) at each iteration. <ref type="figure" target="#fig_3">Figure 3</ref> shows the performance results in three tasks. Consistently with <ref type="bibr" target="#b13">Houthooft et al. (2016)</ref>, we observed that the Gaussian noise baseline completely broke down and rarely achieved the goal, and VIME significantly improved the performance. However, replacing the dynamics network with NNG-MVG considerably improved the exploration efficiency on all three tasks. Since the policy search algorithm was shared between all three conditions, we attribute this improvement to the improved uncertainty modeling by the dynamics network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We drew a surprising connection between natural gradient ascent for point estimation and for variational inference. We exploited this connection to derive surprisingly simple variational BNN training procedures which can be instantiated as noisy versions of widely used optimization algorithms for point estimation. This let us efficiently fit MVG variational posteriors, which capture correlations between different weights. Our variational BNNs with MVG posteriors matched the predictive variances of HMC much better than fully factorized posteriors, and led to more efficient exploration in the settings of active learning and reinforcement learning with intrinsic motivation.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Normalized precision matrices for Gaussian variational posteriors trained using noisy natural gradient. We used a network with 2 hidden layers of 15 units each, trained on the Boston housing dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Reliability diagrams (Niculescu-Mizil &amp; Caruana, 2005; Guo et al., 2017) for K-FAC (left) and noisy K-FAC (right) on CIFAR10. Reliability diagrams show accuracy as a function of confidence. Models trained without BN (top) and with BN (bottom). ECE = Expected Calibration Error (Guo et al., 2017); smaller is better.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Performance of [TRPO] TRPO baseline with Gaussian control noise, [TRPO+BBB] VIME baseline with BBB dynamics network, and [TRPO+NNG-MVG] VIME with NNG-MVG dynamics network (ours). The darker-colored lines represent the median performance in 10 different random seeds while the shaded area show the interquartile range.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Algorithm 1 Noisy Adam. Differences from standard Adam are shown in blue. Require: α: Stepsize Require: β 1 , β 2 : Exponential decay rates for updating µ and the Fisher F Require: λ, η, γ ex : KL weighting, prior variance, extrinsic</figDesc><table>damping term 
+m ← 0 
+Calculate the intrinsic damping term γ in </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Averaged test RMSE and log-likelihood for the regression benchmarks.</figDesc><table>TEST RMSE 
+TEST LOG-LIKELIHOOD 
+DATASET 
+BBB 
+PBP 
+NNG-FFG 
+NNG-MVG 
+BBB 
+PBP 
+NNG-FFG 
+NNG-MVG 
+
+BOSTON 
+3.171±0.149 3.014±0.180 3.031±0.155 2.742±0.125 -2.602±0.031 -2.574±0.089 -2.558±0.032 -2.446±0.029 
+CONCRETE 
+5.678±0.087 5.667±0.093 5.613±0.113 5.019±0.127 -3.149±0.018 -3.161±0.019 -3.145±0.023 -3.039±0.025 
+ENERGY 
+0.565±0.018 1.804±0.048 0.839±0.046 0.485±0.023 -1.500±0.006 -2.042±0.019 -1.629±0.020 -1.421±0.005 
+KIN8NM 
+0.080±0.001 0.098±0.001 0.079±0.001 0.076±0.001 1.111±0.007 
+0.896±0.006 
+1.112±0.008 
+1.148±0.007 
+NAVAL 
+0.000±0.000 0.006±0.000 0.001±0.000 0.000±0.000 6.143±0.032 
+3.731±0.006 
+6.231±0.041 
+7.079±0.034 
+POW. PLANT 4.023±0.036 4.124±0.035 4.002±0.039 3.886±0.041 -2.807±0.010 -2.837±0.009 -2.803±0.010 -2.776±0.011 
+PROTEIN 
+4.321±0.017 4.732±0.013 4.380±0.016 4.097±0.009 -2.882±0.004 -2.973±0.003 -2.896±0.004 -2.836±0.002 
+WINE 
+0.643±0.012 0.635±0.008 0.644±0.011 0.637±0.011 -0.977±0.017 -0.968±0.014 -0.976±0.016 -0.969±0.014 
+YACHT 
+1.174±0.086 1.015±0.054 1.289±0.069 0.979±0.077 -2.408±0.007 -1.634±0.016 -2.412±0.006 -2.316±0.006 
+YEAR 
+9.076±NA 
+8.879±NA 
+9.071±NA 
+8.885±NA 
+-3.614±NA 
+-3.603±NA 
+-3.620±NA 
+-3.595±NA 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Classification accuracy on CIFAR10 with mod-
+ified VGG16. [D] denotes data augmentation including 
+horizontal flip and random crop while [B] denotes batch 
+normalization. We leave [N/A] for BBB and noisy Adam 
+with BN since they are extremely unstable and work only 
+with a very small λ. 
+
+METHOD 
+NETWORK 
+TEST ACCURACY 
+D 
+B 
+D + B 
+
+SGD 
+VGG16 
+81.79 88.35 85.75 91.39 
+KFAC 
+VGG16 
+82.39 88.89 86.86 92.13 
+BBB 
+VGG16 
+82.82 88.31 
+N/A 
+N/A 
+NOISY-ADAM 
+VGG16 
+82.68 88.23 
+N/A 
+N/A 
+NOISY-KFAC 
+VGG16 
+85.52 89.35 88.22 92.01 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Average test RMSE in active learning.</figDesc><table>DATASET 
+PBP R 
+PBP A 
+NNG-FFG R 
+NNG-FFG A 
+NNG-MVG R NNG-MVG A 
+HMC R 
+HMC A 
+
+BOSTON 
+6.716±0.500 
+5.480±0.175 
+5.911±0.250 
+5.435±0.132 
+5.831±0.177 
+5.220±0.132 
+5.750±0.222 
+5.156±0.150 
+CONCRETE 
+12.417±0.392 11.894±0.254 12.583±0.168 12.563±0.142 12.301±0.203 11.671±0.175 10.564±0.198 11.484±0.191 
+ENERGY 
+3.743±0.121 
+3.399±0.064 
+4.011±0.087 
+3.761±0.068 
+3.635±0.084 
+3.211±0.076 
+3.264±0.067 
+3.118±0.062 
+KIN8NM 
+0.259±0.006 
+0.254±0.005 
+0.246±0.004 
+0.252±0.003 
+0.243±0.003 
+0.244±0.003 
+0.226±0.004 
+0.223±0.003 
+NAVAL 
+0.015±0.000 
+0.016±0.000 
+0.013±0.000 
+0.013±0.000 
+0.010±0.000 
+0.009±0.000 
+0.013±0.000 
+0.012±0.000 
+POW. PLANT 
+5.312±0.108 
+5.068±0.082 
+5.812±0.119 
+5.423±0.111 
+5.377±0.133 
+4.974±0.078 
+5.229±0.097 
+4.800±0.074 
+WINE 
+0.945±0.044 
+0.809±0.011 
+0.730±0.011 
+0.748±0.008 
+0.752±0.014 
+0.746±0.009 
+0.740±0.011 
+0.749±0.010 
+YACHT 
+5.388±0.339 
+4.508±0.158 
+7.381±0.309 
+6.583±0.264 
+7.192±0.280 
+6.371±0.204 
+4.644±0.237 
+3.211±0.120 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Pearson correlation of each algorithm's predictive variances with those of HMC.POW. PLANT 0.509±0.068 0.618±0.050 0.829±0.020 0.853±0.020 WINE 0.883±0.042 0.918±0.014 0.957±0.009 0.964±0.006 YACHT 0.620±0.053 0.597±0.063 0.717±0.072 0.727±0.070</figDesc><table>DATASET 
+PBP 
+NNG-FFG 
+NNG-MVG 
+NNG-BLKTRI 
+
+BOSTON 
+0.761±0.032 0.718±0.035 0.891±0.021 0.889±0.024 
+CONCRETE 
+0.817±0.028 0.811±0.028 0.913±0.010 0.922±0.006 
+ENERGY 
+0.471±0.076 0.438±0.075 0.617±0.087 0.646±0.088 
+KIN8NM 
+0.587±0.021 0.659±0.015 0.731±0.021 0.759±0.023 
+NAVAL 
+0.270±0.098 0.321±0.087 0.596±0.073 0.598±0.070 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">eq. (8) leaves ambiguous what distribution the gradients are sampled from. Throughout our experiments, we sample the targets from the model's predictions, as done in K-FAC (Martens &amp; Grosse, 2015). The resulting F is known as the true Fisher. The alternative is to use the SGD gradients, giving the empirical Fisher. The true Fisher is a better approximation to the Hessian (Martens, 2014). 2 For simplicity, we assume the prior is a spherical Gaussian and its variance η is fixed. Otherwise, we can keep an exponential moving average of the prior Hessian.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>GZ was supported by an NSERC Discovery Grant, and SS was supported by a Connaught New Researcher Award and a Connaught Fellowship. We thank Emtiyaz Khan and Mark van der Wilk for helpful discussions.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Neural learning in structured parameter spacesnatural riemannian gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Amari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="page" from="127" to="133" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Natural gradient works efficiently in learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-I</forename><surname>Amari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="251" to="276" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Uci machine learning repository</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Asuncion</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Newman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Distributed second-order optimization using kronecker-factored approximations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cornebise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1505.05424</idno>
+		<title level="m">Weight uncertainty in neural networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Transformations des signaux aléatoires a travers les systemes non linéaires sans mémoire</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bonnet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Annals of Telecommunications</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="203" to="220" />
+			<date type="published" when="1964" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Practical variational inference for neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2348" to="2356" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A kronecker-factored approximate fisher matrix for convolution layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="573" to="582" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Pleiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.04599</idno>
+		<title level="m">On calibration of modern neural networks</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Probabilistic backpropagation for scalable learning of bayesian neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1861" to="1869" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Keeping the neural networks simple by minimizing the description length of the weights</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Van Camp</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the sixth annual conference on Computational learning theory</title>
+		<meeting>the sixth annual conference on Computational learning theory</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="1993" />
+			<biblScope unit="page" from="5" to="13" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Stochastic variational inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Paisley</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1303" to="1347" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Vime: Variational information maximizing exploration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Houthooft</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De Turck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abbeel</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1109" to="1117" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on machine learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="448" to="456" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Variational adaptive-Newton method for explorative learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">E</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Tangkaratt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nielsen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.05560</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Auto-encoding variational bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Variational dropout and the local reparameterization trick</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2575" to="2583" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Structured and efficient variational deep learning with matrix gaussian posteriors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Louizos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1708" to="1716" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Louizos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.01961</idno>
+		<title level="m">Multiplicative normalizing flows for variational bayesian neural networks</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Information-based objective functions for active data selection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Mackay</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="590" to="604" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A practical Bayesian framework for backpropagation networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Mackay</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="448" to="472" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">New insights and perspectives on the natural gradient method</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.1193</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Optimizing neural networks with kronecker-factored approximate curvature</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2408" to="2417" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Noisy Natural Gradient as Variational Inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bayesian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>For</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Net-Works</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+		<respStmt>
+			<orgName>University of Toronto</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A view of the em algorithm that justifies incremental, sparse, and other variants</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Learning in graphical models</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="355" to="368" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Predicting good probabilities with supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Niculescu-Mizil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caruana</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22nd international conference on Machine learning</title>
+		<meeting>the 22nd international conference on Machine learning</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="625" to="632" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">The variational gaussian approximation revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Opper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Archambeau</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="786" to="792" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A mean field theory learning algorithm for neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Peterson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Complex systems</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="995" to="1019" />
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">A useful theorem for nonlinear devices having gaussian inputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Price</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IRE Transactions on Information Theory</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="69" to="72" />
+			<date type="published" when="1958" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1505.05770</idno>
+		<title level="m">Variational inference with normalizing flows</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1401.4082</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Trust region policy optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moritz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 32nd International Conference on Machine Learning (ICML-15)</title>
+		<meeting>the 32nd International Conference on Machine Learning (ICML-15)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1889" to="1897" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Active learning literature survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Settles</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">52</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<pubPlace>Madison</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>University of Wisconsin</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Staines</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Barber</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1212.4507</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+<note type="report_type">Variational optimization. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Learning structured weight uncertainty in bayesian neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carin</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Artificial Intelligence and Statistics</title>
+		<imprint>
+			<biblScope unit="page" from="1283" to="1292" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">3-4</biblScope>
+			<biblScope unit="page" from="229" to="256" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Scalable trust-region method for deep reinforcement learning using kronecker-factored approximation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mansimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.05144</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

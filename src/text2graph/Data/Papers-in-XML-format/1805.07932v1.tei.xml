@@ -1,0 +1,1450 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Bilinear Attention Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jin-Hwa</forename><surname>Kim</surname></persName>
+							<email>jhkim@bi.snu.ac.kr</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Seoul National University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jaehyun</forename><surname>Jun</surname></persName>
+							<email>jhjun@bi.snu.ac.kr</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Seoul National University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Byoung-Tak</forename><surname>Zhang</surname></persName>
+							<email>btzhang@bi.snu.ac.kr</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Seoul National University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Surromind Robotics</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Bilinear Attention Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Attention networks in multimodal learning provide an efficient way to utilize given visual information selectively. However, the computational cost to learn attention distributions for every pair of multimodal input channels is prohibitively expensive. To solve this problem, co-attention builds two separate attention distributions for each modality neglecting the interaction between multimodal inputs. In this paper, we propose bilinear attention networks (BAN) that find bilinear attention distributions to utilize given vision-language information seamlessly. BAN considers bilinear interactions among two groups of input channels, while low-rank bilinear pooling extracts the joint representations for each pair of channels. Furthermore, we propose a variant of multimodal residual networks to exploit eight-attention maps of the BAN efficiently. We quantitatively and qualitatively evaluate our model on visual question answering (VQA 2.0) and Flickr30k Entities datasets, showing that BAN significantly outperforms previous methods and achieves new state-of-the-arts on both datasets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Machine learning for computer vision and natural language processing accelerates the advancement of artificial intelligence. Since vision and natural language are the major modalities of human interaction, understanding and reasoning of vision and natural language information become a key challenge. For instance, visual question answering involves a vision-language cross-grounding problem. A machine is expected to answer given questions like "who is wearing glasses?", "is the umbrella upside down?", or "how many children are in the bed?" exploiting visually-grounded information.</p><p>For this reason, visual attention based models have succeeded in multimodal learning tasks, identifying selective regions in a spatial map of an image defined by the model. Also, textual attention can be considered along with visual attention. The attention mechanism of co-attention networks <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b37">38]</ref> concurrently infers visual and textual attention distributions for each modality. The co-attention networks selectively attend to question words in addition to a part of image regions. However, the coattention neglects the interaction between words and visual regions to avoid increasing computational complexity.</p><p>In this paper, we extend the idea of co-attention into bilinear attention which considers every pair of multimodal channels, e.g., the pairs of question words and image regions. If the given question involves multiple visual concepts represented by multiple words, the inference using visual attention distributions for each word can exploit relevant information better than that using single compressed attention distribution. previous works <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b14">15]</ref> where multiple attention maps are used by concatenating the attended features.</p><p>Since the proposed residual learning method for BAN exploits residual summations instead of concatenation, which leads to parameter-efficiently and performance-effectively learn up to eight-glimpse BAN. For the overview of two-glimpse BAN, please refer to <ref type="figure" target="#fig_0">Figure 1</ref>.</p><p>Our main contributions are:</p><p>• We propose the bilinear attention networks (BAN) to learn and use bilinear attention distributions, on top of low-rank bilinear pooling technique.</p><p>• We propose a variant of multimodal residual networks (MRN) to efficiently utilize the multiple bilinear attention maps generated by our model. Unlike previous works, our method successfully utilizes up to 8 attention maps.</p><p>• Finally, we validate our proposed method on a large and highly-competitive dataset, VQA 2.0 <ref type="bibr" target="#b7">[8]</ref>. Our model achieves a new state-of-the-art maintaining simplicity of model structure. Moreover, we evaluate the visual grounding of bilinear attention map on Flickr30k Entities <ref type="bibr" target="#b22">[23]</ref> outperforming previous methods, along with 25.37% improvement of inference speed taking advantage of the processing of multi-channel inputs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Low-rank bilinear pooling</head><p>We first review the low-rank bilinear pooling and its application to attention networks <ref type="bibr" target="#b14">[15]</ref>, which uses single-channel input (question vector) to combine the other multi-channel input (image features) as single-channel intermediate representation (attended feature).</p><p>Low-rank bilinear model. Pirsiavash et al. <ref type="bibr" target="#b21">[22]</ref> proposed a low-rank bilinear model to reduce the rank of bilinear weight matrix W i to give regularity. For this, W i is replaced with the multiplication of two smaller matrices U i V T i , where U i ∈ R N ×d and V i ∈ R M ×d . As a result, this replacement makes the rank of W i to be at most d ≤ min(N, M ). For the scalar output f i (bias terms are omitted without loss of generality):</p><formula xml:id="formula_0">f i = x T W i y = x T U i V T i y = 1 T (U T i x • V T i y)<label>(1)</label></formula><p>where 1 ∈ R d is a vector of ones and • denotes Hadamard product (element-wise multiplication).</p><p>Low-rank bilinear pooling. For a vector output f , a pooling matrix P is introduced:</p><formula xml:id="formula_1">f = P T (U T x • V T y)<label>(2)</label></formula><p>where P ∈ R d×c , U ∈ R N ×d , and V ∈ R M ×d . It allows U and V to be two-dimensional tensors by introducing P for a vector output f ∈ R c , significantly reducing the number of parameters.</p><p>Unitary attention networks. Attention provides an efficient mechanism to reduce input channel by selectively utilizing given information. Assuming that a multi-channel input Y consisting of φ = |{y i }| column vectors, we want to get single channelŷ from Y using the weights {α i }:</p><formula xml:id="formula_2">y = i α i y i<label>(3)</label></formula><p>where α represents an attention distribution to selectively combine φ input channels. Using the low-rank bilinear pooling, the α is defined by the output of softmax function as:</p><formula xml:id="formula_3">α := softmax P T (U T x · 1 T ) • (V T Y)<label>(4)</label></formula><p>where</p><formula xml:id="formula_4">α ∈ R G×φ , P ∈ R d×G , U ∈ R N ×d , x ∈ R N , 1 ∈ R φ , V ∈ R M ×d</formula><p>, and Y ∈ R M ×φ . If G &gt; 1, multiple glimpses (a.k.a. attention heads) are used <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b14">15]</ref>, thenŷ = G g=1 i α g,i y i , the concatenation of attended outputs. Finally, two single channel inputs x andŷ can be used to get the joint representation using the other low-rank bilinear pooling for a classifier.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Bilinear attention networks</head><p>We generalize a bilinear model for two multi-channel inputs, X ∈ R N ×ρ and Y ∈ R M ×φ , where ρ = |{x i }| and φ = |{y j }|, the numbers of two input channels, respectively. To reduce both input channel simultaneously, we introduce bilinear attention map A ∈ R ρ×φ as follows:</p><formula xml:id="formula_5">f k = (X T U ) T k A(Y T V ) k<label>(5)</label></formula><p>where </p><formula xml:id="formula_6">U ∈ R N ×K , V ∈ R M ×K , (X T U ) k ∈ R ρ , (Y T V ) k ∈ R φ ,</formula><formula xml:id="formula_7">f k = ρ i=1 φ j=1 A i,j (X T i U k )(V T k Y j ) = ρ i=1 φ j=1 A i,j X T i (U k V T k )Y j<label>(6)</label></formula><p>where X i and Y j denotes the i-th channel (column) of input X and the j-th channel (channel) of input Y, respectively, U k and V k denotes the k-th column of U and V matrices, respectively, and A i,j denotes an element in the i-th row and the j-th column of A. Notice that, for each pair of channels, the 1-rank bilinear representation of two feature vectors is modeled in</p><formula xml:id="formula_8">X T i (U k V T k )Y j of Equation 6</formula><p>(eventually at most K-rank bilinear pooling for f ∈ R K ). Then, the bilinear joint representation is f = P T f where f ∈ R C and P ∈ R K×C . For the convenience, we define the bilinear attention networks as a function of two multi-channel inputs parameterized by a bilinear attention map as follows:</p><formula xml:id="formula_9">f = BAN(X, Y; A).<label>(7)</label></formula><p>Bilinear attention map. Now, we want to get the attention map similarly to Equation 4. Using Hadamard product and matrix-matrix multiplication, the attention map A is defined as:</p><formula xml:id="formula_10">A := softmax (1 · p T ) • X T U V T Y<label>(8)</label></formula><p>where 1 ∈ R ρ , p ∈ R K , and remind that A ∈ R ρ×φ . The softmax function is applied elementwisely. Notice that each logit A i,j of the softmax is the output of low-rank bilinear pooling as:</p><formula xml:id="formula_11">A i,j = p T (U T X i ) • (V T Y j ) .<label>(9)</label></formula><p>The multiple bilinear attention maps can be extended as follows:</p><formula xml:id="formula_12">A g := softmax (1 · p T g ) • X T U V T Y<label>(10)</label></formula><p>where the parameters of U and V are shared, but not for p g where g denotes the index of glimpses.</p><p>Residual learning of attention. Inspired by multimodal residual networks (MRN) from Kim et al. <ref type="bibr" target="#b13">[14]</ref>, we propose a variant of MRN to integrate the joint representations from the multiple bilinear attention maps. The i + 1-th output is defined as:</p><formula xml:id="formula_13">f i+1 = BAN i (f i , Y; A i ) · 1 T + f i (11) where f 0 = X (if N = K) and 1 ∈ R ρ .</formula><p>Here, the size of f i is the same with the size of X as successive attention maps are processed. To get the logits for a classifier, e.g., two-layer MLP, we sum over the channel dimension of the last output f G , where G is the number of glimpses.</p><p>Time complexity. When we assume that the number of input channels is smaller than feature sizes, M ≥ N ≥ K φ ≥ ρ, the time complexity of the BAN is the same with the case of one multi-channel input as O(KM φ) for single glimpse model. Since the BAN consists of matrix chain multiplication and exploits the property of low-rank factorization in the low-rank bilinear pooling.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Related works</head><p>Multimodal factorized bilinear pooling. Yu et al. <ref type="bibr" target="#b37">[38]</ref> extends low-rank bilinear pooling <ref type="bibr" target="#b14">[15]</ref> using the rank &gt; 1. They remove a projection matrix P, instead, d in Equation 2 is replaced with much smaller k while U and V are three-dimensional tensors. However, this generalization was not effective for BAN, at least in our experimental setting. Please see BAN-1+MFB in <ref type="figure" target="#fig_2">Figure 2b</ref> where the performance is not significantly improved from that of BAN-1. Furthermore, the peak GPU memory consumption is larger due to its model structure which hinders to use multiple-glimpse BAN.</p><p>Co-attention networks. Xu and Saenko <ref type="bibr" target="#b34">[35]</ref> proposed the spatial memory network model estimating the correlation among every image patches and tokens in a sentence. The estimated correlation C is defined as (UX)</p><p>T Y in our notation. Unlike our method, they get an attention distribution α = softmax max i=1,...,ρ (C i ) ∈ R ρ where the logits to softmax is the maximum values in each row vector of C. The attention distribution for the other input can be calculated similarly. There are variants of co-attention networks <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b19">20]</ref>, especially, Lu et al. <ref type="bibr" target="#b17">[18]</ref> sequentially get two attention distributions conditioning on the other modality. Recently, Yu et al. <ref type="bibr" target="#b37">[38]</ref> reduce the co-attention method into two steps, self-attention for a question embedding and the question-conditioned attention for a visual embedding. However, these co-attention approaches use separate attention distributions for each modality, neglecting the interaction between the modalities what we consider and model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Datasets</head><p>Visual Question Answering (VQA). We evaluate on the VQA 2.0 dataset <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b7">8]</ref>, which is improved from the previous version to emphasize visual understanding by reducing the answer bias in the dataset. This improvement pushes the model to have more effective joint representation of question and image, which fits the motivation of our bilinear attention approach. The VQA evaluation metric considers inter-human variability defined as Accuracy(ans) = min(#humans that said ans/3, 1). Note that reporting accuracies are averaged over all ten choose nine sets of ground-truths. The test set is split into test-dev, test-standard, test-challenge, and test-reserve. The annotations for the test set are unavailable except the remote evaluation servers.</p><p>Flickr30k Entities. For the evaluation of visual grounding by the bilinear attention maps, we use Flickr30k Entities <ref type="bibr" target="#b22">[23]</ref> consisting of 31,783 images <ref type="bibr" target="#b36">[37]</ref> and 244,035 annotations that multiple entities (phrases) in a sentence for an image are mapped to the boxes on the image to indicate the correspondences between them. The task is to localize a corresponding box for each entity. In this way, visual grounding of textual information is quantitatively measured. Following the evaluation metric <ref type="bibr" target="#b22">[23]</ref>, if a predicted box has the intersection over union (IoU) of overlapping area with one of the ground-truth boxes which are greater than or equal to 0.5, the prediction for a given entity is correct. This metric is called Recall@1. If K predictions are permitted to find at least one correction, it is called Recall@K. We report Recall@1, 5, and 10 to compare state-of-the-arts (R@K in <ref type="table" target="#tab_3">Table 4</ref>). The upper bound of performance depends on the performance of object detection if the detector proposes candidate boxes for the prediction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Preprocessing</head><p>Question embedding. For VQA, we get a question embedding X T ∈ R 14×N using GloVe word embeddings <ref type="bibr" target="#b20">[21]</ref> and the outputs of Gated Recurrent Unit (GRU) <ref type="bibr" target="#b4">[5]</ref> for every time-steps up to the first 14 tokens following the previous work <ref type="bibr" target="#b28">[29]</ref>. The questions shorter than 14 words are end-padded with zero vectors. For Flickr30k Entities, we use a full length of sentences (82 is maximum) to get all entities. We mark the token positions which are at the end of each annotated phrase. Then, we select a subset of the output channels of GRU using these positions, which makes the number of channels is the number of entities in a sentence. The word embeddings and GRU are fine-tuned in training.</p><p>Image features. We use the image features extracted from bottom-up attention <ref type="bibr" target="#b1">[2]</ref>. These features are the output of Faster R-CNN <ref type="bibr" target="#b24">[25]</ref>, pre-trained using Visual Genome <ref type="bibr" target="#b16">[17]</ref>. We set a threshold for object detection to get φ = 10 to 100 objects per image. The features are represented as Y T ∈ R φ×2,048 , which is fixed while training. To deal with variable-channel inputs, we mask the padding logits with minus infinite to get zero probability from softmax avoiding underflow.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3">Nonlinearity and classifier</head><p>Nonlinearity. We use ReLU <ref type="bibr" target="#b18">[19]</ref> to give nonlinearity to BAN as</p><formula xml:id="formula_14">f k = σ(X T U ) T k · A · σ(Y T V ) k where σ denotes ReLU(x) := max(x, 0)</formula><p>. For the attention maps, the logits A g is defined as</p><formula xml:id="formula_15">(1 · p T g ) • σ(X T U) · σ(V T Y).</formula><p>Note that X T U and V T Y are corresponding to the question embedding matrix Q and the detected object features V in <ref type="figure" target="#fig_0">Figure 1</ref>, respectively.</p><p>Classifier. For VQA, we use a two-layer multi-layer perceptron as a classifier for the final joint representation f G . The activation function is ReLU. The number of outputs is determined by the minimum occurrence of the answer in unique questions as nine times in the dataset, which is 3,129. Binary cross entropy is used for the loss function following the previous work <ref type="bibr" target="#b28">[29]</ref>. For Flickr30k Entities, we take the output of bilinear attention map, and binary cross entropy is used for this output.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4">Hyperparameters and regularization</head><p>Hyperparameters. The size of image features and question embeddings are M = 2, 048 and N = 1, 024, respectively. The size of joint representation C is the same with the rank K in lowrank bilinear pooling, C = K = 1, 024, but K = K × 3 is used in the bilinear attention maps to increase a representational capacity for residual learning of attention. Every linear mapping is regularized by Weight Normalization <ref type="bibr" target="#b26">[27]</ref> and Dropout <ref type="bibr" target="#b27">[28]</ref> (p = .2, except for the classifier with .5). Adamax optimizer <ref type="bibr" target="#b15">[16]</ref>, a variant of Adam based on infinite norm, is used. The learning rate is min(ie −3 , 4e −3 ) where i is the number of epochs starting from 1, then after 10 epochs, the learning rate is decayed by 1/4 for every 2 epochs up to 13 epochs (i.e. 1e −3 for 11-th and 2.5e −4 for 13-th epoch). We clip the 2-norm of vectorized gradients to .25. The batch size is 512.</p><p>Regularization. For the test split of VQA, both train and validation splits are used for training. We augment a subset of Visual Genome <ref type="bibr" target="#b16">[17]</ref> dataset following the procedure of the previous works <ref type="bibr" target="#b28">[29]</ref>. Accordingly, we adjust the model capacity by increasing all of N , C, and K to 1,280. And, G = 8 glimpses are used. For Flickr30k Entities, we use the same test split of the previous methods <ref type="bibr" target="#b22">[23]</ref>, without additional hyperparameter tuning from VQA experiments.</p><p>6 VQA results and discussions</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1">Quantitative results</head><p>Comparison with state-of-the-arts. The first row in <ref type="table" target="#tab_0">Table 1</ref> shows 2017 VQA Challenge winner architecture <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b28">29]</ref>. BAN significantly outperforms this baseline and successfully utilize up to eight bilinear attention maps to improve its performance taking advantage of residual learning of attention. As shown in <ref type="table" target="#tab_2">Table 3</ref>, BAN outperforms the latest model <ref type="bibr" target="#b37">[38]</ref> which uses the same bottom-up attention feature <ref type="bibr" target="#b1">[2]</ref> by a substantial margin. BAN-Glove uses the concatenation of 300-dimensional Glove word embeddings and the semantically-closed mixture of these embeddings (see Appendix A.1). Notice that similar approaches can be found in the competitive models <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b37">38]</ref> in <ref type="table" target="#tab_2">Table 3</ref> with a different initialization strategy for the same 600-dimensional word embedding. BAN-Glove-Counter uses both the previous 600-dimensional word embeddings and counting module <ref type="bibr" target="#b39">[40]</ref>, which exploits spatial information of detected object boxes from the feature extractor <ref type="bibr" target="#b1">[2]</ref>. The learned representation c ∈ R φ+1 for the counting mechanism is linearly projected and added to joint representation after applying ReLU (see <ref type="bibr">Equation 13</ref> in Appendix A.2). In <ref type="table" target="#tab_5">Table 5</ref> (Appendix), we compare with the entries in the leaderboard of both VQA Challenge 2017 and 2018 achieving the 1st place at the time of submission (our entry is not shown in the leaderboad since challenge entries are not visible).</p><p>Comparison with other attention methods. Unitary attention has a similar architecture with Kim et al. <ref type="bibr" target="#b14">[15]</ref> where a question embedding vector is used to calculate the attentional weights for multiple image features of an image. Co-attention has the same mechanism of Yu et al. <ref type="bibr" target="#b37">[38]</ref>, similar to Lu et al. <ref type="bibr" target="#b17">[18]</ref>, Xu and Saenko <ref type="bibr" target="#b34">[35]</ref>, where multiple question embeddings are combined as single embedding vector using a self-attention mechanism, then unitary visual attention is applied. <ref type="table" target="#tab_1">Table 2</ref> confirms that bilinear attention is significantly better than any other attention methods. The co-attention is slightly better than simple unitary attention. In <ref type="figure" target="#fig_2">Figure 2a</ref>, co-attention suffers overfitting more severely (green) than any other methods, while bilinear attention (blue) is more regularized compared with the others. In <ref type="figure" target="#fig_2">Figure 2b</ref>, BAN is the most parameter-efficient among various attention methods. Notice that four-glimpse BAN more parsimoniously utilizes its parameters than one-glimpse BAN does.   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2">Residual learning of attention</head><p>Comparison with other approaches. In the second section of <ref type="table" target="#tab_1">Table 2</ref>, the residual learning of attention significantly outperforms the other methods, sum, i.e., f G = i BAN i (X, Y; A i ), and concatenation (concat), i.e., f G = i BAN i (X, Y; A i ). Whereas, the difference between sum and concat is not significantly different. Notice that the number of parameters of concat is larger than the others, since the input size of the classifier is increased.</p><p>Ablation study. An interesting property of residual learning is robustness toward arbitrary ablations <ref type="bibr" target="#b30">[31]</ref>. To see the relative contributions, we observe the learning curve of validation scores when incremental ablation is performed. First, we train {1,2,4,8,12}-glimpse models using training split. Then, we evaluate the model on validation split using the first N attention maps. Hence, the intermediate representation f N is directly fed into the classifier instead of f G . As shown in <ref type="figure" target="#fig_2">Figure 2c</ref>, the accuracy gain of the first glimpse is the highest, then the gain is smoothly decreased as the number of used glimpses is increased.</p><p>Entropy of attention. We analyze the information entropy of attention distributions in a four-glimpse BAN. As shown in <ref type="figure" target="#fig_2">Figure 2d</ref>, the mean entropy of each attention for validation split is converged to a different level of values. This result is repeatably observed in the other number of glimpse models. Our speculation is the multi-attention maps do not equally contribute similarly to voting by committees, but the residual learning by the multi-step attention. We argue that this is a novel observation where the residual learning <ref type="bibr" target="#b8">[9]</ref> is used for stacked attention networks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3">Qualitative analysis</head><p>The visualization for a two-glimpse BAN is shown in <ref type="figure" target="#fig_4">Figure 3</ref>   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Flickr30k entities results and discussions</head><p>To examine the capability of bilinear attention map to capture vision-language interactions, we conduct experiments on Flickr30k Entities <ref type="bibr" target="#b22">[23]</ref>. Our experiments show that BAN outperforms the previous state-of-the-art on the phrase localization task with a large margin of 4.48% at a high speed of inference.</p><p>Performance. In <ref type="table" target="#tab_3">Table 4</ref>, we compare with other previous approaches. Our bilinear attention map to predict the boxes for the phrase entities in a sentence achieves new state-of-the-art with 69.69% for Recall@1. This result is remarkable considering that BAN does not use any additional features like box size, color, segmentation, or pose-estimation <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b35">36]</ref>. Note that both Query-Adaptive RCNN <ref type="bibr" target="#b9">[10]</ref> and our off-the-shelf object detector <ref type="bibr" target="#b1">[2]</ref> are based on Faster RCNN <ref type="bibr" target="#b24">[25]</ref> and pre-trained on Visual Genome <ref type="bibr" target="#b16">[17]</ref>. Compared to Query-Adaptive RCNN, the parameters of our object detector are fixed and only used to extract 10-100 visual features and the corresponding box proposals.</p><p>Type. In <ref type="table" target="#tab_6">Table 6</ref> (included in Appendix), we report the results for each type of Flickr30k Entities. Notice that clothing and body parts are significantly improved to 74.95% and 47.23%, respectively.</p><p>Speed. The faster inference is achieved taking advantage of multi-channel inputs in our BAN. Unlike previous methods, BAN ables to infer multiple entities in a sentence which can be prepared as a multi-channel input. Therefore, the number of forwardings to infer is significantly decreased. In our experiment, BAN takes 0.67 ms/entity whereas the setting that single entity as an example takes 0.84 ms/entity, achieving 25.37% improvement. We emphasize that this property is a novel in our model that considers every interaction among vision-language multi-channel inputs.   <ref type="bibr" target="#b25">[26]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref> 42.43 --77.90 Wang et al. <ref type="bibr" target="#b32">[33]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref> 42.08 --76.91 Wang et al. <ref type="bibr" target="#b31">[32]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref> 43.89 64.46 68.66 76.91 Rohrbach et al. <ref type="bibr" target="#b25">[26]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref> 48.38 --77.90 Fukui et al. <ref type="bibr" target="#b5">[6]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref> 48.69 ---Plummer et al. <ref type="bibr" target="#b22">[23]</ref> Fast RCNN <ref type="bibr" target="#b6">[7]</ref>  Visualization. <ref type="figure" target="#fig_5">Figure 4</ref> shows three examples from the test split of Flickr30k Entities. The entities which has visual properties, for instance, a yellow tennis suit and white tennis shoes in <ref type="figure" target="#fig_5">Figure 4a</ref>, and a denim shirt in <ref type="figure" target="#fig_5">Figure 4b</ref>, are correct. However, relatively small object (e.g., a cigarette in <ref type="figure" target="#fig_5">Figure 4b</ref>) and the entity that requires semantic inference (e.g., a male conductor in <ref type="figure" target="#fig_5">Figure 4c</ref>) are incorrect.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8">Conclusions</head><p>BAN gracefully extends unitary attention networks exploiting bilinear attention maps, where the joint representations of multimodal multi-channel inputs are extracted using low-rank bilinear pooling. Although BAN considers every pair of multimodal input channels, the computational cost remains in the same magnitude, since BAN consists of matrix chain multiplication for efficient computation. The proposed residual learning of attention efficiently uses up to eight bilinear attention maps, keeping the size of intermediate features constant. We believe our BAN gives a new opportunity to learn the richer joint representation for multimodal multi-channel inputs, which appear in many real-world problems.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Bilinear Attention Networks -Appendix</head><p>A Variants of BAN</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A.1 Enhancing glove word embedding</head><p>We augment a computed 300-dimensional word embedding to each 300-dimensional Glove word embedding. The computation is as follows: 1) we choose arbitrary two words w i and w j from each question can be found in VQA and Visual Genome datasets or each caption in MS COCO dataset.</p><p>2) we increase the value of A i,j by one where A ∈ V × V is an association matrix initialized with zeros. Notice that i and j can be the index out of vocabulary V and the size of vocabulary in this computation is denoted by V . 3) to penalize highly frequent words, each row of A is divided by the number of sentences (question or caption) which contain the corresponding word . 4) each row is normalized by the sum of all elements of each row. 5) we calculate W = A · W where W ∈ V × E is a Glove word embedding matrix and E is the size of word embedding, i.e., 300. Therefore, W ∈ V × E stands for the mixed word embeddings of semantically closed words. 6) finally, we select V rows from W corresponding to the vocabulary in our model and augment these rows to the previous word embeddings, which makes 600-dimensional word embeddings in total. The input size of GRU is increased to 600 to match with these word embeddings. These word embeddings are fine-tuned.</p><p>As a result, this variant significantly improves the performance to 66.03 (±0.12) compared with the performance of 65.72 (± 0.11) which is done by augmenting the same 300-dimensional Glove word embeddings (so the number of parameters is controlled). In this experiment, we use four-glimpse BAN and evaluate on validation split. The standard deviation is calculated by three random initialized models and the means are reported. The result on test-dev split can be found in <ref type="table" target="#tab_2">Table 3</ref> as BAN+Glove.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A.2 Integrating counting module</head><p>The counting module <ref type="bibr" target="#b39">[40]</ref> is proposed to improve the performance related to counting tasks. This module is a neural network component to get a dense representation from spatial information of detected objects, i.e., the left-top and right-bottom positions of the φ proposed objects (rectangles) denoted by S ∈ R 4×φ . The interface of the counting module is defined as:</p><formula xml:id="formula_16">c = Counter(s,α)<label>(12)</label></formula><p>where c ∈ R φ+1 andα ∈ R φ is the logits of corresponding objects for sigmoid function inside the counting module. We found that theα defined by max j=1,...,φ (A ·,j ), i.e., the maximum values in each column vector of A in <ref type="bibr">Equation 9</ref>, was better than that of summation. Since the counting module does not support variable-object inputs, we select 10-top objects for the input instead of φ objects based on the values ofα.</p><p>The BAN integrated with the counting module is defined as:</p><formula xml:id="formula_17">f i+1 = BAN i (f i , Y; A i ) + g(c) · 1 T + f i<label>(13)</label></formula><p>where the function g(·) is a linear embedding followed by ReLU activation function. Note that a dropout layer before this linear embedding severely hurts performance.</p><p>As a result, this variant significantly improves the counting performance from 54.92 (±0.30) to 58.21 (±0.49), while overall performance is improved from 65.81 (±0.09) to 66.01 (±0.14) in a controlled experiment using a vanilla four-glimpse BAN. The definition of a subset of counting questions comes from the previous work <ref type="bibr" target="#b29">[30]</ref>. The result on test-dev split can be found in <ref type="table" target="#tab_2">Table 3</ref> as BAN+Glove+Counter, notice that, which is applied by the previous embedding variant, too.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A.3 Integrating multimodal factorized bilinear (MFB) pooling</head><p>Yu et al. <ref type="bibr" target="#b37">[38]</ref> extend low-rank bilinear pooling <ref type="bibr" target="#b14">[15]</ref> with the rank k &gt; 1 and two factorized threedimensional matrices, which called as MFB. The implementation of MFB is effectively equivalent to low-rank bilinear pooling with the rank d = d × k followed by sum pooling with the window size of k and the stride of k, defined by SumPool(Ũ T x •Ṽ T y, k). Notice that a pooling matrix P in <ref type="figure" target="#fig_2">Equation 2</ref> is not used. The variant of BAN inspired by MFB is defined as:</p><formula xml:id="formula_18">z k = σ(X TŨ ) T k · A · σ(Y TṼ ) k (14) f = SumPool(z, k)<label>(15)</label></formula><p>whereŨ ∈ R N ×K ,Ṽ ∈ R M ×K , σ denotes ReLU activation function, and k = 5 following Yu et al. <ref type="bibr" target="#b37">[38]</ref>. Notice that K = K × k and k is the index for the elements in z ∈ R K in our notation.</p><p>However, this generalization was not effective for BAN. In <ref type="figure" target="#fig_2">Figure 2b</ref>, the performance of BAN-1+MFB is not significantly different from that of BAN-1. Furthermore, the larger K increases the peak consumption of GPU memory which hinders to use multiple-glimpses for the BAN.  </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Overview of a two-layer BAN. Two multi-channel inputs, φ-object detection features and ρ-length GRU hidden vectors, are used to get bilinear attention maps and joint representations to be used by a classifier. For the definition of the BAN, see the text in Section 3.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>and f k denotes the k-th element of intermediate representation. The subscript k for the matrices indicates the index of column. Notice that Equation 5 is a bilinear model for the two groups of input channels where A in the middle is a bilinear weight matrix. Interestingly, Equation 5 can be rewritten as:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: (a) learning curves. Bilinear attention (bi-att) is more robust to overfitting than unitary attention (uni-att) and co-attention (co-att). (b) validation scores for the number of parameters. The error bar indicates the standard deviation among three random initialized models, although it is too small to be noticed for over-15M parameters. (c) ablation study for the first-N-glimpses (x-axis) used in evaluation. (d) the information entropy (y-axis) for each attention map in four-glimpse BAN. The entropy of multiple attention maps is converged to certain levels.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>. The question is "what color are the pants of the guy skateboarding". The question and content words, what, pants, guy, and skateboarding</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Visualization of the bilinear attention maps for two-glimpse BAN. The left and right groups indicate the first and second bilinear attention maps (right in each group, log-scaled) and the visualized image (left in each group). The most salient six boxes (1-6 numbered in the images and x-axis of the grids) in the first attention map determined by marginalization are visualized on both images to compare. The model gives the correct answer, brown.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Visualization examples from the test split of Flickr30k Entities are shown. Solid-lined boxes indicate predicted phrase localizations and dashed-line boxes indicate the ground-truth. If there are multiple ground-truth boxes, the closest box is shown to investigate. Each color of a phrase is matched with the corresponding color of predicted and ground-truth boxes. Best view in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Validation scores on VQA 2.0 dataset for the number of glimpses of the BAN. The standard deviations are reported after ± using three random initialization.</figDesc><table>Model 
+VQA Score 
+
+Bottom-Up [29] 
+63.37 ±0.21 
+
+BAN-1 
+65.36 ±0.14 
+BAN-2 
+65.61 ±0.10 
+BAN-4 
+65.81 ±0.09 
+BAN-8 
+66.00 ±0.11 
+BAN-12 
+66.04 ±0.08 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Validation scores on VQA 2.0 dataset for attention and integration mechanisms. The nParams indicates the number of parameters. Note that the hidden sizes of unitary attention and co-attention are 1,280, while 1,024 for the BAN.</figDesc><table>Model 
+nParams 
+VQA Score 
+
+Unitary attention 
+31.9M 
+64.59 ±0.04 
+Co-attention 
+32.5M 
+64.79 ±0.06 
+Bilinear attention 
+32.2M 
+65.36 ±0.14 
+
+BAN-4 (residual) 
+44.8M 
+65.81 ±0.09 
+BAN-4 (sum) 
+44.8M 
+64.78 ±0.08 
+BAN-4 (concat) 
+51.1M 
+64.71 ±0.21 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc></figDesc><table>Test-dev and test-standard scores of single-model on VQA 2.0 dataset to compare state-of-
+the-arts , trained on training and validation splits, and Visual Genome for feature extraction or data 
+augmentation.  † This model can be found in https://github.com/yuzcccc/vqa-mfb, which is 
+not published in a paper. 
+
+Model 
+Overall Yes/no Number Other Test-std 
+
+Bottom-Up [2, 29] 
+65.32 
+81.82 
+44.21 
+56.05 
+65.67 
+MFH [38] 
+66.12 
+-
+-
+-
+-
+Counter [40] 
+68.09 
+83.14 
+51.62 
+58.97 
+68.41 
+MFH+Bottom-Up [38] † 
+68.76 
+84.27 
+49.56 
+59.89 
+-
+
+BAN (ours) 
+69.52 
+85.31 
+50.93 
+60.26 
+-
+BAN+Glove (ours) 
+69.66 
+85.46 
+50.66 
+60.50 
+-
+BAN+Glove+Counter (ours) 
+70.04 
+85.42 
+54.04 
+60.52 
+70.35 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 4 :</head><label>4</label><figDesc></figDesc><table>Test split results for Flickr30k Entities. We report the average performance of our three 
+randomly-initialized models (the standard deviation of R@1 is 0.17). Upper Bound of performance 
+asserted by object detector is shown.  † box size and color information are used as additional features. 
+ ‡ semantic segmentation, object detection, and pose-estimation is used as additional features. Notice 
+that the detectors of Hinami and Satoh [10] and ours [2] are based on Faster RCNN [25], pre-trained 
+using Visual Genome dataset [17]. 
+
+Model 
+Detector 
+R@1 R@5 R@10 Upper Bound 
+
+Zhang et al. [39] 
+MCG [3] 
+28.5 
+52.7 
+61.3 
+-
+Hu et al. [11] 
+Edge Boxes [41] 
+27.8 
+-
+62.9 
+76.9 
+Rohrbach et al. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 5 :</head><label>5</label><figDesc>Test-standard scores of ensemble-model on VQA 2.0 dataset to compare state-of-the-arts. Excerpt from the VQA 2.0 Leaderboard at the time of writing. # denotes the number of models for their ensemble method.</figDesc><table>Team Name 
+# 
+Overall Yes/no Number Other 
+
+vqateam_mcb_benchmark [6, 8] 
+1 
+62.27 
+78.82 
+38.28 
+53.36 
+vqa_hack3r 
+-
+62.89 
+79.88 
+38.95 
+53.58 
+VQAMachine [34] 
+-
+62.97 
+79.82 
+40.91 
+53.35 
+NWPU_VQA 
+-
+63.00 
+80.38 
+40.32 
+53.07 
+yahia zakaria 
+-
+63.57 
+79.77 
+40.53 
+54.75 
+ReasonNet_ 
+-
+64.61 
+78.86 
+41.98 
+57.39 
+JuneflowerIvaNlpr 
+-
+65.70 
+81.09 
+41.56 
+57.83 
+UPMC-LIP6 [4] 
+-
+65.71 
+82.07 
+41.06 
+57.12 
+Athena 
+-
+66.67 
+82.88 
+43.17 
+57.95 
+Adelaide-Teney 
+-
+66.73 
+83.71 
+43.77 
+57.20 
+LV_NUS [12] 
+-
+66.77 
+81.89 
+46.29 
+58.30 
+vqahhi_drau 
+-
+66.85 
+83.35 
+44.37 
+57.63 
+CFM-UESTC 
+-
+67.02 
+83.69 
+45.17 
+57.52 
+VLC Southampton [40] 
+1 
+68.41 
+83.56 
+51.39 
+59.11 
+Tohoku CV 
+-
+68.91 
+85.54 
+49.00 
+58.99 
+VQA-E 
+-
+69.44 
+85.74 
+48.18 
+60.12 
+Adelaide-Teney ACRV MSR [29] 30 
+70.34 
+86.60 
+48.64 
+61.15 
+DeepSearch 
+-
+70.40 
+86.21 
+48.82 
+61.58 
+HDU-USYD-UNCC [38] 
+8 
+70.92 
+86.65 
+51.13 
+61.75 
+
+BAN+Glove+Counter (ours) 
+1 
+70.35 
+85.82 
+53.71 
+60.69 
+BAN Ensemble (ours) 
+8 
+71.72 
+87.02 
+54.41 
+62.37 
+BAN Ensemble (ours) 
+15 
+71.84 
+87.22 
+54.37 
+62.45 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="true"><head>Table 6 :</head><label>6</label><figDesc>Recall@1 performance over types for Flickr30k Entities (%) Model People Clothing Body Parts Animals Vehicles Instruments Scene Other</figDesc><table>Rohrbach et al. [26] 
+60.24 
+39.16 
+14.34 
+64.48 
+67.50 
+38.27 
+59.17 30.56 
+Plummer et al. [23] 
+64.73 
+46.88 
+17.21 
+65.83 
+68.75 
+37.65 
+51.39 31.77 
+Yeh et al. [36] 
+68.71 
+46.83 
+19.50 
+70.07 
+73.75 
+39.50 
+60.38 32.45 
+Hinami and Satoh [10] 
+78.17 
+61.99 
+35.25 
+74.41 
+76.16 
+56.69 
+68.07 47.42 
+
+BAN (ours) 
+79.90 
+74.95 
+47.23 
+81.85 
+76.92 
+43.00 
+68.69 51.33 
+
+# of Instances 
+5,656 
+2,306 
+523 
+518 
+400 
+162 
+1,619 3,374 </table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Vqa: Visual question answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aishwarya</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiasen</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stanislaw</forename><surname>Antol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Margaret</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lawrence</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devi</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dhruv</forename><surname>Batra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">123</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="4" to="31" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Anderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaodong</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Buehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Damien</forename><surname>Teney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephen</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lei</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.07998</idno>
+		<title level="m">Up and Top-Down Attention for Image Captioning and Visual Question Answering</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Multiscale combinatorial grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pablo</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordi</forename><surname>Pont-Tuset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ferran</forename><surname>Marques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jitendra</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE conference on computer vision and pattern recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="328" to="335" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">MUTAN: Multimodal Tucker Fusion for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hedi</forename><surname>Ben-Younes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rémi</forename><surname>Cadene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Cord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Thome</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2612" to="2620" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bart</forename><surname>Van Merriënboer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Caglar</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dzmitry</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fethi</forename><surname>Bougares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Holger</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1724" to="1734" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Akira</forename><surname>Fukui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dong</forename><forename type="middle">Huk</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daylen</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anna</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcus</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.01847</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Fast r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1440" to="1448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Making the V in VQA Matter: Elevating the Role of Image Understanding in Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yash</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tejas</forename><surname>Khot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Douglas</forename><surname>Summers-Stay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dhruv</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devi</forename><surname>Parikh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Deep Residual Learning for Image Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryota</forename><surname>Hinami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shin&amp;apos;ichi</forename><surname>Satoh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.09509</idno>
+		<title level="m">Query-Adaptive R-CNN for Open-Vocabulary Object Detection and Retrieval</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Natural language object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronghang</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huazhe</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcus</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kate</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4555" to="4564" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">A Simple Loss Function for Improving the Convergence and Accuracy of Visual Question Answering Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilija</forename><surname>Ilievski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Spatial Transformer Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">28</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multimodal Residual Learning for Visual QA</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jin-Hwa</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sang-Woo</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Donghyun</forename><surname>Kwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Min-Oh</forename><surname>Heo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeonghee</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jung-Woo</forename><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Byoungtak</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="361" to="369" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Hadamard Product for Low-rank Bilinear Pooling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jin-Hwa</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Woosang</forename><surname>Kyoung Woon On</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeonghee</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jung-Woo</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Byoung-Tak</forename><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The 5th International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Adam: A Method for Stochastic Optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ranjay</forename><surname>Krishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuke</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oliver</forename><surname>Groth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kenji</forename><surname>Hata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joshua</forename><surname>Kravitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stephanie</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yannis</forename><surname>Kalantidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li-Jia</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">A</forename><surname>Shamma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.07332</idno>
+		<title level="m">Visual genome: Connecting language and vision using crowdsourced dense image annotations</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Hierarchical Question-Image Co-Attention for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiasen</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianwei</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dhruv</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Devi</forename><surname>Parikh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.00061</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Rectified Linear Units Improve Restricted Boltzmann Machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinod</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">27th International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="807" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Dual Attention Networks for Multimodal Reasoning and Matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hyeonseob</forename><surname>Nam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jung-Woo</forename><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeonghee</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">GloVe: Global Vectors for Word Representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><surname>Pennington</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing</title>
+		<meeting>the 2014 Conference on Empirical Methods in Natural Language Processing</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Bilinear classifiers for visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hamed</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Deva</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charless</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="1482" to="1490" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Flickr30k Entities: Collecting Region-to-Phrase Correspondences for Richer Image-to-Sentence Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liwei</forename><surname>Plummer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Juan</forename><forename type="middle">C</forename><surname>Cervantes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julia</forename><surname>Caicedo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Svetlana</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">123</biblScope>
+			<biblScope unit="page" from="74" to="93" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">YOLO9000: Better, Faster, Stronger</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joseph</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ali</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>Shaoqing Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Grounding of textual phrases in images by reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anna</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcus</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronghang</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bernt</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="817" to="834" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.07868</idno>
+		<title level="m">Weight Normalization: A Simple Reparameterization to Accelerate Training of Deep Neural Networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Dropout : A Simple Way to Prevent Neural Networks from Overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nitish</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Damien</forename><surname>Teney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Anderson</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.02711</idno>
+		<title level="m">Xiaodong He, and Anton van den Hengel. Tips and Tricks for Visual Question Answering: Learnings from the 2017 Challenge</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Interpretable Counting for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Trott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Caiming</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Residual Networks are Exponential Ensembles of Relatively Shallow Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><surname>Veit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Serge</forename><surname>Wilber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="550" to="558" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning Deep Structure-Preserving Image-Text Embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liwei</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yin</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Svetlana</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="5005" to="5013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Structured Matching for Phrase Localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mingzhe</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mahmoud</forename><surname>Azab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noriyuki</forename><surname>Kojima</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rada</forename><surname>Mihalcea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jia</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">9908</biblScope>
+			<biblScope unit="page" from="696" to="711" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Chunhua Shen, and Anton van den Hengel. The VQA-Machine: Learning How to Use Existing Vision Algorithms to Answer New Questions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peng</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qi</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1173" to="1182" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Attend and Answer: Exploring Question-Guided Spatial Attention for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huijuan</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kate</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ask</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Interpretable and Globally Optimal Prediction for Textual Grounding using Image Concepts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Raymond</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jinjun</forename><surname>Yeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wen-Mei W</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh</forename><forename type="middle">N</forename><surname>Hwu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">G</forename><surname>Do</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schwing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alice</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Micah</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julia</forename><surname>Hockenmaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="67" to="78" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Beyond Bilinear: Generalized Multi-modal Factorized High-order Pooling for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhou</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chenchao</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianping</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dacheng</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Neural Networks and Learning Systems</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Top-Down Neural Attention by Excitation Backprop</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianming</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhe</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Brandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaohui</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stan</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">9908</biblScope>
+			<biblScope unit="page" from="543" to="559" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Learning to Count Objects in Natural Images for Visual Question Answering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yan</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Hare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam Prügel-</forename><surname>Bennett</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lawrence</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Piotr</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="391" to="405" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

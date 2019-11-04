@@ -1,0 +1,748 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">L4: Practical loss-based stepsize adaptation for deep learning</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+				<date type="published" when="2019-04-29">April 29, 2019</date>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michal</forename><surname>Rolínek</surname></persName>
+							<email>michal.rolinek@tuebingen.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="department">Max-Planck-Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georg</forename><surname>Martius</surname></persName>
+							<email>georg.martius@tuebingen.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="department">Max-Planck-Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">L4: Practical loss-based stepsize adaptation for deep learning</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date type="published" when="2019-04-29">April 29, 2019</date>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We propose a stepsize adaptation scheme for stochastic gradient descent. It operates directly with the loss function and rescales the gradient in order to make fixed predicted progress on the loss. We demonstrate its capabilities by conclusively improving the performance of Adam and Momentum optimizers. The enhanced optimizers with default hyperparameters consistently outperform their constant stepsize counterparts, even the best ones, without a measurable increase in computational cost. The performance is validated on multiple architectures including dense nets, CNNs, ResNets, and the recurrent Differential Neural Computer on classical datasets MNIST, fashion MNIST, CIFAR10 and others.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Stochastic gradient methods are the driving force behind the recent boom of deep learning. As a result, the demand for practical efficiency as well as for theoretical understanding has never been stronger. Naturally, this has inspired a lot of research and has given rise to new and currently very popular optimization methods such as Adam <ref type="bibr" target="#b8">[9]</ref>, AdaGrad <ref type="bibr" target="#b4">[5]</ref>, or RMSProp <ref type="bibr" target="#b23">[24]</ref>, which serve as competitive alternatives to classical stochastic gradient descent (SGD). However, the current situation still causes huge overhead in implementations. In order to extract the best performance, one is expected to choose the right optimizer, finely tune its hyperparameters (sometimes multiple), often also to handcraft a specific stepsize adaptation scheme, and finally combine this with a suitable regularization strategy. All of this, mostly based on intuition and experience. If we put aside the regularization aspects, the holy grail for resolving the optimization issues would be a widely applicable automatic stepsize adaptation for stochastic gradients. This idea has been floating in the community for years and different strategies were proposed. One line of work casts the learning rate as another parameter one can train with a gradient descent (see <ref type="bibr" target="#b1">[2]</ref>, also for a survey). Another approach is to make use of (an approximation of) second order information (see <ref type="bibr" target="#b2">[3]</ref> and <ref type="bibr" target="#b18">[19]</ref> as examples). Also, an interesting Bayesian approach for probabilistic line search has been proposed in <ref type="bibr" target="#b13">[14]</ref>. Finally, another related research branch is based on the "Learning to learn" paradigm <ref type="bibr" target="#b0">[1]</ref> (possibly using reinforcement learning such as in <ref type="bibr" target="#b12">[13]</ref>). Although some of the mentioned papers claim to "effectively remove the need for learning rate tuning", this has not been observed in practice. Whether this is due to conservativism on the implementor's side or due to lack of solid experimental evidence, we leave aside. In any case, we also take the challenge. Our strategy is performance oriented. Admittedly, this also means, that while our stepsize adaptation scheme makes sense intuitively (and is related to sound methods), we do not provide or claim any theoretical guarantees. Instead, we focus on strong reproducible performance against optimized baselines across multiple different architectures, on a minimum need for tuning, and on releasing a prototype implementation that is easy to use in practice. Our adaptation method is called Linearized Loss-based optimaL Learning-rate (L 4 ) and it has two main features. First, it operates directly with the (currently observed) value of the loss. This eventually allows for almost independent stepsize computation of consecutive updates and consequently enables very rapid learning rate changes. Second, we separate the two roles a gradient vector typically has. It provides both a local linear approximation as well as an actual vector of the update step. We allow using a different gradient method for each of the two tasks. The scheme itself is a meta-algorithm and can be combined with any stochastic gradient method. We report our results for the L 4 adaptation of Adam and Momentum SGD.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Method</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Motivation</head><p>The stochasticity poses a severe challenge for stepsize adaptation methods. Any changes in the learning rate based on one or a few noisy loss estimates are likely to be inaccurate. In a setting, where any overestimation of the learning rate can be very punishing, this leaves little maneuvering space. The approach we take is different. We do not maintain any running value of the stepsize. Instead, at every iteration, we compute it anew with the intention to make maximum possible progress on the (linearized) loss. This is inspired by the classical iterative Newton's method for finding roots of one-dimensional functions. At every step, this method computes the linearization of the function at the current point and proceeds to the root of this linearization. We use analogous updates to locate the root (minimum) of the loss function. The idea of using linear approximation for line search is, of course, not novel, as witnessed for example by the Armijo-Wolfe line search <ref type="bibr" target="#b15">[16]</ref>. Our scheme should be thought of as an adaptation of these methods for the practical needs of deep learning. Also, the ideological proximity to provably correct methods is reassuring.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Algorithm</head><p>In the following section, we describe how the stepsize is chosen for a gradient update proposed by an underlying optimizer (e. g. SGD, Adam, momentum SGD). We begin with a simplified core version. Let L(θ) be the loss function (on current batch) depending on the parameters θ and let v be the update step provided by some standard optimizer, e. g. in case of SGD this would be ∇ θ L. Throughout the paper, the loss L will be considered to be non-negative. For now, let us assume the minimum attainable loss is L min (see Section 2.4 for details). We consider the stepsize η needed to reach L min (under idealized assumptions) by satisfying</p><formula xml:id="formula_0">L(θ − ηv) ! = L min .<label>(1)</label></formula><p>We linearize L (around θ) and then, after denoting g = ∇ θ L, we solve for η:</p><formula xml:id="formula_1">L(θ) − ηg v ! = L min =⇒ η = L(θ) − L min g v .<label>(2)</label></formula><p>First of all, note the clear separation between g, the estimator of the gradient of L and v, the proposed update step. Moreover, it is easily seen that the final update step ηv is independent of the magnitude of v. In other words, the adaptation method only takes into account the "direction" of the proposed update. This decomposition into the gradient estimate and the update direction is the core principle behind the method and is also vital for its performance.  The update rule is illustrated in <ref type="figure" target="#fig_0">Fig. 1</ref> for a quadratic (or other convex) loss. Here, we see (deceptively) that the proposed stepsize is, in fact, still conservative. However, in the multidimensional case, the minimum will not necessarily lie on the line given by the gradient. That is why in real-world problems, this stepsize is far too aggressive and prone to divergence. In addition there are the following reasons to be more conservative: the problems in deep learning are (often strongly) non-convex, and actually minimizing the currently seen batch loss is very likely to not generalize to the whole dataset. For these reasons, we introduce a hyperparameter α which captures the fixed fraction of the stepsize (2) we take at each step. Then the update rule becomes:</p><formula xml:id="formula_2">∆θ = −ηv = −α L(θ) − L min g v v ,<label>(3)</label></formula><p>Even though a few more hyperparameters will appear later as stability measures and regularizers, α is the main hyperparameter to consider. We observed in experiments that the relevant range is consistently α ∈ (0.10, 0.30). In comparison, for SGD the range of stable learning rates varies over multiple orders of magnitude. We chose the slightly conservative value α = 0.15 as a default setting. We report its performance on all the tasks in Section 3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Invariance to affine transforms of the loss</head><p>Here, we offer a partial explanation why the value of α stays in the same small relevant range even for very different problems and datasets. Interestingly, the new update equation <ref type="formula" target="#formula_2">(3)</ref> is invariant to affine loss transformations of the type:</p><formula xml:id="formula_3">L = aL + b (4)</formula><p>with a, b &gt; 0. Let us briefly verify this. The gradient of L will be g = ag and we will assume that the underlying optimizer will offer the same update direction v in both cases (we have already established that its magnitude does not matter). Then we can simply write</p><formula xml:id="formula_4">− α L (θ) − L min g v v = −α aL(θ) + b − aL min − b ag v v = −α L(θ) − L min g v v</formula><p>and we see that the updates are the same in both cases. On top of being a good sanity check for any loss-based method, we additionally believe that it simplifies problem-to-problem adaptation (also in terms of hyperparameters).</p><p>It should be noted though that we lose this precise invariance once we introduce some heuristical and regularization steps in Section 2.4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4">Stability measures and heuristics</head><p>L min adaptation: We still owe an explanation of how L min is maintained during training. We base its value on the minimal loss seen so far. Naturally, some mini-batches will have a lower loss and will be used as a reference for the others. By itself, this comes with some disadvantages. In case of small variance across batches, this L min estimate would be very pessimistic. Also, the "new best" mini-batches would have zero stepsize. Therefore, we introduce a factor γ which captures the fraction of the lowest seen loss that is still believed to be achievable. Similarly, to correct for possibly strong effects of a few outlier batches, we let L min slowly increase with a timescale τ . This reactiveness of L min slightly shifts its interpretation from "globally minimum loss" to "minimum currently achievable loss". This reflects on the fact that in practical settings, it is unrealistic to aim for the global minimum in each update. All in all, when a new value L of the loss comes, we set</p><formula xml:id="formula_5">L min ← min(L min , L),</formula><p>then we use γL min for the gradient update and apply the "forgetting"</p><formula xml:id="formula_6">L min ← (1 + 1 /τ)L min .<label>(5)</label></formula><p>The value of L min gets initialized by a fixed fraction of the first seen loss L, that is L min ← γ 0 L. We set γ = 0.9, τ = 1000, and γ 0 = 0.75 as default settings and we use these values in all our experiments. Even though, we can not exclude that tuning these values could lead to enhanced performance, we have not observed such effects and we do not feel the necessity to modify these values.</p><p>Numerical stability: Another unresolved issue is the division by an inner product in Eq. (3). Our solution to potential numerical instabilities are two-fold. First, we require compatibility of g and v in the sense that the angle between the vectors does not exceed 90 • . In other words, we insist on g v ≥ 0. For L 4 Adam and L 4 Mom this is the case, see Section 2.5, Eq. (7). Second, we add a tiny ε as a regularizer to the denominator. The final form of update rule then is:</p><formula xml:id="formula_7">∆θ = −α L(θ) − γL min g v + v ,<label>(6)</label></formula><p>with the default value ε = 10 −12 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5">Putting it together: L 4 Mom and L 4 Adam</head><p>The algorithm is called Linearized Loss-based optimaL Learning-rate (L 4 ) and it works on top of provided gradient estimator (producing g) and an update direction algorithm (producing v), see Algorithm 1 for the pseudocode. For compactness of presentation, we introduce a notation for exponential moving averages as · τ with timescale τ using bias correction just as in <ref type="bibr" target="#b8">[9]</ref> (see Algorithm 2).</p><p>Algorithm 1 L 4 , a meta algorithm for stochastic optimization, compatible with momentum SGD, Adam or other gradient estimators. The default hyperparameters are: α = 0.15, γ = 0.9, γ 0 = 0.75, τ = 1000, and = 10 −12 .</p><p>Require: α: Stepsize/fraction Require: γ, γ 0 : optimism loss improvement fraction Require: τ : timescale of forgetting minimum loss Require: L(θ): non-negative stochastic loss function w.r.t. parameters θ (a sample at step t is denoted by L t ) Require:</p><formula xml:id="formula_8">θ 0 : initial parameter vector Require: V (L, θ): gradient direction function Require: G(L, θ): gradient step function t ← 0 L min ← γ 0 · L 0 (fraction of initial loss) while θ t not converged do t ← t + 1 v ← V (L t , θ t−1 ) (gradient step) g ← G(L t , θ t−1 ) (gradient estimator) L min t ← min(L min t−1 , L t ) (minimum loss) θ t = θ t−1 − α · Lt−γ·L min t g ·v+ v (parameter update) L min t ← (1 + 1 /τ) · L min t</formula><p>(forgetting minimum loss) end while return: θ t (final parameter vector) Algorithm 2 Bias corrected moving average.</p><p>Require: τ : timescape m t ← 0 (initialize mean with zero vector) t ← 0 (initialize step counter) update average(x): (x: input vector to be averaged)</p><formula xml:id="formula_9">t ← t + 1 m t ← (1 − 1 /τ) · m t−1 + 1 /τ · x (update average) return: m t /(1 − (1 − 1/τ ) t ) (correct bias)</formula><p>In this paper, we introduce two variants of L 4 leading to two optimizers: (1) with momentum gradient descent, denoted by L 4 Mom, and (2) with Adam <ref type="bibr" target="#b8">[9]</ref>, denoted by L 4 Adam. We choose the update directions for L 4 Mom and L 4 Adam, respectively as</p><formula xml:id="formula_10">v = V M om (L, θ) = ∇ θ L(θ) τm v = V Adam (L, θ) = ∇ θ L(θ) τm |∇ θ | 2 L(θ) τs ,<label>(7)</label></formula><p>with τ m = 10 and τ s = 1000 being the timescales for momentum and (in case of L 4 Adam) second moment averaging. In both cases, the choice of g = G(L, θ) = V M om (L, θ) ensures g v ≥ 0 (see Section 2.4 for more discussion). Additional reasoning is that the averaged local gradient is in practice often a more accurate estimator of the gradient on the global loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Results</head><p>We evaluate the proposed method on five different setups, spanning over different architectures, datasets, and loss functions. We compare to the de facto standard methods: stochastic gradient descent (SGD), momentum SGD (Mom), and Adam <ref type="bibr" target="#b8">[9]</ref>. For each of the methods, the performance is evaluated for the best setting of the stepsize/learning rate parameter (found via a fine grid search with multiple restarts). All other parameters are as follows: for momentum SGD we used a timescale of 10 steps (β = 0.9); for Adam: β 1 = 0.9, β 2 = 0.999, and ε = 10 −4 . The (non-default) value of ε was selected in accordance with TensorFlow documentation to decrease the instability of Adam.</p><p>In all experiments, the performance of the standard methods heavily depends on the stepsize parameter. However, in case of the proposed method, the default setting showed remarkable consistency. Across the experiments, it outperforms even the best constant learning rates for the respective gradient-based update rules. In addition, the performance of these default settings is also comparable with handcrafted optimization policies on more complicated architectures. We consider this to be the main strength of the L 4 method. We present results for L 4 Mom and L 4 Adam, see Tab. 3 for an overview. In all experiments we strictly followed the out-of-the-box policy. We simply cloned an official repository, changed the optimizer, and left everything else intact. Also, throughout the experiments we have observed neither any runtime increase nor additional memory requirements arising from the adaptation. As a general nomenclature, a method is marked with a * if optimized stepsize was used. Otherwise (in case of L 4 optimizers), the default settings are in place.</p><p>To the end of this section, we append experiments with varying batch sizes as hinted in Tab. 3 by values in brackets. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Badly conditioned regression</head><p>The first task we investigate is a linear regression with badly conditioned input/output relationship. It has recently been brought into the spotlight by Ali Rahimi in his NIPS 2017 talk, see <ref type="bibr" target="#b17">[18]</ref>, as an example of a problem "resistant" to standard stochastic gradient optimization methods. For our experiments, we used the corresponding code by Ben Recht <ref type="bibr" target="#b16">[17]</ref>. The network has two weight matrices W 1 , W 2 and the loss function is given by</p><formula xml:id="formula_11">L(W 1 , W 2 ) = E x∼N (0,I) W 1 W 2 x − y 2 s.t. y = Ax<label>(8)</label></formula><p>where A is a badly conditioned matrix, i. e. κ(A) = σ max /σ min 1, with σ max and σ min are the largest and the smallest singular values of A, respectively. Note that this is in disguise a (realizable) matrix factorization problem:</p><formula xml:id="formula_12">L = W 1 W 2 − A 2</formula><p>F . Also, it is not a stochastic optimization problem but a deterministic one. <ref type="figure" target="#fig_1">Figure 2</ref> shows the results for x ∈ R 6 , W 1 ∈ R 10×6 , W 2 ∈ R 6×6 , y ∈ R 10 (the default configuration of <ref type="bibr" target="#b16">[17]</ref>) and condition number κ(A) = 10 10 . The statistics is given for 5 independent runs (with randomly generated matrices A) and a fixed dataset of 1000 samples. We can confirm that standard optimizers indeed have great difficulty reaching convergence. Only a fine grid search discovered settings behaving reasonably well (divergence or too early plateaus are very common). The proposed stepsize adaptation method apparently overcomes this issue (see <ref type="figure" target="#fig_1">Fig. 2</ref>).  As an extension of the experiments on badly conditioned regression, we also include a comparison with the classical Levenberg-Marquardt algorithm (LMA) <ref type="bibr" target="#b11">[12]</ref> which can be viewed as a GaussNewton method with a trust region. In Tab. 2 the speed of the algorithms, both in terms of the number of iterations as well as wall-clock time 1 is reported. The same comparison is also performed on an instance of twice the size (all dimensions doubled). The results show that the gradients provided by LMA reach convergence in a much smaller number of steps. However, at the same time, LMA is significantly more computationally expensive since each step involves solving a least squares problem. This can be clearly seen from comparing performance on the problem sizes in Tab. 2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">MNIST digit recognition</head><p>The second task is a classical multilayer neural network trained for digit recognition using the MNIST <ref type="bibr" target="#b10">[11]</ref> dataset. We use the standard architecture with two layers containing 300 and 100 hidden units and ReLu activations functions followed by a logistic regression output layer for the 10 digit classes. Batch size in use is 64. <ref type="figure" target="#fig_3">Figure 3</ref> shows the learning curves and the effective learning rates. The effective learning rate is given by η in (3). Note how after 22 epochs the effective learning of L 4 Adam becomes very small and actually becomes 0 around 30 epochs. This is simply because by then the loss is 0 (within machine precision) on every batch and thus η = 0; a global optimum was found. The very high learning rates that precede can be attributed to a "plateau" character of the obtained minimum. The gradients are so small in magnitude that very high stepsize is necessary to make any progress. This is, perhaps, unexpected since in optimization theory convergence is typically linked to decrease in the learning rate, rather than increase. Generally, we see that the effective learning rate shows highly nontrivial behavior. We can observe sharp increases as well as sharp decreases. Also, even in short time period it fully spans 2 or more orders of magnitude as highlighted by the shaded area, see <ref type="figure" target="#fig_3">Fig. 3(b)</ref>. None of this causes instabilities in the training itself. Even though the ability to generalize and compatibility with various regularization methods are not our main focus in this work, we still report in Tab. 3 the development of test accuracy during the training. We see that the test performance of all optimizers is comparable. This does not come as a surprise as the used architecture has no regularization. Also, it can be seen that the L 4 optimizers reach near-final accuracies faster, already after around 10 epochs.   <ref type="figure" target="#fig_0">19, 14, 1, 2, 15]</ref>). Unfortunately, there are no widely recognized benchmarks to use for comparison. There is a lot of variety in choosing the baseline optimizer (often only the default setting for SGD) and in the number of training steps reported (often fewer than one epoch). In this situation, it is difficult to make any substantiated claims. However, to our knowledge, previous work does not achieve such rapid convergence as can be seen in <ref type="figure" target="#fig_3">Fig. 3</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">ResNets for CIFAR-10 image classification</head><p>In the next two tasks, we target finely tuned publicly available implementations of well-known architectures and compare their performance to our default setting. We begin with the deep residual network architecture for CIFAR-10 <ref type="bibr" target="#b9">[10]</ref> taken from the official TensorFlow repository <ref type="bibr" target="#b22">[23]</ref>. Deep residual networks <ref type="bibr" target="#b7">[8]</ref>, or ResNets for short, provided the breakthrough idea of identity mappings in order to enable training of very deep convolutional neural networks. The provided architecture has 32 layers and uses batch normalization for batches of size 128. The loss is given by cross-entropy with L 2 regularization. The deployed optimization policy is momentum gradient with manually crafted piece-wise constant stepsize adaptation. We simply replace it with default settings of L 4 Mom and L 4 Adam. the manually designed schedule (also for momentum gradient). This match disappears after 150 epochs but from a quick inspection of <ref type="figure">Fig. 5</ref> we see that the last 100 epochs of training are not very eventful anyway.</p><p>Comparing performance against optimized constant learning rates is favorable for L 4 optimizers both in terms of loss and test accuracy (see <ref type="figure">Fig. 5</ref>). Note also that the two L 4 optimizers perform almost indistinguishably. However, competing with the default policy has another surprising outcome. While the default policy is inferior in loss minimization (more strongly at the beginning than at the end), in terms of test accuracy it eventually dominates. By careful inspection of <ref type="figure">Fig. 5</ref>, we see the decisive gain happens right after the first drop in the hardcoded learning rate. This, in itself, is very intriguing since both default and L 4 Mom use the same type of gradients of similar magnitudes. Also, it explains the original authors' choice of a piece-wise constant learning rate schedule. To our knowledge, there is no satisfying answer to why piece-wise constant learning rates lead to good generalization. Yet, practitioners use them frequently, perhaps precisely for this reason.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Differential neural computer</head><p>As the last task, we chose a somewhat exotic one; a recurrent architecture of Google Deepmind's Differential Neural Computer (DNC) <ref type="bibr" target="#b6">[7]</ref>. Again, we compare with the performance from the official repository <ref type="bibr" target="#b3">[4]</ref>. The DNC is a culmination of a line of work developing LSTM-like architectures with a differentiable memory management, e. g. <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b20">21]</ref>, and is in itself very complex. The targeted tasks have typically very structured flavor (e. g. shortest path, question answering). The task implemented in <ref type="bibr" target="#b3">[4]</ref> is to learn a REPEAT-COPY algorithm. In a nutshell, the input specifies a sequence of bits a n and a number of repeats k while the expected output is a sequence b n consisting of k repeats of a n . The loss function is a negative log-probability of outputting the correct sequence. Since, the ground truth is a known algorithm, the training data can be generated on the fly, and there is no separate test regime. This time, the optimizer in place is RMSProp <ref type="bibr" target="#b23">[24]</ref> with gradient clipping. We found out, however, that the constant learning rate 10 −3 provided in <ref type="bibr" target="#b3">[4]</ref> can be further tuned and we compare our results against the improved value 0.005. We also used the best performing constant learning rates 0.01 for Adam and 1.2 for momentum SGD (both with the suggested gradient clipping) as baselines. The L 4 optimizers did not use gradient clipping. Again, we can see in <ref type="figure" target="#fig_6">Fig. 6</ref> that L 4 Adam and L 4 Mom performed almost the same on average, even though L 4 Mom was more prone to instabilities as can be seen from the volume of the orange-shaded regions. More importantly, they both performed better or on par with the optimized baselines. We end this experimental section with a short discussion of <ref type="figure" target="#fig_6">Fig. 6(b)</ref>, since it illustrates multiple features of the adaptation all at once. In this figure, we compare the effective learning rates of L 4 and plain Adam. We immediately notice the dramatic evolution of the L 4 learning rate, jumping across multiple orders of magnitude, until finally settling around 10 3 . This behavior, however, results in a much more stable optimization process (see again <ref type="figure" target="#fig_6">Fig. 6</ref>), unlike in the case of plain Adam optimizer (note the volume of the green-shaded regions). The intuitive explanation is two-fold. For one, the high gradients only need a small learning rate to make the expected progress. This lowers the danger of divergence and, in this sense, it plays the role of gradient clipping. And second, plateau regions with small gradients will force very high learning rates in order to leave them. This beneficial rapid adaptation is due to almost independent stepsize computation for every batch. Only L min and possibly (depending on the underlying gradient methods) some gradient history is reused. This is a fundamental difference to methods that at each step make a small update to the previous learning rate. This is in agreement with <ref type="bibr" target="#b24">[25]</ref>, where the phenomenon was discussed in more depth.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5">Fashion MNIST</head><p>The Fashion MNIST dataset <ref type="bibr" target="#b25">[26]</ref> is a drop-in replacement for MNIST that is considered to better represent modern computer vision tasks. We ran it on a TensorFlow official implementation of a ConvNet for MNIST <ref type="bibr" target="#b21">[22]</ref>. The architecture consists of two convolutional layers followed by two fully connected layers that a have a dropout <ref type="bibr" target="#b19">[20]</ref> in between. By default, the batch size is 100 and the optimizer is Adam. We see in <ref type="figure" target="#fig_7">Fig. 7</ref>, that both L 4 optimizers work out-of-the-box and despite the presence of dropout during training, both achieve a loss that is roughly an order of maginute lower than the losses of optimized baselines. This leads to a mild gain in test accuracy as can be seen in Tab. 4. Such low training loss of L 4 optimizers despite the presence of dropout suggests increasing the dropout rate in hope for better generalization. And indeed when switching from the default rate p = 0.4 to value p = 0.7, one can see (also in Tab. 4) an additional gain in test accuracy. Although generalization performance was not our main focus in this paper, we firmly believe that superior performance in optimization is convertible to better results in test time. This case of increasing the dropout rate is one promising example of it. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6">Sweeping over batch sizes</head><p>Since L 4 recomputes the stepsize individually for each batch, it is natural to investigate how its performance depends on the batch size. For this experiment we chose the MNIST and DNC datasets, since there L 4 displayed the most variance in the effective learning rates, and thus behaved "most different" from standard optimizers. Of particular interest is the "high variance" regime of small batch sizes, where the stepsize adaptation can be expected to evolve the learning rate rapidly. The same default setting (α = 0.15) of both L 4 Mom and L 4 Adam was consistently applied. In both cases we swept over batch size 8, 16, 32, and 64. In the experiments from the main text of the paper, the selected batch sizes were 64, and 16, respectively for MNIST and DNC. The results for MNIST are plotted in <ref type="figure">Fig. 8</ref>. It turns out that the original setting is the least favorable for both L 4 optimizers. In fact, the performance increases with decreasing the batch size. For DNC, we report the performance in <ref type="figure">Fig. 9</ref>. We also observe that L 4 favors small batch sizes.</p><p>Here batch size 8 is probably the limit of what L 4 can tolerate. This is not directly visible on the loss curves but in fact one of the runs of L 4 Mom diverged (after processing 50000 examples and reaching 10 −7 loss). In all other cases, good level of convergence was reached.</p><p>In conclusion, adapting the stepsize for every batch shows to be gradually more beneficial as we lower the batch sizes (loss estimates increase in variance). This is a further validation for applying learning rates that are highly varying from mini-batch to mini-batch. Although the batch sizes in both cases range almost over an order of magnitude, no severe deterioration of performance was ever detected.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Discussion</head><p>We propose a stepsize adaptation scheme L 4 compatible with currently most prominent gradient methods. Two arising optimizers were tested on a multitude of datasets, spanning across different batch sizes, loss functions and network structures. The results validate the stepsize adaptation in itself, as the adaptive optimizers consistently outperform their non-adaptive counterparts, even when the adaptive optimizers use the default setting and the non-adaptive ones were finely tuned. This default setting also performs well when compared to hand-tuned optimization policies from official repositories of modern high-performing architectures. Although we cannot give guarantees, this is a promising step towards practical "no-tuning-necessary" stochastic optimization.</p><p>The core design feature, ability to change stepsize dramatically from batch to batch, while occasionally reaching extremely high stepsizes, was also validated. This idea does not seem widespread in the community and we would like to inspire further work. The ability of the proposed method to actually drive loss to convergence creates an opportunity to better evaluate regularization strategies and develop new ones. This can potentially convert the superiority in training to enhanced test performance as discussed in the Fashion MNIST experiments. Finally, Ali Rahimi and Benjamin Recht suggested in their NIPS 2017 talk (and the corresponding blog post) <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b17">18]</ref> that the failure to drive loss to zero within machine precision might be an actual bottleneck of deep learning (using exactly the ill-conditioned regression task). We show on this example and on MNIST that our method can break this "optimization floor".</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Illustration of stepsize calculation for one parameter. Given a minimum loss, the stepsize is such that the linearized loss would be minimal after one step. In practice a fraction of that stepsize is used, see Sec. 2.4.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Training performance on badly conditioned regression task with κ(A) = 10 10 . The mean (in log-space) training loss over 5 restarts is shown. The areas between minimal and maximal loss (after log-space smoothing) are shaded. For all algorithms the best stepsize was selected (4 · 10 −5 and 10 −3 for SGD and Adam respectively, and α = 0.25 for both L 4 optimizers), except for the default setting without the "*". Note the logarithmic scale of the loss.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>2 :</head><label>2</label><figDesc>Comparison with Levenberg-Marquardt algorithm. Time and the number of gradient updates needed to reach convergence (L &lt; 10 −8 ) is reported. The average is with respect to 5 restarts. Two problem setups are considered, the default from [17] (x ∈ R 6 , W 1 ∈ R 10×6 , W 2 ∈ R 6×6 , y ∈ R 10 , κ(A) = 10 10 ) and its "scaled up by two" version. Stepsize α = 0.3 was selected for LMA as the best performing one, and α = 0.25 is chosen for both L 4 optimizers.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Training progress of multilayer neural networks on MNIST, see Section 3.2 for details. (a) Average (in log-space) training loss with respect to five restarts with a shaded area between minimum and maximum loss (after log-space smoothing). (b) Effective learning rates η for a single run. The bold curves are averages taken in log-space.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>Comparison to other work: A list of papers reporting improved performance over SGD on MNIST is long (examples include [</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 :Figure 5 :</head><label>45</label><figDesc>Figure 4: Effective learning rates η for CIFAR10. The adaptive stepsize of L 4 Mom matches roughly the hand-coded decay schedule (grey line) until 150 epochs. Both use the same gradient type.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 :</head><label>6</label><figDesc>Figure 6: Training progress of the DNC. (a) Training loss (equals test loss) on the Differential Neural Computer architecture. See Fig. 2 for details. The L 4 optimizers use default settings, whereas RMSProp and Adam use best performing learning rates 0.005 and 0.01, respectively. We see high stochasticity in training, particularly with Adam. Both L 4 optimizers match or beat RMSProp in performance. (b) Effective learning rate η of L 4 Adam and plain Adam. The L 4 Adam displays a huge variance in the selected stepsize. This however has a stabilizing effect on the training progress.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 :</head><label>7</label><figDesc>Figure 7: Training performance on Fashion MNIST. Default L 4 optimizers reach lower level of the loss depsite the presence of dropout (rate p = 0.4).The optimized learning rates for mSGD and Adam were 0.01 and 0.0003, respectively. Results are reported over five independent restarts.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 8 :Figure 9 :</head><label>89</label><figDesc>Figure 8: Sweeping over batch sizes for MNIST. The plotted curves are averages over five restarts (with smoothing in log-spcae). All lower batch sizes outperform the batch size 64 used in the main paper.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Overview of experiments. The experiments span over classical datasets, traditional and modern architectures, as well as different batch sizes. The tested learning rates are denoted by α and marked with * if chosen optimally via grid search. The optimal learning rates for the baselines vary while L 4 optimizers can keep a fixed setting and still outperforming in terms of training and test loss.</figDesc><table>Dataset 
+Arch 
+Batch size 
+α  *  
+M om/SGD α  *  
+Adam α L 4 Adam 
+α L 4 M om 
+
+Synthetic 
+2-Layer MLP -
+0.0005 
+0.001 
+0.15 [0.25] 0.15 [0.25] 
+MNIST 
+3-Layer MLP 64 [8,16,32] 
+0.05 
+0.001 0.15 [0.25] 0.15 [0.25] 
+CIFAR-10 
+ResNet 
+128 
+0.004 
+0.0002 0.15 
+0.15 
+DNC 
+Recurrent 
+16 [8, 32, 64] 1.2 
+0.01 
+0.15 
+0.15 
+Fashion MNIST ConvNet 
+100 
+0.01 
+0.0003 0.15 
+0.15 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table</head><label></label><figDesc></figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Test accuracy after a certain number of epochs of (unregularized) MNIST training. The results are reported over 5 restarts.</figDesc><table>Test accuracy in % 
+
+Adam 
+mSGD 
+L 4 Adam L 4 Adam* 
+L 4 Mom 
+L 4 Mom* 
+
+1 epoch 
+95.7 </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Test accuracies on Fashion MNIST. Both L 4 Mom and L 4 Adam reach (slightly) higher accuracies. This effect is strenghtened by increasing the dropout rate to p = 0.7. Reported are mean and standard deviation of five independent restarts.</figDesc><table>L 4 Adam (p = 0.7) L 4 Mom (p = 0.7) 
+L 4 Adam 
+L 4 Mom 
+Adam* 
+Mom* 
+
+93.6 ± 0.25 
+93.45 ± 0.15 
+93.35 ± 0.15 93.25 ± 0.2 93.1 ± 0.2 93.0 ± 0.15 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The experiments were conducted on a machine with i7-7800X CPU @ 3.50GHz with 8 cores.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Acknowledgement</head><p>We would like to thank Alex Kolesnikov, Friedrich Solowjow, and Anna Levina for helping to improve the manuscript.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Learning to learn by gradient descent by gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcin</forename><surname>Andrychowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Misha</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergio</forename><surname>Gómez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Matthew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Pfau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nando</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>De Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="3981" to="3989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Online learning rate adaptation with hypergradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Atilim Gunes Baydin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">Martinez</forename><surname>Cornish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mark</forename><surname>Rubio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><forename type="middle">D</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wood</surname></persName>
+		</author>
+		<idno>abs/1703.04782</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">A stochastic quasi-newton method for large-scale optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">H</forename><surname>Byrd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jorge</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Optimization</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="1008" to="1031" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Official implementation of the differential neural computer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Google</forename><surname>Deepmind</surname></persName>
+		</author>
+		<ptr target="https://github.com/deepmind/dncCommita4debae" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Elad</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoram</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Neural turing machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivo</forename><surname>Danihelka</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Hybrid computing using a neural network with dynamic external memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Malcolm</forename><surname>Reynolds</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Harley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivo</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Agnieszka</forename><surname>Grabskabarwiska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergio</forename><forename type="middle">Gmez</forename><surname>Colmenarejo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tiago</forename><surname>Ramalho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Agapiou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adri</forename><forename type="middle">Puigdomnech</forename><surname>Badia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karl</forename><forename type="middle">Moritz</forename><surname>Hermann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yori</forename><surname>Zwols</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georg</forename><surname>Ostrovski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">538</biblScope>
+			<biblScope unit="issue">7626</biblScope>
+			<biblScope unit="page" from="471" to="476" />
+			<date type="published" when="2016-10" />
+			<publisher>Koray Kavukcuoglu, and Demis Hassabis</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ba</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1412.6980" />
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of ICLR</title>
+		<meeting>ICLR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinod</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<idno>CIFAR-10</idno>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+		<respStmt>
+			<orgName>Canadian Institute for Advanced Research</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A method for the solution of certain non-linear problems in least squares</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kenneth</forename><surname>Levenberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Quarterly of Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">164168</biblScope>
+			<date type="published" when="1944" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Learning to optimize. CoRR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ke</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jitendra</forename><surname>Malik</surname></persName>
+		</author>
+		<idno>abs/1606.01885</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Probabilistic line searches for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mahsereci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hennig</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="181" to="189" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Online learning of a memory for learning rates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Franziska</forename><surname>Meier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Kappler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefan</forename><surname>Schaal</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1709.06709" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Numerical Optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Wright</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Springer</publisher>
+			<pubPlace>New York</pubPlace>
+		</imprint>
+	</monogr>
+	<note>2nd edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Gradient descent doesn&apos;t find a local minimum</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benjamin</forename><surname>Recht</surname></persName>
+		</author>
+		<ptr target="https://github.com/benjamin-recht/shallow-linear-netCommitd192d96" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Reflections on random kitchen sinks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benjamin</forename><surname>Recht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ali</forename><surname>Rahimi</surname></persName>
+		</author>
+		<ptr target="http://www.argmin.net/2017/12/05/kitchen-sinks" />
+		<imprint>
+			<date type="published" when="2017-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">No more pesky learning rates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sixin</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 30th International Conference on Machine Learning</title>
+		<editor>Sanjoy Dasgupta and David McAllester</editor>
+		<meeting>the 30th International Conference on Machine Learning<address><addrLine>Atlanta, Georgia, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>PMLR</publisher>
+			<date type="published" when="2013-06" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="17" to="19" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Dropout: A simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nitish</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">End-to-end memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sainbayar</forename><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2440" to="2448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Tensorflow implementation of ConvNet for MNIST</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tensorflow Github Repository</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+	<note>Commit 1f34fcaf</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Tensorflow implementation of ResNets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tensorflow Github Repository</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+	<note>Commit 1f34fcaf</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Lecture 6.5-RmsProp: Divide the gradient by a running average of its recent magnitude</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">COURSERA: Neural Networks for Machine Learning</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Understanding short-horizon bias in stochastic meta-optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuhuai</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mengye</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Renjie</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Han</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kashif</forename><surname>Rasul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roland</forename><surname>Vollgraf</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

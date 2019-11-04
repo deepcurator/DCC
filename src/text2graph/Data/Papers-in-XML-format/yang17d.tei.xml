@@ -1,0 +1,1364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Improved Variational Autoencoders for Text Modeling using Dilated Convolutions</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zichao</forename><surname>Yang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiting</forename><surname>Hu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taylor</forename><surname>Berg-Kirkpatrick</surname></persName>
+						</author>
+						<title level="a" type="main">Improved Variational Autoencoders for Text Modeling using Dilated Convolutions</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Recent work on generative text modeling has found that variational autoencoders (VAE) with LSTM decoders perform worse than simpler LSTM language models <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>. This negative result is so far poorly understood, but has been attributed to the propensity of LSTM decoders to ignore conditioning information from the encoder. In this paper, we experiment with a new type of decoder for VAE: a dilated CNN. By changing the decoder's dilation architecture, we control the size of context from previously generated words. In experiments, we find that there is a trade-off between contextual capacity of the decoder and effective use of encoding information. We show that when carefully managed, VAEs can outperform LSTM language models. We demonstrate perplexity gains on two datasets, representing the first positive language modeling result with VAE. Further, we conduct an in-depth investigation of the use of VAE (with our new decoding architecture) for semi-supervised and unsupervised labeling tasks, demonstrating gains over several strong baselines.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generative models play an important role in NLP, both in their use as language models and because of their ability to effectively learn from unlabeled data. By parameterzing generative models using neural nets, recent work has proposed model classes that are particularly expressive and can pontentially model a wide range of phenomena in language and other modalities. We focus on a specific instance 1 Carnegie Mellon University. Correspondence to: Zichao Yang &lt;zichaoy@cs.cmu.edu&gt;.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proceedings of the 34</head><p>th International Conference on Machine Learning, Sydney, <ref type="bibr">Australia, PMLR 70, 2017</ref><ref type="bibr">. Copyright 2017</ref> by the author(s). of this class: the variational autoencoder 1 (VAE) <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013)</ref>.</p><p>The generative story behind the VAE (to be described in detail in the next section) is simple: First, a continuous latent representation is sampled from a multivariate Gaussian. Then, an output is sampled from a distribution parameterized by a neural decoder, conditioned on the latent representation. The latent representation (treated as a latent variable during training) is intended to give the model more expressive capacity when compared with simpler neural generative models-for example, conditional language models. The choice of decoding architecture and final output distribution, which connect the latent representation to output, depends on the kind of data being modeled. The VAE owes its name to an accompanying variational technique <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013</ref>) that has been successfully used to train such models on image data <ref type="bibr" target="#b6">(Gregor et al., 2015;</ref><ref type="bibr">Salimans et al., 2015;</ref><ref type="bibr" target="#b32">Yan et al., 2016)</ref>.</p><p>The application of VAEs to text data has been far less successful <ref type="bibr" target="#b1">(Bowman et al., 2015;</ref><ref type="bibr" target="#b24">Miao et al., 2016)</ref>. The obvious choice for decoding architecture for a textual VAE is an LSTM, a typical workhorse in NLP. However, <ref type="bibr" target="#b1">Bowman et al. (2015)</ref> found that using an LSTM-VAE for text modeling yields higher perplexity on held-out data than using an LSTM language model. In particular, they observe that the LSTM decoder in VAE does not make effective use of the latent representation during training and, as a result, VAE collapses into a simple language model. Related work <ref type="bibr" target="#b24">(Miao et al., 2016;</ref><ref type="bibr" target="#b20">Larochelle &amp; Lauly, 2012;</ref><ref type="bibr" target="#b26">Mnih &amp; Gregor, 2014)</ref> has used simpler decoders that model text as a bag of words. Their results indicate better use of latent representations, but their decoders cannot effectively model longer-range dependencies in text and thus underperform in terms of final perplexity.</p><p>Motivated by these observations, we hypothesize that the contextual capacity of the decoder plays an important role in whether VAEs effectively condition on the latent representation when trained on text data. We propose the use of a dilated CNN as a decoder in VAE, inspired by the recent success of using CNNs for audio, image and language modeling <ref type="bibr" target="#b12">(van den Oord et al., 2016a;</ref><ref type="bibr" target="#b12">Kalchbrenner et al., 2016a;</ref><ref type="bibr" target="#b13">van den Oord et al., 2016b)</ref>. In contrast with prior work where extremely large CNNs are used, we exploit the dilated CNN for its flexibility in varying the amount of conditioning context. In the two extremes, depending on the choice of dilation, the CNN decoder can reproduce a simple MLP using a bags of words representation of text, or can reproduce the long-range dependence of recurrent architectures (like an LSTM) by conditioning on the entire history. Thus, by choosing a dilated CNN as the decoder, we are able to conduct experiments where we vary contextual capacity, finding a sweet spot where the decoder can accurately model text but does not yet overpower the latent representation.</p><p>We demonstrate that when this trade-off is correctly managed, textual VAEs can perform substantially better than simple LSTM language models, a finding consistent with recent image modeling experiments using variational lossy autoencoders <ref type="bibr" target="#b2">(Chen et al., 2016)</ref>. We go on to show that VAEs with carefully selected CNN decoders can be quite effective for semi-supervised classification and unsupervised clustering, outperforming several strong baselines (from <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>) on both text categorization and sentiment analysis.</p><p>Our contributions are as follows: First, we propose the use of a dilated CNN as a new decoder for VAE. We then empirically evaluate several dilation architectures with different capacities, finding that reduced contextual capacity leads to stronger reliance on latent representations. By picking a decoder with suitable contextual capacity, we find our VAE performs better than LSTM language models on two data sets. We also explore the use of dilated CNN VAEs for semi-supervised classification and find they perform better than strong baselines from <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>. Finally, we verify that the same framework can be used effectively for unsupervised clustering.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Model</head><p>In this section, we begin by providing background on the use of variational autoencoders for language modeling. Then we introduce the dilated CNN architecture that we will use as a new decoder for VAE in experiments. Finally, we describe the generalization of VAE that we will use to conduct experiments on semi-supervised classification.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Background on Variational Autoencoders</head><p>Neural language models <ref type="bibr" target="#b25">(Mikolov et al., 2010)</ref> typically generate each token x t conditioned on the entire history of previously generated tokens:</p><formula xml:id="formula_0">p(x) = t p(x t |x 1 , x 2 , ..., x t−1 ).<label>(1)</label></formula><p>State-of-the-art language models often parametrize these conditional probabilities using RNNs, which compute an evolving hidden state over the text which is used to predict each x t . This approach, though effective in modeling text, does not explicitly model variance in higher-level properties of entire utterances (e.g. topic or style) and thus can have difficulty with heterogeneous datasets. <ref type="bibr" target="#b1">Bowman et al. (2015)</ref> propose a different approach to generative text modeling inspired by related work on vision <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013</ref> </p><formula xml:id="formula_1">p θ (x|z) = t p θ (x t |x 1 , x 2 , ..., x t−1 , z).<label>(2)</label></formula><p>To estimate model parameters θ we would ideally like to maximize the marginal probability p θ (x) = p θ (z)p θ (x|z)dz. However, computing this marginal is intractable for many decoder choices. Thus, the following variational lower bound is often used as an objective <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013)</ref>:</p><formula xml:id="formula_2">log p θ (x) = − log p θ (z)p θ (x|z)dz ≥ E q φ (z|x) [log p θ (x|z)] − KL(q φ (z|x)||p θ (z)).</formula><p>Here, q φ (z|x) is an approximation to the true posterior (often called the recognition model or encoder) and is parameterized by φ. Like the decoder, we have a choice of neural architecture to parameterize the encoder. However, unlike the decoder, the choice of encoder does not change the model class -it only changes the variational approximation used in training, which is a function of both the model parameters θ and the approximation parameters φ. Training seeks to optimize these parameters jointly using stochastic gradient ascent. A final wrinkle of the training procedure involves a stochastic approximation to the gradients of the variational objective (which is itself intractable). We omit details here, noting only that the final distribution of the posterior approximation q φ (z|x) is typically assumed to be Gaussian so that a re-parametrization trick can be used, and refer readers to <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Training Collapse with Textual VAEs</head><p>Together, this combination of generative model and variational inference procedure are often referred to as a variational autoencoder (VAE). We can also view the VAE as a regularized version of the autoencoder. Note, however, that while VAEs are valid probabilistic models whose likelihood can be evaluated on held-out data, autoencoders are not valid models. If only the first term of the VAE variational bound E q φ (z|x) [log p θ (x|z)] is used as an objective, the variance of the posterior probability q φ (z|x) will become small and the training procedure reduces to an autoencoder. It is the KL-divergence term, KL(q φ (z|x)||p θ (z)), that discourages the VAE memorizing each x as a single latent point.</p><p>While the KL term is critical for training VAEs, historically, instability on text has been evidenced by the KL term becoming vanishingly small during training, as observed by <ref type="bibr" target="#b1">Bowman et al. (2015)</ref>. When the training procedure collapses in this way, the result is an encoder that has duplicated the Gaussian prior (instead of a more interesting posterior), a decoder that completely ignores the latent variable z, and a learned model that reduces to a simpler language model. We hypothesize that this collapse condition is related to the contextual capacity of the decoder architecture. The choice encoder and decoder depends on the type of data. For images, these are typically MLPs or CNNs. LSTMs have been used for text, but have resulted in training collapse as discussed above <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>. Here, we propose to use a dilated CNN as the decoder instead. In one extreme, when the effective contextual width of a CNN is very large, it resembles the behavior of LSTM. When the width is very small, it behaves like a bag-ofwords model. The architectural flexibility of dilated CNNs allows us to change the contextual capacity and conduct experiments to validate our hypothesis: decoder contextual capacity and effective use of encoding information are directly related. We next describe the details of our decoder.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Dilated Convolutional Decoders</head><p>The typical approach to using CNNs used for text generation <ref type="bibr" target="#b12">(Kalchbrenner et al., 2016a</ref>) is similar to that used for images <ref type="bibr" target="#b19">(Krizhevsky et al., 2012;</ref><ref type="bibr" target="#b8">He et al., 2016)</ref>, but with the convolution applied in one dimension. We take this approach here in defining our decoder.</p><p>One dimensional convolution: For a CNN to serve as a decoder for text, generation of x t must only condition on past tokens x &lt;t . Applying the traditional convolution will break this assumption and use tokens x ≥t as inputs to predict x t . In our decoder, we avoid this by simply shifting the input by several slots <ref type="bibr" target="#b13">(van den Oord et al., 2016b)</ref>. With a convolution with filter size of k and using n layers, our effective filter size (the number of past tokens  to condition to in predicting x t ) would be (k − 1) × n + 1. Hence, the filter size would grow linearly with the depth of the network.</p><p>Dilation: Dilated convolution <ref type="bibr" target="#b34">(Yu &amp; Koltun, 2015)</ref> was introduced to greatly increase the effective receptive field size without increasing the computational cost. With dilation d, the convolution is applied so that d − 1 inputs are skipped each step. Causal convolution can be seen a special case with d = 1. With dilation, the effective receptive size grows exponentially with network depth. In <ref type="figure" target="#fig_1">Figure 1b</ref>, we show dilation of sizes of 1 and 2 in the first and second layer, respectively. Suppose the dilation size in the i-th layer is d i and we use the same filter size k in all layers, then the effective filter size is (k − 1) i d i + 1. The dilations are typically set to double every layer d i+1 = 2d i , so the effective receptive field size can grow exponentially. Hence, the contextual capacity of a CNN can be controlled across a greater range by manipulating the filter size, dilation size and network depth. We use this approach in experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Residual connection:</head><p>We use residual connection   to speed up convergence and enable training of deeper models. We use a residual block (shown to the right) similar to that of <ref type="bibr" target="#b12">(Kalchbrenner et al., 2016a)</ref>. We use three convolutional layers with filter size 1×1, 1×k, 1×1, respectively, and ReLU activation be-tween convolutional layers.</p><p>Overall architecture: Our VAE architecture is shown in <ref type="figure" target="#fig_1">Figure 1a</ref>. We use LSTM as the encoder to get the posterior probability q(z|x), which we assume to be diagonal Gaussian. We parametrize the mean µ and variance σ with LSTM output. We sample z from q(z|x), the decoder is conditioned on the sample by concatenating z with every word embedding of the decoder input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Semi-supervised VAE</head><p>In addition to conducting language modeling experiments, we will also conduct experiments on semi-supervised classification of text using our proposed decoder. In this section, we briefly review semi-supervised VAEs of ) that incorporate discrete labels as additional variables. Given the labeled set (x, y) ∼ D L and the unlabeled set x ∼ D U ,  proposed a model whose latent representation contains continuous vector z and discrete label y:</p><formula xml:id="formula_3">p(x, y, z) = p(y)p(z)p(x|y, z).<label>(3)</label></formula><p>The semi-supervised VAE fits a discriminative network q(y|x), an inference network q(z|x, y) and a generative network p(x|y, z) jointly as part of optimizing a variational lower bound similar that of basic VAE. For labeled data (x, y), this bound is:</p><formula xml:id="formula_4">log p(x, y) ≥ E q(z|x,y) [log p(x|y, z)] − KL(q(z|x, y)||p(z)) + log p(y) =L(x, y) + log p(y).</formula><p>For unlabeled data x, the label is treated as a latent variable, yielding:</p><formula xml:id="formula_5">log p(x) ≥U (x) = E q(y|x) E q(z|x,y) [log p(x|y, z)] − KL(q(z|x, y)||p(z)) + log p(y) − log q(y|x) = y q(y|x)L(x, y) − KL(q(y|x)||p(y)).</formula><p>Combining the labeled and unlabeled data terms, we have the overall objective as:</p><formula xml:id="formula_6">J = E (x,y)∼D L [L(x, y)] + E x∼D U [U (x)] + α E (x,y)∼D L [log q(y|x)],</formula><p>where α controls the trade off between generative and discriminative terms.</p><p>Gumbel-softmax: Jang et al. <ref type="formula" target="#formula_0">(2016)</ref>; <ref type="bibr" target="#b22">Maddison et al. (2016)</ref> propose a continuous approximation to sampling from a categorical distribution. Let u be a categorical distribution with probabilities π 1 , π 2 , ..., π c . Samples from u can be approximated using:</p><formula xml:id="formula_7">y i = exp((log(π i ) + g i )/τ ) c j=1 exp((log(π j ) + g j )/τ ) ,<label>(4)</label></formula><p>where g i follows Gumbel(0, 1). The approximation is accurate when τ → 0 and smooth when τ &gt; 0. In experiments, we use Gumbel-Softmax to approximate the samples from p(y|x) to reduce the computational cost. As a result, we can directly back propagate the gradients of U (x) to the discriminator network. We anneal τ so that sample variance is small when training starts and then gradually decrease τ .</p><p>Unsupervised clustering: In this section we adapt the same framework for unsupervised clustering. We directly minimize the objective U (x), which is consisted of two parts: reconstruction loss and KL regularization on q(y|x). The first part encourages the model to assign x to label y such that the reconstruction loss is low. We find that the model can easily get stuck in two local optimum: the KL term is very small and q(y|x) is close to uniform distribution or the KL term is very large and all samples collapse to one class. In order to make the model more robust, we modify the KL term by:</p><formula xml:id="formula_8">KL y = max(γ, KL(q(y|x)|p(y)).<label>(5)</label></formula><p>That is, we only minimize the KL term when it is large enough.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Data sets</head><p>Since we would like to investigate VAEs for language modeling and semi-supervised classification, the data sets should be suitable for both purposes. We use two large scale document classification data sets: Yahoo Answer and Yelp15 review, representing topic classification and sentiment classification data sets respectively <ref type="bibr" target="#b31">(Tang et al., 2015;</ref><ref type="bibr" target="#b33">Yang et al., 2016;</ref><ref type="bibr" target="#b36">Zhang et al., 2015)</ref>. The original data sets contain millions of samples, of which we sample 100k as training and 10k as validation and test from the respective partitions. The detailed statistics of both data sets are in <ref type="table">Ta</ref>   <ref type="table">Table 2</ref>: Language modeling results on the test set. * * is from <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>. We report negative log likelihood (NLL) and perplexity (PPL) on the test set. The KL component of NLL is given in parentheses. Size indicates the effective filter size. VAE + init indicates pretraining of only the encoder using an LSTM LM.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Model configurations and Training details</head><p>We use an LSTM as an encoder for VAE and explore LSTMs and CNNs as decoders. For CNNs, we explore several different configurations. We set the convolution filter size to be 3 and gradually increase the depth and dilation from [1, 2, 4], <ref type="bibr">[1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16</ref>] to <ref type="bibr">[1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16,</ref><ref type="bibr">1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16]</ref>. They represent small, medium and large model and we name them as SCNN, MCNN and LCNN. We also explore a very large model with dilations <ref type="bibr">[1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16,</ref><ref type="bibr">1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16,</ref><ref type="bibr">1,</ref><ref type="bibr">2,</ref><ref type="bibr">4,</ref><ref type="bibr">8,</ref><ref type="bibr">16]</ref> and name it as VLCNN. The effective filter size are 15, 63, 125 and 187 respectively. We use the last hidden state of the encoder LSTM and feed it though an MLP to get the mean and variance of q(z|x), from which we sample z and then feed it through an MLP to get the starting state of decoder. For the LSTM decoder, we follow <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref> to use it as the initial state of LSTM and feed it to every step of LSTM. For the CNN decoder, we concatenate it with the word embedding of every decoder input.</p><p>The architecture of the Semi-supervised VAE basically follows that of the VAE. We feed the last hidden state of the encoder LSTM through a two layer MLP then a softmax to get q(y|x). We use Gumbel-softmax to sample y from q(y|x). We then concatenate y with the last hidden state of encoder LSTM and feed them throught an MLP to get the mean and variance of q(z|y, x). y and z together are used as the starting state of the decoder.</p><p>We use a vocabulary size of 20k for both data sets and set the word embedding dimension to be 512. The LSTM dimension is 1024. The number of channels for convolutions in CNN decoders is 512 internally and 1024 externally, as shown in Section 2.3. We select the dimension of z from <ref type="bibr">[32,</ref><ref type="bibr">64]</ref>. We find our model is not sensitive to this parameter.</p><p>We use Adam <ref type="bibr" target="#b14">(Kingma &amp; Ba, 2014)</ref> to optimize all models and the learning rate is selected from [2e-3, 1e-3, 7.5e-4] and β 1 is selected from [0.5, 0.9]. Empirically, we find learning rate 1e-3 and β 1 = 0.5 to perform the best. We select drop out ratio of LSTMs (both encoder and decoder) from [0.3, 0.5]. Following <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>, we also use drop word for the LSTM decoder, the drop word ratio is selected from <ref type="bibr">[0, 0.3, 0.5, 0.7]</ref>. For the CNN decoder, we use a drop out ratio of 0.1 at each layer. We do not use drop word for CNN decoders. We use batch size of 32 and all model are trained for 40 epochs. We start to half the learning rate every 2 epochs after epoch 30. Following <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>, we use KL cost annealing strategy. We set the initial weight of KL cost term to be 0.01 and increase it linearly until a given iteration T . We treat T as a hyper parameter and select it from [10k, 40k, 80k].</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Language modeling results</head><p>The results for language modeling are shown in <ref type="table">Table 2</ref>. We report the negative log likelihood (NLL) and perplexity (PPL) of the test set. For the NLL of VAEs, we decompose it into reconstruction loss and KL divergence and report the KL divergence in the parenthesis. To better visualize these results, we plot the results of Yahoo data set <ref type="table" target="#tab_4">(Table 2a)</ref>    We can see that LSTM-VAE is worse than LSTM-LM in terms of NLL and the KL term is nearly zero, which verifies the finding of <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref>. When we use CNNs as the decoders for VAEs, we can see improvement over pure CNN LMs. For SCNN, MCNN and LCNN, the VAE results improve over LM results from 345.3 to 337.8, 338.3 to 336.2, and 335.4 to 333.9 respectively. The improvement is big for small models and gradually decreases as we increase the decoder model contextual capacity. When the model is as large as VLCNN, the improvement diminishes and the VAE result is almost the same with LM result. This is also reflected in the KL term, SCNN-VAE has the largest KL of 13.3 and VLCNN-VAE has the smallest KL of 0.7. When LCNN is used as the decoder, we obtain an optimal trade off between using contextual information and latent representation. LCNN-VAE achieves a NLL of 333.9, which improves over LSTM-LM with NLL of 334.9.</p><p>We find that if we initialize the parameters of LSTM encoder with parameters of LSTM language model, we can improve the VAE results further. This indicates better encoder model is also a key factor for VAEs to work well. Combined with encoder initialization, LCNN-VAE improves over LSTM-LM from 334.9 to 332.1 in NLL and from 66.2 to 63.9 in PPL. Similar results for the sentiment data set are shown in <ref type="table">Table 2b</ref>. LCNN-VAE improves over LSTM-LM from 362.7 to 359.1 in NLL and from 42.6 to 41.1 in PPL. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Latent representation visualization:</head><p>In order to visualize the latent representation, we set the dimension of z to be 2 and plot the mean of posterior probability q(z|x), as shown in <ref type="figure" target="#fig_4">Figure 3</ref>. We can see distinct different characteristics of topic and sentiment representation. In <ref type="figure" target="#fig_4">Figure 3a</ref>, we can see that documents of different topics fall into different clusters, while in <ref type="figure" target="#fig_4">Figure 3b</ref>, documents of different ratings form a continuum, they lie continuously on the xaxis as the review rating increases.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Model ACCU NLL (KL)</head><p>LSTM-VAE-Semi 51.9 345.5 (9.3) SCNN-VAE-Semi 65.5 335.7 (10.4) MCNN-VAE-Semi 64.6 332.8 (7.2) LCNN-VAE-Semi 57.2 331.3 (2.7) <ref type="table">Table 3</ref>: Semi-supervised VAE ablation results on Yahoo. We report both the NLL and classification accuracy of the test data. Accuracy is in percentage. Number of labeled samples is fixed to be 500.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Semi-supervised VAE results</head><p>Motivated by the success of VAEs for language modeling, we continue to explore VAEs for semi-supervised learning. Following that of , we set the number of labeled samples to be 100, 500, 1000 and 2000 respectively.</p><p>Ablation Study: At first, we would like to explore the effect of different decoders for semi-supervised classification. We fix the number of labeled samples to be 500 and report both classification accuracy and NLL of the test set of Yahoo data set in <ref type="table">Table.</ref> 5. We can see that SCNN-VAESemi has the best classification accuracy of 65.5. The accuracy decreases as we gradually increase the decoder contextual capacity. On the other hand, LCNN-VAE-Semi has the best NLL result. This classification accuracy and NLL trade off once again verifies our conjecture: with small contextual window size, the decoder is forced to use the encoder information, hence the latent representation is better Model 100 500 1000 2000 LSTM 10.7 11.9 14.3 23.1 LA-LSTM <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref> 20.8 42.2 50.4 54.7 LM-LSTM <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>   <ref type="table">Table 4</ref>: Semi-supervised VAE results on the test set, in percentage. LA-LSTM and LM-LSTM come from <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>, they denotes the LSTM is initialized with a sequence autoencoder and a language model.</p><p>learned.</p><p>Comparing the NLL results of Comparison with related methods: We compare Semisupervised VAE with the methods from <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>, which represent the previous state-of-the-art for semisupervised sequence learning. <ref type="bibr" target="#b4">Dai &amp; Le (2015)</ref> pre-trains a classifier by initializing the parameters of a classifier with that of a language model or a sequence autoencoder. They find it improves the classification accuracy significantly. Since SCNN-VAE-Semi performs the best according to Table 5, we fix the decoder to be SCNN in this part. The detailed comparison is in <ref type="table">Table 4</ref>. We can see that semisupervised VAE performs better than LM-LSTM and LA-LSTM from <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>. We also initialize the encoder of the VAE with parameters from LM and find classification accuracy further improves. We also see the advantage of SCNN-VAE-Semi over LM-LSTM is greater when the number of labeled samples is smaller. The advantage decreases as we increase the number of labeled samples. When we set the number of labeled samples to be 25k, the SCNN-VAE-Semi achieves an accuracy of 70.4, which is similar to LM-LSTM with an accuracy of 70.5. Also, SCNN-VAE-Semi performs better on Yahoo data set than Yelp data set. For Yelp, SCNN-VAE-Semi is a little bit worse than LM-LSTM if the number of labeled samples is greater than 100, but becomes better when we initialize the encoder. <ref type="figure" target="#fig_4">Figure 3b</ref> explains this observation. It shows the documents are coupled together and are harder to classify. Also, the latent representation contains information other than sentiment, which may not be useful for classification.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Unsupervised clustering results</head><p>We also explored using the same framework for unsupervised clustering. We compare with the baselines that ex-  tract the feature with existing models and then run Gaussian Mixture Model (GMM) on these features. We find empirically that simply using the features does not perform well since the features are high dimensional. We run a PCA on these features, the dimension of PCA is selected from <ref type="bibr">[8,</ref><ref type="bibr">16,</ref><ref type="bibr">32]</ref>. Since GMM can easily get stuck in poor local optimum, we run each model ten times and report the best result. We find directly optimizing U (x) does not perform well for unsupervised clustering and we need to initialize the encoder with LSTM language model. The model only works well for Yahoo data set. This is potentially because <ref type="figure" target="#fig_4">Figure 3b</ref> shows that sentiment latent representations does not fall into clusters. γ in Equation 5 is a sensitive parameter, we select it from the range between 0.5 and 1.5 with an interval of 0.1. We use the following evaluation protocol <ref type="bibr" target="#b23">(Makhzani et al., 2015)</ref>: after we finish training, for cluster i, we find out the validation sample x n from cluster i that has the best q(y i |x) and assign the label of x n to all samples in cluster i. We then compute the test accuracy based on this assignment. The detailed results are in <ref type="table" target="#tab_6">Table 5</ref>. We can see SCNN-VAE-Unsup + init performs better than other baselines. LSTM+GMM performs very bad probably because the feature dimension is 1024 and is too high for GMM, even though we already used PCA to reduce the dimension.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Conditional text generation</head><p>With the semi-supervised VAE, we are able to generate text conditional on the label. Due to space limitation, we only show one example of 1 star the food was good but the service was horrible . took forever to get our food . we had to ask twice for our check after we got our food . will not return . 2 star the food was good , but the service was terrible . took forever to get someone to take our drink order . had to ask 3 times to get the check . food was ok , nothing to write about . 3 star came here for the first time last night . food was good . service was a little slow . food was just ok . 4 star food was good , service was a little slow , but the food was pretty good . i had the grilled chicken sandwich and it was really good . will definitely be back ! 5 star food was very good , service was fast and friendly . food was very good as well . will be back ! <ref type="table">Table 6</ref>: Text generated by conditioning on sentiment label. generated reviews conditioning on review rating in <ref type="table">Table 6</ref>. For each group of generated text, we fix z and vary the label y, while picking x via beam search with a beam size of 10.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Related work</head><p>Variational inference via the re-parameterization trick was initially proposed by <ref type="bibr" target="#b15">(Kingma &amp; Welling, 2013;</ref><ref type="bibr" target="#b28">Rezende et al., 2014)</ref> and since then, VAE has been widely adopted as generative model for images <ref type="bibr" target="#b6">(Gregor et al., 2015;</ref><ref type="bibr" target="#b32">Yan et al., 2016;</ref><ref type="bibr">Salimans et al., 2015;</ref><ref type="bibr" target="#b7">Gregor et al., 2016;</ref><ref type="bibr" target="#b10">Hu et al., 2017b</ref>).</p><p>Our work is in line with previous works on combining variational inferences with text modeling <ref type="bibr" target="#b1">(Bowman et al., 2015;</ref><ref type="bibr" target="#b24">Miao et al., 2016;</ref><ref type="bibr" target="#b30">Serban et al., 2016;</ref><ref type="bibr" target="#b35">Zhang et al., 2016;</ref><ref type="bibr" target="#b9">Hu et al., 2017a)</ref>. <ref type="bibr" target="#b1">(Bowman et al., 2015)</ref> is the first work to combine VAE with language model and they use LSTM as the decoder and find some negative results. On the other hand, <ref type="bibr" target="#b24">(Miao et al., 2016</ref>) models text as bag of words, though improvement has been found, the model can not be used to generate text. Our work fills the gaps between them. <ref type="bibr" target="#b30">(Serban et al., 2016;</ref><ref type="bibr" target="#b35">Zhang et al., 2016)</ref> applies variational inference to dialogue modeling and machine translation and found some improvement in terms of generated text quality, but no language modeling results are reported. <ref type="bibr">(Chung et al., 2015;</ref><ref type="bibr" target="#b0">Bayer &amp; Osendorfer, 2014;</ref><ref type="bibr" target="#b5">Fraccaro et al., 2016)</ref> embedded variational units in every step of a RNN, which is different from our model in using global latent variables to learn high level features.</p><p>Our use of CNN as decoder is inspired by recent success of PixelCNN model for images <ref type="bibr" target="#b13">(van den Oord et al., 2016b)</ref>, WaveNet for audios <ref type="bibr" target="#b12">(van den Oord et al., 2016a)</ref>, Video Pixel Network for video modeling  and ByteNet for machine translation <ref type="bibr" target="#b12">(Kalchbrenner et al., 2016a)</ref>. But in contrast to those works showing using a very deep architecture leads to better performance, CNN as decoder is used in our model to control the contextual capacity, leading to better performance.</p><p>Our work is closed related the recently proposed variational lossy autoencoder <ref type="bibr" target="#b2">(Chen et al., 2016)</ref> which is used to predict image pixels. They find that conditioning on a smaller window of a pixels leads to better results with VAE, which is similar to our finding. Much <ref type="bibr" target="#b27">(Rezende &amp; Mohamed, 2015;</ref><ref type="bibr" target="#b17">Kingma et al., 2016;</ref><ref type="bibr" target="#b2">Chen et al., 2016)</ref> has been done to come up more powerful prior/posterior distribution representations with techniques such as normalizing flows. We treat this as one of our future works. This work is largely orthogonal and could be potentially combined with a more effective choice of decoder to yield additional gains.</p><p>There is much previous work exploring unsupervised sentence encodings, for example skip-thought vectors <ref type="bibr" target="#b18">(Kiros et al., 2015)</ref>, paragraph vectors <ref type="bibr" target="#b21">(Le &amp; Mikolov, 2014)</ref>, and sequence autoencoders <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref>. <ref type="bibr" target="#b4">(Dai &amp; Le, 2015)</ref> applies a pretrained model to semi-supervised classification and find significant gains, we use this as the baseline for our semi-supervised VAE.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We showed that by controlling the decoder's contextual capacity in VAE, we can improve performance on both language modeling and semi-supervised classification tasks by preventing a degenerate collapse of the training procedure. These results indicate that more carefully characterizing decoder capacity and understanding how it relates to common variational training procedures may represent important avenues for unlocking future unsupervised problems.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>of dilated CNN decoder.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Our training and model architectures for textual VAE using a dilated CNN decoder.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>in Figure 2 .</head><label>2</label><figDesc></figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: NLL decomposition of Table 2a. Each group consists of three bars, representing LM, VAE and VAE+init. For VAE, we decompose the loss into reconstruction loss and KL divergence, shown in blue and red respectively. We subtract all loss values with 300 for better visualization.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Visualizations of learned latent representations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>in the decoder</figDesc><table>ReLU 1x1, 512 
+
+ReLU 1xk, 512 
+
+conv 
+
+ReLU 1x1, 1024 
+
++ 
+
+conv 
+
+conv 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Data statistics</figDesc><table>Improved Variational Autoencoders for Text Modeling using Dilated Convolutions 
+
+Model 
+Size NLL (KL) 
+PPL 
+
+LSTM-LM 
+&lt; i 334.9 
+66.2 
+LSTM-VAE 
+
+ *  *  
+
+&lt; i 342.1 (0.0) 
+72.5 
+LSTM-VAE 
+ *  *  + init 
+&lt; i 339.2 (0.0) 
+69.9 
+
+SCNN-LM 
+15 345.3 
+75.5 
+SCNN-VAE 
+15 337.8 (13.3) 68.7 
+SCNN-VAE + init 
+15 335.9 (13.9) 67.0 
+
+MCNN-LM 
+63 338.3 
+69.1 
+MCNN-VAE 
+63 336.2 (11.8) 67.3 
+MCNN-VAE + init 
+63 334.6 (12.6) 66.0 
+
+LCNN-LM 
+125 335.4 
+66.6 
+LCNN-VAE 
+125 333.9 (6.7) 
+65.4 
+LCNN-VAE + init 
+125 332.1 (10.0) 63.9 
+
+VLCNN-LM 
+187 336.5 
+67.6 
+VLCNN-VAE 
+187 336.5 (0.7) 
+67.6 
+VLCNN-VAE + init 
+187 335.8 (3.8) 
+67.0 
+
+(a) Yahoo 
+
+Model 
+Size NLL (KL) 
+PPL 
+
+LSTM-LM 
+&lt; i 362.7 
+42.6 
+LSTM-VAE 
+
+ *  *  
+
+&lt; i 372.2 (0.3) 
+47.0 
+LSTM-VAE 
+ *  *  + init 
+&lt; i 368.9 (4.7) 
+46.4 
+
+SCNN-LM 
+15 371.2 
+46.6 
+SCNN-VAE 
+15 365.6 (9.4) 
+43.9 
+SCNN-VAE + init 
+15 363.7 (10.3) 43.1 
+
+MCNN-LM 
+63 366.5 
+44.3 
+MCNN-VAE 
+63 363.0 (6.9) 
+42.8 
+MCNN-VAE + init 
+63 360.7 (9.1) 
+41.8 
+
+LCNN-LM 
+125 363.5 
+43.0 
+LCNN-VAE 
+125 361.9 (6.4) 
+42.3 
+LCNN-VAE + init 
+125 359.1 (7.6) 
+41.1 
+
+VLCNN-LM 
+187 364.8 
+43.7 
+VLCNN-VAE 
+187 364.3 (2.7) 
+43.4 
+VLCNN-VAE + init 
+187 364.7 (2.2) 
+43.5 
+
+(b) Yelp 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 2a .</head><label>2a</label><figDesc>The NLL of LCNN-LM is very close to the NLL of LSTM-LM 334.9. But VLCNN-LM is a lit- tle bit worse than LCNN-LM, this indicates a little bit of over-fitting.</figDesc><table>Each group con-
+sists of three bars, representing LM, VAE and VAE+init. 
+For VAE, we decompose the loss into reconstruction loss 
+and KL divergence, shown in blue and red respectively. We 
+subtract all loss values with 300 for better visualization. 
+
+We first look at the LM results for Yahoo data set. As 
+we gradually increase the effective filter size of CNN from 
+SCNN, MCNN to LCNN, the NLL decreases from 345.3, 
+338.3 to 335.4. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 5</head><label>5</label><figDesc></figDesc><table>with that of Ta-
+ble 2a, we can see the NLL improves. The NLL of semi-
+supervised VAE improves over simple VAE from 337.8 to 
+335.7 for SCNN, from 336.2 to 332.8 for MCNN, and from 
+333.9 to 332.8 for LCNN. The improvement mainly comes 
+from the KL divergence part, this indicates that better la-
+tent representations decrease the KL divergence, further 
+improving the VAE results. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_8" validated="false"><head>Table 5 :</head><label>5</label><figDesc></figDesc><table>Unsupervised clustering results for Yahoo data set. 
+We run each model 10 times and report the best results. 
+LSTM+GMM means we extract the features from LSTM 
+language model. SCNN-VAE + GMM means we use the 
+mean of q(z|x) as the feature. SCNN-VAE + init + GMM 
+means SCNN-VAE is trained with encoder initialization. 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Learning stochastic recurrent networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Bayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Osendorfer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.7610</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Generating sentences from a continuous space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samuel</forename><forename type="middle">R</forename><surname>Bowman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vilnis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Luke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">M</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rafal</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06349</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Prafulla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.02731</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">Variational lossy autoencoder. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A recurrent latent variable model for sequential data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Junyoung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kastner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Laurent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Goel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kratarth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Aaron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Improved Variational Autoencoders for Text Modeling using Dilated Convolutions Chung</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2980" to="2988" />
+		</imprint>
+	</monogr>
+	<note>Advances in neural information processing systems</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Semi-supervised sequence learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">M</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3079" to="3087" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Sequential neural models with stochastic layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marco</forename><surname>Fraccaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Søren</forename><surname>Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaae</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ulrich</forename><surname>Paquet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ole</forename><surname>Winther</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2199" to="2207" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Draw: A recurrent neural network for image generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ivo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.04623</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Towards conceptual compression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Besse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Frederic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ivo</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances In Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3549" to="3557" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiangyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiting</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zichao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiaodan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00955</idno>
+		<title level="m">Controllable text generation</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiting</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zichao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.00550</idno>
+		<title level="m">On unifying deep generative models</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><surname>Jang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Poole</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01144</idno>
+		<title level="m">Categorical reparameterization with gumbel-softmax</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nal</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Espeholt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lasse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Den</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.10099</idno>
+		<title level="m">Neural machine translation in linear time</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nal</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Den</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ivo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.00527</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<title level="m">Auto-encoding variational bayes</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Semi-supervised learning with deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shakir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="3581" to="3589" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.04934</idno>
+		<title level="m">Improving variational inference with inverse autoregressive flow</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Skip-thought vectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yukun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ruslan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antonio</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3294" to="3302" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A neural autoregressive topic model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hugo</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stanislas</forename><surname>Lauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="2708" to="2716" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Distributed representations of sentences and documents</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Mikolov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="page" from="1188" to="1196" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">The concrete distribution: A continuous relaxation of discrete random variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yee</forename><surname>Teh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Whye</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.00712</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alireza</forename><surname>Makhzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Navdeep</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brendan</forename><surname>Frey</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.05644</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">Adversarial autoencoders. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Neural variational inference for text processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yishu</forename><surname>Miao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lei</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Recurrent neural network based language model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karafiát</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Burget</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lukas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Cernockỳ</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Khudanpur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanjeev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Interspeech</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1402.0030</idno>
+		<title level="m">Neural variational inference and learning in belief networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1505.05770</idno>
+		<title level="m">Variational inference with normalizing flows</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1401.4082</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Improved Variational Autoencoders for Text Modeling using Dilated Convolutions Salimans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kingma</forename><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="1218" to="1226" />
+		</imprint>
+	</monogr>
+	<note>Markov chain monte carlo and variational inference: Bridging the gap</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">A hierarchical latent variable encoderdecoder model for generating dialogues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iulian</forename><surname>Serban</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vlad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alessandro</forename><surname>Sordoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lowe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Laurent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joelle</forename><surname>Pineau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.06069</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Document modeling with gated recurrent neural network for sentiment classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Duyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bing</forename><surname>Qin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ting ; Aäron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Heiga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wavenet ; Aaron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Espeholt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lasse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="4790" to="4798" />
+		</imprint>
+	</monogr>
+	<note>EMNLP</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Attribute2image: Conditional image generation from visual attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xinchen</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kihyuk</forename><surname>Sohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Honglak</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="776" to="791" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Hierarchical attention networks for document classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zichao</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Diyi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiaodong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eduard</forename><surname>Hovy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of NAACL-HLT</title>
+		<meeting>NAACL-HLT</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1480" to="1489" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fisher</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vladlen</forename><surname>Koltun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.07122</idno>
+		<title level="m">Multi-scale context aggregation by dilated convolutions</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Biao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Deyi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jinsong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hong</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Min</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.07869</idno>
+		<title level="m">Variational neural machine translation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Characterlevel convolutional networks for text classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiang</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junbo</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="649" to="657" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

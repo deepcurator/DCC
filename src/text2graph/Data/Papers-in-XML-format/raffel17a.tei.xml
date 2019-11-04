@@ -1,0 +1,1315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Online and Linear-Time Attention by Enforcing Monotonic Alignments</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Colin</forename><surname>Raffel</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh-Thang</forename><surname>Luong</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><forename type="middle">J</forename><surname>Liu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ron</forename><forename type="middle">J</forename><surname>Weiss</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Douglas</forename><surname>Eck</surname></persName>
+						</author>
+						<title level="a" type="main">Online and Linear-Time Attention by Enforcing Monotonic Alignments</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Recurrent neural network models with an attention mechanism have proven to be extremely effective on a wide variety of sequence-tosequence problems. However, the fact that soft attention mechanisms perform a pass over the entire input sequence when producing each element in the output sequence precludes their use in online settings and results in a quadratic time complexity. Based on the insight that the alignment between input and output sequence elements is monotonic in many problems of interest, we propose an end-to-end differentiable method for learning monotonic alignments which, at test time, enables computing attention online and in linear time. We validate our approach on sentence summarization, machine translation, and online speech recognition problems and achieve results competitive with existing sequence-tosequence models.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Recently, the "sequence-to-sequence" framework <ref type="bibr" target="#b37">(Sutskever et al., 2014;</ref><ref type="bibr" target="#b5">Cho et al., 2014)</ref> has facilitated the use of recurrent neural networks (RNNs) on sequence transduction problems such as machine translation and speech recognition. In this framework, an input sequence is processed with an RNN to produce an "encoding"; this encoding is then used by a second RNN to produce the target sequence. As originally proposed, the encoding is a single fixed-length vector representation of the input sequence. This requires the model to effectively compress all important information about the input sequence into a single vector. In practice, this often results in the model having difficulty generalizing to longer sequences than those seen during training .</p><p>An effective solution to these shortcomings are attention 1 Google Brain, Mountain View, California, USA. Correspondence to: Colin Raffel &lt;craffel@gmail.com&gt;.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proceedings of the 34</head><p>th International Conference on Machine Learning, Sydney, <ref type="bibr">Australia, PMLR 70, 2017</ref><ref type="bibr">. Copyright 2017</ref> by the author(s). mechanisms . In a sequence-tosequence model with attention, the encoder produces a sequence of hidden states (instead of a single fixed-length vector) which correspond to entries in the input sequence. The decoder is then allowed to refer back to any of the encoder states as it produces its output. Similar mechanisms have been used as soft addressing schemes in memoryaugmented neural network architectures <ref type="bibr" target="#b17">(Graves et al., 2014;</ref><ref type="bibr" target="#b36">Sukhbaatar et al., 2015)</ref> and RNNs used for sequence generation <ref type="bibr" target="#b14">(Graves, 2013)</ref>. Attention-based sequence-tosequence models have proven to be extremely effective on a wide variety of problems, including machine translation , image captioning <ref type="bibr" target="#b40">(Xu et al., 2015)</ref>, speech recognition <ref type="bibr" target="#b8">(Chorowski et al., 2015;</ref><ref type="bibr" target="#b4">Chan et al., 2016)</ref>, and sentence summarization <ref type="bibr" target="#b33">(Rush et al., 2015)</ref>. In addition, attention creates an implicit soft alignment between entries in the output sequence and entries in the input sequence, which can give useful insight into the model's behavior.</p><p>A common criticism of soft attention is that the model must perform a pass over the entire input sequence when producing each element of the output sequence. This results in the decoding process having complexity O(T U), where T and U are the input and output sequence lengths respectively. Furthermore, because the entire sequence must be processed prior to outputting any symbols, soft attention cannot be used in "online" settings where output sequence elements are produced when the input has only been partially observed.</p><p>The focus of this paper is to propose an alternative attention mechanism which has linear-time complexity and can be used in online settings. To achieve this, we first note that in many problems, the input-output alignment is roughly monotonic. For example, when transcribing an audio recording of someone saying "good morning", the region of the speech utterance corresponding to "good" will always precede the region corresponding to "morning". Even when the alignment is not strictly monotonic, it often only contains local input-output reorderings. Separately, despite the fact that soft attention allows for assignment of focus to multiple disparate entries of the input sequence, in many cases the attention is assigned mostly to a single entry. For examples of alignments with these characteristics, we refer to e.g. <ref type="bibr" target="#b8">(Chorowski et al. 2015</ref>  <ref type="figure">Figure 2</ref>; <ref type="bibr" target="#b4">Chan et al. 2016</ref>  <ref type="figure">Figure 2</ref>; <ref type="bibr" target="#b33">Rush et al. 2015</ref>  <ref type="figure">Figure 1</ref>; <ref type="bibr" target="#b2">Bahdanau et al. 2015</ref>  <ref type="figure">Figure 3</ref>), etc. Of course, this is not true in all problems; for example, when using soft attention for image captioning, the model will often change focus arbitrarily between output steps and will spread attention across large regions of the input image <ref type="bibr" target="#b40">(Xu et al., 2015)</ref>.</p><p>Motivated by these observations, we propose using hard monotonic alignments for sequence-to-sequence problems because, as we argue in section 2.2, they enable computing attention online and in linear time. Towards this end, we show that it is possible to train such an attention mechanism with a quadratic-time algorithm which computes its expected output. This allows us to continue using standard backpropagation for training while still facilitating efficient online decoding at test-time. On all problems we studied, we found these added benefits only incur a small decrease in performance compared to softmax-based attention.</p><p>The rest of this paper is structured as follows: In the following section, we develop an interpretation of soft attention as optimizing a stochastic process in expectation and formulate a corresponding stochastic process which allows for online and linear-time decoding by relying on hard monotonic alignments. In analogy with soft attention, we then show how to compute the expected output of the monotonic attention process and elucidate how the resulting algorithm differs from standard softmax attention. After giving an overview of related work, we apply our approach to the tasks of sentence summarization, machine translation, and online speech recognition, achieving results competitive with existing sequence-to-sequence models. Finally, we present additional derivations, experimental details, and ideas for future research in the appendix.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Online and Linear-Time Attention</head><p>To motivate our approach, we first point out that softmaxbased attention is computing the expected output of a simple stochastic process. We then detail an alternative process which enables online and linear-time decoding. Because this process is nondifferentiable, we derive an algorithm for computing its expected output, allowing us to train a model with standard backpropagation while applying our online and linear-time process at test time. Finally, we propose an alternative energy function motivated by the differences between monotonic attention and softmax-based attention.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Soft Attention</head><p>To begin with, we review the commonly-used form of soft attention proposed originally in . Broadly, a sequence-to-sequence model produces a sequence of outputs based on a processed input sequence. The model consists of two RNNs, referred to as the "encoder" and "decoder". The encoder RNN processes the input sequence x = {x 1 , . . . , x T } to produce a sequence of hidden states h = {h 1 , . . . , h T }. We refer to h as the "memory" to emphasize its connection to memory-augmented neural networks <ref type="bibr" target="#b17">(Graves et al., 2014;</ref><ref type="bibr" target="#b36">Sukhbaatar et al., 2015)</ref>. The decoder RNN then produces an output sequence y = {y 1 , . . . , y U }, conditioned on the memory, until a special end-of-sequence token is produced.</p><p>When computing y i , a soft attention-based decoder uses a learnable nonlinear function a(·) to produce a scalar value e i,j for each entry h j in the memory based on h j and the decoder's state at the previous timestep s i 1 . Typically, a(·) is a single-layer neural network using a tanh nonlinearity, but other functions such as a simple dot product between s i 1 and h j have been used <ref type="bibr" target="#b17">Graves et al., 2014)</ref>. These scalar values are normalized using the softmax function to produce a probability distribution over the memory, which is used to compute a context vector c i as the weighted sum of h. Because items in the memory have a sequential correspondence with items in the input, these attention distributions create a soft alignment between the output and input. Finally, the decoder updates its state to s i based on s i 1 and c i and produces y i . In total, producing y i involves</p><formula xml:id="formula_0">e i,j = a(s i 1 , h j )<label>(1)</label></formula><formula xml:id="formula_1">↵ i,j = exp(e i,j ) T X k=1 exp(e i,k )<label>(2)</label></formula><formula xml:id="formula_2">c i = T X j=1 ↵ i,j h j<label>(3)</label></formula><formula xml:id="formula_3">s i = f (s i 1 , y i 1 , c i )<label>(4)</label></formula><formula xml:id="formula_4">y i = g(s i , c i )<label>(5)</label></formula><p>where f (·) is a recurrent neural network (typically one or more LSTM <ref type="bibr" target="#b18">(Hochreiter &amp; Schmidhuber, 1997)</ref> or GRU <ref type="bibr" target="#b9">(Chung et al., 2014)</ref> layers) and g(·) is a learnable nonlinear function which maps the decoder state to the output space (e.g. an affine transformation followed by a softmax when the target sequences consist of discrete symbols).</p><p>To motivate our monotonic alignment scheme, we observe that eqs. (2) and (3) are computing the expected output of a simple stochastic process, which can be formulated as follows: First, a probability ↵ i,j is computed independently for each entry h j of the memory. Then, a memory index k is sampled by k ⇠ Categorical(↵ i ) and c i is set to h k . We visualize this process in <ref type="figure">fig. 1</ref>. Clearly, eq. (3) shows that soft attention replaces sampling k and assigning c i = h k with direct computation of the expected value of c i .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Memory h</head><p>Output y <ref type="figure">Figure 1</ref>. Schematic of the stochastic process underlying softmax-based attention decoders. Each node represents a possible alignment between an entry of the output sequence (vertical axis) and the memory (horizontal axis). At each output timestep, the decoder inspects all memory entries (indicated in gray) and attends to a single one (indicated in black). A black node indicates that memory element hj is aligned to output yi. In terms of which memory entry is chosen, there is no dependence across output timesteps or between memory entries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">A Hard Monotonic Attention Process</head><p>The discussion above makes clear that softmax-based attention requires a pass over the entire memory to compute the terms ↵ i,j required to produce each element of the output sequence. This precludes its use in online settings, and results in a complexity of O(T U) for generating the output sequence. In addition, despite the fact that h represents a transformation of a sequence (which ostensibly exhibits dependencies between subsequent elements), the attention probabilities are computed independent of temporal order and the attention distribution at the previous timestep.</p><p>We address these shortcomings by first formulating a stochastic process which explicitly processes the memory in a left-to-right manner. Specifically, for output timestep i we begin processing memory entries from index t i 1 , where t i is the index of the memory entry chosen at output timestep i (for convenience, letting t 0 = 1). We sequentially compute, for j = t i 1 , t i 1 + 1, t i 1 + 2, . . .</p><formula xml:id="formula_5">e i,j = a(s i 1 , h j )<label>(6)</label></formula><formula xml:id="formula_6">p i,j = s(e i,j ) (7) z i,j ⇠ Bernoulli(p i,j )<label>(8)</label></formula><p>where a(·) is a learnable deterministic "energy function" and s(·) is the logistic sigmoid function. As soon as we sample z i,j = 1 for some j, we stop and set c i = h j and t i = j, "choosing" memory entry j for the context vector. Each z i,j can be seen as representing a discrete choice of whether to ingest a new item from the memory (z i,j = 0) or produce an output (z i,j = 1). For all sub-</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Memory h</head><p>Output y <ref type="figure">Figure 2</ref>. Schematic of our novel monotonic stochastic decoding process. At each output timestep, the decoder inspects memory entries (indicated in gray) from left-to-right starting from where it left off at the previous output timestep and chooses a single one (indicated in black). A black node indicates that memory element hj is aligned to output yi. White nodes indicate that a particular input-output alignment was not considered because it violates monotonicity. Arrows indicate the order of processing and dependence between memory entries and output timesteps.</p><p>sequent output timesteps, we repeat this process, always starting from t i 1 (the memory index chosen at the previous timestep). If for any output timestep i we have z i,j = 0 for j 2 {t i 1 , . . . , T }, we simply set c i to a vector of zeros. This process is visualized in <ref type="figure">fig. 2</ref> and is presented more explicitly in algorithm 1 (appendix A).</p><p>Note that by construction, in order to compute p i,j , we only need to have computed h k for k 2 {1, . . . , j}. It follows that our novel process can be computed in an online manner; i.e. we do not need to wait to observe the entire input sequence before we start producing the output sequence. Furthermore, because we start inspecting memory elements from where we left off at the previous output timestep (i.e. at index t i 1 ), the resulting process only computes at most max(T, U ) terms p i,j , giving it a linear runtime. Of course, it also makes the strong assumption that the alignment between the input and output sequence is strictly monotonic.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Training in Expectation</head><p>The online alignment process described above involves sampling, which precludes the use of standard backpropagation. In analogy with softmax-based attention, we therefore propose training with respect to the expected value of c i , which can be computed straightforwardly as follows. We first compute e i,j and p i,j exactly as in eqs. <ref type="formula" target="#formula_5">(6)</ref> and <ref type="formula">(7)</ref>, where p i,j are interpreted as the probability of choosing memory element j at output timestep i. The attention distribution over the memory is then given by (see appendix C for a derivation)</p><formula xml:id="formula_7">↵ i,j = p i,j j X k=1 ↵ i 1,k j 1 Y l=k (1 p i,l ) ! (9) = p i,j ✓ (1 p i,j 1 ) ↵ i,j 1 p i,j 1 + ↵ i 1,j ◆<label>(10)</label></formula><p>We provide a solution to the recurrence relation of eq. (10) which allows computing ↵ i,j for j 2 {1, . . . , T } in parallel with cumulative sum and cumulative product operations in appendix C.1. Defining q i,j = ↵ i,j /p i,j gives the following procedure for computing ↵ i,j :</p><formula xml:id="formula_8">e i,j = a(s i 1 , h j )<label>(11)</label></formula><formula xml:id="formula_9">p i,j = s(e i,j )<label>(12)</label></formula><formula xml:id="formula_10">q i,j = (1 p i,j 1 )q i,j 1 + ↵ i 1,j<label>(13)</label></formula><formula xml:id="formula_11">↵ i,j = p i,j q i,j<label>(14)</label></formula><p>where we define the special cases of q i,0 = 0, p i,0 = 0 to maintain equivalence with eq. (9). As in softmaxbased attention, the ↵ i,j values produce a weighting over the memory, which are then used to compute the context vector at each timestep as in eq. (3). However, note that ↵ i may not be a valid probability distribution because P j ↵ i,j  1. Using ↵ i as-is, without normalization, effectively associates any additional probability not allocated to memory entries to an additional all-zero memory location. Normalizing ↵ i so that P T j=1 ↵ i,j = 1 has two issues: First, we can't perform this normalization at test time and still achieve online decoding because the normalization depends on ↵ i,j for j 2 {1, . . . , T }, and second, it would result in a mismatch compared to the probability distribution induced by the hard monotonic attention process which sets c i to a vector of zeros when z i,j = 0 for j 2 {t i 1 , . . . , T }. Note that computing c i still has a quadratic complexity because we must compute ↵ i,j for j 2 {1, . . . , T } for each output timestep i. However, because we are training directly with respect to the expected value of c i , we will train our decoders using eqs. <ref type="formula" target="#formula_0">(11) to (14)</ref> and then use the online, linear-time attention process of section 2.2 at test time. Furthermore, if p i,j 2 {0, 1} these approaches are equivalent, so in order for the model to exhibit similar behavior at training and test time, we need p i,j ⇡ 0 or p i,j ⇡ 1. We address this in section 2.5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Modified Energy Function</head><p>While various "energy functions" a(·) have been proposed, the most common to our knowledge is the one proposed in :</p><formula xml:id="formula_12">a(s i 1 , h j ) = v &gt; tanh(W s i 1 + V h j + b)<label>(15)</label></formula><p>where W and V are weight matrices, b is a bias vector, 1 and v is a weight vector. We make two modifications to eq. (15) for use with our monotonic decoder: First, while the softmax is invariant to offset, 2 the logistic sigmoid is not. As a result, we make the simple modification of adding a scalar variable r after the tanh function, allowing the model to learn the appropriate offset for the pre-sigmoid activations. Note that eq. (13) tends to exponentially decay attention over the memory because 1 p i,j 2 [0, 1]; we therefore initialized r to a negative value prior to training so that 1 p i,j tends to be close to 1. Second, the use of the sigmoid nonlinearity in eq. (12) implies that our mechanism is particularly sensitive to the scale of the energy terms e i,j , or correspondingly, the scale of the energy vector v. We found an effective solution to this issue was to apply weight normalization <ref type="bibr" target="#b35">(Salimans &amp; Kingma, 2016)</ref> to v, replacing it by gv/kvk where g is a scalar parameter. Initializing g to the inverse square root of the attention hidden dimension worked well for all problems we studied.</p><p>The above produces the energy function</p><formula xml:id="formula_13">a(s i 1 , h j ) = g v &gt; kvk tanh(W s i 1 + V h j + b) + r (16)</formula><p>The addition of the two scalar parameters g and r prevented the issues described above in all our experiments while incurring a negligible increase in the number of parameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5.">Encouraging Discreteness</head><p>As mentioned above, in order for our mechanism to exhibit similar behavior when training in expectation and when using the hard monotonic attention process at test time, we require that p i,j ⇡ 0 or p i,j ⇡ 1. A straightforward way to encourage this behavior is to add noise before the sigmoid in eq. (12), as was done e.g. in <ref type="bibr" target="#b11">(Frey, 1997;</ref><ref type="bibr" target="#b34">Salakhutdinov &amp; Hinton, 2009;</ref><ref type="bibr" target="#b10">Foerster et al., 2016)</ref>. We found that simply adding zero-mean, unit-variance Gaussian noise to the pre-sigmoid activations was sufficient in all of our experiments. This approach is similar to the recently proposed Gumbel-Softmax trick <ref type="bibr" target="#b20">(Jang et al., 2016;</ref><ref type="bibr" target="#b28">Maddison et al., 2016)</ref>, except we did not find it necessary to anneal the temperature as suggested in <ref type="bibr" target="#b20">(Jang et al., 2016)</ref>.</p><p>Note that once we have a model which produces p i,j which are effectively discrete, we can eschew the sampling involved in the process of section 2.2 and instead simply set</p><formula xml:id="formula_14">z i,j = I(p i,j &gt; ⌧)</formula><p>where I is the indicator function and ⌧ is a threshold. We used this approach in all of our experiments, setting ⌧ = 0.5. Furthermore, at test time we do not add pre-sigmoid noise, making decoding purely deter-ministic. Combining all of the above, we present our differentiable approach to training the monotonic alignment decoder in algorithm 2 (appendix A).  and <ref type="bibr" target="#b43">(Zaremba &amp; Sutskever, 2015)</ref> both study a similar framework in which a decoder RNN can decide whether to ingest another entry from the input sequence or emit an entry of the output sequence. Instead of training in expectation, they maintain the discrete nature of this decision while training and use reinforcement learning (RL) techniques. We initially experimented with RL-based training methods but were unable to find an approach which worked reliably on the different tasks we studied. Empirically, we also show superior performance to  on online speech recognition tasks; we did not attempt any of the tasks from <ref type="bibr" target="#b43">(Zaremba &amp; Sutskever, 2015)</ref>. <ref type="bibr" target="#b1">(Aharoni &amp; Goldberg, 2016</ref>) also study hard monotonic alignments, but their approach requires target alignments computed via a separate statistical alignment algorithm in order to be trained.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Related Work</head><p>As an alternative approach to monotonic alignments, Connectionist Temporal Classification (CTC) <ref type="bibr" target="#b15">(Graves et al., 2006)</ref> and the RNN Transducer (Graves, 2012) both assume that the output sequences consist of symbols, and add an additional "null" symbol which corresponds to "produce no output". More closely to our model, <ref type="bibr" target="#b42">(Yu et al., 2016b)</ref> similarly add "shift" and "emit" operations to an RNN. Finally, the Segmental RNN <ref type="bibr" target="#b23">(Kong et al., 2015)</ref> treats a segmentation of the input sequence as a latent random variable. In all cases, the alignment path is marginalized out via a dynamic program in order to obtain a conditional probability distribution over label sequences and train directly with maximum likelihood. These models either require conditional independence assumptions between output symbols or don't condition the decoder (language model) RNN on the input sequence. We instead follow the framework of attention and marginalize out alignment paths when computing the context vectors c i which are subsequently fed into the decoder RNN, which allows the decoder to condition on its past output as well as the input sequence. Our approach can therefore be seen as a marriage of these CTCstyle techniques and attention. Separately, instead of performing an approximate search for the most probable output sequence at test time, we use hard alignments which facilitates linear-time decoding.</p><p>A related idea is proposed in <ref type="bibr" target="#b32">(Raffel &amp; Lawson, 2017)</ref>, where "subsampling" probabilities are assigned to each entry in the memory and a stochastic process is formulated which involves keeping or discarding entries from the input sequence according to the subsampling probabilities. A dynamic program similar to the one derived in section 2.3 is then used to compute the expected output which allows for training with standard backpropagation. Our approach differs in that we utilize an RNN decoder to construct the output sequence, and furthermore allows for output sequences which are longer than the input.</p><p>Some similar ideas to those in section 2.3 were proposed in the context of speech recognition in <ref type="bibr" target="#b8">(Chorowski et al., 2015)</ref>: First, the prior attention distributions are convolved with a bank of one-dimensional filters and then included in the energy function calculation. Second, instead of computing attention over the entire memory they only compute it over a sliding window. This reduces the runtime complexity at the expense of the strong assumption that memory locations attended to at subsequent output timesteps fall within a small window of one another. Finally, they also advocate replacing the softmax function with a sigmoid, but they then normalize by the sum of these sigmoid activations across the memory window instead of interpreting these probabilities in the left-to-right framework we use. While these modifications encourage monotonic attention, they do not explicitly enforce it, and so the authors do not investigate online decoding.</p><p>In a similar vein,  explore only computing attention over a small window of the memory. In addition to simply monotonically increasing the window location at each output timestep, they also consider learning a policy for producing the center of the memory window based on the current decoder state. <ref type="bibr" target="#b21">(Kim et al., 2017)</ref> also make the connection between soft attention and selecting items from memory in expectation. They consider replacing the softmax in standard soft attention with an elementwise sigmoid nonlinearity, but do not formulate the interpretation of addressing memory from left-to-right and the corresponding probability distributions as we do in section 2.3. <ref type="bibr" target="#b19">(Jaitly et al., 2015)</ref> apply standard softmax attention in online settings by splitting the input sequence into chunks and producing output tokens using the attentive sequence-tosequence framework over each chunk. They then devise a dynamic program for finding the approximate best alignment between the model output and the target sequence. In contrast, our ingest/emit probabilities p i,j can be seen as adaptively chunking the input sequence (rather than providing a fixed setting of the chunk size) and we instead train by exactly computing the expectation over alignment paths.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>To validate our proposed approach for learning monotonic alignments, we applied it to a variety of sequenceto-sequence problems: sentence summarization, machine translation, and online speech recognition. In the follow-ing subsections, we give an overview of the models used and the results we obtained; for more details about hyperparamers and training specifics please see appendix D. Incidentally, all experiments involved predicting discrete symbols (e.g. phonemes, characters, or words); as a result, the output of the decoder in each of our models was fed into an affine transformation followed by a softmax nonlinearity with a dimensionality corresponding to the number of possible symbols. At test time, we performed a beam search over softmax predictions on all problems except machine translation. All networks were trained using standard cross-entropy loss with teacher forcing against target sequences using the Adam optimizer <ref type="bibr" target="#b22">(Kingma &amp; Ba, 2014)</ref>. All of our decoders used the monotonic attention mechanism of section 2.3 during training to address the hidden states of the encoder. For comparison, we report test-time results using both the hard linear-time decoding method of section 2.2 and the "soft" monotonic attention distribution. We also present the results of a synthetic benchmark we used to measure the potential speedup offered by our linear-time decoding process in appendix F.</p><p>Online Speech Recognition Online speech recognition involves transcribing the words spoken in a speech utterance in real-time, i.e. as a person is talking. This problem is a natural application for monotonic alignments because online decoding is an explicit requirement. In addition, this precludes the use of bidirectional RNNs, which degrades performance somewhat . We tested our approach on two datasets: TIMIT <ref type="bibr" target="#b12">(Garofolo et al., 1993)</ref> and the Wall Street Journal corpus <ref type="bibr" target="#b31">(Paul &amp; Baker, 1992)</ref>.</p><p>Speech recognition on the TIMIT dataset involves transcribing the phoneme sequence underlying a given speech utterance. Speech utterances were represented as sequences of 40-filter (plus energy) mel-filterbank spectra, computed every 10 milliseconds, with delta-and deltadelta-features. Our encoder RNN consisted of three unidirectional LSTM layers. Following , after the first and second LSTM layer we placed time reduction layers which skip every other sequence element. Our decoder RNN was a single unidirectional LSTM. Our output softmax had 62 dimensions, corresponding to the 60 phonemes from TIMIT plus special start-of-sequence and end-of-sequence tokens. At test time, we utilized a beam search over softmax predictions, with a beam width of 10. We report the phone error rate (PER) after applying the standard mapping to 39 phonemes . We used the standard train/validation/test split and report results on the test set.</p><p>Our model's performance, with a comparison to other online approaches, is shown in table 1. We achieve better performance than recently proposed sequence-to-sequence models <ref type="bibr" target="#b19">Jaitly et al., 2015)</ref>, though the <ref type="table">Table 1</ref>. Phone error rate on the TIMIT dataset for different online methods.</p><p>Method PER ) (stacked LSTM) 21.5% <ref type="bibr">(Jaitly et al., 2015) (end-to-end)</ref> 20.8% <ref type="bibr">(Luo et al., 2016) (grid LSTM)</ref> 20.5% Hard Monotonic Attention (ours) 20.4% Soft Monotonic Attention (ours, offline) 20.1% <ref type="bibr">(Graves et al., 2013) (CTC)</ref> 19.6%</p><p>small size of the TIMIT dataset and the resulting variability of results precludes making substantiative claims about one approach being best. We note that <ref type="bibr" target="#b19">(Jaitly et al., 2015)</ref> were able to improve performance by precomputing alignments using an HMM system and providing them as a supervised signal to their decoder; we did not experiment with this idea. CTC  still outperforms all sequence-to-sequence models. In addition, there remains a substantial gap between these online results and offline results using bidirectional LSTMs, e.g. <ref type="bibr" target="#b8">(Chorowski et al., 2015)</ref> achieves a 17.6% phone error rate using a softmax-based attention mechanism and (Graves et al., 2013) achieved 17.7% using a pre-trained RNN transducer model. We are interested in investigating ways to close this gap in future work.</p><p>Because of the size of the dataset, performance on TIMIT is often highly dependent on appropriate regularization. We therefore also evaluated our approach on the Wall Street Journal (WSJ) speech recognition dataset, which is about 10 times larger. For the WSJ corpus, we present speech utterances to the network as 80-filter mel-filterbank spectra with delta-and delta-delta features, and normalized using per-speaker mean and variance computed offline. The model architecture is a variation of that from <ref type="bibr" target="#b45">(Zhang et al., 2016)</ref>, using an 8 layer encoder including: two convolutional layers which downsample the sequence in time, followed by one unidirectional convolutional LSTM layer, and finally a stack of three unidirectional LSTM layers interleaved with linear projection layers and batch normalization. The encoder output sequence is consumed by the proposed online attention mechanism which is passed into a decoder consisting of a single unidirectional LSTM layer followed by a softmax layer.</p><p>Our output softmax predicted one of 49 symbols, consisting of alphanumeric characters, punctuation marks, and start-of sequence, end-of-sequence, "unknown", "noise", and word delimiter tokens. We utilized label smoothing during training <ref type="bibr" target="#b7">(Chorowski &amp; Jaitly, 2017)</ref>, replacing the targets at time y t with a convex weighted combination of the surrounding five labels (full details in appendix D.1.2). Performance was measured in terms of word error rate (WER) on the test set after segmenting the model's predic- tions according to the word delimiter tokens. We used the standard dataset split of si284 for training, dev93 for validation, and eval92 for testing. We did not use a language model to improve decoding performance.</p><p>Our results on WSJ are shown in table 2. Our model, with hard monotonic decoding, achieved a significantly lower WER than the other online methods. While these figures show a clear advantage to our approach, our model architecture differed significantly from those of <ref type="bibr" target="#b39">Wang et al., 2016)</ref>. We therefore additionally measured performance against a baseline model which was identical to our model except that it used softmax-based attention (which makes it quadratic-time and offline) instead of a monotonic alignment decoder. This resulted in a small decrease of 1.4% WER, suggesting that our hard monotonic attention approach achieves competitive performance while being substantially more efficient. To get a qualitative picture of our model's behavior compared to the softmax-attention baseline, we plot each model's inputoutput alignments for two example speech utterances in <ref type="figure">fig. 4</ref> (appendix B). Both models learn roughly the same alignment, with some minor differences caused by ours being both hard and strictly monotonic.</p><p>Sentence Summarization Speech recognition exhibits a strictly monotonic input-output alignment. We are interested in testing whether our approach is also effective on problems which only exhibit approximately monotonic alignments. We therefore ran a "sentence summarization" experiment using the Gigaword corpus, which involves predicting the headline of a news article from its first sentence.</p><p>Overall, we used the model of <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref>, modifying it only so that it used our monotonic alignment decoder instead of a soft attention decoder. Because online decoding is not important for sentence summarization, we utilized bidirectional RNNs in the encoder for this task (as is standard). We expect that the bidirectional RNNs will give the model local context which may help allow for strictly monotonic alignments. The model both took as input and produced as output one-hot representations of the word IDs, with a vocabulary of the 200,000 most common words in the training set. Our encoder consisted of <ref type="table">Table 3</ref>. ROUGE F-measure scores for sentence summarization on the Gigaword test set of <ref type="bibr" target="#b33">(Rush et al., 2015)</ref>. <ref type="bibr" target="#b33">(Rush et al., 2015)</ref> reports ROUGE recall scores, so we report the F-1 scores computed for that approach from <ref type="bibr" target="#b6">(Chopra et al., 2016)</ref>. As is standard, we report unigram, bigram, and longest common subsequence metrics as R-1, R-2, and R-L respectively. <ref type="bibr" target="#b44">Zeng et al., 2016)</ref> 27.82 12.74 26.01 <ref type="bibr" target="#b33">(Rush et al., 2015)</ref> 29.76 11.88 26.96 <ref type="bibr" target="#b42">(Yu et al., 2016b)</ref> 30.27 13.68 27.91 <ref type="bibr" target="#b6">(Chopra et al., 2016)</ref> 33.78 15.97 31.15 <ref type="bibr" target="#b29">(Miao &amp; Blunsom, 2016</ref><ref type="bibr">) 34.17 15.94 31.92 (Nallapati et al., 2016</ref> 34.19 16.29 32.13 <ref type="bibr" target="#b41">(Yu et al., 2016a)</ref> 34.41 16.86 31.83 <ref type="bibr" target="#b38">(Suzuki &amp; Nagata, 2017)</ref>   <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref> 38.22 18.70 35.74 <ref type="figure">Figure 3</ref>. Example sentence-summary pair with attention alignments for our hard monotonic model and the softmax-based attention model of <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref>. Attention matrices are displayed so that black corresponds to 1 and white corresponds to 0. The ground-truth summary is "greece pumps more money and personnel into bird flu defense". a word embedding matrix (which was initialized randomly and trained as part of the model) followed by four bidirectional LSTM layers. We used a single LSTM layer for the decoder. For data preparation and evaluation, we followed the approach of <ref type="bibr" target="#b33">(Rush et al., 2015)</ref>, measuring performance using the ROUGE metric.</p><formula xml:id="formula_15">Method R-1 R-2 R-L (</formula><p>Our results, along with the scores achieved by other approaches, are presented in table 3. While the monotonic alignment model outperformed existing models by a substantial margin, it fell slightly behind the model of <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref> which we used as a baseline. The higher performance of our model and the model of <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref> can be partially explained by the fact that their encoders have roughly twice as many layers as most models proposed in the literature.</p><p>For qualitative evaluation, we plot an example input-output pair and alignment matrices for our hard monotonic attention model and the softmax-attention baseline of <ref type="bibr" target="#b24">(Liu &amp; Pan, 2016)</ref> in <ref type="figure">fig. 3</ref> (an additional example is shown in <ref type="figure">fig. 6</ref>, appendix B). Most apparent is that a given word in the summary is not always aligned to the most obvious word in the input sentence; the hard monotonic decoder aligns the first four words in the summary reasonably (greek $ greek, government $ finance, approves $ approved, more $ more), but the latter four words have unexpected alignments (funds $ in, to $ for, bird $ measures, bird $ flu). We believe this is due to the ability of the multilayer bidirectional RNN encoder to reorder words in the input sequence. This effect is also apparent in <ref type="figure">fig. 6</ref>/ (appendix B), where the monotonic alignment decoder is able to produce the phrase "human rights criticism" despite the fact that the input sentence has the phrase "criticism of human rights". Separately, we note that the softmax attention model's alignments are extremely "soft" and nonmonotonic; this may be advantageous for this problem and partially explain its slightly superior performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Machine Translation</head><p>We also evaluated our approach on machine translation, another task which does not exhibit strictly monotonic alignments. In fact, for some language pairs (e.g. English and Japanese, English and Korean), we do not expect monotonicity at all. However, for other pairs (e.g. English and French, English and Vietnamese) only local word reorderings are required. Our translation experiments therefore involved English to Vietnamese translation using the parallel corpus of TED talks (133K sentence pairs) provided by the IWSLT 2015 Evaluation Campaign <ref type="bibr" target="#b3">(Cettolo et al., 2015)</ref>. Following , we tokenize the corpus with the default Moses tokenizer, preserve casing, and replace words whose frequencies are less than 5 by &lt;unk&gt;. As a result, our vocabulary sizes are 17K and 7.7K for English and Vietnamese respectively. We use the TED tst2012 (1553 sentences) as a validation set for hyperparameter tuning and TED tst2013 (1268 sentences) as a test set. We report results in both perplexity and BLEU.</p><p>Our baseline neural machine translation (NMT) system is the softmax attention-based sequence-to-sequence model described in . From that baseline, we substitute the softmax-based attention mechanism with our proposed monotonic alignment decoder. The model utilizes two-layer unidirectional LSTM networks for both the encoder and decoder.</p><p>In , the authors demonstrated that under their proposed architecture, a dot product-based energy function worked better than eq. (15). Since our architecture is based on that of , to facilitate comparison we also tested the following variant:  .</p><formula xml:id="formula_16">a(s i 1 , h j ) = g(s &gt; i 1 W h) + r<label>(17)</label></formula><p>Method BLEU  23.3 Hard Monotonic, energy function eq. <ref type="formula" target="#formula_0">(16)</ref> 22.6 Hard Monotonic, energy function eq. <ref type="formula" target="#formula_0">(17)</ref> 23.0</p><p>where g and r are scalars (initialized as in section 2.4) and W is a weight matrix. Our results are shown in <ref type="table" target="#tab_2">Table 4</ref>. To get a better picture of each model's behavior, we plot input-output alignments in <ref type="figure">fig. 5</ref> (appendix B). Most noticeable is that the monotonic alignment model tends to focus attention later in the input sequence than the baseline softmax-attention model. We hypothesize that this is a way to compensate for non-monotonic alignments when a unidirectional encoder is used; i.e. the model has effectively learned to focus on words at the end of phrases which require reordering, at which point the unidirectional encoder has observed the whole phrase. This can be seen most clearly in the example on the right, where translating "a huge famine" to Vietnamese requires reordering (as suggested by the softmax-attention model's alignment), so the hard monotonic alignment model focuses attention on the final word in the phrase ("famine") while producing its translation. We suspect our model's small decrease in BLEU compared to the baseline model may be due in part to this increased modeling burden.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussion</head><p>Our results show that our differentiable approach to enforcing monotonic alignments can produce models which, following the decoding process of section 2.2, provide efficient online decoding at test time without sacrificing substantial performance on a wide variety of tasks. We believe our framework presents a promising environment for future work on online and linear-time sequence-to-sequence models. We are interested in investigating various extensions to this approach, which we outline in appendix E. To facilitate experimentation with our proposed attention mechanism, we have made an example TensorFlow <ref type="bibr" target="#b0">(Abadi et al., 2016)</ref> implementation of our approach available online 3 and added a reference implementation to TensorFlow's tf.contrib.seq2seq module. We also provide a "practitioner's guide" in appendix G.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Word error rate on the WSJ dataset. All approaches used a unidirectional encoder; results in grey indicate offline models.</figDesc><table>Method 
+WER 
+
+CTC (our model) 
+33.4% 
+(Luo et al., 2016) (hard attention) 
+27.0% 
+(Wang et al., 2016) (CTC) 
+22.7% 
+Hard Monotonic Attention (our model) 17.4% 
+Soft Monotonic Attention (our model) 
+16.5% 
+Softmax Attention (our model) 
+16.0% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 4 .</head><label>4</label><figDesc>Performance on the IWSLT 2015 English-Vietnamese TED talks for our monotonic alignment model and the baseline softmax-attention model of</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">b is occasionally omitted, but we found it often improves performance and only incurs a modest increase in parameters, so we include it. 2 That is, softmax(e) = softmax(e + r) for any r 2 R.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">https://github.com/craffel/mad</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>We thank Jan Chorowski, Mark Daoust, Pietro Kreitlon Carolino, Dieterich Lawson, Navdeep Jaitly, George Tucker, Quoc V. Le, Kelvin Xu, Cinjon Resnick, Melody Guan, Matthew D. Hoffman, Jeffrey Dean, Kevin Swersky, Ashish Vaswani, and members of the Google Brain team for helpful discussions and insight.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">TensorFlow: A system for large-scale machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jianmin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhifeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matthieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanjay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kudlur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manjunath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josh</forename><surname>Levenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rajat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sherry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Derek</forename><forename type="middle">G</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Steiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Benoit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vijay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Warden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pete</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wicke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoqiang</forename><surname>Zheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Operating Systems Design and Implementation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Sequence to sequence transduction with hard monotonic attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roee</forename><surname>Aharoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01487</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Neural machine translation by jointly learning to align and translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dzmitry</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The IWSLT 2015 evaluation campaign</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mauro</forename><surname>Cettolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Niehues</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Stüker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sebastian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bentivogli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Luisa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roldano</forename><surname>Cattoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcello</forename><surname>Federico</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Workshop on Spoken Language Translation</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Oriol. Listen, attend and spell: A neural network for large vocabulary conversational speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Navdeep</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinyals</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Acoustics, Speech and Signal Processing</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Learning phrase representations using RNN encoder-decoder for statistical machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Merriënboer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gülçehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Çaglar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dzmitry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bougares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fethi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Holger</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Abstractive sentence summarization with attentive recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sumit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Auli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">M</forename><surname>Rush</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Towards better decoding and language model integration in sequence to sequence models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Chorowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Navdeep</forename><surname>Jaitly</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.02695</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Attention-based models for speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Chorowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dzmitry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Serdyuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dmitriy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Empirical evaluation of gated recurrent neural networks on sequence modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junyoung</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Caglar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.3555</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Learning to communicate with deep multi-agent reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jakob</forename><surname>Foerster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nando</forename><surname>De Freitas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shimon</forename><surname>Whiteson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Continuous sigmoidal belief networks trained using slice sampling. Advances in neural information processing systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brendan</forename><forename type="middle">J</forename><surname>Frey</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">DARPA TIMIT acoustic-phonetic continous speech corpus</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">S</forename><surname>Garofolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lori</forename><forename type="middle">F</forename><surname>Lamel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><forename type="middle">M</forename><surname>Fisher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><forename type="middle">G</forename><surname>Fiscus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">S</forename><surname>Pallett</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1211.3711</idno>
+		<title level="m">Sequence transduction with recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Generating sequences with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1308.0850</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Connectionist temporal classification: labelling unsegmented sequence data with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Santiago</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Faustino</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on Machine learning</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Geoffrey. Speech recognition with deep recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mohamed</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hinton</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Acoustics, Speech and Signal Processing</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ivo</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.5401</idno>
+		<title level="m">Neural turing machines</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Long shortterm memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Navdeep</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sussillo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.04868</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">A neural transducer. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><surname>Jang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Poole</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01144</idno>
+		<title level="m">Categorical reparameterization with gumbel-softmax</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Structured attention networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoon</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Denton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Carl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luong</forename><surname>Hoang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">M</forename><surname>Rush</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.00887</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lingpeng</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Noah</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06018</idno>
+		<title level="m">Segmental recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Text summarization with TensorFlow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><forename type="middle">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xin</forename><surname>Pan</surname></persName>
+		</author>
+		<ptr target="http://goo.gl/16RNEu" />
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Learning online alignments with continuous rewards policy gradient</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuping</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chiu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chung-Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Navdeep</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ilya</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.01281</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Stanford neural machine translation systems for spoken language domain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh-Thang</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Workshop on Spoken Language Translation</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Effective approaches to attention-based neural machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh-Thang</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hieu</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Christopher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">The concrete distribution: A continuous relaxation of discrete random variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andriy</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yee</forename><surname>Teh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Whye</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.00712</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Language as a latent variable: Discrete generative models for sentence compression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yishu</forename><surname>Miao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.07317</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Abstractive text summarization using sequenceto-sequence RNNs and beyond</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ramesh</forename><surname>Nallapati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bowen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cícero</forename><surname>Santos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nogueira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Çaglar</forename><surname>Gülçehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bing</forename><surname>Xiang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computational Natural Language Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">The design for the Wall Street Journal-based CSR corpus</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Douglas</forename><forename type="middle">B</forename><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Janet</forename><forename type="middle">M</forename><surname>Baker</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Workshop on Speech and Natural Language</title>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Training a subsampling mechanism in expectation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Colin</forename><surname>Raffel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dieterich</forename><surname>Lawson</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.06914</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">A neural attention model for abstractive sentence summarization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">M</forename><surname>Rush</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sumit</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Semantic hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Approximate Reasoning</title>
+		<imprint>
+			<biblScope unit="volume">50</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Weight normalization: A simple reparameterization to accelerate training of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">End-to-end memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sainbayar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Szlam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Arthur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Sequence to sequence learning with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ilya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename><surname>Quoc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Cutting-off redundant repeating generations for neural abstractive summarization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Suzuki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Masaaki</forename><surname>Nagata</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.00138</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Lookahead convolution layer for unidirectional recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chong</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yogatama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Awni</forename><surname>Hannun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bo</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Workshop Extended Abstracts of the 4th International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Show, attend and tell: Neural image caption generation with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kelvin</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ryan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kyunghyun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aaron</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Salakhudinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ruslan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rich</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lei</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blunsom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Phil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Kocisky</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.02554</idno>
+		<title level="m">The neural noisy channel</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Online segment to segment neural transduction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lei</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Buys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1505.00521</idno>
+		<title level="m">Reinforcement learning neural turing machines</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">362</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Efficient summarization with read-again and copy mechanism</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wenyuan</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wenjie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sanja</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.03382</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for end-to-end speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Navdeep</forename><surname>Jaitly</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.03022</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

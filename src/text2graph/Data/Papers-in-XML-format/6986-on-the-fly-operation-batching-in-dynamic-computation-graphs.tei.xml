@@ -1,0 +1,1059 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">On-the-fly Operation Batching in Dynamic Computation Graphs</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Graham</forename><surname>Neubig</surname></persName>
+							<email>gneubig@cs.cmu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department Bar-Ilan University</orgName>
+								<orgName type="institution">Language Technologies Institute Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department Bar-Ilan University</orgName>
+								<orgName type="institution">Language Technologies Institute Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">Dyer</forename><surname>Deepmind</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department Bar-Ilan University</orgName>
+								<orgName type="institution">Language Technologies Institute Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">On-the-fly Operation Batching in Dynamic Computation Graphs</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Dynamic neural network toolkits such as PyTorch, DyNet, and Chainer offer more flexibility for implementing models that cope with data of varying dimensions and structure, relative to toolkits that operate on statically declared computations (e.g., TensorFlow, CNTK, and Theano). However, existing toolkits-both static and dynamic-require that the developer organize the computations into the batches necessary for exploiting high-performance algorithms and hardware. This batching task is generally difficult, but it becomes a major hurdle as architectures become complex. In this paper, we present an algorithm, and its implementation in the DyNet toolkit, for automatically batching operations. Developers simply write minibatch computations as aggregations of single instance computations, and the batching algorithm seamlessly executes them, on the fly, using computationally efficient batched operations. On a variety of tasks, we obtain throughput similar to that obtained with manual batches, as well as comparable speedups over singleinstance learning on architectures that are impractical to batch manually. </p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Modern CPUs and GPUs evaluate batches of arithmetic operations significantly faster than the sequential evaluation of the same operations. For example, performing elementwise operations takes nearly the same amount of time on the GPU whether operating on tens or on thousands of elements, and multiplying a few hundred different vectors by the same matrix is significantly slower than executing a single (equivalent) matrix-matrix product using an optimized GEMM implementation on either a GPU or a CPU. Thus, careful grouping of operations into batches that can execute efficiently in parallel is crucial for making the most of available hardware resources.</p><p>Today, developers who write code to train neural networks are responsible for crafting most of this batch handling by hand. In some cases this is easy: when inputs and outputs are naturally represented as fixed sized tensors (e.g., images of a fixed size such those in the MNIST and CIFAR datasets, or regression problems on fixed sized vector inputs), and the computations required to process each instance are instance-invariant and expressible as standard operations on tensors (e.g., a series of matrix multiplications, convolutions, and elementwise nonlinearities), a suitably flexible tensor library</p><formula xml:id="formula_0">RNN RNN RNN RNN RNN RNN RNN RNN RNN L RNN RNN RNN RNN L L (1)</formula><p>L <ref type="bibr" target="#b1">(2)</ref> L <ref type="formula">(</ref> y <ref type="bibr" target="#b1">(2)</ref> y <ref type="bibr" target="#b2">(3)</ref> x <ref type="formula">(</ref> Two computation graphs for computing the loss on a minibatch of three training instances consisting of a sequence of input vectors paired with a fixed sized output vector. On the left is a "conceptual" computation graph which shows the operations associated with computing the losses individually for each sequence and then aggregating them. The same computation is executed by the right-hand ("batched") computation graph: it aggregates the inputs in order to make better use of modern processors. This comes with a price in complexity-the variable length of the sequences requires padding and masking operations. Our aim is for the user to specify the conceptual computation on the left, and let the framework take care of its efficient execution.</p><p>that provides efficient implementations of higher-order generalizations of low-order operations makes manual batching straightforward. For example, by adding a leading or trailing dimension to the tensors representing inputs and outputs, multiple instances can be straightforwardly represented in a single data structure. In other words: in this scenario, the developer conceives of and writes code for the computation on an individual instance, packs several instances into a tensor as a "minibatch", and the library handles executing these efficiently in parallel.</p><p>Unfortunately, this idealized scenario breaks when working with more complex architectures. Deep learning is increasingly being applied to problems whose inputs, outputs and intermediate representations do not fit easily into fixed sized tensors. For example, images vary in size and sequences in length; data may be structured as trees <ref type="bibr" target="#b28">[29]</ref> or graphs <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b26">27</ref>], or the model may select its own computation conditional on the input <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b32">33]</ref>. In all these cases, while the desired computation is easy enough to write for a single instance, organizing the computational operations so that they make optimally efficient use of the hardware is nontrivial. Indeed, many papers that operate on data structures more complicated than sequences have avoided batching entirely <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b24">25]</ref>. In fact, until last year <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b19">20]</ref>, all published work on recursive (i.e., tree-structured) neural networks appears to have used single instance training.</p><p>The premise of this work is that operation batching should not be the responsibility of the user, but instead should be a service provided by the framework. The user should only be responsible for specifying a large enough computation so that batching is possible (i.e, summing the losses of several instances, such as one sees in the left side of <ref type="figure" target="#fig_1">Figure 1</ref>), and the framework should take care of the lower-level details of operation batching, much like optimizing compilers or JIT optimizers in interpreted languages do. evaluation ( §2). Once this separation is in place, we propose a fast batching heuristic that can be performed in real time, for each training instance (or minibatch), between the graph construction and its execution ( §3). We extend the DyNet toolkit <ref type="bibr" target="#b20">[21]</ref> with this capability. From the end-user's perspective, the result is a simple mechanism for exploiting efficient data-parallel algorithms in networks that would be cumbersome to batch by hand. The user simply defines the computation independently for each instance in the batch (using standard Python or C++ language constructs), and the framework takes care of the rest. Experiments show that our algorithm compares favorably to manually batched code, that significant speed improvements are possible on architectures with no straightforward manual batching design, and that we obtain better performance than TensorFlow Fold <ref type="bibr" target="#b18">[19]</ref>, an alternative framework built to simulate dynamic graph definition and automatic batching on top of TensorFlow ( §4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Batching: Conception vs. Efficient Implementation</head><p>To illustrate the challenges with batching, consider the problem of predicting a real-valued vector conditional on a sequence of input vectors (this example is chosen for its simplicity; experiments are conducted on more standard tasks). We assume that an input sequence of vectors is read sequentially by an RNN, and then the final state is used to make a prediction; the training loss is the Euclidean distance between the prediction and target. We compare two algorithms for computing this code: a naïve, but developer-friendly one (whose computation graph is shown in the left part of <ref type="figure" target="#fig_1">Figure 1</ref>), which reflects how one conceives of what a batch loss computation is; and a computationally efficientbut more conceptually complex-version that batches up the computations so they are executed in parallel across the sequences (the right part of <ref type="figure" target="#fig_1">Figure 1</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Naïve (developer-friendly) batched implementation</head><p>The left part of <ref type="figure" target="#fig_1">Figure 1</ref> shows the computations that must be executed to compute the losses associated with three (b = 3) training instances, implemented naïvely. Pseudo-code for constructing the graph for each of the RNNs on the left using a dynamic declaration framework is as follows:</p><formula xml:id="formula_1">function RNN-REGRESSION-LOSS(x 1:n , y; (W, U, b, c) = ✓) h 0 = 0 . Initial state of the RNN; h t 2 R d . for t 2 1, 2, . . . , n do h t = tanh(W[h t 1 ; x t ] + b) y = Uh n + c L = ||ŷ y|| 2 2 return L</formula><p>Note that the code does not compute any value, but constructs a symbolic graph describing the computation. This can then be integrated into a batched training procedure:</p><formula xml:id="formula_2">function TRAIN-BATCH-NAIVE(T = {(x (i) 1:n (i) , y (i) )} b i=1 ; ✓) NEW-GRAPH() for i 2 1, 2, . . . , b do</formula><p>. Naïvely loop over elements of batch.</p><formula xml:id="formula_3">L (i) = RNN-REGRESSION-LOSS(x (i) 1:n (i) , y (i) ; ✓) . Single instance loss. L = P i L (i)</formula><p>. Aggregate losses for all elements in batch.</p><formula xml:id="formula_4">FORWARD(L) @L @✓ = BACKWARD(L) ✓ = ✓ ⌘ @L @✓</formula><p>This code is simple to understand, uses basic flow control present in any programming language and simple mathematical operations. Unfortunately, executing it will generally be quite inefficient, since in the resulting computation graph each operation is performed sequentially without exploiting the fact that similar operations are being performed across the training instances.</p><p>Efficient manually batched implementation To make good use of efficient data-parallel algorithms and hardware, it is necessary to batch up the operations so that the sequences are processed in parallel. The standard way to achieve this is by aggregating the inputs and outputs, altering the code as follows:</p><formula xml:id="formula_5">function RNN-REGRESSION-BATCH-LOSS(X 1:nmax , Y, n (1:b) ; (W, U, b, c) = ✓) M = 0 . Build loss mask; M 2 R b⇥nmax . for i 2 1, 2, . . . , b do M [i,n (i) ] = 1</formula><p>. Position where the final symbol in sequence i occurs.</p><formula xml:id="formula_6">H 0 = 0 . Initial states of the RNN (one per instance); H t 2 R d⇥b . for t 2 1, 2, . . . , n max do H t = tanh(W[H t 1 ; X t ] + b)</formula><p>. Addition broadcasts b over columns.</p><formula xml:id="formula_7">Y t = UH t + c</formula><p>. Addition broadcasts c over columns.</p><formula xml:id="formula_8">L t = ||(Ŷ t Y)(m t 1 &gt; )|| 2 F . Compute masked losses (m t is the tth column of M). L = P t L t return L function TRAIN-BATCH-MANUAL(T = {(x (i) 1:n (i) , y (i) )} b i=1 ; ✓) n max = max i n (i) for t 2 1, 2, . . . , n max do .</formula><p>Build sequence of batch input matrices.</p><formula xml:id="formula_9">X t = 0 2 R d⇥b for i 2 1, 2, . . . , b do X t,[·,i] = x (i) t if t  n (i) otherwise 0 . The ith column of X t . Y = [y (1) y (2) · · · y (b)</formula><p>]</p><p>. Build batch of output targets. NEW-GRAPH() . Now that inputs are constructed, create graph, evaluate loss and gradient.</p><formula xml:id="formula_10">L = RNN-REGRESSION-BATCH-LOSS(X 1:nmax , Y, n (1:b) ; ✓) FORWARD(L) @L @✓ = BACKWARD(L) ✓ = ✓ ⌘ @L @✓</formula><p>This code computes the same value as the naïve implementation, it does so more efficiently, and it is significantly more complicated. Because the sequences processed by RNNs will generally be of different lengths (which is precisely why RNNs are useful!), it is necessary to pad the input representation with dummy values, and also to mask out the resulting losses at the right times. While these techniques are part of the inventory of skills that a good ML engineer has, they increase the difficulty of implementation and probability that bugs will be present in the code. Implementation comparison The naïve algorithm has two advantages over manual batching. First, it is easy to implement: the way we conceive of a model is the way it is implemented, and errors with padding, masking, and batching are avoided. Second, the naïve algorithm aggregates any single instance loss, whereas manual batching efforts are generally problem specific. For these reasons, one should strongly prefer the first algorithm; however, for efficiency reasons, batching matters. In the next section we turn to the problem of how to efficiently execute naïve computation graphs so that they can take advantage of efficient batched implementations of operations. This provides the best of both worlds to developers: code is easy to write, but execution is fast.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">An Algorithm for On-the-fly Batching</head><p>Manual batching, discussed in the previous section, mostly operates by aggregating input instances and feeding them through a network. In RNNs, this means aggregating inputs that share a time step. This often require padding and masking, as input sizes may differ. It also restricts the kinds of operations that can be batched. In contrast, our method identifies and aggregates computation graph nodes that can be executed in a batched fashion for a given graph. This reduces the need for workarounds such as padding and masking, allows for seamless efficient execution also in architectures which are hard to conceptualize in the input-centric paradigm, and allows for the identification of batching opportunities that may not be apparent from an input-centric view.</p><p>Our batching procedure operates in three steps (1) graph definition, (2) operation batching, and (3) computation. Here, steps (1) and (3) are shared with standard execution of computation graphs, while (2) corresponds to our proposed method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Graph Definition</head><p>First, we define the graph that represents the computation that we want to perform. From the user's perspective, this is done by simply performing computation that they are interested in performing, such as that defined in the RNN-REGRESSION-LOSS function from the previous example. While it is common for dynamic graph frameworks to interleave the graph definition and its forward execution, we separate these parts by using lazy evaluation: we only perform forward evaluation when a resulting value is requested by the user through the calling of the FORWARD function. The graph can be further extended after a call to FORWARD, and further calls will lazily evaluate the delta of the computation. This allows the accumulation of large graph chunks before executing forward computations, providing ample opportunities for operation batching.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Operation Batching</head><p>Next, given a computation graph, such as the one on the left side of <ref type="figure" target="#fig_1">Figure 1</ref>, our proposed algorithm converts it into a graph where operations that can be executed together are batched together. This is done in the two step process described below.</p><p>Computing compatibility groups We first partition the nodes into compatibility groups, where nodes in the same group have the potential for batching. This is done by associating each node with a signature such that nodes that share the same signature are guaranteed to be able to be executed in a single operation if their inputs are ready. Signatures vary depending on the operation the node represents. For example, in nodes representing element-wise operations, all nodes with the same operation can be batched together, so the signature is simply the operation name (tanh, log, ...). In nodes where dimensions or other information is also relevant to whether the operations can be batched, this information is also included in the signature. For example, a node that picks a slice of the input matrix will also be dependent on the matrix size and range to slice, so the signature will look something like slice-400x500-100:200. In some other cases (e.g. a parameterized matrix multiply) we may remember the specific node ID of one of the inputs (e.g. node123 representing the matrix multiply parameters) while generalizing across other inputs (e.g. data or hidden state vectors on the right-hand side), resulting in a signature that would look something like matmul-node123-400x1. A more thorough discussion is given in Appendix A.</p><p>Determining execution order A computation graph is essentially a job dependency graph where each node depends on its input (and by proxy the input of other preceding nodes on the path to its inputs). Our goal is to select an execution order in which (1) each node is executed after its dependencies; and (2) nodes that have the same signature and do not depend on each other are scheduled for execution on the same step (and will be executed in a single batched operation). Finding an optimal execution order that maximizes the amount of batching in the general case is NP hard <ref type="bibr" target="#b23">[24]</ref>. We discuss two heuristic strategies for identifying execution orders that satisfy these requirements.</p><p>Depth-based batching is used as a method for automatic batching in TensorFlow Fold <ref type="bibr" target="#b18">[19]</ref>. This is done by calculating the depth of each node in the original computation graph, defined as the maximum length from a leaf node to the node itself, and batching together nodes that have an identical depth and signature. By construction, nodes of the same depth are not dependent on each-other, as all nodes will have a higher depth than their input, and thus this batching strategy is guaranteed to satisfy condition (1) above. However, this strategy will also miss some good batching opportunities. For example, the loss function calculations in <ref type="figure" target="#fig_1">Figure 1</ref> are of different depths due to the different-lengthed sequences, and similar problems will occur in recurrent neural network language models, tree-structured neural networks, and a myriad of other situations.</p><p>Agenda-based batching is a method we propose that does not depend solely on depth. The core of this method is an agenda that tracks "available" nodes that have no unresolved dependencies. For each node, a count of its unresolved dependencies is maintained; this is initialized to be the number of inputs to the node. The agenda is initialized by adding nodes that have no incoming inputs (and thus no unresolved dependencies). At each iteration, we select a node from the agenda together with all of the available nodes in the same signature, and group them into a single batch operation. These nodes are then removed from the agenda, and the dependency counter of all of their successors are decremented. Any new zero-dependency nodes are added to the agenda. This process is repeated until all nodes have been processed.</p><p>How do we prioritize between multiple available nodes in the agenda? Intuitively, we want to avoid prematurely executing nodes if there is a potential for more nodes of the same signature to be added to the agenda at a later point, resulting in better batching. A good example of this from our running example in <ref type="figure" target="#fig_1">Figure 1</ref> is the loss-calculating nodes, which will be added to the agenda at different points due to becoming calculable after different numbers of RNN time steps. To capture this intuition, we introduce a heuristic method for prioritizing nodes based on the average depth of all nodes with their signature, such that nodes with a lower average depth will be executed earlier. In general (with some exceptions), this tends to prioritize nodes that occur in earlier parts of the graph, which will result in the nodes in the later parts of the graph, such as these loss calculations, being executed later and hopefully batched together. <ref type="bibr" target="#b4">5</ref> Finally, this non-trivial batching procedure must be executed quickly so that overhead due to batch scheduling calculations doesn't cancel out the efficiency gains from operation batching. To ensure this, we perform a number of optimizations in the implementation, which we detail in Appendix B.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Forward-backward Graph Execution and Update</head><p>Once we have determined an execution order (including batching decisions), we perform calculations of the values themselves. In standard computation graphs, forward computation is done in topological order to calculate the function itself, and backward calculation is done in reverse topological order to calculate gradients. In our automatically batched evaluation, the calculation is largely similar with two exceptions:</p><p>Single!batch node conversion First, it is necessary to convert single nodes into a batched node, which also requires modification of the underlying operations such as converting multiple matrixvector operations Wh i to a single matrix-matrix operation WH. This is done internally in the library, while the user-facing API maintains the original unbatched computation graph structure, making this process invisible to the user.</p><p>Ensuring contiguous memory To ensure that operations can be executed as a batch, the inputs to the operations (e.g. the various vectors h (i) t ) must be arranged in contiguous memory (e.g. a matrix H t ). In some cases, it is necessary to perform a memory copy to arrange these inputs into contiguous memory, but in other cases the inputs are already contiguous and in the correct order, and in these cases we can omit the memory copy and use the inputs as-is. <ref type="bibr" target="#b5">6</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section we describe our experiments, designed to answer three main questions: <ref type="bibr" target="#b0">(1)</ref> in situations where manual batching is easy, how close can the proposed method approach the efficiency of a program that uses hand-crafted manual batching, and how do the depth-based and agenda-based approaches compare ( §4.1)? <ref type="bibr" target="#b1">(2)</ref> in situations where manual batching is less easy, is the proposed method capable of obtaining significant improvements in efficiency ( §4.2)? (3) how does the proposed method compare to TensorFlow Fold, an existing method for batching variably structured networks within a static declaration framework ( §4.3)?</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Synthetic Experiments</head><p>Our first experiments stress-test our proposed algorithm in an ideal case for manual batching. Specifically, we train a model on a bi-directional LSTM sequence labeler <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b22">23]</ref>, on synthetic data where every sequence to be labeled is the same length (40). Because of this, manual batching is easy because we don't have to do any padding or adjustment for sentences of different lengths. The network takes as input a size 200 embedding vector from a vocabulary of size 1000, has 2 layers of 256 hidden node LSTMs in either direction, then predicts a label from one of 300 classes. The batch size is 64. <ref type="bibr" target="#b6">7</ref> Within this setting we test various batching settings: Without or with manual mini-batching where we explicitly batch the word vector lookup, LSTM update, and loss calculation for each time step. <ref type="bibr" target="#b4">5</ref> Even given this prioritization method it is still possible to have ties, in which case we break ties by calculating "cheap" operations (e.g. tanh and other elementwise ops) before "heavy" ones (e.g. matrix multiplies). <ref type="bibr" target="#b5">6</ref> The implication of this is that batched computation will take up to twice as much memory as unbatched computation, but in practice the memory usage is much less than this. Like manually batched computation, memory usage can be controlled by adjusting the batch size appropriately so it fits in memory. <ref type="bibr" target="#b6">7</ref> Experiments were run on a single Tesla K80 GPU or Intel Xeon 2.30GHz E5-2686v4 CPU. To control for variance in execution time, we perform three runs and report the fastest. We do not report accuracy numbers, as the functions calculated and thus accuracies are the same regardless of batching strategy. The results can be found in <ref type="figure" target="#fig_2">Figure 2</ref>. First, comparing the first row with the second two, we can see that the proposed on-the-fly batching strategy drastically reduces computation time per sentence, with BYAGENDA reducing per-sentence computation time from 193ms to 16.9ms on CPU and 54.6ms to 5.03ms on GPU, resulting in an approximately 11-fold increase in sentences processed per second (5.17!59.3 on CPU and 18.3!198 on GPU). BYAGENDA is faster than BYDEPTH by about 15-30%, demonstrating that our more sophisticated agenda-based strategy is indeed more effective at batching together operations.</p><p>Next, compared to manual batching without automatic batching (the fourth row), we can see that fully automatic batching with no manual batching is competitive, but slightly slower. The speed decrease is attributed to the increased overhead for computation graph construction and batch scheduling. However, even in this extremely idealized scenario where manual batching will be most competitive, the difference is relatively small (1.27⇥ on CPU and 1.76⇥ on GPU) compared to the extreme difference between the case of using no batching at all. Given that automatic batching has other major advantages such as ease of implementation, it may be an attractive alternative even in situations where manual batching is relatively easy.</p><p>Finally, if we compare the fourth and fifth/sixth rows, we can see that on GPU, even with manual batching, automatic batching still provides gains in computational efficiency, processing sentences up to 1.1 times faster than without automatic batching. The reason for this can be attributed to the fact that our BiLSTM implementation performs manual batching across sentences, but not across time steps within the sentence. In contrast, the auto-batching procedure was able to batch the word embedding lookup and softmax operations across time-steps as well, reducing the number of GPU calls and increasing speed. This was not the case for CPU, as there is less to be gained from batching these less expensive operations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Experiments on Difficult-to-batch Tasks</head><p>Next, we extend our experiments to cases that are increasingly more difficult to manually batch. We use realistic dimension sizes for the corresponding tasks, and batches of size b = 64. Exact dimensions and further details on training settings are in Appendix C.</p><p>BiLSTM: This is similar to the ideal case in the previous section, but trained on actual variable length sequences. BiLSTM w/char: This is the same as the BiLSTM tagger above, except that we use an additional BiLSTM over characters to calculate the embeddings over rare words. These sorts of character-based embeddings have been shown to allow the model to generalize better <ref type="bibr" target="#b17">[18]</ref>, but also makes batching operations more difficult, as we now have a variably-lengthed encoding step that may or may not occur for each of the words in the input. Tree-structured LSTMs: This is the Tree-LSTM model of <ref type="bibr" target="#b30">[31]</ref>. Here, each instance is a tree rather than a sequence, and the network structure follows the tree structures. As discussed in the introduction, this architecture is notoriously hard to manually batch. Transition-based Dependency Parsing: The most challenging case we evaluate is that of a transition-based system, such as a transition based parser with LSTM-based featureextraction <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b12">13]</ref> and exploration-based training <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b9">10]</ref>. Here, a sequence is encoded using an LSTM (or a bi-LSTM), followed by a series of predictions. Each prediction based on a subset of the encoded vectors, and the vectors that participate in each prediction, as well as the loss, are determined by the outcomes of the previous predictions. Here, batching is harder yet as the nature of the computation interleaves sampling from the model and training, and requires calling FORWARD at each step, leaving the automatic-batcher very little room to play with. However, with only a small change to the computation, we can run b different parsers "in parallel", and potentially share the computation across the different systems in a given time-step. Concretely, we use a modified version of the BIST parser <ref type="bibr" target="#b13">[14]</ref>.</p><p>From the results in <ref type="table" target="#tab_0">Table 1</ref>, we can see that in all cases automatic batching gives healthy improvements in computation time, 3.6x-9.2⇥ on the CPU, and 2.7-8.6⇥ on GPU. Furthermore, the agenda-based heuristic is generally more effective than the depth-based one. We compare the TensorFlow Fold reference implementation of the Stanford Sentiment Treebank regression task <ref type="bibr" target="#b29">[30]</ref>, using the same TreeL-STM architecture <ref type="bibr" target="#b30">[31]</ref>. <ref type="figure" target="#fig_3">Figure 3</ref> shows how many trees are processed per second by TF (excluding both evaluation of the dev set and static graph construction/optimization) on GPU and CPU relative to the performance of the BYA-GENDA algorithm in DyNet (including graph construction time). The DyNet performance is better across the board stratified by hardware type. Furthermore, DyNet has greater throughput on CPU than TensorFlow Fold on GPU until batch sizes exceed 64. Additionally, we find that with single instance training, DyNet's sequential evaluation processes 46.7 trees/second on CPU, whereas autobatching processes 93.6 trees/second. This demonstrates that in complex architectures like TreeLSTMs, there are opportunities to batch up operations inside a single training instance, which are exploited by our batching algorithm. In addition, it should be noted that the DyNet implementation has the advantage that it is much more straightforward, relying on simple Python data structures and flow control to represent and traverse the trees, while the Fold implementation requires implementing the traversal and composition logic in a domain specific functional programming language (described in Section 3 of Looks et al. <ref type="bibr" target="#b18">[19]</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Comparison to TensorFlow Fold</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Related Work</head><p>Optimization of static algorithms is widely studied, and plays an important role in numerical libraries used in machine learning. Our work is rather different since the code/workload (as represented by the computation graph) is dynamically specified and must be executed rapidly, which precludes sophisticated statistic analysis. However, we review some of the important related work here.</p><p>Automatic graph optimization and selection of kernels for static computation graphs is used in a variety of toolkits, including TensorFlow <ref type="bibr" target="#b0">[1]</ref> and Theano <ref type="bibr" target="#b5">[6]</ref>. Dynamic creation of optimally sized minibatches (similar to our strategy, except the computation graph is assumed to be static) that make good use of hardware resources has also been proposed for optimizing convolutional architectures <ref type="bibr" target="#b10">[11]</ref>. The static nature of the computation makes this tools closer to optimizing compilers rather than efficient interpreters which are required to cope with the dynamic workloads encountered when dealing with dynamically structured computations.</p><p>Related to this is the general technique of automatic vectorization, which is a mainstay of optimizing compilers. Recent work has begun to explore vectorization in the context of interpreted code which may cannot be compiled <ref type="bibr" target="#b25">[26]</ref>. Our autobatching variant of DyNet similarly provides vectorized primitives that can be selected dynamically.</p><p>Further afield, the problem of scheduling with batching decisions has been widely studied in operations research since at least the 1950s (for a recent survey, see <ref type="bibr" target="#b23">[24]</ref>). Although the OR work deals with similar problems (e.g., scheduling work on machines that can process a 'family' of related item with minimal marginal cost over a single item), the standard algorithms from this field (which are often based on polynomial-time dynamic programs or approximations to NP-hard search problems) are too computationally demanding to execute in the inner loop of a learning algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusion</head><p>Deep learning research relies on empirical exploration of architectures. The rapid pace of innovation we have seen in the last several years has been enabled largely by tools that have automated the error-prone aspects of engineering, such as writing code that computes gradients. However, our contention is that operation batching is increasingly becoming another aspect of model coding that is error prone and amenable to automation.</p><p>Our solution is a framework that lets programmers express computations naturally and relies on a smart yet lightweight interpreter to figure out how to execute the operations efficiently. Our hope is that this will facilitate the creation of new classes of models that better cope with the complexities of real-world data.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Two computation graphs for computing the loss on a minibatch of three training instances consisting of a sequence of input vectors paired with a fixed sized output vector. On the left is a "conceptual" computation graph which shows the operations associated with computing the losses individually for each sequence and then aggregating them. The same computation is executed by the right-hand ("batched") computation graph: it aggregates the inputs in order to make better use of modern processors. This comes with a price in complexity-the variable length of the sequences requires padding and masking operations. Our aim is for the user to specify the conceptual computation on the left, and let the framework take care of its efficient execution.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Computation time for forward/backward graph construction or computation, as well as parameter update for a BiLSTM tagger without or with manual batching, and without, with depth-based, or with agenda-based automatic batching.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Comparison of runtime performance between TensorFlow Fold and DyNet with autobatching on TreeLSTMs (trees/sec).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Sentences/second on various training tasks for increasingly challenging batching scenarios.</figDesc><table>Task 
+CPU 
+GPU 
+
+NOAUTO BYDEPTH BYAGENDA NOAUTO BYDEPTH BYAGENDA 
+
+BiLSTM 
+16.8 
+139 
+156 
+56.2 
+337 
+367 
+BiLSTM w/ char 
+15.7 
+93.8 
+132 
+43.2 
+183 
+275 
+TreeLSTM 
+50.2 
+348 
+357 
+76.5 
+672 
+661 
+Transition-Parsing 
+16.8 
+61.0 
+61.2 
+33.0 
+89.5 
+90.1 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">⇤ Authors contributed equally. 2 The proposed algorithm is implemented in DyNet (http://dynet.io/), and can be activated by using the "--dynet-autobatch 1" command line flag.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">We take a large step towards this goal by introducing an efficient algorithm-and a corresponding implementation-for automatic batching in dynamically declared computation graphs. 4 Our method relies on separating the graph construction from its execution, using operator overloading and lazy 3 This is in contrast to other existing options for automatic batching such as TensorFlow Fold, which require the user to learn an additional domain-specific language to turn computation into a format conducive to automatic batching [19]. 4 Computation graphs (often represented in a form called a Wengert list) are the data structures used to structure the evaluation of expressions and use reverse mode automatic differentiation to compute their derivatives [3]. Broadly, learning frameworks use two strategies to construct these: static and dynamic. In static toolkits (e.g., Theano [6], Tensorflow [1]) the computation graph is defined once and compiled, and then examples are fed into the same graph. In contrast, dynamic toolkits (e.g., DyNet [21], Chainer [32], PyTorch [http://pytorch.org]) construct the computation graph for each training instance (or minibatch) as the forward computation is executed. While dynamic declaration means that each minibatch can have its own computational architecture, the user is still responsible for batching operations themselves.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martın</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eugene</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhifeng</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Craig</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Devin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.04467</idno>
+		<title level="m">Large-scale machine learning on heterogeneous distributed systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Training with exploration improves a greedy stack LSTM parser</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing (EMNLP)</title>
+		<imprint>
+			<date type="published" when="2016-11" />
+			<biblScope unit="page" from="2005" to="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Automatic differentiation of algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Bartholomew-Briggs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Steven</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bruce</forename><surname>Christianson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurence</forename><surname>Dixon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Computational and Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">124</biblScope>
+			<biblScope unit="page" from="171" to="190" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Interaction networks for learning about objects, relations and physics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Peter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Battaglia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthew</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Scheduled sampling for sequence prediction with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Navdeep</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noam</forename><surname>Shazeer</surname></persName>
+		</author>
+		<idno>abs/1506.03099</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Theano: A CPU and GPU math compiler in Python</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olivier</forename><surname>Breuleux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frédéric</forename><surname>Bastien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Lamblin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guillaume</forename><surname>Desjardins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joseph</forename><surname>Turian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. 9th Python in Science Conf</title>
+		<meeting>9th Python in Science Conf</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1" to="7" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A fast unified model for parsing and sentence understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Samuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jon</forename><surname>Bowman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abhinav</forename><surname>Gauthier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raghav</forename><surname>Rastogi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">D</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Potts</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Annual Conference of the Association for Computational Linguistics (ACL)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1466" to="1477" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Transitionbased dependency parsing with stack long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wang</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Austin</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Annual Conference of the Association for Computational Linguistics (ACL)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="334" to="343" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Recurrent neural network grammars</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adhiguna</forename><surname>Kuncoro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference of the North American Chapter of the Association for Computational Linguistics (NAACL)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="199" to="209" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Training deterministic parsers with non-deterministic oracles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joakim</forename><surname>Nivre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="403" to="414" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Caffe con troll: Shallow ideas to speed up deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefan</forename><surname>Hadjis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Firas</forename><surname>Abuzaid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ce</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Ré</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Fourth Workshop on Data analytics at sCale</title>
+		<meeting>the Fourth Workshop on Data analytics at sCale</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Bidirectional LSTM-CRF models for sequence tagging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiheng</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wei</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kai</forename><surname>Yu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1508.01991</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Easy-first dependency parsing with hierarchical tree LSTMs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eliyahu</forename><surname>Kiperwasser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="445" to="461" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Simple and accurate dependency parsing using bidirectional LSTM feature representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eliyahu</forename><surname>Kiperwasser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="313" to="327" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Latticernn: Recurrent neural networks over lattices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Faisal</forename><surname>Ladhak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ankur</forename><surname>Gandhe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Markus</forename><surname>Dreyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lambert</forename><surname>Matthias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ariya</forename><surname>Rastrow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Björn</forename><surname>Hoffmeister</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. INTERSPEECH</title>
+		<meeting>INTERSPEECH</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Neural program lattices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chengtao</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Tarlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">L</forename><surname>Gaunt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><surname>Brockschmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nate</forename><surname>Kushman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Semantic object parsing with graph LSTM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaodan</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaohui</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liang</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Finding function in form: Compositional character models for open vocabulary word representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wang</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><forename type="middle">W</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Isabel</forename><surname>Trancoso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ramon</forename><surname>Fermandez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Silvio</forename><surname>Amir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luis</forename><surname>Marujo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tiago</forename><surname>Luis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing (EMNLP)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1520" to="1530" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep learning with dynamic computation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moshe</forename><surname>Looks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcello</forename><surname>Herreshoff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Delesley</forename><surname>Hutchins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Norvig</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gilles</forename><surname>Louppe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cyril</forename><surname>Becot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyle</forename><surname>Cranmer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.00748</idno>
+		<title level="m">QCD-aware recursive neural networks for jet physics</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Graham</forename><surname>Neubig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Austin</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Waleed</forename><surname>Ammar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antonios</forename><surname>Anastasopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Miguel</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Chiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Clothiaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Cohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Duh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Manaal</forename><surname>Faruqui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cynthia</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dan</forename><surname>Garrette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yangfeng</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lingpeng</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adhiguna</forename><surname>Kuncoro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gaurav</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chaitanya</forename><surname>Malaviya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Michel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.03980</idno>
+		<title level="m">Swabha Swayamdipta, and Pengcheng Yin. DyNet: The dynamic neural network toolkit</title>
+		<meeting><address><addrLine>Yusuke Oda, Matthew Richardson, Naomi Saphra</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning multilingual named entity recognition from Wikipedia</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><surname>Nothman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicky</forename><surname>Ringland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Will</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tara</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">R</forename><surname>Curran</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Artificial Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">194</biblScope>
+			<biblScope unit="page" from="151" to="175" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Multilingual part-of-speech tagging with bidirectional long short-term memory models and auxiliary loss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Barbara</forename><surname>Plank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anders</forename><surname>Søgaard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoav</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Annual Conference of the Association for Computational Linguistics (ACL)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="412" to="418" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Scheduling with batching: A review</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">N</forename><surname>Potts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikhail</forename><forename type="middle">Y</forename><surname>Kovalyov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">European Journal of Operational Research</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="228" to="249" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Neural programmer-interpreters</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nando De Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Vectorization technology to improve interpreter performance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Erven</forename><surname>Rohou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Yuste</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Architecture and Code Optimization</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">The graph neural network model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Franco</forename><surname>Scarselli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marco</forename><surname>Gori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ah</forename><surname>Chung Tsoi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gabriele</forename><surname>Monfardini</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Neural Networks</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="61" to="80" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Outrageously large neural networks: The sparsely-gated mixture-of-experts layer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noam</forename><surname>Shazeer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Azalia</forename><surname>Mirhoseini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Krzysztof</forename><surname>Maziarz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Quoc</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Parsing natural scenes and natural language with recursive neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cliff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew Y</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="129" to="136" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Recursive deep models for semantic compositionality over a sentiment treebank</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Perelygin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jean</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Chuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Potts</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods in Natural Language Processing (EMNLP)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Improved semantic representations from tree-structured long short-term memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kai Sheng</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Annual Conference of the Association for Computational Linguistics (ACL)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Chainer: a next-generation open source framework for deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Seiya</forename><surname>Tokui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kenta</forename><surname>Oono</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shohei</forename><surname>Hido</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Clayton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Workshop on Machine Learning Systems (LearningSys) in The Twenty-ninth Annual Conference on Neural Information Processing Systems (NIPS)</title>
+		<meeting>Workshop on Machine Learning Systems (LearningSys) in The Twenty-ninth Annual Conference on Neural Information Processing Systems (NIPS)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Learning to compose words into sentences with reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dani</forename><surname>Yogatama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phil</forename><surname>Blunsom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wang</forename><surname>Ling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

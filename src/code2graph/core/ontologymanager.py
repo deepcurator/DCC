@@ -1,6 +1,7 @@
 from rdflib import Graph, RDFS, RDF, URIRef, Namespace
 from .scraper_tf_voc import TFVocScraper
-
+import os
+import sys
 
 class OntologyManager:
 
@@ -150,7 +151,7 @@ class OntologyManager:
 
 
 def test_ontology_manager():
-    ontology_manager = OntologyManager()
+    ontology_manager = OntologyManager('../core/123.owl')
 
     print("Fuzzy Search:")
     print(ontology_manager.search("Dense"))

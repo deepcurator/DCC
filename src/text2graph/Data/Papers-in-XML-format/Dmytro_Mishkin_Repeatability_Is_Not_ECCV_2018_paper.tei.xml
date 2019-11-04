@@ -1,0 +1,1776 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:18+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Repeatability Is Not Enough: Learning Affine Regions via Discriminability</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dmytro</forename><surname>Mishkin</surname></persName>
+						</author>
+						<author>
+							<affiliation>
+								<orgName>[</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Repeatability Is Not Enough: Learning Affine Regions via Discriminability</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract/>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Local features, forming correspondences, are exploited in state of the art pipelines for 3D reconstruction <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2]</ref>, two-view matching <ref type="bibr" target="#b2">[3]</ref>, 6DOF image localization <ref type="bibr" target="#b3">[4]</ref>. Classical local features have also been successfully used for providing supervision for CNN-based image retrieval <ref type="bibr" target="#b4">[5]</ref>.</p><p>Affine-convariance <ref type="bibr" target="#b6">[7]</ref> is a desirable property of local features since it allows robust matching of images separated by a wide baseline <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b2">3]</ref>, unlike scale-covariant features like ORB <ref type="bibr" target="#b8">[9]</ref> or difference of Gaussian (DoG) <ref type="bibr" target="#b9">[10]</ref> that rely on tests carried out on circular neighborhoods. This is the reason why the Hessian-Affine detector <ref type="bibr" target="#b6">[7]</ref> combined with the RootSIFT descriptor <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11]</ref> is the gold standard for local feature in image retrieval <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b12">13]</ref>. Affine covariant features also provide stronger geometric constraints, e.g., for image rectification <ref type="bibr">[14]</ref>.</p><p>On the other hand, the classical affine adaptation procedure <ref type="bibr" target="#b13">[15]</ref> fails in 20%-40% <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b14">16]</ref> cases, thus reducing the number and repeatability of detected local features. It is also not robust to significant illumination change <ref type="bibr" target="#b14">[16]</ref>. Applications where the number of detected features is important, e.g., large scale 3D reconstruction <ref type="bibr" target="#b1">[2]</ref>, therefore use the DoG detector. Alleviating the problem of the drop in the number of correspondences caused by the non-repeatability of the affine adaptation procedure, may lead to connected 3D reconstructions and improved image retrieval engines <ref type="bibr" target="#b15">[17,</ref><ref type="bibr" target="#b18">20]</ref>. This paper makes four contributions towards robust estimation of the local affine shape. First, we experimentally show that geometric repeatability of a local feature is not a sufficient condition for successful matching. The learning of affine shape increases the number of corrected matches if it steers the estimators towards discriminative regions and therefore must involve optimization of a descriptor-related loss.</p><p>Second, we propose a novel loss function for descriptor-based registration and learning, named the hard negative-constant loss. It combines the advantages of the triplet and contrastive positive losses. Third, we propose a method for learning the affine shape, orientation and potentially other parameters related to geometric and appearance properties of local features. The learning method does not require a precise ground truth which reduces the need for manual annotation.</p><p>Last but not least, the learned AffNet itself significantly outperforms prior methods for affine shape estimation and improves the state of art in image retrieval by a large margin. Importantly, unlike the de-facto standard <ref type="bibr" target="#b13">[15]</ref>, AffNet does not significantly reduce the number of detected features, it is thus suitable even for pipelines where affine invariance is needed only occasionally.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1">Related work</head><p>The area of learning local features has been active recently, but the attention has focused dominantly on learning descriptors <ref type="bibr" target="#b19">[21,</ref><ref type="bibr" target="#b20">22,</ref><ref type="bibr" target="#b21">23,</ref><ref type="bibr" target="#b22">24,</ref><ref type="bibr" target="#b23">25,</ref><ref type="bibr" target="#b24">26,</ref><ref type="bibr" target="#b25">27]</ref> and translation-covariant detectors <ref type="bibr" target="#b26">[28,</ref><ref type="bibr" target="#b27">29,</ref><ref type="bibr" target="#b28">30,</ref><ref type="bibr" target="#b29">31]</ref>. The authors are not aware of any recent work on learning or improvement of local feature affine shape estimation. The most closely related work is thus the following.</p><p>Hartmann et al. <ref type="bibr" target="#b30">[32]</ref> train random forest classifier for predicting feature matchability based on a local descriptor. "Bad" points are discarded, thus speeding up the matching process in a 3D reconstruction pipeline. Yi et al. <ref type="bibr" target="#b31">[33]</ref> proposed to learn feature orientation by minimizing descriptor distance between positive patches, i.e. those corresponding to the same point on the 3D surface. This allows to avoid hand-picking a "canonical" orientation, thus learning the one which is the most suitable for descriptor matching. We have observed that direct application of the method <ref type="bibr" target="#b31">[33]</ref> for affine shape estimation leads to learning degenerate shapes collapsed to single line. Yi et al. <ref type="bibr" target="#b32">[34]</ref> proposed a multi-stage framework for learning the descriptor, orientation and translation-covariant detector. The detector was trained by maximizing the intersection-over-union and the reprojection error between corresponding regions.</p><p>Lenc and Vedaldi <ref type="bibr" target="#b28">[30]</ref> introduced the "covariant constraint" for learning various types of local feature detectors. The proposed covariant loss is the Frobenius norm of the difference between the local affine frames. The disadvantage of such approach is that it could lead to features that are, while being repeatable, not necessarily suited for the matching task (see Section 2.2). On top of that, the common drawback of the Yi et al. <ref type="bibr" target="#b32">[34]</ref> and Lenc and Vedaldi <ref type="bibr" target="#b28">[30]</ref> methods is that they require to know the exact geometric relationship between patches which increases the amount of work needed to prepare the training dataset. Zhang et al. <ref type="bibr" target="#b27">[29]</ref> proposed to "anchor" the detected features to some pre-defined features with known good discriminability like TILDE <ref type="bibr" target="#b26">[28]</ref>. We remark that despite showing images of affine-covariant features, the results presented in the paper are for translation-covariant features only. Savinov et al. <ref type="bibr" target="#b29">[31]</ref> proposed a ranking approach for unsupervised learning of a feature detector. While this is natural and efficient for learning the coordinates of the center of the feature, it is problematic to apply it for the affine shape estimation. The reason is that it requires sampling and scoring of many possible shapes.</p><p>Finally, Choy et al. <ref type="bibr" target="#b33">[35]</ref> trained a "Universal correspondence network" (UCN) for a direct correspondence estimation with contrastive loss on a patch descriptor distance. This approach is related to the current work, yet the two methods differ in several important aspects. First, UCN used an ImageNet-pretrained network which is subsequently fine-tuned. We learn the affine shape estimation from scratch. Second, UCN uses dense feature extraction and negative examples extracted from the same image. While this could be a good setup for short baseline stereo, it does not work well for wide baseline, where affine features are usually sought. Finally, we propose the hard negative-constant loss instead of the contrastive one.</p><p>2 Learning affine shape and orientation</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Affine shape parametrization</head><p>A local affine frame is defined by 6 parameters of the affine matrix. Two form a translation vector (x, y) which is given by the keypoint detector and in the rest of the paper we omit it and focus on the affine transformation matrix A,</p><formula xml:id="formula_0">A = a 11 a 12 a 21 a 22 .<label>(1)</label></formula><p>Among many possible decompositions of matrix A, we use the following</p><formula xml:id="formula_1">A = λR(α)A ′ = det A cos α sin α − sin α cos α a ′ 11 0 a ′ 21 a ′ 22 ,<label>(2)</label></formula><p>where λ = det A is the scale, R(α) the orientation matrix and A ′ 1 is the affine shape matrix with det A ′ = 1. A ′ is decomposed into identity matrix I and residual shape A ′′ :</p><formula xml:id="formula_2">A ′ = I + A ′′ = a ′ 11 0 a ′ 21 a ′ 22 = 1 0 0 1 + a ′′ 11 0 a ′′ 21 a ′′ 22 (3)</formula><p>We show that the different parameterizations of the affine transformation significantly influence the performance of CNN-based estimators of local geometry, see <ref type="table">Table 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">The hard negative-constant loss</head><p>We propose a loss function called hard negative-constant loss (HardNegC). It is based on the hard negative triplet margin loss <ref type="bibr" target="#b23">[25]</ref> (HardNeg), but the distance to the hardest <ref type="bibr" target="#b0">1</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A</head><p>′ has a (0,1) eigenvector, preserving the vertical direction.  (i.e. closest) negative example is treated as constant and the respective derivative of L is set to zero:</p><formula xml:id="formula_3">L = 1 n i=1,n max (0, 1 + d(s i ,ṡ i ) − d(s i , N )), ∂L ∂N := 0,<label>(4)</label></formula><p>where d(s i ,ṡ i ) is the distance between the matching descriptors, d(s i , N ) is a distance to the hardest negative example N in the mini-batch for i th pair.</p><formula xml:id="formula_4">d(s i , N ) = min (min j =i d(s i ,ṡ j ), min j =i d(s j ,ṡ i ))</formula><p>The difference between the Positive descriptor distance loss (PosDist) used for learning local feature orientation in <ref type="bibr" target="#b31">[33]</ref> and the HardNegC and HardNeg losses is shown on a toy example in <ref type="figure" target="#fig_1">Figure 1</ref>. Five pairs of points in the 2D space are generated and their positions are updated by the Adam optimizer <ref type="bibr" target="#b34">[36]</ref> for the three loss functions. PosDist converges the first, but the different class points end up near each other, because the distance to the negative classes is not incorporated in the loss. The HardNeg margin loss has trouble when the points from different classes lie between each other. The HardNegC loss behavior first resembles the PosDist loss, bringing positive points together and then distributes them in the space, satisfying the triplet margin criterion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Descriptor losses for shape registration</head><p>Exploring how local feature repeatability is connected with descriptor similarity, we conducted an shape registration experiment ( <ref type="figure" target="#fig_2">Figure 2</ref>). Hessian features are detected in reference HSequences <ref type="bibr" target="#b35">[37]</ref> illumination images and reprojected by (identity) homography to another image in the sequence. Thus, the repeatability is 1 and reprojection error is 0. Then, the local descriptors (HardNet <ref type="bibr" target="#b23">[25]</ref>, SIFT <ref type="bibr" target="#b9">[10]</ref>, TFeat <ref type="bibr" target="#b21">[23]</ref> and raw pixels) are extracted and features are matched by first-to-second-nearest neighbor ratio <ref type="bibr" target="#b9">[10]</ref> with threshold 0.8. This threshold was suggested by Lowe <ref type="bibr" target="#b9">[10]</ref> as a good trade-off between false positives and false negatives. For SIFT, 22% of the geometrically correct correspondences are not the nearest SIFTs and they cannot be matched, regardless of the threshold. In our experiments, the 0.8 threshold worked well for all descriptors and we used it, in line with previous papers, in all experiments.</p><p>Notice that for all descriptors, the percentage of correct matches even for the perfect geometrical registration is only about 50%.</p><p>Adam optimizer is used to update affine region A to minimize the descriptor-based losses: PosDist, HardNeg and HardNegC. The top two rows show the results for A matrices coupled for both images, bottom -the descriptor difference optimization is allowed to deform A andȦ in both images independently, which leads to a pair of affine regions that are not in perfect geometric correspondence, yet they are more matchable. Note, that no training of any kind is involved.</p><p>Such descriptor-driven optimization, not maintaining perfect registration, produces a descriptor that is matched successfully up to 90% of the detections under illumination changes.</p><p>For most of the unmatched regions, the affine shapes become a degenerate linesshown in top graphs, and the number of degenerate ellipses is high for PosDist loss; HardNeg and HardNegC perform better.</p><p>The bottom row of <ref type="figure" target="#fig_2">Figure 2</ref> shows results for experiments where affine shapes pairs are independent in each image. Optimization of descriptor losses lead to an increase of the geometric error on the affine shape. Error E is defined as the mean square error on A matrix difference:</p><formula xml:id="formula_5">E = n i=1 2(A i −Ȧ i ) 2 det A + detȦ<label>(5)</label></formula><p>Again, PosDist loss leads to a larger error. CNN-based descriptors, HardNet and TFeat lead to relative small geometric error when reaching matchability plateau, while for SIFT and raw pixels the shapes diverge. <ref type="figure" target="#fig_3">Figure 3</ref> shows the case when the initialized shapes include a small amount of the reprojection error.  <ref type="bibr" target="#b31">[33]</ref>, red -hard triplet margin HardNeg <ref type="bibr" target="#b23">[25]</ref>, blue -proposed HardNegC. Average over HSequences, illumination subset. All features are initially perfectly registered. First two rows: single feature geometry for both images, second two rows: feature geometries are independent in each image. Top row: geometric error of corresponding features (solid) and percentage of non-collapsed, i.e. elongation ≤ 6, features (dashed). Bottom row: the percentage of correct matches. This experiment shows that even perfectly initially registered feature might not be matched with any of descriptors -initial matching score is roughly ≈ 30..50%. But it is possibly to find measurement region, which offers both discriminativity and repeatability. PosDist loss squashes most of the features, leading to the largest geometrical error. HardNeg loss produces the best results in the number of survived feature and geometrical error. HardNegC performs slightly worse than HardNeg, slightly outperforming it on matching score. However, HardNegC is easier to optimize for AffNet learning -see <ref type="table" target="#tab_0">Table 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4">AffNet training procedure</head><p>The main blocks of the proposed training procedure are shown in <ref type="figure">Figure 5</ref>. First, a batch of matching patch pairs (P i ,Ṗ i ) i=1..n is generated, where P i andṖ i correspond to the same point on a 3D surface. Rotation and skew transformation matrices (T i , T ′ i ) are randomly and independently generated. The patches P i andṖ i are warped by (T i ,Ṗ i ) respectively into A-transformed patches. Then, a 32 × 32 center patch is cropped and a pair of transformed patches is fed into the convolutional neural network AffNet, which predicts a pair of affine transformations A i ,Ṗ i , that are applied to the T i -transformed patches via spatial transformers ST <ref type="bibr" target="#b36">[38]</ref>.</p><p>Thus, geometrically normalized patches are cropped to 32 × 32 pixels and fed into the descriptor network, e.g. HardNet, SIFT or raw patch pixels, obtaining descriptors  (s i ,ṡ i ). Descriptors (s i ,ṡ i ) are then used to form triplets by the procedure proposed in <ref type="bibr" target="#b23">[25]</ref>, followed by our newly proposed hard negative-constant loss (Eq. 4).</p><p>More formally, we are finding affine transformation model parameters θ such that estimated affine transformation A minimizes descriptor HardNegC loss:</p><formula xml:id="formula_6">A(θ|(P,Ṗ )) = arg min θ L(s,ṡ)<label>(6)</label></formula><p>2.5 Training dataset and data preprocessing UBC Phototour <ref type="bibr" target="#b37">[39]</ref> dataset is used for training. It consists of three subsets: Liberty, Notre Dame and Yosemite with about 2 × 400k normalized 64x64 patches in each, detected by DoG and Harris detectors. Patches are verified by 3D reconstruction model. We randomly sample 10M pairs for training. Although positive point corresponds to roughly the same point on the 3D surface, they are not perfectly aligned, having position, scale, rotation and affine noise. We have randomly generated affine transformations, which consist in random rotation -tied for pair of corresponding patches, and anisotropic scaling t in random direction by magnitude t m , which is gradually increased during the training from the initial value of 3 to 5.8 at the middle of the training. The tilt is uniformly sampled from range [0, t m ]. <ref type="figure">Fig. 5</ref>. AffNet training. Corresponding patches undergo random affine transformation Ti,Ṫi, are cropped and fed into AffNet, which outputs affine transformation Ai,Ȧi to an unknown canonical shape. ST -the spatial transformer warps the patch into an estimated canonical shape. The patch is described by a differentiable CNN descriptor. n × n descriptor distance matrix is calculated and used to form triplets, according to the HardNegC loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.6">Implementation details</head><p>The CNN architecture is adopted from HardNet <ref type="bibr" target="#b23">[25]</ref>, see <ref type="figure" target="#fig_4">Fig. 4</ref>, with the number of channels in all layers reduced 2x and the last 128D output replaced by a 3D output predicting ellipse shape. The network formula is 16C3-16C3-32C3/2-32C3-64C3/2-64C3-3C8, where 32C3/2 stands for 3x3 kernel with 32 filters and stride 2. Zeropadding is applied in all convolutional layers to preserve the size, except the last one. BatchNorm <ref type="bibr" target="#b38">[40]</ref> layer followed by ReLU <ref type="bibr" target="#b39">[41]</ref> is added after each convolutional layer, except the last one, which is followed by hyperbolic tangent activation. Dropout <ref type="bibr" target="#b40">[42]</ref> with 0.25 rate is applied before the last convolution layer. Grayscale input patches 32×32 pixels are normalized by subtracting the per-patch mean and dividing by the per-patch standard deviation.</p><p>Optimization is done by SGD with learning rate 0.005, momentum 0.9, weight decay 0.0001. The learning rate decayed linearly <ref type="bibr" target="#b42">[44]</ref> to zero within 20 epochs. The training was done with PyTorch <ref type="bibr" target="#b41">[43]</ref> and took 24 hours on Titan X GPU; the bottleneck is the data augmentation procedure. The inference time is 0.1 ms per patch on Titan X, including patch sampling done on CPU and Baumberg iteration -0.05 ms per patch on CPU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Empirical evaluation 3.1 Loss functions and descriptors for learning measurement region</head><p>We trained different versions of the AffNet and orientation networks, with different combinations affine transformation parameterizations and descriptors with the procedure described above. The results of the comparison based on the number of correct matches (reprojection error ≤ 3 pixel) on the hardest pair for each of the 116 sequences from the HSequences <ref type="bibr" target="#b35">[37]</ref> dataset are shown in <ref type="table" target="#tab_0">Tables 1,2.</ref> The proposed HardNetC loss is the only loss function with no "not converged" results. In the case of convergence, all tested descriptors and loss functions lead to comparable performance, unlike registration experiments in the previous section. We believe it is because now the CNN always outputs the same affine transformation for a patch, unlike in the previous experiment, where repeated features may end up with different shapes. Affine transformation parameterizations are compared in <ref type="table">Table 2</ref>. All attempts to learn affine shape and orientation jointly in one network fail completely, or perform significantly worse than the two-stage procedure, when affine shape is learned first and orientation is estimated on an affine-shape-normalized patch. Learning residual shape A ′′ (Eq. 3) leads to the best results overall. Note, that such parameterization does not contain enough parameters to include feature orientation, thus "joint" learning is not possible. Slightly worse performance is obtained by using an identity matrix prior for learnable biases in the output layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Repeatability</head><p>Repeatability of affine detectors: Hessian detector + affine shape estimator was benchmarked, following classical work by Mikolajczyk et al. <ref type="bibr" target="#b7">[8]</ref>, but on recently introduced larger HSequences <ref type="bibr" target="#b35">[37]</ref> dataset by VLBenchmarks toolbox <ref type="bibr" target="#b43">[45]</ref>.</p><p>HSequences consists of two subsets. Illumination part contains 57 image sixplets with illumination changes, both natural and artificial. There is no difference is viewpoint in this subset, geometrical relation between images in sixplets is identity.Second part is Viewpoint, where 59 image sixplets vary in scale, rotation, but mostly in horizontal tilt. The average viewpoint change is a bit smaller than in well-known graffiti sequence from Oxford-Affine dataset <ref type="bibr" target="#b7">[8]</ref>.</p><p>Local features are detected in pairs of images, reprojected by ground truth homography to the reference image and closest reprojected region is found for each region from reference image. The correspondence is considered correct, when overlap error of the pair is less than 40%. The repeatability score for a given pair of images is a ratio between number of correct correspondences and the smaller number of detected regions in common part of scene among two images.</p><p>Results are shown in <ref type="figure">Figure 7</ref>. Original affine shape estimation procedure, implemented in <ref type="bibr" target="#b11">[12]</ref>  One reason for such difference is the feature-rejection strategy. Baumberg iterative procedure rejects feature in one of three cases. First, elongated ellipses with long-toshort axis ratio more than six are rejected. Second, features touching boundary of the image are rejected. This is true for the AffNet post-processing procedure as well, but AffNet produces less elongated shapes: average axis ratio on Oxford5k 16M features is 1.63 vs. 1.99 for Baumberg. Both cases happen less often for AffNet, increasing the number of surviving features by 25%. We compared performance of the Baumberg vs. AffNet on the same number of features in Section 3.4. Finally, features whose shape did not converge within sixteen iteration are removed. This is quite rare, it happens in approximately 1% cases. Example of shapes estimated by AffNet and the Baumberg procedure are shown in <ref type="figure" target="#fig_5">Fig. 6</ref>. <ref type="table">Table 2</ref>. Learning the affine transform: parameterization comparison. The average number of correct matches on the HPatchesSeq <ref type="bibr" target="#b35">[37]</ref> hardest image pairs 1-6 for the Hessian detector and the HardNet descriptor. Cases compared, affine shape combined with the de-facto handcrafted standard dominant orientation, affine shape and orientation learnt separately or jointly. The match considered correct for reprojection error ≤ 3 pixels. The HardNegC loss and HardNet descriptor used for learning. n/c -did not converge.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Orientation</head><p>Estimated biases Learned Dominant</p><p>Eq. Matrix parameters init jointly separately gradient <ref type="bibr" target="#b9">[10]</ref> (1)</p><formula xml:id="formula_7">A (a11, a12, a21, a22) 0 n/c n/c n/c (1)</formula><p>A (a11, a12, a21, a22) 1 n/c 360 320 </p><formula xml:id="formula_8">(2) A ′ , (a ′ 11 , 0, a ′ 21 , a ′ 22 ), 1 250 327 286 R(α) (sin α, cos α) (3) A ′′ (a ′′ 11 , a ′′ 21 , a ′′ 22 ) 1 - 370 340 (3) A ′′ (1 + a ′′ 11 , a ′′ 21 , 1 + a ′′ 22 ) 0 - 388 349</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Wide baseline stereo</head><p>We conducted an experiment on wide baseline stereo, following local feature detector benchmark protocol, defined in <ref type="bibr" target="#b14">[16]</ref> on the set of two-view matching datasets <ref type="bibr" target="#b45">[47,</ref><ref type="bibr" target="#b46">48,</ref><ref type="bibr" target="#b44">46,</ref><ref type="bibr" target="#b47">49]</ref>. The local features are detected by benchmarked detector, described by HardNet++ <ref type="bibr" target="#b23">[25]</ref> and HalfRootSIFT <ref type="bibr" target="#b48">[50]</ref> and geometrically verified by RANSAC <ref type="bibr" target="#b49">[51]</ref>. Two following metrics are reported: the number of successfully matched image pairs and average number of correct inliers per matched pair. We have replaced original affine shape estimator in Hessian-Affine with AffNet in Hessian and Adaptive threshold Hessian (AdHess) The results are shown in <ref type="table" target="#tab_1">Table 3</ref>. AffNet outperforms Baumberg in both number of registered image pairs and/or number of correct inliers in all datasets, including painting-to-photo pairs in SymB <ref type="bibr" target="#b45">[47]</ref> and multimodal pairs in GDB <ref type="bibr" target="#b46">[48]</ref>, despite it was not trained for that domains.  Fig <ref type="figure">. 7</ref>. Repeatability and the number of correspondences (mean top, median bottom row) on the HSequences <ref type="bibr" target="#b35">[37]</ref>. AffNet is compared with the de facto standard Baumberg iteration <ref type="bibr" target="#b13">[15]</ref> according to the Mikolajczyk protocol <ref type="bibr" target="#b7">[8]</ref>. Left -images with illumination differences, rightwith viewpoint and scale changes. SS -patch is sampled from the scale-space pyramid at the level of the detection, image -from the original image; 19 and 33 -patch sizes. Hessian-Affine is from <ref type="bibr" target="#b11">[12]</ref>. For illumination subset, performance of Hessian with no adaptation is an upper bound, and AffNet performs close to it.</p><p>The total runtimes per image are the following (average for 800x600 images). Baseline HesAff + dominant gradient orientation + SIFT: no CNN components -0.4 sec. HesAffNet (CNN) + dominant gradient orientation + SIFT -0.8s, 3 CNN components: HesAffNet + OriNet + HardNet -1.2 s. Now the data is naively transferred from CPU to GPU and back each of the stages, which generates the major bottleneck.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Image retrieval</head><p>We evaluate the proposed approach on standard image retrieval datasets Oxford5k <ref type="bibr" target="#b54">[56]</ref> and Paris6k <ref type="bibr" target="#b55">[57]</ref>. Each dataset contains images (5062 for Oxford5k and 6391 for Paris6k) depicting 11 different landmarks and distractors. The performance is reported as mean average precision (mAP) <ref type="bibr" target="#b54">[56]</ref>. Recently, these benchmarks have been revisited, annotation errors fixed and new, more challenging sets of queries added <ref type="bibr" target="#b16">[18]</ref>. The revisited datasets define new test protocols: Easy, Medium, and Hard.</p><p>We use the multi-scale Hessian-affine detector <ref type="bibr" target="#b7">[8]</ref> with the Baumberg method for affine shape estimation. The proposed AffNet replaces Baumberg, which we denote HessAffNet. The use of HessAffNet increased the number of used feature, from 12.5M to 17.5M for Oxford5k and from 15.6M to 21.2M for Paris6k, because more features survive the affine shape adaptions, as explained in Section 3.2. We also performed additional experiment by restricting number of AffNet features to same as in BaumbergHesAffNetLess in <ref type="table">Table 4</ref>. We evaluated HesAffNet with both hand-crafted descriptor RootSIFT <ref type="bibr" target="#b10">[11]</ref> and state-of-the-art learned descriptors <ref type="bibr" target="#b21">[23,</ref><ref type="bibr" target="#b23">25]</ref>.</p><p>First, HesAffNet is tested within the traditional bag-of-words (BoW) <ref type="bibr" target="#b56">[58]</ref> image retrieval pipeline. A flat vocabulary with 1M centroids is created with the k-means algorithm and approximate nearest neighbor search <ref type="bibr" target="#b57">[59]</ref>. All descriptors of an image are <ref type="table">Table 4</ref>. Performance (mAP) evaluation of the bag-of-words (BoW) image retrieval on the Oxford5k and Paris6k benchmarks. Vocabulary consisting of 1M visual words is learned on independent dataset: Oxford5k vocabulary for Paris6k evaluation and vice versa. SV: spatial verification. QE(t): query expansion with t inliers threshold. The best results are in bold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Oxford5k</head><p>Paris6k</p><p>Detector-Descriptor assigned to a respective centroid of the vocabulary, and then they are aggregated with a histogram of occurrences into a BoW image representation. We also apply spatial verification (SV) <ref type="bibr" target="#b54">[56]</ref> and standard query expansion (QE) <ref type="bibr" target="#b55">[57]</ref>. QE is performed with images that have either 15 (typically used) or 8 inliers after the spatial verification. The results of the comparison are presented in <ref type="table">Table 4</ref>.</p><p>AffNet achieves the best results on both Oxford5k and Paris6k datasets, in most of the cases it outperforms the second best approach by a large margin. This experiment clearly shows the benefit of using AffNet in the local feature detection pipeline.</p><p>Additionally, we compare with state-of-the-art local-feature-based image retrieval methods. A visual vocabulary of 65k words is learned, with Hamming embedding (HE) <ref type="bibr" target="#b58">[60]</ref> technique added that further refines descriptor assignments with a 128 bits binary signature. We follow the same procedure as HesAff-RootSIFT-HQE <ref type="bibr" target="#b12">[13]</ref> method. All parameters are set as in <ref type="bibr" target="#b12">[13]</ref>. The performance of AffNet methods is the best reported on both Oxford5k and Paris6k for local features.</p><p>Finally, on the revisited R-Oxford and R-Paris, we compare with state-of-the-art methods in image retrieval, both local and global feature based: the best-performing fine- <ref type="table">Table 6</ref>. Performance (mAP, mP@10) comparison with the state-of-the-art in image retrieval on the R-Oxford and R-Paris benchmarks <ref type="bibr" target="#b16">[18]</ref>. SV: spatial verification. HQE: hamming query expansion. αQE: α query expansion. DFS: global diffusion. The best results are in bold. tuned networks <ref type="bibr" target="#b61">[63]</ref>, ResNet101 with generalized-mean pooling (ResNet101-GeM) <ref type="bibr" target="#b51">[53]</ref> and ResNet101 with regional maximum activations pooling (ResNet101-R-MAC) <ref type="bibr" target="#b53">[55]</ref>. Deep methods use re-ranking methods: α query expansion (αQE) <ref type="bibr" target="#b51">[53]</ref>, and global diffusion (DFS) <ref type="bibr" target="#b52">[54]</ref>. Results are in <ref type="table">Table 6</ref>. HesAffNet performs best on the R-Oxford. It is consistently the best performing local-feature method, yet is worse than deep methods on R-Paris. A possible explanation is that deep networks (ResNet and DELF) were finetuned from ImageNet, which contains Paris-related images, e.g. Sacre-Coeur and Notre Dame Basilica in the "church" category. Therefore global deep nets are partially evaluated on the training set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Medium</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Conclusions</head><p>We presented a method for learning affine shape of local features in a weakly-supervised manner. The proposed HardNegC loss function might find other application domains as well. Our intuition is that the distance to the hard-negative estimates the local density of all points and provides a scale for the positive distance. The resulting AffNet regressor bridges the gap between performance of the similarity-covariant and affine-covariant detectors on images with short baseline and big illumination differences and it improves performance of affine-covariant detectors in the wide baseline setup. AffNet applied to the output of the Hessian detector improves the state-of-the art in wide baseline matching, affine detector repeatability and image retrieval.</p><p>We experimentally show that descriptor matchability, not only repeatability should be taken into account when learning a feature detector.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 1 .</head><label>1</label><figDesc>Fig. 1. A toy example optimization problem illustrating the proposed hard negative-constant (HardNegC) loss. Five pairs of points, representing 2D descriptors, are generated and the losses are minimized by Adam [36]: the positive descriptor distance (PosDist) [33] -left, the hard negative (HardNeg) margin loss [25] -center, HardNegC-right. Top row: identical initial positions of five pairs of matching points. Arrows show the gradient direction and relative magnitude. Bottom row: points after 150 steps of Adam optimization, trajectories are shown by dots. HardNeg loss has a difficulty with the green and magenta point pairs, because the negative example lies between two positives. Minimization of the positive distance only leads to a small distance to the negative examples. The proposed HardNegC loss first pushes same class points close to each other and then distributes them to increase distance to the negative pairs.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Matching score versus geometric repeatability experiment. Affine shape registration by a minimization of descriptor losses of corresponding features. Descriptor losses: green -L2-descriptor distance (PosDist) [33], red -hard triplet margin HardNeg [25], blue -proposed HardNegC. Average over HSequences, illumination subset. All features are initially perfectly registered. First two rows: single feature geometry for both images, second two rows: feature geometries are independent in each image. Top row: geometric error of corresponding features (solid) and percentage of non-collapsed, i.e. elongation ≤ 6, features (dashed). Bottom row: the percentage of correct matches. This experiment shows that even perfectly initially registered feature might not be matched with any of descriptors -initial matching score is roughly ≈ 30..50%. But it is possibly to find measurement region, which offers both discriminativity and repeatability. PosDist loss squashes most of the features, leading to the largest geometrical error. HardNeg loss produces the best results in the number of survived feature and geometrical error. HardNegC performs slightly worse than HardNeg, slightly outperforming it on matching score. However, HardNegC is easier to optimize for AffNet learning -see Table 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. Minimization of descriptor loss by optimization of affine parameters of corresponding features. Average over HPatchesSeq, illumination subset. Top row: geometric error of corresponding features (full line) and percentage of non-collapsed, i.e. elongation ≤ 6, features (dashed line). Bottom row: the fraction correct matches. All features initially have the same medium amount of reprojection noise. Left to right: HardNet, SIFT, TFeat, mean-normalized pixels descriptors.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. AffNet. Feature map spatial size -top, # channels -bottom. /2 stands for stride 2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 6 .</head><label>6</label><figDesc>Fig. 6. AffNet (top) and Baumberg (bottom) estimated affine shape. One ellipse is detected in the reference image, the other is a reprojected closest match from the second image. Baumberg ellipses tend to be more elongated, average axis ratio is 1.99 vs. 1.63 for AffNet, median: Baumberg 1.72 vs 1.39 AffNet. The statistics are calculated over 16M features on Oxford5k.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>is denoted Baum SS 19, as 19 × 19 patches are sampled from scale space. AffNet takes 32 × 32 patches, which are sampled from original image. So for fair comparison, we also tested Baum versions, where patches are sampled from original image, with 19 and 33 pixels patch size. AffNet slightly outperforms all the variants of Baumberg procedure for images with viewpoint change in terms of repeatability and more significant -in number of correspondences. The difference is even bigger for them image with illumination change only, where AffNet performs almost the same as plain Hessian, which is upper bound here, as this part of dataset has no viewpoint changes. We have also tested AffNet with other detectors on the Viewpoint subset of the HPatches. The repeatabilities are the following (no affine adaptation/Baumberg/AffNet): DoG: 0.46/0.51/0.52, Harris: 0.41/0.44/0.47, Hessian: 0.47/0.52/0.56 The proposed methods outperforms the standard (Baumberg) for all detectors.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Learning the affine transform: loss functions and descriptor comparison. The median of average number of correct matches on the HSequences [37] hardest image pairs 1-6 for the Hessian detector and the HardNet descriptor. The match considered correct for reprojection error ≤ 3 pixels. Affine shape is parametrized as in Eq. 3. n/c -did not converge.</figDesc><table>Training descriptor/loss 
+PosDist HardNeg HardNegC 
+
+Affine shape 
+
+SIFT 
+n/c 
+385 
+386 
+HardNet 
+n/c 
+n/c 
+388 
+
+Baumberg [15] 
+298 
+
+Orientation 
+
+SIFT 
+387 
+379 
+382 
+HardNet 
+386 
+383 
+380 
+
+Dominant orientation [10] 
+339 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 3 .</head><label>3</label><figDesc>AffNet vs. Baumberg affine shape estimators on wide baseline stereo datasets, with Hessian and adaptive Hessian detectors, following the protocol [16]. The number of matched image pairs and the average number of inliers. The numbers of image pairs in a dataset are boxed. Best results are in bold.</figDesc><table>EF 
+EVD 
+OxAff 
+SymB 
+GDB 
+LTLL 
+[46] 
+[3] 
+[8] 
+[47] 
+[48] 
+[49] 
+
+Detector 
+33 inl. 15 inl. 40 
+inl. 46 inl. 22 inl. 172 inl. 
+
+HesAff [7] 
+33 78 
+2 38 
+40 1008 
+34 153 
+17 199 
+26 34 
+HesAffNet 
+33 112 
+2 48 
+40 1181 
+37 203 
+19 222 
+46 36 
+
+AdHesAff [16] 
+33 111 
+3 33 
+40 1330 
+35 190 
+19 286 
+28 35 
+AdHesAffNet 
+33 165 
+4 42 
+40 1567 
+37 275 
+21 336 
+48 39 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Table 5. Performance (mAP) comparison with the state-of-the-art in local feature-based image retrieval. Vocabulary is learned on independent dataset: Oxford5k vocabulary for Paris6k evaluation and vice versa. All results are with spatial verification and query expansion. VS: vocabulary size. SA: single assignment. MA: multiple assignments. The best results are in bold.</figDesc><table>BoW 
++SV 
++SV+QE(15) +SV+QE(8) 
+BoW 
++SV 
++SV+QE(15) +SV+QE(8) 
+
+HesAff-RootSIFT [11] 
+55.1 
+63.0 
+78.4 
+80.1 59.3 
+63.7 
+76.4 
+77.4 
+HesAffNet-RootSIFT 
+61.6 
+72.8 
+86.5 
+88.0 63.5 
+71.2 
+81.7 
+83.5 
+
+HesAff-TFeat-M* [23] 
+46.7 
+55.6 
+72.2 
+73.8 43.8 
+51.8 
+65.3 
+69.7 
+HesAffNet-TFeat-M* 
+45.5 
+57.3 
+75.2 
+77.5 50.6 
+58.1 
+72.0 
+74.8 
+
+HesAff-HardNet++ [25] 
+60.8 
+69.6 
+84.5 
+85.1 65.0 
+70.3 
+79.1 
+79.9 
+HesAffNetLess-HardNet++ 64.3 
+73.3 
+86.1 
+87.3 62.0 
+68.7 
+79.1 
+79.2 
+HesAffNet-HardNet++ 
+68.3 
+77.8 
+89.0 
+91.1 65.7 
+73.4 
+83.3 
+83.3 
+
+Oxford5k 
+Paris6k 
+
+Method 
+VS 
+SA 
+MA 
+SA 
+MA 
+
+HesAff-SIFT-BoW-fVocab [52] 
+16M 
+74.0 
+84.9 
+73.6 
+82.4 
+HesAff-RootSIFT-HQE [13] 
+65k 
+85.3 
+88.0 
+81.3 
+82.8 
+HesAff-HardNet++-HQE [25] 
+65k 
+86.8 
+88.3 
+82.8 
+84.9 
+
+HesAffNet-HardNet++-HQE 
+65k 
+87.9 
+89.5 
+84.2 
+85.9 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements The authors were supported by the Czech Science Foundation Project GACR P103/12/G084, the Austrian Ministry for Transport, Innovation and Technology, the Federal Ministry of Science, Research and Economy, and the Province of Upper Austria in the frame of the COMET center, the CTU student grant SGS17/185/OHK3/3T/13, and the MSMT LL1303 ERC-CZ grant.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Structure-from-motion revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schonberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Frahm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4104" to="4113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Comparative evaluation of hand-crafted and learned local features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schonberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hardmeier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sattler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Mods: Fast and robust method for two-view matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mishkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Perdoch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Vision and Image Understanding</title>
+		<imprint>
+			<biblScope unit="volume">141</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Benchmarking 6DOF Urban Visual Localization in Changing Conditions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sattler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Maddern</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torii</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Okutomi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017-07" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">CNN image retrieval learns from BoW: Unsupervised fine-tuning with hard examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3" to="20" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">An Iterative Image Registration Technique with an Application to Stereo Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Lucas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Joint Conference on Artificial Intelligence (IJCAI)</title>
+		<imprint>
+			<date type="published" when="1981" />
+			<biblScope unit="page" from="674" to="679" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Scale &amp; affine invariant interest point detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A comparison of affine region detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schaffalitzky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kadir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">65</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">12</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">ORB: An efficient alternative to SIFT or SURF</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rublee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rabaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolige</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2564" to="2571" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scale-invariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Three things everyone should know to improve object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Arandjelovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Efficient representation of local geometry for large scale object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Perdoch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Visual query expansion with or without geometry: refining local descriptors by feature aggregation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jegou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pritts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Kukelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Larsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<editor>CVPR.</editor>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>Radially-distorted conjugate translations</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Reliable feature matching across widely separated views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Baumberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Wxbs: Wide baseline stereo generalizations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mishkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Perdoch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+		<idno>Arxiv 1504.06603</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">From single image query to detailed 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schonberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Frahm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5126" to="5134" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Revisiting Oxford and Paris: Large-Scale Image Retrieval Benchmarking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Iscen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2018" />
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Designing Deep Convolutional Neural Networks for Continuous Object Orientation Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vemulapalli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017-02" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">From dusk till dawn: Modeling in the dark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schonberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="5488" to="5496" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning to compare image patches via convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zagoruyko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Matchnet: Unifying feature and metric learning for patch-based matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3279" to="3286" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning local feature descriptors with triplets and shallow convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Balntas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Riba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ponsa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">L2-net: Deep learning of discriminative patch descriptor in euclidean space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">F</forename><surname>Yurun Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Working hard to know your neighbor&apos;s margins: Local descriptor learning loss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mishchuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mishkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Learning Spread-out Local Feature Descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">F</forename><surname>Chang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017-08" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Discriminative unsupervised feature learning with exemplar convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1734" to="1747" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Tilde: a temporally invariant learned detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Verdie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5279" to="5288" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Learning discriminative and transformation covariant local feature detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karaman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">F</forename><surname>Chang</surname></persName>
+		</author>
+		<editor>CVPR.</editor>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Learning Covariant Feature Detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>In</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>Springer International Publishing</publisher>
+			<biblScope unit="page" from="100" to="117" />
+			<pubPlace>Cham</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Quad-networks: unsupervised learning to rank for interest point detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Seki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sattler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016-11" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Predicting matchability</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hartmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Havlena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="9" to="16" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning to Assign Orientations to Feature Points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Verdie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Computer Vision and Pattern Recognition</title>
+		<meeting>the Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">LIFT: Learned invariant feature transform</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Trulls</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="467" to="483" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Universal correspondence network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">B</forename><surname>Choy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chandraker</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2414" to="2422" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In: ICLR</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">HPatches: A benchmark and evaluation of handcrafted and learned local descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Balntas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<title level="m">Spatial Transformer Networks. ArXiv e-prints</title>
+		<imprint>
+			<date type="published" when="2015-06" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Automatic panoramic image stitching using invariant features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">74</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="59" to="73" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno>ArXiv 1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="807" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Dropout: a simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research (JMLR)</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Automatic differentiation in PyTorch</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Chanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Devito</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Desmaison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Antiga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lerer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of NIPS Workshop</title>
+		<meeting>NIPS Workshop</meeting>
+		<imprint>
+			<date type="published" when="2017-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mishkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sergievskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<title level="m">Systematic evaluation of convolution neural network advances on the Imagenet. Computer Vision and Image Understanding</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="11" to="19" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Gulshan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>Vlbenchmarks</publisher>
+			<biblScope unit="page">9</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Edge foci interest points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ramnath</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Image matching using local symmetry features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Hauagge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Registration of challenging image pairs: Initialization, estimation, and decision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">V</forename><surname>Stewart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sofka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Tsai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<monogr>
+		<title level="m" type="main">Location recognition over large time lags. Computer Vision and Image Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tommasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">139</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Keypoint descriptors for matching across multiple image modalities and non-linear intensity variations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kelman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sofka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">V</forename><surname>Stewart</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR 2007</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Fixing the locally optimized ransac</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lebeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC 2012</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Learning vocabularies over a fine quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mikulik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Perdoch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">103</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="163" to="175" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenović</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.02512</idno>
+		<title level="m">Fine-tuning cnn image retrieval with no human annotation</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<monogr>
+		<title level="m" type="main">Efficient diffusion on region manifolds: Recovering small objects with compact cnn representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Iscen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Furon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<monogr>
+		<title level="m" type="main">End-to-end learning of deep visual representations for image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gordo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Almazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Larlus</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Object retrieval with large vocabularies and fast spatial matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Lost in quantization: Improving particular object retrieval in large scale image databases</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Video google: A text retrieval approach to object matching in videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Fast approximate nearest neighbors with automatic algorithm configuration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Muja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision Theory and Application (VISSAPP)</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">Improving bag-of-features for large scale image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jegou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">87</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="316" to="336" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">On the burstiness of visual elements</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jegou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1169" to="1176" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Accurate image search using the contextual dissimilarity measure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jegou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Harzallah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page" from="2" to="11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<monogr>
+		<title level="m" type="main">Large-Scale Image Retrieval with Attentive Deep Local Features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Araujo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weyand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

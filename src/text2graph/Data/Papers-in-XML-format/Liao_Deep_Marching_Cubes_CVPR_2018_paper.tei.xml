@@ -1,0 +1,1388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:59+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Deep Marching Cubes: Learning Explicit Surface Representations</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yiyi</forename><surname>Liao</surname></persName>
+							<email>yiyi.liao@tue.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Autonomous Vision Group</orgName>
+								<orgName type="institution">MPI for Intelligent Systems Tübingen</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Institute of Cyber-Systems and Control</orgName>
+								<orgName type="institution">Zhejiang University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Simon</forename><surname>Donné</surname></persName>
+							<email>simon.donne@tue.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Autonomous Vision Group</orgName>
+								<orgName type="institution">MPI for Intelligent Systems Tübingen</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="department">imec</orgName>
+								<orgName type="institution">IPI -Ghent University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><surname>Geiger</surname></persName>
+							<email>andreas.geiger@tue.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Autonomous Vision Group</orgName>
+								<orgName type="institution">MPI for Intelligent Systems Tübingen</orgName>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="laboratory">CVG Group</orgName>
+								<orgName type="institution">ETH Zürich</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Deep Marching Cubes: Learning Explicit Surface Representations</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Existing learning based solutions to 3D surface prediction cannot be trained end-to-end as they operate on intermediate representations (e.g., TSDF) from which 3D surface meshes must be extracted in a post-processing step (e.g., via the marching cubes algorithm). In this paper, we investigate the problem of end-to-end 3D surface prediction. We first demonstrate that the marching cubes algorithm is not differentiable and propose an alternative differentiable formulation which we insert as a final layer into a 3D convolutional neural network. We further propose a set of loss functions which allow for training our model with sparse point supervision. Our experiments demonstrate that the model allows for predicting sub-voxel accurate 3D shapes of arbitrary topology. Additionally, it learns to complete shapes and to separate an object's inside from its outside even in the presence of sparse and incomplete ground truth. We investigate the benefits of our approach on the task of inferring shapes from 3D point clouds. Our model is flexible and can be combined with a variety of shape encoder and shape inference techniques.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>3D reconstruction is a core problem in computer vision, yet despite its long history many problems remain unsolved. Ambiguities or noise in the input require the integration of strong geometric priors about our 3D world. Towards this goal, many existing approaches formulate 3D reconstruction as inference in a Markov random field <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b45">46]</ref> or as a variational problem <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b46">47]</ref>. Unfortunately, the expressiveness of such prior models is limited to simple local smoothness assumptions <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b46">47]</ref> or very specialized shape models <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b41">42]</ref>. Neither can such simple priors resolve strong ambiguities, nor are they able to reason about missing or occluded parts of the scene. Hence, existing 3D reconstruction systems work either in narrow domains where specialized shape knowledge is available, or  <ref type="figure">Figure 1</ref>: Illustration comparing point prediction (a), implicit surface prediction (b) and explicit surface prediction (c). The encoder is shared across all approaches and depends on the input (we use point clouds in this paper). The decoder is specific to the output representation. All trainable components are highlighted in yellow. Note that only (c) can be trained end-to-end for the surface prediction task.</p><p>require well captured and highly-textured environments. However, the recent success of deep learning <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b37">38]</ref> and the availability of large 3D datasets <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b36">37]</ref> nourishes hope for models that are able to learn powerful 3D shape representations from data, allowing reconstruction even in the presence of missing, noisy and incomplete observations. And indeed, recent advances in this area <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b39">40]</ref> suggest that this goal can ultimately be achieved.</p><p>Existing 3D representation learning approaches can be classified into two categories: voxel based methods and point based methods, see <ref type="figure">Fig. 1</ref> for an illustration. Voxel based methods <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b44">45]</ref> use a grid of voxels as output representation and predict either voxel occupancy <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b44">45]</ref> or a truncated signed distance field (TSDF) which implicitly determines the surface <ref type="bibr" target="#b34">[35]</ref>. Point based methods <ref type="bibr" target="#b11">[12]</ref> directly regress a fixed number of points as output. While voxel and point based representations are easy to implement, both require a post processing step to retrieve the actual 3D surface mesh which is the quantity of interest in 3D reconstruction. For point based methods, meshing techniques such as Poisson surface reconstruction <ref type="bibr" target="#b24">[25]</ref> or SSD <ref type="bibr" target="#b3">[4]</ref> can be employed. In contrast, implicit voxel based methods typically use marching cubes <ref type="bibr" target="#b28">[29]</ref> to extract the zero level set.</p><p>As both techniques cannot be trained end-to-end for the 3D surface prediction task, an auxiliary loss (e.g., Chamfer distance on point sets, ℓ 1 loss on signed distance field) must be used during training. However, there are two major limitations in this setup: firstly, while implicit methods require 3D supervision on the implicit model, the ground truth of the implicit representation is often hard to obtain, e.g., in the presence of a noisy and incomplete point cloud or when the inside and outside of the object is unknown. Secondly, these methods only optimize an auxiliary loss defined on an intermediate representation and require an additional postprocessing step for surface extraction. Thus they are unable to directly constrain the properties of the predicted surface.</p><p>In this work, we propose Deep Marching Cubes (DMC), a model which predicts explicit surface representations of arbitrary topology. Inspired by the seminal work on Marching Cubes <ref type="bibr" target="#b28">[29]</ref>, we seek for an end-to-end trainable model that directly produces an explicit surface representation and optimizes a geometric loss function. This avoids the need for defining auxiliary losses or converting target meshes to implicit distance fields. Instead, we directly train our model to predict surfaces that agree with the 3D observations. We demonstrate that direct surface prediction can lead to more accurate reconstructions while also handling noise and missing observations. Besides, this allows for separating inside from outside even if the ground truth is sparse or not watertight, as well as easily integrating additional priors about the surface (e.g., smoothness). We summarize our contributions as follows:</p><p>• We demonstrate that Marching Cubes is not differentiable with respect to topological changes and propose a modified representation which is differentiable.</p><p>• We present a model for end-to-end surface prediction and derive appropriate geometric loss functions. Our model can be trained from unstructured point clouds and does not require explicit surface ground truth.</p><p>• We propose a novel loss function which allows for separating an object's inside from its outside even when learning with sparse unstructured 3D data.</p><p>• We apply our model to several surface prediction tasks and demonstrate its ability to recover surfaces even in the presence of incomplete or noisy ground truth.</p><p>Our code and data is available on the project website 1 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Point Based Representations: Point based representations have a long history in robotics and computer graphics. However, the irregular structure complicates the usage of point clouds in deep learning. Qi et al. <ref type="bibr" target="#b30">[31]</ref> proposed PointNet for point cloud classification and segmentation. Invariance wrt. the order of the points is achieved by means of a global pooling operation over all points. As global pooling does not preserve local information, a hierarchical neural network that applies PointNet recursively on a nested partitioning of the input point set has been proposed in follow-up work <ref type="bibr" target="#b32">[33]</ref>. Fan et al. <ref type="bibr" target="#b11">[12]</ref> proposed a model for sparse 3D reconstruction, predicting a point set from a single image. While point sets require less parameters to store compared to dense volumetric grids, the maximal number of points which can be predicted is limited to a few thousand due to the simple fully connected decoder. In contrast to the method proposed in this paper, an additional post-processing step <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b24">25]</ref> is required to "lift" the 3D point cloud to a dense surface mesh.</p><p>Implicit Surface Representations: Implicit surface representations are amongst the most widely adopted representations in 3D deep learning as they can be processed by means of standard 3D CNNs. By far the most popular representation are binary occupancy grids which have been applied to a series of discriminative tasks such as 3D object classification <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b31">32]</ref>, 3D object detection <ref type="bibr" target="#b37">[38]</ref> and 3D reconstruction <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b44">45]</ref>. Its drawback, however, is obvious: the accuracy of the predicted reconstruction is limited to the size of a voxel. While most existing approaches are limited to a resolution of 32 3 voxels, methods that exploit adaptive space partitioning techniques <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b38">39]</ref> scale up to 256 3 or 512 3 voxel resolution. Yet, without sub voxel estimation, the resulting reconstructions exhibit voxel-based discretization artefacts. Sub voxel precision can be achieved by exploiting the truncated signed distance function (TSDF) <ref type="bibr" target="#b7">[8]</ref> as representation where each voxel stores the truncated signed distance to the closest 3D surface point <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b34">35]</ref>.</p><p>While the aforementioned works require post-processing for isosurface extraction, e.g., using Marching Cubes <ref type="bibr" target="#b28">[29]</ref>, here we propose an end-to-end trainable solution which integrates this step into one coherent model. This allows for training the model directly using point based supervision and geometric loss functions. Thus, our model avoids the need for converting the ground truth point cloud or mesh into an intermediate representation (e.g., TSDF) and defining auxiliary loss functions. It is worth noting that this conversion is not only undesirable but often also very difficult, i.e., when learning from unordered point sets or nonwatertight meshes for which inside/outside distinction is difficult. Our approach avoids the conversion step and instead infers such relationships using weak prior knowledge.</p><p>Explicit Surface Representations: Compared to implicit surface representations, explicit surface representations are less structured as they are typically organized as a set of vertices and faces, complicating their deployment in deep learning. Several works consider the problem of shape classification and segmentation by defining neural networks which operate on the graph spanned by the edges and vertices of a 3D mesh <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b42">43]</ref>. However, these methods assume a fixed input graph while in 3D reconstruction the graph (i.e., mesh) itself needs to be inferred. Very limited results have been presented for mesh based inference, and existing works are restricted by a fixed 3D topology or mild deviations from a 3D template. Rezende et al. <ref type="bibr" target="#b33">[34]</ref> predict a small number of vertices using a fully connected network. Each vertex is constrained to move along a pre-defined line. Thus, their method is limited to very simple convex shapes (they consider spheres, cuboids and cylinders) with a small number of vertices. Kong et al. <ref type="bibr" target="#b26">[27]</ref> predict a mesh by deforming the vertices of a nearest neighbor CAD model, resulting in predictions close to the original shape templates. Kanazawa et al. <ref type="bibr" target="#b22">[23]</ref> also predict meshes, however their method is specialized to human body shapes.</p><p>Our goal is to overcome these difficulties by combining voxel and mesh based representations. Our decoder operates in a volumetric space, but predicts the local face parameters of the surface mesh. Compared to the aforementioned methods, our representation is scalable regarding the number of vertex points while allowing for arbitrary topologies and the prediction of non-convex shapes. No shape templates are required at test time and the model generalizes well to unseen shape categories.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Deep Marching Cubes</head><p>We tackle the problem of predicting an explicit surface representation (i.e., a mesh) directly from raw observations (e.g., a mesh, point cloud, volumetric data or an image). Existing works formulate this problem as the prediction of an intermediate signed distance representation using an auxiliary (typically ℓ 1 ) loss <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b34">35]</ref>, followed by applying the Marching Cubes (MC) algorithm <ref type="bibr" target="#b28">[29]</ref>. In this work we aim at making this last step differentiable, hence allowing for end-to-end training using surface based geometric loss functions.</p><p>We first provide a formal introduction to the Marching Cubes algorithm <ref type="bibr" target="#b28">[29]</ref>. We then demonstrate that backprop- <ref type="figure">Figure 2</ref>: Mesh Topology. The 2 8 = 256 topologies can be grouped into 15 equivalence classes due to rotational symmetry. In this paper, we consider only the singly connected topologies (highlighted in yellow).</p><p>T ri a n g le F a c e (a) Marching Cubes agation through this algorithm is intractable and propose a modified differentiable representation which avoids these problems. We exploit this representation as a Differentiable Marching Cubes Layer (DMCL) in a neural network for end-to-end surface prediction of arbitrary topology.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Marching Cubes</head><p>The Marching Cubes (MC) algorithm extracts the zero level set of a signed distance field and represents it as a set of triangles. It comprises two steps: estimation of the topology (i.e., the number and connectivity of triangles in each cell of the volumetric grid) and the prediction of the vertex locations of the triangles, determining the geometry.</p><p>More formally, let D ∈ R N ×N ×N denote a (discretized) signed distance field obtained using volumetric fusion <ref type="bibr" target="#b7">[8]</ref> or predicted by a neural network <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b34">35]</ref> where N denotes the number of voxels along each dimension. Let further d n ∈ R denote the n'th element of D where n = (i, j, k) ∈ N between voxel n and its closest surface point. Without loss of generality, let us assume that d n &gt; 0 if voxel n is located inside an object and d n &lt; 0 otherwise. The zero level set of the signed distance field D defines the surface which can be represented by means of a triangular mesh M. This mesh M can be extracted from D using the Marching Cubes (MC) algorithm <ref type="bibr" target="#b28">[29]</ref> which iterates ("marching") through all cells of the grid connecting the voxel centers and inserts triangular faces whenever a sign change is detected <ref type="bibr" target="#b1">2</ref> . More specifically, MC performs the following two steps:</p><p>First, the cell's surface topology T is determined based on the sign of d n at its 8 corners. T can be represented as a binary tensor T ∈ {0, 1} 2×2×2 where each element represents a corner. The total number of configurations equals 2 8 = 256, see <ref type="figure">Fig. 2</ref> for an illustration. A vertex is created in case of a sign change of the distance values of two adjacent corners of the cell (i.e., corners connected by an edge). The vertex is placed at the edge connecting both corners.</p><p>In a second step, the vertex location of each triangular face along the edge is determined using linear interpolation. </p><formula xml:id="formula_0">x) = d + x(d ′ − d). Setting f (x) = 0 yields x = d/(d − d ′ ), see also Fig. 3a.</formula><p>Discussion: Given the MC algorithm, can we construct a deep neural network for end-to-end surface prediction? Indeed, we could try to construct a deep neural network which predicts a signed distance field that is converted into a triangular mesh using MC. We could then compare this surface to a ground truth surface or point cloud and backpropagate errors through the MC layer and the neural network. Unfortunately, this approach is intractable for two reasons:</p><formula xml:id="formula_1">• First, x = d/(d − d ′ ) is singular at d = d ′ ,</formula><p>thus preventing topological changes during training. However, the topology is unknown at training time if a point cloud or a partial mesh is used as input. Instead, the network needs to learn the topology during training.</p><p>• Second, observations affect only grid cells in their immediate vicinity, i.e., they act solely on cells where the surface passes through. Thus gradients are not propagated to cells further away from the predicted surface.</p><p>To circumvent these problems we propose a modified differentiable representation which separates the mesh topology from the geometry. In contrast to predicting signed distance values, we predict the probability of occupancy for each voxel. The mesh topology is then implicitly (and probabilistically) defined by the state of the occupancy variables at its corners. In addition, we predict a vertex location for every edge of each cell. The combination of both implicitly defined topology and vertex location defines a distribution over meshes which is differentiable and can be used for backpropagation. The second problem can be tackled by introducing appropriate loss functions on the occupancy and the vertex location variables. Note that predicting occupancies instead of distance values is not a limitation as the surface computed via MC does not depend on cells further away. Similar to MC, our representation is flexible in terms of the output topology.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Differentiable Marching Cubes</head><p>We now formalize our Differentiable Marching Cubes Layer (DMCL). Let again n = (i, j, k) ∈ N 3 denote a multi-index into a 3D tensor and let 1 = <ref type="figure">(1, 1, 1</ref> 3 denote the n'th element of X, representing the displacements of the triangle vertices along the edges associated with x n . Note that x n is a 3-dimensional vector as we need to specify one vertex displacement for each dimension of the 3D space (see <ref type="figure" target="#fig_0">Fig. 3b</ref>). Let w denote a vertex of the output mesh located on edge e = (v, v ′ ). As before, we have x = 0 if w = v and x = 1 if w = v ′ . In other words, w is displaced linearly between v and v ′ based on x. The topology can be implicitly defined via the occupancy variables. We consider the predictions of the neural network o n ∈ [0, 1] as parameters of a Bernoulli distribution</p><formula xml:id="formula_2">p n (t) = (o n ) t (1 − o n ) 1−t<label>(1)</label></formula><p>where t ∈ {0, 1} is a random variable and p n (t) is the probability of voxel n being occupied (t = 1) or unoccupied (t = 0). Let now {o n , . . . , o n+1 } denote the 2 3 = 8 occupancy variables corresponding to the 8 corners of the n'th grid cell. Let further T ∈ {0, 1} 2×2×2 denote a binary random tensor representing the topology. The probability for topology T at grid cell n is the product of the 8 occupancy probabilities at its corners with t m ∈ {0, 1} denoting the m'th element of T. Note that jointly with the vertex displacement field X, the distribution over topologies p n (T) at cell n defines a distribution over triangular meshes within cell n. Considering all cells n ∈ T we obtain a distribution over meshes in the entire grid as</p><formula xml:id="formula_3">p n (T) = m∈{0,1} 3 (o n+m ) tm (1 − o n+m ) 1−tm (2)</formula><formula xml:id="formula_4">p({T n |n ∈ T }) = n∈T p n (T n )<label>(3)</label></formula><p>where T = {1, . . . , N − 1} 3 and the vertex displacements X are fixed to the predictions of the neural net.</p><p>Remark: While the total number of possible topologies within a voxel is 2 8 = 256, many of them represent disconnected meshes. As those are unlikely to occur in practice given a fine enough voxel resolution, in this paper we only consider the 140 singly connected topologies (highlighted in yellow in <ref type="figure">Fig. 2</ref>) and renormalize (2) accordingly.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Network Architecture</head><p>This section describes our complete network architecture which integrates the Differentiable Marching Cubes Layer described in the previous section as a final layer for explicit surface prediction. We adopt an encoder-decoder architecture as illustrated in <ref type="figure" target="#fig_3">Fig. 4</ref>. The encoder extracts features from the raw observations and the decoder predicts an explicit surface. In this paper we consider a 3D point cloud P ∈ R K×3 with K points as input. However, note that the encoder could be easily adapted to other types of observations including 3D volumetric information or 2D images.</p><p>Our point cloud encoder is a variation of PointNet++ <ref type="bibr" target="#b32">[33]</ref> which is invariant to the local point ordering while retaining local information. Similar to PointNet++, we first extract a local feature vector for each point using fully connected layers. The major difference is that our feature representation is tightly coupled with the discrete structure of the voxel grid. While PointNet++ recursively samples points for grouping, we group all points falling into a voxel into one set and apply pooling within this voxel. Thus, we retain the regular grid structure of the decoder which allows for exploiting skip connections in our model (see <ref type="figure" target="#fig_3">Fig. 4</ref>).</p><p>The result of the grid pooling operation is fed into a standard 3D encoder-decoder CNN for increasing the size of the receptive field. This subnetwork is similar to the one used in <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b35">36]</ref> and comprises convolution, pooling and unpooling layers as well as ReLU non-linearities. Following common practice, we exploit skip connections to preserve details. The decoder head is split into two branches, one for estimating the occupancy probabilities O and one for predicting the vertex displacement field X. A sigmoid layer is added to both O and X to ensure valid probabilities between 0 and 1 for O, and valid vertex displacements for X. The distribution over topologies is given by equation <ref type="bibr" target="#b2">(3)</ref>. For more details we refer to the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Loss Functions</head><p>At training time, our goal is to minimize the distance between the ground truth point cloud and the predicted surface mesh M. Note that our model predicts a distribution over surface meshes p(M) thus we minimize the expected surface error. We add additional constraints to regularize the occupancy variables and the smoothness of the estimated mesh. Our loss function decomposes into four parts</p><formula xml:id="formula_5">L(θ) = w 1 n L mesh n (θ) + w 2 L occ (θ) + (4) w 3 n∼m L smooth n,m (θ) + w 4 n∼m L curve n,m (θ)</formula><p>where θ represents the parameters of the neural network in <ref type="figure" target="#fig_3">Fig. 4</ref>, {w i } are the weights of the loss function and n ∼ m denotes the set of adjacent cells in the grid. Each part of this loss function will be described in the following paragraphs.</p><p>Point to Mesh Loss: We first introduce a geometric loss which measures the compatibility of the predicted 3D surface mesh with respect to the observed 3D points. Let Y denote the set of observed 3D points (i.e., the ground truth) and let Y n ⊆ Y denote the set of observed points falling into cell n. As our model predicts a distribution of topologies p n (T) and hence also meshes at every cell n, we seek to minimize the expected error with respect to this distribution. More formally, we have</p><formula xml:id="formula_6">L mesh n (θ) = E pn(T|θ)   y∈Yn ∆(M n (T, X(θ)), y)   (5)</formula><p>where y ∈ R 3 is an observed 3D point, M n (T, X) represents the mesh induced by topology T and vertex displacement field X at cell n, and ∆(M, y) denotes the point-tomesh distance if . The point-to-mesh distance is calculated by finding the triangle closest to y in terms of euclidean (ℓ 2 ) distance. Note that in contrast to losses defined on implicit surface representations (e.g., TSDF), the loss in (5) directly measures the geometric error of the inferred mesh.</p><p>While <ref type="formula">(5)</ref> ensures that the inferred mesh covers all observations the converse is not true. That is, surface predictions far from the observations are not penalized as long as all observations are covered by the predicted surface mesh. Unfortunately, such a penalty is not feasible in our case as the ground truth may be incomplete. We therefore add a small constant loss on all non-empty topologies for cells without observed points. Moreover, we introduce additional loss functions that prefer simple solutions in the following paragraphs. In particular, these constraints enforce free-space at the boundary of the volume and smoothness of the surface.</p><p>Occupancy Loss: As mentioned above, the occupancy status is ambiguous when considering unstructured 3D point clouds as observations. That is, flipping the occupied with the free voxels will result in exactly the same geometric loss as only the distance to the surface can be measured, but no information about what is inside or outside is present in the data. However, we observe that for most scenes objects are surrounded by free space, thus we can safely assume that the 6 faces of the cube bounding the 3D scene are unoccupied. Defining a prior for occupied voxels is more challenging. One could naïvely assume that the center of the bounding cube must be occupied, yet this is not true in general. Thus, we relax this assumption by encouraging a sub-volume inside the scene to be occupied. More formally, we have:</p><formula xml:id="formula_7">L occ (θ) = 1 |Γ| n∈Γ o n (θ) + w(1 − 1 |Ω| n∈Ω o n (θ)) (6)</formula><p>where Γ denotes the boundary of the scene cube (i.e., all voxels on its six faces) and Ω denotes a sub-volume inside the cube (e.g., half the size of the scene cube). Minimizing the first term of (6) encourages the boundary voxels to become unoccupied. Minimizing the second term enforces a region within the scene cube to become occupied depending on the adaptive weight w, which decreases with the number of high confident occupied voxels in the scene.</p><p>Smoothness Loss: Note that both L mesh as well as L occ act only locally on the volume. To propagate occupancy information within the volume, we therefore introduce an additional smoothness loss. In particular, we assume that the majority of all neighboring voxels take the same occupancy state. This assumption is justified by the fact that transitions happen only at the surface of an object (covering the minority of voxels). We therefore introduce the following pairwise loss, encouraging occupancy smoothness:</p><formula xml:id="formula_8">L smooth n,m = |o n (θ) − o m (θ)|<label>(7)</label></formula><p>Curvature Loss: Similarly to the smoothness loss on the occupancy variables we can encourage smoothness of the predicted mesh geometry. This is particularly important if the ground truth point cloud is sparse and noisy as assumed in this paper. We therefore add a curvature loss which enforces smooth transitions between adjacent cells by minimizing the expected difference in normal orientation:</p><formula xml:id="formula_9">L curve n,m (θ) = E pn,m(T,T ′ |θ) [ϕ n,m (T, T ′ , X(θ))]<label>(8)</label></formula><p>Here, p n,m (T,</p><formula xml:id="formula_10">T ′ |θ) = p n (T|θ) p m (T ′ |θ)</formula><p>is the joint distribution over the topologies of voxel n and voxel m. Furthermore, ϕ n,m (·) denotes a function which returns the squared ℓ 2 distance between the normals of the faces in cell n and m which are connected by a joint edge, and 0 if the faces in both cells are not topologically connected.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Evaluation</head><p>In this section, we first thoroughly evaluate the effectiveness and robustness of the proposed method in 2D. Then we demonstrate the ability of our method to predict 3D meshes from 3D point clouds.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Model Validation in 2D</head><p>For clarity, we validate our model in 2D before we consider the 3D case. In 2D, the total number of topologies reduces to 2 4 = 16 as illustrated in the supplementary material. We rendered silhouettes of 1547 different car instances from ShapeNet <ref type="bibr" target="#b4">[5]</ref>, which we split into 1237 training samples and 310 test samples. We randomly sampled 300 points from the silhouette boundaries which we feed as input to the network. We use a voxel grid of size N × N × N with N = 32 throughout all of our experiments. All other hyperparameters are specified in the supplementary material. For evaluation, we use Chamfer distance, accuracy and completeness. We follow common practice <ref type="bibr" target="#b21">[22]</ref> and specify all measures as distances, thus lower accuracy / completeness values indicate better results. We evaluate the quality of the predicted mesh by measuring the Chamfer distance in voxels, which considers both accuracy and completeness of the predicted mesh. For this experiment, we also evaluated the Hamming distance between our occupancy prediction and the ground truth occupancy to assess the ability of our model in separating inside from outside. Using only L mesh , the network predicts multiple surfaces around the true surface and fails to predict occupancy (a). Adding the occupancy loss L occ allows the network to separate inside from outside, but still leads to fragmented surface boundaries (b). Adding the smoothness loss L smooth , removes these fragmentations (c). The curvature loss L curve further enhances the smoothness of the surface without decreasing performance. Thus, we adopt the full model in the following evaluation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Generalization &amp; Topology:</head><p>To demonstrate the flexibility of our approach, we apply our model trained on the category "car" to point clouds from the category "bottle". As evidenced by <ref type="figure" target="#fig_4">Fig. 5e</ref>, our model generalizes well to novel categories; it learns local shape representations rather than capturing purely global shape properties. <ref type="figure" target="#fig_4">Fig. 5f</ref> shows that our method, trained and tested with multiple separated car instances also handles complex topologies, correctly separating inside from outside, even when the center voxel is not occupied, validating the robustness of our occupancy loss.</p><p>Model Robustness: In practice, 3D point cloud measurements are often noisy or incomplete due to sensor occlusions. In this section, we demonstrate that our method is able to reconstruct surfaces even in the presence of noisy and incomplete observations. Note that this is a challenging problem which is typically not considered in learningbased approaches to 3D reconstruction which assume that the ground truth is densely available. We vary the level   of noise and completeness in <ref type="table" target="#tab_1">Table 1 and Table 2</ref>. For moderate levels of noise, the predicted mesh degrades only slightly. Moreover, our model correctly predicts the shape of the car in <ref type="table" target="#tab_2">Table 2</ref> even though information within an angular range of up to 45</p><p>• was not available during training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">3D Shape Prediction from Point Clouds</head><p>In this section, we verify the main hypothesis of this paper, namely if end-to-end learning for 3D shape prediction is beneficial wrt. regressing an auxiliary representation and extracting the 3D shape in a postprocessing step. Towards this goal, we compare our model to two baseline methods which regress an implicit representation as widely adopted in the 3D deep learning literature <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b44">45]</ref>, as well as to the well-known Screened Poisson Surface Reconstruction (PSR) <ref type="bibr" target="#b24">[25]</ref>. Specifically, given the same point cloud encoder as introduced in Section 3.3, we construct two baselines which predict occupancy and Truncated Signed Distance Functions (TSDFs), respectively, followed by classical Marching Cubes (MC) for extracting the meshes. For a fair comparison, we use the same decoder architecture as our occupancy branch and predict at the same resolution (32 × 32 × 32 voxels). We apply PSR with its default pa-  Again, we conduct our experiments on the ShapeNet dataset, but this time we directly use the provided 3D models. More specifically, we train our models jointly on objects from 3 classes (bottle, car, sofa). As ShapeNet models comprise interior faces such as car seats, we rendered depth images and applied TSDF fusion at a high resolution (128 × 128 × 128 voxels) for extracting clean meshes and occupancy grids. We randomly sampled points on these meshes which are used as input to the encoder as well as observations. Note that training the implicit representation baselines requires dense ground truth of the implicit surface / occupancy grid while our approach only requires a sparse unstructured 3D point cloud for supervision. For the input point cloud we add Gaussian noise with σ = 0.15 voxels. <ref type="table" target="#tab_4">Table 3</ref> shows our results. All predicted meshes are compared to the ground truth mesh extracted from the TSDF at 128 × 128 × 128 voxels resolution. Here, wTSDF refers to a TSDF variant where higher importance is given to voxels closer to the surface resulting in better meshes.</p><p>Our method outperforms both baseline methods and PSR in all three metrics given the same resolution. This validates our hypothesis that directly optimizing a surface loss leads to better surface reconstructions. Note that our method infers occupancy using only unstructured points as supervision while both baselines require this knowledge explicitly.</p><p>A qualitative comparison is shown in <ref type="figure">Fig. 6</ref>. Our method significantly outperforms the baseline methods in reconstructing small details (e.g., wheels of the cars in rows 1-4) and thin structures (e.g., back of the sofa in rows 6+8). The reason for this is that implicit representations require discretization of the ground truth while our method does not. Furthermore, the baseline methods fail completely when the ground truth mesh is not closed (e.g., car underbody is missing in row 4) or has holes (e.g., car windows in row 2). In this case, large portions of the space are incorrectly labeled free space. While the baselines use this information directly as training signal, our method uses a surface-based</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Input</head><p>Occ wTSDF PSR-5 PSR-8 Ours GT <ref type="figure">Figure 6</ref>: 3D Shape Prediction from Point Clouds. Surfaces are colored: the outer surface is yellow, the inner red.</p><p>loss. Thus it is less affected by errors in the occupancy ground truth. Even though PSR-8 beats our method on completeness given its far higher resolution, it is less robust to noisy inputs compared to PSR-5, while our method handles the trade-off between reconstruction and robustness more gracefully. Furthermore, PSR sometimes flips inside and outside (rows 2+4+6+7) as estimating oriented normal vectors from a sparse point set is a non-trivial task. We also provide some failure cases of our method in the last two rows of <ref type="figure">Fig. 6</ref>. Our method might fail on very thin surfaces (row 9) or connect disconnected parts (row 10) although in both cases our method still convincingly outperforms the other methods. Those failures are caused by the rather low-resolution output (a 32 3 grid), which could be addressed using octree networks <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b38">39]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We proposed a flexible framework for learning 3D mesh prediction. We demonstrated that training the surface prediction task end-to-end leads to more accurate and complete reconstructions. Moreover, we showed that surface-based supervision results in better predictions in case the ground truth 3D model is incomplete. In future work, we plan to adapt our method to higher resolution outputs using octrees techniques <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b38">39]</ref> and integrate our approach with other input modalities like the ones illustrated in <ref type="figure">Fig. 1</ref>.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Representation used by Marching Cubes (a) and the proposed Differentiable Marching Cubes (b). The former uses an implicit surface representation based on signed distances D while the latter exploits an explicit surface representation which is parameterized in terms of occupancy probabilites O and vertex displacements X.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>More formally, let x ∈ [0, 1] denote the relative location of a triangle vertex w along edge e = (v, v ′ ) where v and v ′ are the corresponding edge vertices as illustrated in Fig. 3a. In particular, let's assume x = 0 if w = v and x = 1 if w = v ′ . Let further d ∈ R and d ′ ∈ R denote the signed distance values at v and v ′ , respectively. In the Marching Cubes algorithm, x is determined from d and d ′ as the zero crossing of the linear interpolant of d and d ′ . This inter- polant is given as f (</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>) index the first element of the tensor. Let O ∈ [0, 1] N ×N ×N denote the occupancy field and let X ∈ [0, 1] N ×N ×N ×3 denote the vertex displacement field predicted by a neural network (see Section 3.3 for details on the network architecture). Let o n ∈ [0, 1] denote the n'th element of O, representing the occupancy probability of that voxel with o = 1 if the voxel is occupied. Similarly, let x n ∈ [0, 1]</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Network Architecture. The input point cloud P is converted into a volumetric representation using grid pooling. The grid pooling operation (highlighted in yellow) takes as input a set of K points with their D = 16 dimensional feature maps and performs max pooling within each cell. Empty cells are associated with the zero vector. The pooled features are processed by an encoder-decoder network with skip connections. The decoder has two heads: one for occupancies O and one for vertex displacements X. All details of the architecture can be found in the supplementary material.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: 2D Ablation Study. (a)-(d)+(g) show our results when incrementally adding the loss functions of (4). (e)+(f) demonstrate the ability of our model to generalize to novel categories (train: car, test: bottle) and more complex surface topologies (in this case, two separated objects). The top row shows the input points in gray and the estimated occupancy field O with red indicating occupied voxels. The bottom row shows the most probable surface M in red.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Sparse Point Prediction (e.g., [12])</figDesc><table>Encoder 
+
+Point 
+Generation 
+
+Observation 
+Explicit surface 
+Point set 
+
+Meshing 
+
+(a) Encoder 
+Decoder 
+
+Observation 
+Explicit surface 
+Implicit surface 
+
+Marching 
+Cubes 
+
+(b) Implicit Surface Prediction (e.g., [35, 45]) 
+
+Encoder 
+Decoder 
+
+Observation 
+Explicit surface 
+Occupancy 
+Geometry 
+
+(c) Explicit Surface Prediction (ours) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Robustness wrt. Noisy Ground Truth.</figDesc><table>Chamfer Accuracy Complete. 
+
+θ = 15 
+
+• 
+
+0.234 
+0.210 
+0.257 
+θ = 30 
+
+• 
+
+0.250 
+0.227 
+0.273 
+θ = 45 
+
+• 
+
+0.308 
+0.261 
+0.354 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Robustness wrt. Incomplete Ground Truth.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Resolution Method Chamfer Accuracy Complete.</figDesc><table>32 
+
+3 
+
+Occ. + MC 
+0.407 
+0.246 
+0.567 
+TSDF + MC 
+0.412 
+0.236 
+0.588 
+wTSDF + MC 
+0.354 
+0.219 
+0.489 
+PSR-5 
+0.352 
+0.405 
+0.298 
+Ours 
+0.218 
+0.182 
+0.254 
+
+256 
+
+3 
+
+PSR-8 
+0.198 
+0.196 
+0.200 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 :</head><label>3</label><figDesc>3D Shape Prediction from Point Clouds. rameters 3 . While the default resolution of the underlying grid (with reconstruction depth d = 8) is 256 × 256 × 256 we also evaluate PSR with d = 5 (and hence a 32 × 32 × 32 grid as in our method) for a fair comparison.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">https://avg.is.tue.mpg.de/research projects/deep-marching-cubes</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">is a multi-index (i, j, k correspond to the 3 dimensions of D). As D is a signed distance field, |d n | is the distance</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">We distinguish voxels and cells in this paper: voxels are the regular representation used by occupancy maps, while cells are displaced by a distance of 0.5 voxels and connect the voxel centers. Marching cubes as well as our algorithm operates on the edges and vertices of these cells.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">PSR: https://github.com/mkazhdan/PoissonRecon; We use Meshlab to estimate normal vectors as input to PSR.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements: Yiyi Liao was partially supported by NSFC under grant U1509210.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Dense object reconstruction with semantic priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chandraker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization via graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Geometric deep learning: Going beyond euclidean data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Szlam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vandergheynst</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Signal Processing Magazine</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="18" to="42" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">SSD: smooth signed distance surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Calakli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Taubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">A</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanrahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<idno>arXiv.org, 1512.03012</idno>
+		<title level="m">Shapenet: An information-rich 3d model repository</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+		<idno>1602.02481</idno>
+		<title level="m">A large dataset of object scans. arXiv.org</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">3d-r2n2: A unified approach for single and multi-view 3d object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">B</forename><surname>Choy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Trans. on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Scannet: Richly-annotated 3d reconstructions of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Halber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niessner</surname></persName>
+		</author>
+		<idno>2017. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition</meeting>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Shape completion using 3d-encoder-predictor cnns and shape synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Flownet: Learning optical flow with convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haeusser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hazirbas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Golkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Smagt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A point set generation network for 3d object reconstruction from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learning a predictable and generative vector representation for objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girdhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rodriguez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">3d mesh labeling via deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<idno>2015. 3</idno>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Trans. on Graphics</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Displets: Resolving stereo ambiguities using object knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Güney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Class specific 3d object shape priors using surface normals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Joint 3D scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Hierarchical surface prediction for 3d object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno>arXiv.org, 1704.00710</idno>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<idno>1703.06870</idno>
+		<title level="m">Mask R-CNN. arXiv.org</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Stereo processing by semiglobal matching and mutual information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hirschmüller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="328" to="341" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Large scale multi-view stereopsis evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Jensen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Vogiatzis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Aanaes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Escape from cells: Deep kd-networks for the recognition of 3d point cloud models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kanazawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno>arXiv.org, 1712.06584</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Categoryspecific object reconstruction from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Screened poisson surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graphics (SIGGRAPH)</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Tanks and temples: Benchmarking large-scale scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Knapitsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+		<idno>2017. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graphics (SIGGRAPH)</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Using locally corresponding cad models for dense 3d reconstructions from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-H</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lucey</surname></persName>
+		</author>
+		<idno>2017. 3</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition</meeting>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">From point clouds to mesh using regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Saurer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jeong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Maninchedda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Marching cubes: A high resolution 3d surface construction algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">E</forename><surname>Lorensen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">E</forename><surname>Cline</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Trans. on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Voxnet: A 3d convolutional neural network for real-time object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Scherer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE International Conf. on Intelligent Robots and Systems (IROS)</title>
+		<meeting>IEEE International Conf. on Intelligent Robots and Systems (IROS)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Pointnet: Deep learning on point sets for 3d classification and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Volumetric and multi-view cnns for object classification on 3d data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Pointnet++: Deep hierarchical feature learning on point sets in a metric space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of 3d structure from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Battaglia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">OctNetFusion: Learning depth fusion from data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on 3D Vision (3DV)</title>
+		<meeting>of the International Conf. on 3D Vision (3DV)</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Octnet: Learning deep 3d representations at high resolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">A multi-view stereo benchmark with high-resolution images and multicamera videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schöps</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schönberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Galliani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sattler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<idno>2017. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition</meeting>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Deep sliding shapes for amodal 3d object detection in rgb-d images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Octree generating networks: Efficient convolutional architectures for high-resolution 3d outputs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tatarchenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Multi-view supervision for single-view reconstruction via differentiable ray consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno>2017. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition</meeting>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Patches, planes and probabilities: A non-local prior for volumetric 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Semantic multi-view stereo: Jointly estimating objects and voxels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<idno>2017. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">3d shape segmentation via shape fully convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Shui</surname></persName>
+		</author>
+		<idno>1702.08675</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Computers &amp; Graphics</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Learning a probabilistic latent space of object shapes via 3d generative-adversarial modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">3d shapenets: A deep representation for volumetric shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Efficient joint segmentation, occlusion labeling, stereo and flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">A globally optimal algorithm for robust tv-l1 range image integration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

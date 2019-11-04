@@ -1,0 +1,683 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Bottleneck Conditional Density Estimation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rui</forename><surname>Shu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hung</forename><forename type="middle">H</forename><surname>Bui</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mohammad</forename><surname>Ghavamzadeh</surname></persName>
+						</author>
+						<title level="a" type="main">Bottleneck Conditional Density Estimation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We introduce a new framework for training deep generative models for high-dimensional conditional density estimation. The Bottleneck Conditional Density Estimator (BCDE) is a variant of the conditional variational autoencoder (CVAE) that employs layer(s) of stochastic variables as the bottleneck between the input x and target y, where both are high-dimensional. Crucially, we propose a new hybrid training method that blends the conditional generative model with a joint generative model. Hybrid blending is the key to effective training of the BCDE, which avoids overfitting and provides a novel mechanism for leveraging unlabeled data. We show that our hybrid training procedure enables models to achieve competitive results in the MNIST quadrant prediction task in the fullysupervised setting, and sets new benchmarks in the semi-supervised regime for MNIST, SVHN, and CelebA.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Conditional density estimation (CDE) refers to the problem of estimating a conditional density p(y|x) for the input x and target y. In contrast to classification where the target y is simply a discrete class label, y is typically continuous or high-dimensional in CDE. Furthermore, we want to estimate the full conditional density (as opposed to its conditional mean in regression), an important task the conditional distribution has multiple modes. CDE problems in which both x and y are high-dimensional have a wide range of important applications, including video prediction, cross-modality prediction (e.g. image-to-caption), model estimation in model-based reinforcement learning, and so on. Classical non-parametric conditional density estimators typically rely on local Euclidean distance in the original input and target spaces <ref type="bibr" target="#b5">(Holmes et al., 2012)</ref>. This approach quickly becomes ineffective in high-dimensions from both computational and statistical points of view. Recent advances in deep generative models have led to new parametric models for high-dimensional CDE tasks, namely the conditional variational autoencoders (CVAE) . CVAEs have been applied to a variety of problems, such as MNIST quadrant prediction, segmentation , attribute-based image generation , and machine translation <ref type="bibr" target="#b25">(Zhang et al., 2016)</ref>.</p><p>But CVAEs suffer from two statistical deficiencies. First, they do not learn the distribution of the input x. We argue that in the case of high-dimensional input x where there might exist a low-dimensional representation (such as a low-dimensional manifold) of the data, recovering this structure is important, even if the task at hand is to learn the conditional density p(y|x). Otherwise, the model is susceptible to overfitting. Second, for many CDE tasks, the acquisition of labeled points is costly, motivating the need for semi-supervised CDE. A purely conditional model would not be able to utilize any available unlabeled data. <ref type="bibr">1</ref> We note that while variational methods <ref type="bibr" target="#b8">(Kingma &amp; Welling, 2013;</ref><ref type="bibr" target="#b15">Rezende et al., 2014)</ref> have been applied to semisupervised classification (where y is a class label) <ref type="bibr" target="#b12">Maaløe et al., 2016)</ref>, semi-supervised CDE (where y is high-dimensional) remains an open problem.</p><p>We focus on a set of deep conditional generative models, which we call bottleneck conditional density estimators (BCDEs). In BCDEs, the input x influences the target y via layers of bottleneck stochastic variables z = {z i } in the generative path. The BCDE naturally has a joint generative sibling model which we denote the bottleneck joint density estimator (BJDE), where the bottleneck z generates x and y independently. Motivated by <ref type="bibr" target="#b11">Lasserre et al. (2006)</ref>, we propose a hybrid training framework that regularizes the conditionally-trained BCDE parameters toward the jointly-trained BJDE parameters. This is the key feature that enables semi-supervised learning for conditional density estimation in the BCDEs.</p><p>Our BCDE hybrid training framework is a novel approach for leveraging unlabeled data for conditional density estimation. Using our BCDE hybrid training framework, we establish new benchmarks for the quadrant prediction task  in the semi-supervised regime for MNIST, SVHN, and CelebA. Our experiments show that 1) hybrid training is competitive for fully-supervised CDE, 2) in semi-supervised CDE, hybrid training helps to avoid overfitting, performs significantly better than conditional training with unlabeled data pre-training, and achieves state-of-the-art results, and 3) hybrid training encourages the model to learn better and more robust representations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Variational Autoencoders</head><p>Variational Autoencoder (VAE) is a deep generative model for density estimation. It consists of a latent variable z with unit Gaussian prior z ⇠ N (0, I k ), which in turn generates an observable vector x. The observation is usually con-</p><formula xml:id="formula_0">ditionally Gaussian x|z ⇠ N µ ✓ (z), diag( 2 ✓ (z)</formula><p>, where µ and 2 are neural networks whose parameters are represented by ✓.</p><p>2 VAE can be seen as a non-linear generalization of the probabilistic PCA <ref type="bibr" target="#b22">(Tipping &amp; Bishop, 1999)</ref>, and thus, can recover non-linear manifolds in the data. However, VAE's flexibility makes posterior inference of the latent variables intractable. This inference issue is addressed via a recognition model q (z|x), which serves as an amortized variational approximation of the intractable posterior p ✓ (z|x). Learning in VAE's is done by jointly optimizing the parameters of both the generative and recognition models so as to maximize an objective that resembles an autoencoder regularized reconstruction loss <ref type="bibr" target="#b8">(Kingma &amp; Welling, 2013)</ref></p><formula xml:id="formula_1">, i.e., sup ✓, E q (z|x) ⇥ ln p ✓ (x|z) ⇤ D KL q (z|x) || p(z) . (1)</formula><p>We note that the objective Eq. (1) can be rewritten in the following form that exposes its connection to the variational lower bound of the log-likelihood</p><formula xml:id="formula_2">sup ✓ ⇣ ln p ✓ (x) inf D KL q (z|x) || p ✓ (z|x) ⌘ = sup ✓, E q (z|x)  ln p ✓ (x, z) p (z|x) .<label>(2)</label></formula><p>We make two remarks regarding the minimization of the term D KL q (z|x) || p ✓ (z|x) in Eq. 2. First, when q(·|·) is a conditionally independent Gaussian, this approximation is at best as good as the mean-field approximation that minimizes D KL q || p ✓ (z|x) over all independent Gaussian q's. Second, this term serves as a form of amortized posterior regularization that encourages the posterior p ✓ (z|x) to be close to an amortized variational family <ref type="bibr" target="#b3">Ganchev et al., 2010;</ref><ref type="bibr" target="#b4">Hinton et al., 1995)</ref>. In practice, both ✓ and are jointly optimized in Eq. (1), and the reparameterization trick <ref type="bibr" target="#b8">(Kingma &amp; Welling, 2013</ref>) is used to transform the expectation over z ⇠ q (z|x) into</p><formula xml:id="formula_3">✏ ⇠ N (0, I k ); z = µ (x) + diag 2<label>(x</label></formula><p>) ✏, which leads to an easily obtained stochastic gradient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Conditional VAEs (CVAEs)</head><p>In <ref type="bibr" target="#b19">Sohn et al. (2015)</ref>, the authors introduce the conditional version of variational autoencoders. The conditional generative model is similar to VAE, except that the latent variable z and the observed vector y are both conditioned on the input x. The conditional generative path is</p><formula xml:id="formula_4">p ✓ (z | x) = N ⇣ z | µ z,✓ (x), diag 2 z,✓ (x) ⌘ (3) p ✓ (y | x, z) = N ⇣ y | µ y,✓ (x, z), diag 2 y,✓ (x, z) ⌘ ,<label>(4)</label></formula><p>and when we use a Bernoulli decoder is</p><formula xml:id="formula_5">p ✓ (y | x, z) = Ber y | µ y,✓ (x, z) .<label>(5)</label></formula><p>Here, ✓ denotes the parameters of the neural networks used in the generative path. The CVAE is trained by maximizing a lower bound of the conditional likelihood</p><formula xml:id="formula_6">ln p ✓ (y|x) E q (z|x,y)  ln p ✓ (z|x)p ✓ (y|x, z) q (z|x, y) ,<label>(6)</label></formula><p>but with a recognition network q (z|x, y), which is typi-</p><formula xml:id="formula_7">cally Gaussian N ⇣ z|µ (x, y), diag 2 (x, y) ⌘</formula><p>, and takes both x and y as input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Blending Generative and Discriminative</head><p>It is well-known that a generative model may yield suboptimal performance when compared to the same model trained discriminatively <ref type="bibr" target="#b13">(Ng &amp; Jordan, 2002)</ref>, a phenomenon attributable to the generative model being misspecified <ref type="bibr" target="#b11">(Lasserre et al., 2006)</ref>. However, generative models can easily handle unlabeled data in semi-supervised setting. This is the main motivation behind blending generative and discriminative models. <ref type="bibr" target="#b11">Lasserre et al. (2006)</ref> proposed a principled method for hybrid blending by duplicating the parameter of the generative model into a discriminatively trained ✓ and a generatively trained✓, i.e.,</p><formula xml:id="formula_8">p(X l , Y l , X u ,✓, ✓) = p(✓, ✓)p(X u |✓)p(X l |✓)p(Y l |X l , ✓).<label>(7)</label></formula><p>The discriminatively trained parameter ✓ is regularized toward the generatively trained parameter✓ via a prior p(✓, ✓) that prefers small k✓ ✓ k 2 . As a result, in addition to <ref type="figure">Figure 1</ref>. The hybrid training procedure that regularizes BCDE towards BJDE. This regularization enables the BCDE to indirectly leverage unpaired x and y for conditional density estimation.</p><formula xml:id="formula_9">z x y BJDE z x y BCDE Regularization Unpaired Data {x i } [ {y i } Paired Data {x i , y i }</formula><p>learning from the labeled data (X l , Y l ), the discriminative parameter ✓ can be informed by the unlabeled data X u via✓, enabling a form of semi-supervised discriminatively trained generative model. However, this approach is limited to simple generative models (e.g., naive Bayes and HMMs), where exact inference of p(y|x, ✓) is tractable.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Neural Bottleneck Conditional Density Estimation</head><p>While <ref type="bibr" target="#b19">Sohn et al. (2015)</ref> has successfully applied the CVAE to CDE, CVAE suffers from two limitations. First, the CVAE does not learn the distribution of its input x, and thus, is far more susceptible to overfitting. Second, it cannot incorporate unlabeled data. To resolve these limitations, we propose a new approach to high-dimensional CDE that blends the discriminative model that learns the conditional distribution p(y|x), with a generative model that learns the joint distribution p(x, y).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Overview</head><p>Figure 1 provides a high-level overview of our approach that consists of a new architecture and a new training procedure. Our new architecture imposes a bottleneck constraint, resulting a class of conditional density estimators, we call it bottleneck conditional density estimators (BCDEs). Unlike CVAE, the BCDE generative path prevents x from directly influencing y. Following the conditional training paradigm in <ref type="bibr" target="#b19">Sohn et al. (2015)</ref>, conditional/discriminative training of the BCDE means maximizing the lower bound of a conditional likelihood similar to (6),i.e.,</p><formula xml:id="formula_10">ln p ✓ (y|x) C(✓, ; x, y) = E q (z|x,y)  ln p ✓ (z|x)p ✓ (y|z) q (z|x, y) .</formula><p>When trained over a dataset of paired (X, Y) samples, the overall conditional training objective is</p><formula xml:id="formula_11">C(✓, ; X, Y) = X x,y2X,Y C(✓, ; x, y).<label>(8)</label></formula><p>However, this approach suffers from the same limitations as CVAE and imposes a bottleneck that limits the flexibility of the generative model. Instead, we propose a hybrid training framework that takes advantage of the bottleneck architecture to avoid overfitting and supports semi-supervision.</p><p>One component in our hybrid training procedure tackles the problem of estimating the joint density p(x, y). To do this, we use the joint counterpart of the BCDE: the bottleneck joint density estimator (BJDE). Unlike conditional models, the BJDE allows us to incorporate unpaired x and y data during training. Thus, the BJDE can be trained in a semisupervised fashion. We will also show that the BJDE is well-suited to factored inference (see Section 3.4), i.e., a factorization procedure that makes the parameter space of the recognition model more compact.</p><p>The BJDE also serves as a way to regularize the BCDE, where the regularization constraint can be viewed as softtying between the parameters of these two models' generative and recognition networks. Via this regularization, BCDE benefits from unpaired x and y for conditional density estimation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Bottleneck Joint Density Estimation</head><p>In the BJDE, we wish to learn the joint distribution of x and y. The bottleneck is introduced in the generative path via the bottleneck variable z, which points to x and y (see  <ref type="table" target="#tab_0">Table 1</ref>. joint likelihood is</p><formula xml:id="formula_12">Standard BJDE: q˜ (z|x, y) q˜ (z|y) q˜ (z|x) p✓(y|z) p✓(x|z) BCDE: q (z|x, y) p ✓ (z|x) p ✓ (y|z) Factored BJDE: ˆ˜ (z; y) q˜ (z|x) p✓(y|z) p✓(x|z) BCDE: ˆ˜ (z; y) p ✓ (z|x) p ✓ (y|z)</formula><formula xml:id="formula_13">ln p✓(x, y) J xy (✓,˜ ; x, y) = E q˜ (z|x,y) " ln p(z)p✓(x|z)p✓(y|z) q˜ (z|x, y) # .<label>(9)</label></formula><p>We use {✓,˜ } to indicate the parameters of the BJDE networks and reserve {✓, } for the BCDE parameters. For samples in which x or y is unobserved, we will need to compute the variational lower bound for the marginal likelihoods. Here, the bottleneck plays a critical role. If x were to directly influence y in a non-trivial manner, any attempt to incorporate unlabeled y would require the recognition model to infer the unobserved x from the observed y-a conditional density estimation problem which might be as hard as our original task. In the bottleneck architecture, the conditional independence of x and y given z implies that only the low-dimensional bottleneck needs to be marginalized. Thus, the usual variational lower bounds for the marginal likelihoods yield</p><formula xml:id="formula_14">ln p✓(x) J x (✓,˜ ; x) = E q˜ (z|x) " ln p(z)p✓(x|z) q˜ (z|x) # , ln p✓(y) J y (✓,˜ ; y) = E q˜ (z|y) " ln p(z)p✓(y|z) q˜ (z|y) # .</formula><p>Since z takes on the task of reconstructing both x and y, the BJDE is sensitive to the distributions of x and y and learns a joint manifold over the two data sources. Thus, the BJDE provides the following benefits: 1) learning the distribution of x makes the inference of z given x robust to perturbations in the inputs, 2) z becomes a joint-embedding of x and y, 3) the model can leverage unlabeled data. Following the convention in Eq. <ref type="formula" target="#formula_11">(8)</ref>, the joint training objectives is</p><formula xml:id="formula_15">J (✓,˜ ; X u , Y u , X l , Y l ) = (10) J x (✓,˜ ; X u ) + J y (✓,˜ ; Y u ) + J xy (✓,˜ ; X l , Y l ), where (X l , Y l )</formula><p>is a dataset of paired (x, y) samples, and X u and Y u are datasets of unpaired samples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Blending Joint and Conditional Deep Models</head><p>Because of potential model mis-specifications, the BJDE is not expected to yield good performance if applied to the conditional task. Thus, we aim to blend the BJDE and BCDE models in the spirit of <ref type="bibr" target="#b11">Lasserre et al. (2006)</ref>. However, we note that <ref type="formula" target="#formula_8">(7)</ref> is not directly applicable since the BCDE and BJDE are two different models, and not two different views (discriminative and generative) of the same model. Therefore, it is not immediately clear how to tie the BCDE and BJDE parameters together. Further, these models involve conditional probabilities parameterized by deep networks and have no closed form for inference.</p><p>Any natural prior for the BCDE parameter ✓ and the BJDE parameter✓ should encourage p BCDE (y|x, ✓) to be close to p BJDE (y|x,✓). In the presence of the latent variable z, it is then natural to encourage p(z|x, ✓) to be close to p(z|x,✓) and p(y|z, ✓) to be close to p(y|z,✓). However, enforcing the former condition is intractable as we do not have a closed form for p BJDE (z|x,✓). Fortunately, an approxima-tion of p BJDE (z|x,✓) is provided by the recognition model q(z|x,˜ ). Thus, we propose to softly tie together the parameters of networks defining p(z|x, ✓) and q(z|x,˜ ). This strategy effectively leads to a joint prior over the model network parameters, as well as the recognition network parameters p(˜ ,✓, , ✓).</p><p>As a result, we arrive at the following hybrid blending of deep stochastic models and its variational lower bound</p><formula xml:id="formula_16">ln p(X l , Y l , X u , Y u ,✓,˜ , ✓, ) ln p(✓,˜ , ✓, ) + J x (✓,˜ ; X u ) + J y (✓,˜ ; Y u ) + J x (✓,˜ ; X l ) + C(✓, ; X l , Y l ).<label>(11)</label></formula><p>We interpret ln p(✓,˜ , ✓, ) as a`2-regularization term that softly ties the joint parameters (✓,˜ ) and conditional parameters (✓, ) in an appropriate way. For the BCDE and BJDE, there is a natural one-to-one mapping from the conditional parameters to a subset of the joint parameters. For the joint model described in <ref type="figure">Fig. 2</ref>(c) and conditional model in <ref type="figure">Fig. 2(d)</ref>, the parameter pairings are provided in <ref type="table" target="#tab_0">Table 1</ref>. Formally, we define = {✓, } and use the index a|b to denote the parameter of the neural network on the Bayesian network link b ! a in the BCDE. For example z|x = ✓ z|x , z|x,y = z|x,y . Similarly, let˜ = {✓,˜ }. In the BJDE, the same notation yields˜ z|x =˜ z|x . The hybrid blending regularization term can be written as</p><formula xml:id="formula_17">ln p(✓, ,✓,˜ ) = 2 X i2I k i ˜ i k 2 2 + const,<label>(12)</label></formula><p>where I denotes the set of common indices of the joint and conditional parameters. When the index is z|x, it effectively means that p(z|x, ✓) is softly tied to q(z|x,✓), i.e.,</p><formula xml:id="formula_18">k z|x ˜ z|x k 2 2 = k✓ z|x ˜ z|x k 2 2</formula><p>. Setting = 0 unties the BCDE from the BJDE, and effectively yields to a conditionally trained BCDE, while letting ! 1 forces the corresponding parameters of the BCDE and BJDE to be identical. Interestingly, Eq. (11) does not contain the term J xy . Since explicit training of J xy may lead to learning a better joint embedding in the space of z, we note the following generalization of Eq. (11) that trades off the contribution between J xy and [</p><formula xml:id="formula_19">J x + C], ln p(X l , Y l , X u , Y u ,✓,˜ , ✓, ) H(✓,˜ , ✓, ; X l , Y l , X u , Y u ) = ln p(✓,˜ , ✓, ) + J x (✓,˜ ; X u ) + J y (✓,˜ ; Y u ) + ↵ · J xy (✓,˜ ; X l , Y l ) + (1 ↵) · h J x (✓,˜ ; X l ) + C(✓, ; X l , Y l ) i .<label>(13)</label></formula><p>Intuitively, the equation computes the lower bound of</p><formula xml:id="formula_20">p(X l , Y l )</formula><p>, either using the joint parameters✓,˜ or factor-</p><formula xml:id="formula_21">izes p(X l , Y l ) into p(X l )p(Y l | X l ) before computing the lower bound of p(Y l | X l )</formula><p>with the conditional parameters. A proof that the lower bound holds for any 0  ↵  1 is provided in Appendix B. For simplicity, we set ↵ = 0.5 and do not tune ↵ in our experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Factored Inference</head><p>The inference network q (z|x, y) is usually parameterized as a single neural network that takes both x and y as input. Using the precision-weighted merging scheme proposed by <ref type="bibr" target="#b20">Sønderby et al. (2016)</ref>, we also consider an alternative parameterization of q (z|x, y) that takes a weighted-average of the Gaussian distribution q (z|x) and a Gaussian likelihood termˆ(z; y) (see Appendix A). Doing so offers a more compact recognition model and more sharing parameters between the BCDE and BJDE (e.g., see the bottom two rows in <ref type="table" target="#tab_0">Table 1</ref>), but at the cost of lower flexibility for the variational family q (z|x, y).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We evaluated the performance of our hybrid training procedure on the permutation-invariant quadrant prediction task <ref type="bibr" target="#b18">(Sohn et al., 2014;</ref><ref type="bibr" target="#b19">Sohn et al., 2015)</ref> for MNIST, SVHN, and CelebA. The quadrant prediction task is a conditional density estimation problem where an image data set is partially occluded. The model is given the observed region and is evaluated by its perplexity on the occluded region. The quadrant prediction task consists of four sub-tasks depending on the degree of partial observability. 1-quadrant prediction: the bottom left quadrant is observed. 2-quadrant prediction: the left half is observed. 3-quadrant prediction: the bottom right quadrant is not observed. Top-down prediction: the top half is observed.</p><p>In the fully-supervised case, the original MNIST training set {x</p><formula xml:id="formula_22">0 i } 50000 i=1</formula><p>is converted into our CDE training set</p><formula xml:id="formula_23">{X l , Y l } = {x i , y i } 50000 i=1</formula><p>by splitting each image into its observed x and unobserved y regions according to the quadrant prediction task. Note that the training set does not contain the original class label information. In the n l -label semi-supervised case, we randomly sub-sampled n l pairs to create our labeled training set {x</p><formula xml:id="formula_24">i , y i } n l i=1</formula><p>. The remaining n u paired samples are decoupled and put into our unlabeled training sets</p><formula xml:id="formula_25">X u = {x i } nu i=1 , Y u = {y i } nu i=1</formula><p>. Test performance is the conditional density estimation performance on the entire test set, which is also split into input x and target y according to the quadrant prediction task. Analogous procedure is used for SVHN and CelebA.</p><p>For comparison against <ref type="bibr" target="#b19">Sohn et al. (2015)</ref>, we evaluate the performance of our models on the MNIST 1-Models n l = 50000 n l = 25000 n l = 10000 n l = 5000 CVAE  63  <ref type="table">Table 2</ref>. MNIST quadrant prediction task: 1-quadrant. We report the test set loss (IW=100) and standard error.</p><p>Models n l = 50000 n l = 25000 n l = 10000 n l = 5000 CVAE  44  <ref type="table">Table 3</ref>. MNIST quadrant prediction task: 2-quadrant.</p><p>Models n l = 50000 n l = 25000 n l = 10000 n l = 5000 CVAE  20 5778.6 ± 0.4 5781.3 ± 0.5 BCDE (hybrid + factored) 5776.1 ± 0.3 5780.3 ± 0.6 <ref type="table">Table 6</ref>. CelebA prediction task: Top-Down.</p><p>quadrant, 2-quadrant, and 3-quadrant prediction tasks. The MNIST digits are statically-binarized by sampling from the Bernoulli distribution according to their pixel values <ref type="bibr" target="#b16">(Salakhutdinov &amp; Murray, 2008)</ref>. We use a sigmoid layer to learn the parameter of the Bernoulli observation model. We provide the performance on the top-down prediction task for SVHN and CelebA. We used a discretized logistic observation model <ref type="bibr" target="#b10">Kingma et al. (2016)</ref> to model the pixel values for SVHN and a Gaussian observation model with fixed variance for CelebA. For numerical stability, we rely on the implementation of the discretized logistic distribution described in <ref type="bibr" target="#b17">Salimans et al. (2017)</ref>.</p><p>In all cases, we extracted a validation set of 10000 samples for hyperparameter tuning. While our training objective uses a single (IW=1) importance-weighted sample <ref type="bibr" target="#b1">(Burda et al., 2015)</ref>, we measure performance using IW=100 to get a tighter bound on the test log-likelihood . We run replicates of all experiments and report the mean performance with standard errors. For a more expressive variational family <ref type="bibr" target="#b14">(Ranganath et al., 2015)</ref>, we use two stochastic layers in the BCDE and perform inference via top-down inference . We use multi-layered perceptrons (MLPs) for MNIST and SVHN, and convolutional neural networks (CNNs) for CelebA. All neural networks are batch-normalized <ref type="bibr" target="#b6">(Ioffe &amp; Szegedy, 2015)</ref> and updated with Adam <ref type="bibr" target="#b7">(Kingma &amp; Ba, 2014)</ref>. The number of training epochs is determined based on the validation set. The dimensionality of each stochastic layer is 50, 100, and 300 for MNIST, CelebA, and SVHN respectively. All models were implemented in Python 3 using Tensorflow <ref type="bibr" target="#b0">(Abadi, 2015)</ref>. <ref type="table">Tables 2 to 6</ref> show the performance comparisons between the CVAE and the BCDE. For baselines, we use the CVAE, the BCDE trained with the conditional objective, and the BCDE initialized via pre-training J x (·) and J y (·) using the available x and y data separately (and then trained conditionally). Against these baselines, we measure the performance of the BCDE (with and without factored inference) trained with the hybrid objective H(·). We tuned the regularization hyperparameter = 10 3 , 10 2 , . . . , 10 3 on the MNIST 2-quadrant semi-supervised tasks and settled on using = 10 2 for all tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Conditional Log-Likelihood Performance</head><p>Fully-supervised regime. By comparing in the fullysupervised regime for MNIST <ref type="table">(Tables 2 to 4</ref>, n l = 50000), we show that the hybrid BCDE achieves competitive performance against the pretrained BCDE and out-performs previously reported results for CVAE . Semi-supervised regime. As the labeled training size n l reduces, the benefit of having the hybrid training procedure becomes more apparent. The BCDEs trained with the hybrid objective function tend to significantly improve upon its conditionally-trained counterparts.</p><p>On MNIST, hybrid training of the factored BCDE achieves the best performance. Both hybrid models achieve over a 1-nat difference than the pre-trained baseline in some cases-a significant difference for binarized MNIST <ref type="bibr" target="#b23">(Wu et al., 2016)</ref>. Conditional BCDE performs very poorly in the semi-supervised tasks due to overfitting.</p><p>On CelebA, hybrid training of the factored BCDE also achieves the best performance. Both hybrid models significantly out-perform the conditional baselines and yield better visual predictions than conditional BCDE (see Appendix C). The hybrid models also outperform pre-trained BCDE with only half the amount of labeled data.</p><p>On SVHN, the hybrid BCDE with standard inference model significantly out-performs the conditional baselines. However, the use of factored inference results in much poorer performance. Since the decoder is a discretized logistic distribution with learnable scale, it is possible that the factored inference model is not expressive enough to model the posterior distribution.</p><p>Model entropy. In <ref type="figure" target="#fig_2">Figure 3</ref>, we sample from p ✓ (y|x) for the conditional BCDE and the hybrid BCDE. We show that the conditionally-trained BCDE achieves poorer performance because it learns a lower-entropy model. In contrast, hybrid training learns a lower perplexity model, resulting in a high-entropy conditional image generator that spreads the conditional probability mass over the target output space <ref type="bibr" target="#b21">(Theis et al., 2015)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Conditional Training Overfits</head><p>To demonstrate the hybrid training's regularization behavior, we show the test set performance during training <ref type="figure" target="#fig_3">(Fig. 4)</ref> on the 2-quadrant MNIST task (n l = 10000). Even with pre-trained initialization of parameters, models that were trained conditionally quickly overfit, resulting in poor test set performance. In contrast, hybrid training regularizes the conditional model toward the joint model, which is  Comparison of the BCDE variants on the 2-quadrant MNIST prediction task with n l = 10000 labeled points. In contrast to conditional training, hybrid training is less susceptible to overfitting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Robustness of Representation</head><p>Since hybrid training encourages the BCDE to consider the distribution of x, we can demonstrate that models trained in a hybrid manner are robust against structured perturbations of the data set. To show this, we experimented with two variants of the MNIST quadrant task called the shiftsensitive and shift-invariant top-bottom prediction tasks. In these experiments, we set = 0.1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.1.">SHIFT-SENSITIVE ESTIMATION</head><p>In the shift-sensitive task, the objective is to learn to predict the bottom half of the MNIST digit (y) when given the top half (x). However, we introduce structural perturbation to the top and bottom halves of the image in our training, validation, and test sets by randomly shifting each pair (x, y) horizontally by the same number of pixels (shift varies between { 4, 3, . . . , 3, 4}). We then train the BCDE using either the conditional or hybrid objective in the fully-supervised regime. Note that compared to the original topdown prediction task, the perplexity of the conditional task remains the same after the perturbation is applied.  <ref type="table">Table 7</ref>. Shift-sensitive top-bottom MNIST prediction. Performance with and without structural corruption reported, along with the performance difference. Hybrid training is robust against structural perturbation of (x, y). <ref type="table">Table 7</ref> shows that hybrid training consistently achieves better performance than conditional training. Furthermore, the hybridly trained models were less affected by the introduction of the perturbation, demonstrating a higher degree of robustness. Because of its more compact recognition model, hybrid + factored is less vulnerable to overfitting, resulting in a smaller performance gap between performance on the shifted and original data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.2.">SHIFT-INVARIANT ESTIMATION</head><p>The shift-invariant task is similar to the shift-sensitive topbottom task, but with one key difference: we only introduce structural noise to the top half of the image in our training, validation, and test sets. The goal is thus to learn that the prediction of y (which is always centered) is invariant to the shifted position of x.  <ref type="table">Table 8</ref>. Shift-invariant top-bottom MNIST prediction. Performance with and without structural corruption reported, along with the performance difference. Hybrid training is robust against structural corruption of x.  <ref type="table">Table 8</ref> shows similar behavior to <ref type="table">Table 7</ref>. Hybrid training continues to achieve better performance than conditional models and suffer a much smaller performance gap when structural corruption in x is introduced.</p><p>In <ref type="figure" target="#fig_5">Fig. 5</ref>, we show the PCA projections of the latent space sub-region populated by digits 2 and color-coded all points based on the degree of shift. We observe that hybrid training versus conditional training of the BCDE result in very different learned representations in the stochastic layer. Because of regularization toward the joint model, the hybrid BCDE's latent representation retrains information about x and learns to untangle shift from other features. And as expected, conditional training does not encourage the BCDE to be aware of the distribution of x, resulting in a latent representation that is ignorant of the shift feature of x.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We presented a new framework for high-dimensional conditional density estimation. The building blocks of our framework are a pair of sibling models: the Bottleneck Conditional Density Estimator (BCDE) and the Bottleneck Joint Density Estimator (BJDE). These models use layers of stochastic neural networks as bottleneck between the input and output data. While the BCDE learns the conditional distribution p(y|x), the BJDE learns the joint distribution p(x, y). The bottleneck constraint implies that only the bottleneck needs to be marginalized when either the input x or the output y are missing during training, thus, enabling the BJDE to be trained in a semi-supervised fashion.</p><p>The key component of our framework is our hybrid objective function that regularizes the BCDE towards the BJDE. Our new objective is a novel extension of <ref type="bibr" target="#b11">Lasserre et al. (2006)</ref> that enables the principle of hybrid blending to be applied to deep variational models. Our framework provides a new mechanism for the BCDE, a conditional model, to become more robust and to learn from unlabeled data in semi-supervised conditional density estimation.</p><p>Our experiments showed that hybrid training is competitive in the fully-supervised regime against pre-training, and achieves superior performance in the semi-supervised quadrant prediction task in comparison to conditional models, achieving new state-of-the-art performances on MNIST, SVHN, and CelebA. Even with pre-trained weight initializations, the conditional model is still susceptible to overfitting. In contrast, hybrid training is significantly more robust against overfitting. Furthermore, hybrid training transfers the nice embedding properties of the BJDE to the BCDE, allowing the BCDE to learn better and more robust representation of the input x. The success of our hybrid training framework makes it a prime candidate for other high-dimensional conditional density estimation problems, especially in semi-supervised settings.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>was done when all the authors were with Adobe Research). Cor- respondence to: Rui Shu &lt;ruishu@stanford.edu&gt;. Proceedings of the 34 th International Conference on Machine Learning, Sydney, Australia, PMLR 70, 2017. Copyright 2017 by the author(s).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figs. 2 Figure 2 .</head><label>22</label><figDesc>Figure 2. The joint and conditional components of the BCDE. Dotted lines represent recognition models. The conditional model parameters are regularized toward the joint model's. The natural pairing of the conditional and joint parameters is described in Table 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Comparison of conditional image generation for the conditional versus hybrid BCDE on the semi-supervised 1-quadrant task. Row 1 shows the original images. Rows 2-4 show three attempts by each model to sample y according to x (the bottom-left quadrant, indicated in gray). Hybrid training yields a higher-entropy model that has lower perplexity.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Comparison of the BCDE variants on the 2-quadrant MNIST prediction task with n l = 10000 labeled points. In contrast to conditional training, hybrid training is less susceptible to overfitting.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>.59 ± 0.02 42.99 ± 0.04 1.40 Hybrid 41.33 ± 0.01 42.53 ± 0.02 1.20 Hybrid + Factored 41.20 ± 0.02 42.20 ± 0.02 1.00</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Visualization of the latent space of hybrid and conditionally-trained BCDEs. PCA plots of the latent space subregion for all x's whose class label = 2 are shown. Fill color indicates the degree of shift: blue = 4, orange = +4.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Soft parameter tying between the BJDE and BCDE. For each network within the BCDE, there is a corresponding network within the BJDE. We show the correspondence among the networks with and without the application of factored inference. We regularize all the BCDE networks to their corresponding BJDE network parameters.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 5 .</head><label>5</label><figDesc>SVHN prediction task: Top-Down.</figDesc><table>.95 
+-
+-
+-
+BCDE (conditional) 
+20.64 ± 0.01 
+21.27 ± 0.01 
+22.44 ± 0.03 
+23.72 ± 0.04 
+BCDE (naïve pre-train) 
+20.37 ± 0.01 
+20.87 ± 0.02 
+21.65 ± 0.02 
+22.32 ± 0.05 
+BCDE (hybrid) 
+20.31 ± 0.01 
+20.69 ± 0.02 
+21.36 ± 0.02 
+22.27 ± 0.02 
+BCDE (hybrid + factored) 
+20.43 ± 0.01 
+20.56 ± 0.01 21.16 ± 0.01 21.81 ± 0.03 
+
+Table 4. MNIST quadrant prediction task: 3-quadrant. 
+
+Models 
+n l = 10000 
+n l = 5000 
+BCDE (conditional) 
+4657 ± 48 
+4845 ± 33 
+BCDE (naïve pre-train) 
+4547 ± 23 
+4627 ± 13 
+BCDE (hybrid) 
+4213 ± 21 4392 ± 13 
+BCDE (hybrid + factored) 4700 ± 146 5030 ± 165 
+
+Models 
+n l = 20000 
+n l = 10000 
+BCDE (conditional) 
+5805 ± 2 
+5 8 1 7± 3 
+BCDE (naïve pre-train) 
+5784.8 ± 0.5 
+5793± 1 
+BCDE (hybrid) 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Hybrid + Factored 41.20 ± 0.02 43.19 ± 0.02 1.99</figDesc><table>Models 
+No Shift 
+Shift 
+
+Conditional 
+41.59 ± 0.02 44.02 ± 0.03 2.43 
+Hybrid 
+41.33 ± 0.01 43.51 ± 0.01 2.17 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">We define a "labeled point" to be a paired (x, y) sample, and an "unlabeled point" to be unpaired x or y.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">For discrete x, one can use a deep network to parameterize a Bernoulli or a discretized logistic distribution.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">github.com/ruishu/bcde</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">TensorFlow: Large-scale machine learning on heterogeneous systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<ptr target="http://tensorflow.org/.Softwareavailablefromten-sorflow.org" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Burda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno>arXiv preprints:1509.00519</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">Importance Weighted Autoencoders.</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">The Helmholtz Machine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Posterior regularization for structured latent variable models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ganchev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Graca</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gillenwater</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>JMLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">The &quot;wake-sleep&quot; algorithm for unsupervised neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Frey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Radford</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Holmes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Gray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Isbell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1206.5278</idno>
+		<title level="m">Fast Nonparametric Conditional Density Estimation</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A Method for Stochastic Optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Auto-Encoding Variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Semi</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.5298</idno>
+		<title level="m">Supervised Learning with Deep Generative Models</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Improving variational inference with inverse autoregressive flow. CoRR, abs/1606.04934</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+		<ptr target="http://arxiv.org/abs/1606.04934" />
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Principled hybrids of generative and discriminative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lasserre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bishop</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Minka</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Maaløe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kaae Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kaae Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Winther</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.05473</idno>
+		<title level="m">Auxiliary Deep Generative Models</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">On discriminative vs. generative classifiers: A comparison of logistic regression and naive bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jordan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Hierarchical Variational Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranganath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+		<idno>1511.02386</idno>
+		<imprint>
+			<date type="published" when="2015-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Stochastic Backpropagation and Approximate Inference in Deep Generative Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno>1401.4082</idno>
+		<imprint>
+			<date type="published" when="2014-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">On the quantitative analysis of deep belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Pixelcnn++: Improving the pixelcnn with discretized logistic mixture likelihood and other modifications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrej</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Diederik</surname></persName>
+		</author>
+		<idno>abs/1701.05517</idno>
+		<ptr target="http://arxiv.org/abs/1701.05517" />
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Improved multimodal deep learning with variation of information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Shang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning structured output representation using deep conditional generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Raiko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Maaløe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kaae Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Winther</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ladder Variational Autoencoders</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.02282</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">A note on the evaluation of generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Theis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bethge</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.01844</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Probabilistic Principal Component Analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tipping</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bishop</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. R. Statist. Soc. B</title>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">On the Quantitative Analysis of Decoder-Based Generative Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Burda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.04273</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.00570</idno>
+		<title level="m">Conditional Image Generation from Visual Attributes</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.07869</idno>
+		<title level="m">Variational Neural Machine Translation</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

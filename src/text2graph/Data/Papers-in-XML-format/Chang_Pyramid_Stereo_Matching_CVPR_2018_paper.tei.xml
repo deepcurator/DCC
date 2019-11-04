@@ -1,0 +1,1045 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:51+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Pyramid Stereo Matching Network</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jia-Ren</forename><surname>Chang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">National Chiao Tung University</orgName>
+								<address>
+									<country key="TW">Taiwan</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yong-Sheng</forename><surname>Chen</surname></persName>
+							<email>yschen@nctu.edu.tw</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">National Chiao Tung University</orgName>
+								<address>
+									<country key="TW">Taiwan</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Pyramid Stereo Matching Network</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Recent work has shown that depth estimation from a stereo pair of images can be formulated as a supervised learning task to be resolved with convolutional neural networks (CNNs). However, current architectures rely on patch-based Siamese networks, lacking the means to exploit context information for finding correspondence in illposed regions. To tackle this problem, we propose PSMNet, a pyramid stereo matching network consisting of two main modules: spatial pyramid pooling and 3D CNN. The spatial pyramid pooling module takes advantage of the capacity of global context information by aggregating context in different scales and locations to form a cost volume. The 3D CNN learns to regularize cost volume using stacked multiple hourglass networks in conjunction with intermediate supervision. The proposed approach was evaluated on several benchmark datasets. Our method ranked first in the KITTI 2012 and 2015 leaderboards before March 18, 2018. The codes of PSMNet are available at: https: //github.com/JiaRenChang/PSMNet.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Depth estimation from stereo images is essential to computer vision applications, including autonomous driving for vehicles, 3D model reconstruction, and object detection and recognition <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b30">31]</ref>. Given a pair of rectified stereo images, the goal of depth estimation is to compute the disparity d for each pixel in the reference image. Disparity refers to the horizontal displacement between a pair of corresponding pixels on the left and right images. For the pixel (x, y) in the left image, if its corresponding point is found at (x − d, y) in the right image, then the depth of this pixel is calculated by fB d , where f is the camera's focal length and B is the distance between two camera centers.</p><p>The typical pipeline for stereo matching involves the finding of corresponding points based on matching cost and post-processing. Recently, convolutional neural networks (CNNs) have been applied to learn how to match corresponding points in MC-CNN <ref type="bibr" target="#b29">[30]</ref>. Early approaches using CNNs treated the problem of correspondence estimation as similarity computation <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b29">30]</ref>, where CNNs compute the similarity score for a pair of image patches to further determine whether they are matched. Although CNN yields significant gains compared to conventional approaches in terms of both accuracy and speed, it is still difficult to find accurate corresponding points in inherently ill-posed regions such as occlusion areas, repeated patterns, textureless regions, and reflective surfaces. Solely applying the intensity-consistency constraint between different viewpoints is generally insufficient for accurate correspondence estimation in such ill-posed regions, and is useless in textureless regions. Therefore, regional support from global context information must be incorporated into stereo matching.</p><p>One major problem with current CNN-based stereo matching methods is how to effectively exploit context information. Some studies attempt to incorporate semantic information to largely refine cost volumes or disparity maps <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b26">27]</ref>. The Displets <ref type="bibr" target="#b7">[8]</ref> method utilizes object information by modeling 3D vehicles to resolve ambiguities in stereo matching. ResMatchNet <ref type="bibr" target="#b26">[27]</ref> learns to measure reflective confidence for the disparity maps to improve performance in ill-posed regions. GC-Net <ref type="bibr" target="#b12">[13]</ref> employs the encoder-decoder architecture to merge multiscale features for cost volume regularization.</p><p>In this work, we propose a novel pyramid stereo matching network (PSMNet) to exploit global context information in stereo matching. Spatial pyramid pooling (SPP) <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b31">32]</ref> and dilated convolution <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b28">29]</ref> are used to enlarge the receptive fields. In this way, PSMNet extends pixel-level features to region-level features with different scales of receptive fields; the resultant combined global and local feature clues are used to form the cost volume for reliable disparity estimation. Moreover, we design a stacked hourglass 3D CNN in conjunction with intermediate supervision to regularize the cost volume. The stacked hourglass 3D CNN repeatedly processes the cost volume in a top-down/bottomup manner to further improve the utilization of global context information.</p><p>Our main contributions are listed below:</p><p>• We propose an end-to-end learning framework for stereo matching without any post-processing.</p><p>• We introduce a pyramid pooling module for incorporating global context information into image features.</p><p>• We present a stacked hourglass 3D CNN to extend the regional support of context information in cost volume.</p><p>• We achieve state-of-the-art accuracy on the KITTI dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>For depth estimation from stereo images, many methods for matching cost computation and cost volume optimization have been proposed in the literature. According to <ref type="bibr" target="#b24">[25]</ref>, a typical stereo matching algorithm consists of four steps: matching cost computation, cost aggregation, optimization, and disparity refinement.</p><p>Current state-of-the-art studies focus on how to accurately compute the matching cost using CNNs and how to apply semi-global matching (SGM) <ref type="bibr" target="#b10">[11]</ref> to refine the disparity map. Zbontar and LeCun <ref type="bibr" target="#b29">[30]</ref> introduce a deep Siamese network to compute matching cost. Using a pair of 9 × 9 image patches, the network is trained to learn to predict the similarity between image patches. Their method also exploits typical stereo matching procedures, including cost aggregation, SGM, and other disparity map refinements to improve matching results. Further studies improve stereo depth estimation. Luo et al. <ref type="bibr" target="#b17">[ 18]</ref> propose a notably faster Siamese network in which the computation of matching costs is treated as a multi-label classification. Shaked and Wolf <ref type="bibr" target="#b26">[27]</ref> propose a highway network for matching cost computation and a global disparity network for the prediction of disparity confidence scores, which facilitate the further refinement of disparity maps.</p><p>Some studies focus on the post-processing of the disparity map. The Displets <ref type="bibr" target="#b7">[8]</ref> method is proposed based on the fact that objects generally exhibit regular structures, and are not arbitrarily shaped. In the Displets <ref type="bibr" target="#b7">[8]</ref> method, 3D models of vehicles are used to resolve matching ambiguities in reflective and textureless regions. Moreover, Gidaris and Komodakis <ref type="bibr" target="#b5">[6]</ref> propose a network architecture which improves the labels by detecting incorrect labels, replacing incorrect labels with new ones, and refining the renewed labels (DRR). Gidaris and Komodakis <ref type="bibr" target="#b5">[6]</ref> use the DRR network on disparity maps and achieve good performance without other post-processing. The SGM-Net <ref type="bibr" target="#b25">[26]</ref> learns to predict SGM penalties instead of manually-tuned penalties for regularization.</p><p>Recently, end-to-end networks have been developed to predict whole disparity maps without post-processing. Mayer et al. <ref type="bibr" target="#b18">[ 19]</ref> present end-to-end networks for the estimation of disparity (DispNet) and optical flow (FlowNet).</p><p>They also offer a large synthetic dataset, Scene Flow, for network training. Pang et al. <ref type="bibr" target="#b20">[21]</ref> extend DispNet <ref type="bibr" target="#b18">[19]</ref> and introduce a two-stage network called cascade residual learning (CRL). The first and second stages calculate the disparity map and its multi-scale residuals, respectively. Then the outputs of both stages are summed to form the final disparity map. Also, Kendall et al. <ref type="bibr" target="#b12">[13]</ref> introduce GC-Net, an end-to-end network for cost volume regularization using 3D convolutions. The above-mentioned end-to-end approaches exploit multiscale features for disparity estimation. Both DispNet <ref type="bibr" target="#b18">[19]</ref> and CRL <ref type="bibr" target="#b20">[21]</ref> reuse hierarchical information, concatenating features from lower layers with those from higher layers. CRL <ref type="bibr" target="#b20">[21]</ref> also uses hierarchical supervision to calculate disparity in multiple resolutions. GC-Net <ref type="bibr" target="#b12">[13]</ref> applies the encoder-decoder architecture to regularize the cost volume. The main idea of these methods is to incorporate context information to reduce mismatch in ambiguous regions and thus improve depth estimation.</p><p>In the field of semantic segmentation, aggregating context information is also essential for labeling object classes. There are two main approaches to exploiting global context information: the encoder-decoder architecture and pyramid pooling. The main idea of the encoder-decoder architecture is to integrate top-down and bottom-up information via skip connections. The fully convolutional network (FCN) <ref type="bibr" target="#b16">[17]</ref> was first proposed to aggregate coarseto-fine predictions to improve segmentation results. UNet <ref type="bibr" target="#b23">[24]</ref>, instead of aggregating coarse-to-fine predictions, aggregates coarse-to-fine features and achieves good segmentation results for biomedical images. Further studies including SharpMask <ref type="bibr" target="#b21">[22]</ref>, RefineNet <ref type="bibr" target="#b14">[15]</ref>, and the label refinement network <ref type="bibr" target="#b11">[12]</ref> follow this core idea and propose more complex architectures for the merging of multiscale features. Moreover, stacked multiple encoder-decoder networks such as <ref type="bibr" target="#b4">[5]</ref> and <ref type="bibr" target="#b19">[20]</ref> were introduced to improve feature fusion. In <ref type="bibr" target="#b19">[20]</ref>, the encoder-decoder architecture is termed the hourglass architecture.</p><p>Pyramid pooling was proposed based on the fact that the empirical receptive field is much smaller than the theoretical receptive field in deep networks <ref type="bibr" target="#b15">[16]</ref>. ParseNet <ref type="bibr" target="#b15">[16]</ref> demonstrates that global pooling with FCN enlarges the empirical receptive field to extract information at the wholeimage level and thus improves semantic segmentation results. DeepLab v2 <ref type="bibr" target="#b1">[2]</ref> proposes atrous spatial pyramid pooling (ASPP) for multiscale feature embedding, containing parallel dilated convolutions with different dilated rates. PSPNet <ref type="bibr" target="#b31">[32]</ref> presents a pyramid pooling module to collect the effective multiscale contextual prior. Inspired by PSPNet <ref type="bibr" target="#b31">[32]</ref>, DeepLab v3 <ref type="bibr" target="#b2">[3]</ref> proposes a new ASPP module augmented with global pooling.</p><p>Similar ideas of spatial pyramids have been used in context of optical flow. SPyNet <ref type="bibr" target="#b22">[23]</ref> introduces image pyramids to estimate optical flow in a coarse-to-fine approach. PWC-Net <ref type="bibr" target="#b27">[28]</ref> improves optical flow estimation by using feature pyramids.</p><p>In this work on stereo matching, we embrace the experience of semantic segmentation studies and exploit global context information at the whole-image level. As described below, we propose multiscale context aggregation via a pyramid stereo matching network for depth estimation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Pyramid Stereo Matching Network</head><p>We present PSMNet, which consists of an SPP <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b31">32]</ref> module for effective incorporation of global context and a stacked hourglass module for cost volume regularization. The architecture of PSMNet is illustrated in <ref type="figure" target="#fig_1">Figure 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Network Architecture</head><p>The parameters of the proposed PSMNet are detailed in <ref type="table">Table 1</ref>. In contrast to the application of large filters (7 × 7) for the first convolution layer in other studies <ref type="bibr" target="#b9">[10]</ref>, three small convolution filters (3 × 3) are cascaded to construct a deeper network with the same receptive field. The conv1 x, conv2 x, conv3 x, and conv4 x are the basic residual blocks <ref type="bibr" target="#b9">[10]</ref> for learning the unary feature extraction. For conv3 x and conv4 x, dilated convolution is applied to further enlarge the receptive field. The output feature map size is  <ref type="table">Table 1</ref>. The SPP module, as shown in <ref type="figure" target="#fig_1">Figure 1</ref>, is then applied to gather context information. We concatenate the left and right feature maps into a cost volume, which is fed into a 3D CNN for regularization. Finally, regression is applied to calculate the output disparity map. The SPP module, cost volume, 3D CNN, and disparity regression are described in later sections.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Spatial Pyramid Pooling Module</head><p>It is difficult to determine the context relationship solely from pixel intensities. Therefore, image features rich with object context information can benefit correspondence estimation, particularly for ill-posed regions. In this work, the relationship between an object (for example, a car) and its sub-regions (windows, tires, hoods, etc.) is learned by the SPP module to incorporate hierarchical context information.</p><p>In <ref type="bibr" target="#b8">[9]</ref>, SPP was designed to remove the fixed-size constraint of CNN. Feature maps at different levels generated by SPP are flattened and fed into the fully connected layer for classification, after which SPP is applied to semantic segmentation problems. ParseNet <ref type="bibr" target="#b15">[16]</ref> applies global average pooling to incorporate global context information. PSPNet <ref type="bibr" target="#b31">[32]</ref> extends ParseNet <ref type="bibr" target="#b15">[16]</ref> to a hierarchical global prior, containing information with different scales and subregions. In <ref type="bibr" target="#b31">[32]</ref>, the SPP module uses adaptive average pooling to compress features into four scales and is followed by a 1 × 1 convolution to reduce feature dimension, <ref type="table">Table 1</ref>. Parameters of the proposed PSMNet architecture. Construction of residual blocks are designated in brackets with the number of stacked blocks. Downsampling is performed by conv0 1 and conv2 1 with stride of 2. The usage of batch normalization and ReLU follows ResNet <ref type="bibr" target="#b9">[10]</ref>, with exception that PSMNet does not apply ReLU after summation. H and W denote the height and width of the input image, respectively, and D denotes the maximum disparity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Name</head><p>Layer setting Output dimension</p><formula xml:id="formula_0">input × × CNN conv0_1 × , × × conv0_2 × , × × conv0_3 × , × × conv1_x × , × , × × × conv2_x × , 6 × , 6 × 6 × ×6 conv3_x × , 8 × , 8 × , dila = 2 × × 8 conv4_x × , 8 × , 8 × , dila= 4 × × 8 SPP module branch_1 6 × 6 avg. pool × , bilinear interpolation × × branch_2 × avg. pool × , bilinear interpolation × × branch_3 6 × 6 avg. pool × , bilinear interpolation × × branch_4 8×8 avg. pool × , bilinear interpolation × × concat[conv2_16, conv4_3, branch_1, branch_2, branch_3, branch_4] × × fusion × , 8 × , × ×</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Cost volume</head><p>Concat left and shifted right × × ×6</p><p>3D CNN (stacked hourglass) after which the low-dimensional feature maps are upsampled to the same size of the original feature map via bilinear interpolation. The different levels of feature maps are concatenated as the final SPP feature maps.</p><formula xml:id="formula_1">3Dconv0 × × , × × , × × × 3Dconv1 × × , × × , × × × 3Dstack1_1 × × ,6 × × ,6 × × ×6 3Dstack1_2 × × ,6 × × ,6 × × ×6 3Dstack1_3 deconv × × , 6 add 3Dstack1_1 × × ×6 3Dstack1_4 deconv × × , add 3Dconv1 × × × 3Dstack2_1 × × ,6 × × ,6 add 3Dstack1_3 × × ×6 3Dstack2_2 × × ,6 × × ,6 × × ×6 3Dstack2_3 deconv × × , 6 add 3Dstack1_1 × × ×6 3Dstack2_4 deconv × × , add 3Dconv1 × × × 3Dstack3_1 × × ,6 × × ,6 add 3Dstack2_3 × × ×6 3Dstack3_2 × × ,6 × × ,6 × × ×6 3Dstack3_3 deconv × × , 6 add 3Dstack1_1 × × ×6 3Dstack3_4 deconv × × , add 3Dconv1 × × × output_1 × × , × × , × × × output_2 × × , × × , add output_1 × × × output_3 × × , × × , add output_2 × × × 3 output [output_1, outpu_t2, output_3]</formula><p>In the current work, we design four fixed-size average pooling blocks for SPP: 64 × 64, 32 × 32, 16 × 16, and 8 × 8, as shown in <ref type="figure" target="#fig_1">Figure 1</ref> and <ref type="table">Table 1</ref>. Further operations, including 1 × 1 convolution and upsampling, are the same as in <ref type="bibr" target="#b31">[32]</ref>. In an ablation study, we performed extensive experiments to show the effect of feature maps at different levels, as described in Section 4.2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Cost Volume</head><p>Rather than using a distance metric, the MC-CNN <ref type="bibr" target="#b29">[30]</ref> and GC-Net <ref type="bibr" target="#b12">[13]</ref> approaches concatenate the left and right features to learn matching cost estimation using deep network. Following <ref type="bibr" target="#b12">[13]</ref>, we adopt SPP features to form a cost volume by concatenating left feature maps with their corresponding right feature maps across each disparity level, resulting in a 4D volume (height×width×disparity×feature size).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">3D CNN</head><p>The SPP module facilitates stereo matching by involving different levels of features. To aggregate the feature information along the disparity dimension as well as spatial dimensions, we propose two kinds of 3D CNN architectures for cost volume regularization: the basic and stacked hourglass architectures. In the basic architecture, as shown in Figure1, the network is simply built using residual blocks. The basic architecture contains twelve 3 × 3 × 3 convolutional layers. Then we upsample the cost volume back to size H ×W ×D via bilinear interpolation. Finally, we apply regression to calculate the disparity map with size H × W , which is introduced in Section 3.5.</p><p>In order to learn more context information, we use a stacked hourglass (encoder-decoder) architecture, consisting of repeated top-down/bottom-up processing in conjunction with intermediate supervision, as shown in <ref type="figure" target="#fig_1">Figure 1</ref>. The stacked hourglass architecture has three main hourglass networks, each of which generates a disparity map. That is, the stacked hourglass architecture has three outputs and losses (Loss 1, Loss 2, and Loss 3). The loss function is described in Section 3.6. During the training phase, the total loss is calculated as the weighted summation of the three losses. During the testing phase, the final disparity map is the last of three outputs. In our ablation study, the basic architecture was used to evaluate the performance of the SPP module, because the basic architecture does not learn extra context information through the encoding/decoding process as in <ref type="bibr" target="#b12">[13]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Disparity Regression</head><p>We use disparity regression as proposed in <ref type="bibr" target="#b12">[13]</ref> to estimate the continuous disparity map. The probability of each disparity d is calculated from the predicted cost c d via the softmax operation σ(·). The predicted disparityd is calculated as the sum of each disparity d weighted by its probability, asd</p><formula xml:id="formula_2">= Dmax d=0 d × σ(−c d ).</formula><p>(1)</p><p>As reported in <ref type="bibr" target="#b12">[13]</ref>, the above disparity regression is more robust than classification-based stereo matching methods. Note that the above equation is similar to that introduced in <ref type="bibr" target="#b0">[1]</ref>, in which it is referred to as a soft attention mechanism.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6.">Loss</head><p>Because of the disparity regression, we adopt the smooth L 1 loss function to train the proposed PSMNet. Smooth L 1 loss is widely used in bounding box regression for object detection because of its robustness and low sensitivity to outliers <ref type="bibr" target="#b6">[7]</ref>, as compared to L 2 loss. The loss function of PSMNet is defined as</p><formula xml:id="formula_3">L(d,d)= 1 N N i=1 smooth L1 (d i −d i ),<label>(2)</label></formula><p>in which</p><formula xml:id="formula_4">smooth L1 (x)= 0.5x 2 , if |x| &lt; 1 |x|−0.5, otherwise ,</formula><p>where N is the number of labeled pixels, d is the groundtruth disparity, andd is the predicted disparity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We evaluated our method on three stereo datasets: Scene Flow, KITTI 2012, and KITTI 2015. We also performed ablation studies using KITTI 2015 with our architecture setting to evaluate the influence on performance made by dilated convolution, different sizes of pyramid pooling, and the stacked hourglass 3D CNN. The experimental settings and network implementation are presented in Section 4.1, followed by the evaluation results on each of the three stereo datasets used in this study.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Experiment Details</head><p>We evaluated our method on three stereo datasets:</p><p>1. Scene Flow: a large scale synthetic dataset containing 35454 training and 4370 testing images with H = 540 and W = 960. This dataset provides dense and elaborate disparity maps as ground truth. Some pixels have large disparities and are excluded in the loss computation if the disparity is larger than the limits set in our experiment.</p><p>2. KITTI 2015: a real-world dataset with street views from a driving car. It contains 200 training stereo image pairs with sparse ground-truth disparities obtained using LiDAR and another 200 testing image pairs without ground-truth disparities. Image size is H = 376 and W = 1240. We further divided the whole training data into a training set (80%) and a validation set (20%).</p><p>3. KITTI 2012: a real-world dataset with street views from a driving car. It contains 194 training stereo image pairs with sparse ground-truth disparities obtained using LiDAR and 195 testing image pairs without ground-truth disparities. Image size is H = 376 and W = 1240. We further divided the whole training data into a training set (160 image pairs) and a validation set (34 image pairs). Color images of KITTI 2012 were adopted in this work.</p><p>The full architecture of the proposed PSMNet is shown in <ref type="table">Table 1</ref>, including the number of convolutional filters. The usage of batch normalization and ReLU is the same as in ResNet <ref type="bibr" target="#b9">[10]</ref>, with exception that PSMNet does not apply ReLU after summation.</p><p>The PSMNet architecture was implemented using PyTorch. All models were end-to-end trained with Adam (β 1 =0 .9,β 2 =0 .999). We performed color normalization on the entire dataset for data preprocessing. During training, images were randomly cropped to size H = 256 and W = 512. The maximum disparity (D) was set to 192. We trained our models from scratch using the Scene Flow dataset with a constant learning rate of 0.001 for 10 epochs. For Scene Flow, the trained model was directly used for testing. For KITTI, we used the model trained with Scene Flow data after fine-tuning on the KITTI training set for 300 epochs. The learning rate of this fine-tuning began at 0.001 for the first 200 epochs and 0.0001 for the remaining 100 epochs. The batch size was set to 12 for the training on four nNvidia Titan-Xp GPUs (each of 3). The training process took about 13 hours for Scene Flow dataset and 5 hours for KITTI datasets. Moreover, we prolonged the training process to 1000 epochs to obtain the final model and the test results for KITTI submission.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">KITTI 2015</head><p>Ablation study for PSMNet We conducted experiments with several settings to evaluate PSMNet, including the usage of dilated convolution, pooling at different levels, and 3D CNN architectures. The default 3D CNN design was the basic architecture. As listed in <ref type="table" target="#tab_0">Table 2</ref>, dilated convolution works better when used in conjunction with the SPP module. For pyramid pooling, pooling with more levels works better. The stacked hourglass 3D CNN significantly outperformed the basic 3D CNN when combined with dilated convolution and the SPP module. The best setting of PSMNet yielded a 1.83% error rate on the KITTI 2015 validation set.</p><p>Ablation study for Loss Weight The stacked hourglass 3D CNN has three outputs for training and can facilitate the learning process. As shown in <ref type="table" target="#tab_1">Table 3</ref>, we conducted experiments with various combinations of loss weights between 0 and 1. For the baseline, we treated the three losses equally and set all to 1. The results showed that the weight settings of 0.5 for Loss 1, 0.7 for Loss 2, and 1.0 for Loss 3 yielded the best performance, which was a 1.98% error rate on the KITTI 2015 validation set.</p><p>Results on Leaderboard Using the best model trained in our experiments, we calculated the disparity maps for the 200 testing images in the KITTI 2015 dataset and submitted the results to the KITTI evaluation server for the performance evaluation. According to the online leaderboard, as shown in <ref type="table" target="#tab_2">Table 4</ref>, the overall three-pixel-error for the proposed PSMNet was 2.32%, which surpassed prior studies by a noteworthy margin. In this table, "All" means that all pixels were considered in error estimation, whereas "Noc" means that only the pixels in non-occluded regions were taken into account. The three columns "D1-bg", "D1-fg" and "D1-all" mean that the pixels in the background, foreground, and all areas, respectively, were considered in the estimation of errors. <ref type="figure" target="#fig_2">Figure 2</ref> illustrates some examples of the disparity maps estimated by the proposed PSMNet, GC-Net <ref type="bibr" target="#b12">[13]</ref>, and MC-CNN <ref type="bibr" target="#b29">[30]</ref> together with the corresponding error maps. These results were reported by the KITTI evaluation server. PSMNet yields more robust results, particularly in ill-posed regions, as indicated by the yellow arrows in <ref type="figure" target="#fig_2">Figure 2</ref>. Among these three methods, PSMNet more correctly predicts the disparities for the fence region, indicated by the yellow arrows in the middle row of <ref type="figure" target="#fig_2">Figure 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Qualitative evaluation</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Scene Flow</head><p>We also compared the performance of PSMNet with other state-of-the-art methods, including CRL <ref type="bibr" target="#b20">[21]</ref>, DispNetC <ref type="bibr" target="#b18">[19]</ref>, GC-Net <ref type="bibr" target="#b12">[13]</ref>, using the Scene Flow test set. As shown in <ref type="table" target="#tab_3">Table 5</ref>, PSMNet outperformed other methods in terms of accuracy. Three testing examples are illustrated in <ref type="figure" target="#fig_3">Figure 3</ref> to demonstrate that PSMNet obtains accurate disparity maps for delicate and intricately overlapped objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">KITTI 2012</head><p>Using the best model trained in our experiments, we calculated the disparity maps for the 195 testing images in the   KITTI 2012 dataset and submitted the results to the KITTI evaluation server for the performance evaluation. According to the online leaderboard, as shown in <ref type="table" target="#tab_4">Table 6</ref>, the overall three-pixel-error for the proposed PSMNet was 1.89%, which surpassed prior studies by a noteworthy margin.</p><formula xml:id="formula_5">(a) PSMNet (b) GC-Net (c) MC-CNN</formula><p>Qualitative evaluation <ref type="figure" target="#fig_5">Figure 4</ref> illustrates some examples of the disparity maps estimated by the proposed PSMNet, GC-Net <ref type="bibr" target="#b12">[13]</ref>, and MC-CNN <ref type="bibr" target="#b29">[30]</ref> together with the corresponding error maps. These results were reported by the KITTI evaluation server. PSMNet obtains more robust results, particularly in regions of car windows and walls, as indicated by the yellow arrows in <ref type="figure" target="#fig_5">Figure 4</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>Recent studies using CNNs for stereo matching have achieved prominent performance. Nevertheless, it remains intractable to estimate disparity for inherently ill-posed regions. In this work, we propose PSMNet, a novel endto-end CNN architecture for stereo vision which consists of two main modules to exploit context information: the SPP module and the 3D CNN. The SPP module incorporates different levels of feature maps to form a cost volume. The 3D CNN further learns to regularize the cost volume via repeated top-down/bottom-up processes. In our experiments, PSMNet outperforms other state-of-the-art methods. PSMNet ranked first in both KITTI 2012 and 2015 leaderboards before March 18, 2018. The estimated disparity maps clearly demonstrate that PSMNet significantly reduces errors in ill-posed regions.    For each input image, the disparity obtained by (a) PSMNet, (b) GC-Net <ref type="bibr" target="#b12">[13]</ref>, and (c) MC-CNN <ref type="bibr" target="#b29">[30]</ref>, is illustrated above its error map.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>the input image size, as shown in</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Architecture overview of proposed PSMNet. The left and right input stereo images are fed to two weight-sharing pipelines consisting of a CNN for feature maps calculation, an SPP module for feature harvesting by concatenating representations from sub-regions with different sizes, and a convolution layer for feature fusion. The left and right image features are then used to form a 4D cost volume, which is fed into a 3D CNN for cost volume regularization and disparity regression.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Results of disparity estimation for KITTI 2015 test images. The left panel shows the left input image of stereo image pair. For each input image, the disparity maps obtained by (a) PSMNet, (b) GC-Net [13], and (c) MC-CNN [30] are illustrated together above their error maps.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Performance evaluation using Scene Flow test data. (a) left image of stereo image pair, (b) ground truth disparity, and (c) disparity map estimated using PSMNet.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Results of disparity estimation for KITTI 2012 test images. The left panel shows the left input image of the stereo image pair. For each input image, the disparity obtained by (a) PSMNet, (b) GC-Net [13], and (c) MC-CNN [30], is illustrated above its error map.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Evaluation of PSMNet with different settings. We computed the percentage of three-pixel-error on the KITTI 2015 validation set, and end-point-error on the Scene Flow test set. * denote that we use half the dilated rate of dilated convolution.</figDesc><table>Network setting 
+KITTI 2015 
+Scene Flow 
+
+dilated conv 
+pyramid pooling size 
+stacked hourglass Val Err (%) End Point Err 
+64 × 64 32 × 32 16 × 16 8 × 8 
+2.43 
+1.43 
+√ 
+2.16 
+1.56 
+√√√ 
+√ 
+2.47 
+1.40 
+√ 
+√ 
+2.17 
+1.30 
+√ 
+√√√ 
+√ 
+2.09 
+1.28 
+√ 
+√√√ 
+√ 
+√ 
+1.98 
+1.09 
+√ 
+* 
+√√√ 
+√ 
+√ 
+1.83 
+1.12 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 3 .</head><label>3</label><figDesc></figDesc><table>Influence of weight values for Loss 1, Loss 2, and Loss 3 
+on validation errors. We empirically found that 0.5/0.7/1.0 yielded 
+the best performance. 
+
+Loss weight 
+KITTI 2015 
+Loss 1 Loss 2 Loss 3 val error(%) 
+0.0 
+0.0 
+1.0 
+2.49 
+0.1 
+0.3 
+1.0 
+2.07 
+0.3 
+0.5 
+1.0 
+2.05 
+0.5 
+0.7 
+1.0 
+1.98 
+0.7 
+0.9 
+1.0 
+2.05 
+1.0 
+1.0 
+1.0 
+2.01 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 4 .</head><label>4</label><figDesc>The KITTI 2015 leaderboard presented on March 18, 2018. The results show the percentage of pixels with errors of more than three pixels or 5% of disparity error from all test images. Only published methods are listed for comparison.</figDesc><table>Rank 
+Method 
+All (%) 
+Noc (%) 
+Runtime (s) 
+D1-bg D1-fg D1-all D1-bg D1-fg D1-all 
+1 
+PSMNet (ours) 
+1.86 
+4.62 
+2.32 
+1.71 
+4.31 
+2.14 
+0.41 
+3 
+iResNet-i2e2 [14] 
+2.14 
+3.45 
+2.36 
+1.94 
+3.20 
+2.15 
+0.22 
+6 
+iResNet [14] 
+2.35 
+3.23 
+2.50 
+2.15 
+2.55 
+2.22 
+0.12 
+8 
+CRL [21] 
+2.48 
+3.59 
+2.67 
+2.32 
+3.12 
+2.45 
+0.47 
+11 
+GC-Net [13] 
+2.21 
+6.16 
+2.87 
+2.02 
+5.58 
+2.61 
+0.90 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 5 .</head><label>5</label><figDesc>Performance comparison with Scene Flow test set. EPE: End-point-error.</figDesc><table>PSMNet CRL [21] DispNetC [19] GC-Net [13] 
+EPE 
+1.09 
+1.32 
+1.68 
+2.51 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 6 .</head><label>6</label><figDesc>The leaderboard of KITTI 2012 presented on March 18, 2018. PSMNet achieves the best results under all evaluation criteria, except runtime. Only published methods are listed for comparison.</figDesc><table>Rank 
+Method 
+&gt;2px 
+&gt;3px 
+&gt;5px 
+Mean Error Runtime (s) 
+Noc All Noc All Noc All Noc All 
+1 
+PSMNet (ours) 
+2.44 3.01 1.49 1.89 0.90 1.15 0.5 
+0.6 
+0.41 
+2 
+iResNet-i2 [14] 
+2.69 3.34 1.71 2.16 1.06 1.32 0.5 
+0.6 
+0.12 
+4 
+GC-Net [13] 
+2.71 3.46 1.77 2.30 1.12 1.46 0.6 
+0.7 
+0.9 
+11 
+L-ResMatch [27] 3.64 5.06 2.27 3.40 1.50 2.26 0.7 
+1.0 
+48 
+14 
+SGM-Net [26] 
+3.60 5.15 2.29 3.50 1.60 2.36 0.7 
+0.9 
+67 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>This work was supported in part by the Taiwan Ministry of Science and Technology (Grants MOST-106-2221-E-009-164-MY2 and MOST-107-2634-F-009-009).</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Neural machine translation by jointly learning to align and translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">DeepLab: Semantic image segmentation with deep convolutional nets, atrous convolution, and fully connected crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.00915</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Rethinking atrous convolution for semantic image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schroff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.05587</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">3D object proposals for accurate object class detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kundu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Berneshawi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="424" to="432" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Stacked deconvolutional network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.04943</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Detect, replace, refine: Deep structured prediction for pixel wise labeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gidaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R-Cnn</forename><surname>Fast</surname></persName>
+		</author>
+		<title level="m">Proceedings of the IEEE international conference on computer vision</title>
+		<meeting>the IEEE international conference on computer vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1440" to="1448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Displets: Resolving stereo ambiguities using object knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Guney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="4165" to="4175" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Spatial pyramid pooling in deep convolutional networks for visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Accurate and efficient stereo processing by semi-global matching and mutual information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hirschmuller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition, 2005. CVPR 2005. IEEE Computer Society Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="807" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Label refinement network for coarse-to-fine semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Islam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Naha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rochan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bruce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00551</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">End-to-end learning of geometry and context for deep stereo regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Martirosyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dasgupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kennedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bachrach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bry</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Learning deep correspondence through prior and posterior feature constancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Qiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.01039</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">RefineNet: Multipath refinement networks for high-resolution semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Milan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.04579</idno>
+		<title level="m">ParseNet: Looking wider to see better</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3431" to="3440" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Efficient deep learning for stereo matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="5695" to="5703" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">A large dataset to train convolutional networks for disparity, optical flow, and scene flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hausser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Stacked hourglass networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="483" to="499" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Cascade residual learning: A two-stage convolutional neural network for stereo matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Learning to refine object segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="75" to="91" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Optical flow estimation using a spatial pyramid network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ranjan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">U-Net: Convolutional networks for biomedical image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ronneberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Medical Image Computing and Computer-Assisted Intervention</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="234" to="241" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">A taxonomy and evaluation of dense two-frame stereo correspondence algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of computer vision</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="issue">1-3</biblScope>
+			<biblScope unit="page" from="7" to="42" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">SGM-Nets: Semi-global matching with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Seki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Improved stereo matching with constant highway networks and reflective confidence learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shaked</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kautz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pwc-Net</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1709.02371</idno>
+		<title level="m">CNNs for optical flow using pyramid, warping, and cost volume</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Multi-scale context aggregation by dilated convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Stereo matching by training a convolutional neural network to compare image patches</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zbontar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">1-32</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Meshstereo: A global stereo model with mesh alignment regularization for view interpolation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Chao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Rui</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision</title>
+		<meeting>the IEEE International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2057" to="2065" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Pyramid scene parsing network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

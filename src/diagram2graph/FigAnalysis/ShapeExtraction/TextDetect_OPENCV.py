@@ -12,6 +12,8 @@ import difflib
 import os
 from scipy import ndimage
 
+import difflib
+from SpellCorrect import SpellCorrect as sc
 from TextDetectFullIm import TextDetectFullIm as td
 from TextDetectEast import TextDetectEast as tde
 
@@ -41,18 +43,18 @@ class TextDetectAll:
             return text1
                   
 
-    def getTextFullImage(self, fileName, im):
+    def getTextFullImage(self, fileName, im, fig_text):
         textdetector = td()
         config = '--psm 6 --oem 1'
-        text_list = textdetector.getText(fileName, im, config)
+        text_list = textdetector.getText(fileName, im, config, fig_text)
         return text_list
         
-    def getTextEast(self, fileName, im):
+    def getTextEast(self, fileName, im, fig_text):
         textdetectoreast = tde()
-        text_list = textdetectoreast.getText(fileName, im)
+        text_list = textdetectoreast.getText(fileName, im, fig_text)
         return text_list    
        
-    def getTextComponent(self, fileName, components, image):
+    def getTextComponent(self, fileName, components, image, fig_text):
 #        textdetector = td()
         text_list = []
         textdetectoreast = tde()
@@ -68,7 +70,7 @@ class TextDetectAll:
                 #get_roi = self.rotateImage(get_roi, -90) 
                 get_roi = ndimage.rotate(get_roi, -90)
                 
-                text = textdetectoreast.getText(fileName, get_roi)#textdetector.getText(fileName, get_roi, config)
+                text = textdetectoreast.getText(fileName, get_roi, fig_text)#textdetector.getText(fileName, get_roi, config)
                 ftext = ""
                 fprob = 0
                 for ((startX, startY, endX, endY), op, prob) in text:
@@ -86,46 +88,89 @@ class TextDetectAll:
         return text_list
         
         
-    def mergeOverlappingTextROI(self, text_list1, text_list2):
+    def mergeOverlappingTextROI(self, text_list1, text_list2, fig_text):
         
         merge = Merger()
         merged_text_list = []
-        
+        spellcorr = sc()
+
         for ((startX1, startY1, endX1, endY1), op1, prob1) in text_list1:
             for ((startX2, startY2, endX2, endY2), op2, prob2) in text_list2:
 
                 if merge._is_rectangles_overlapped_horizontally(Rectangle.from_2_pos(startX1, startY1, endX1, endY1), Rectangle.from_2_pos(startX2, startY2, endX2, endY2)):
                     rec = merge._merge_2_rectangles(Rectangle.from_2_pos(startX1, startY1, endX1, endY1), Rectangle.from_2_pos(startX2, startY2, endX2, endY2))
-                    op1 = op1.lower()
-                    op2 = op2.lower()
-                    op1 = op1.strip()
-                    op2 = op2.strip()
-                    if (re.search(op1, op2, flags = 0) is not None) or (op1 in op2) :
-                        op = op2
+                    sop1 = op1.strip()
+                    sop2 = op2.strip()
+                    if (sop1==sop2):
+                        op = sop1
+                        if prob1 > prob2:
+                            prob = prob1
+                        else:
+                            prob = prob2
+                        merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
+                    elif re.match('^[0-9a-zA-Z]*$',sop1.lower().replace(" ", "")) and re.search(sop1.lower().replace(" ", ""), sop2.lower().replace(" ", ""), flags = 0) is not None:
+                        op = sop2
                         prob = prob2
                         
-                    elif (re.search(op2, op1, flags = 0) is not None) or (op2 in op1):
-                        op = op1
+                        merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
+                    elif re.match('^[0-9a-zA-Z]*$',sop2.lower().replace(" ", "")) and re.search(sop2.lower().replace(" ", ""), sop1.lower().replace(" ", ""), flags = 0) is not None:
+                        op = sop1
                         prob = prob1
                         
+                        merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
                     else:
-                         if prob1 > prob2:
-                             op = op1
-                             prob = prob1
+
+                        matcher = difflib.SequenceMatcher(None, sop1, sop2)
+                        match = matcher.find_longest_match(0, len(sop1), 0, len(sop2))
+                        if (match.size>1): 
+                            if prob1 > prob2:
+                                remaining_text = sop2[0:match.b] + sop2[match.b + match.size :]  
+                                if len(remaining_text) > 1:
+                                    remaining_text = spellcorr.correctWord(remaining_text, fig_text)
+                                    op = sop1 + " " + remaining_text  
+                                else:
+                                    op = sop1
+
+                                prob = prob1
+                                merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
+                            else:
+                                remaining_text = sop1[0:match.a] + sop1[match.a + match.size :] 
+                                if len(remaining_text) > 1:
+                                    remaining_text = spellcorr.correctWord(remaining_text, fig_text)
+                                    op = sop2 + " " + remaining_text 
+                                else:
+                                    op = sop2
+                                prob = prob2
+                                merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))                   
+                        else: 
+                            if prob1>=50 and prob2>=50:
+                                if prob1 > prob2:
+                                    op = sop1 + " " + sop2  
+                                    prob = prob1
+                                else:
+                                    op = sop2 + " " + sop1  
+                                    prob = prob2
+                                merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))                    
+                            elif prob1>=50 and prob2<50:
+                                op = sop1 
+                                prob = prob1
+                                merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
+                            elif prob2>=50 and prob1<50:
+                                op = sop2 
+                                prob = prob2
                              
-                         else:
-                             op = op2
-                             prob = prob2
-                             
-                    merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
-                    break
+                                merged_text_list.append(((rec.x1, rec.y1, rec.x2, rec.y2), op, prob))
+                            else:
+                                op = "NONE"  
+                                prob = 0
+                    #break
 #                else:
 #                    combined_results.append(((startX2, startY2, endX2, endY2), op2, prob2))                    
 #                    combined_results.append(((startX1, startY1, endX1, endY1), op1, prob1))
                    
         return merged_text_list
          
-    def combinedTextDetect(self, fileName, image, components):
+    def combinedTextDetect(self, fileName, image, components, fig_text):
         
         final_text_im = image.copy()
         merge = Merger()
@@ -133,23 +178,23 @@ class TextDetectAll:
         clean_combined_results = []
         
         
-        text_fullIm = self.getTextFullImage(fileName, image)
-        text_ROI = text_ROI = self.getTextEast(fileName, image)
-        text_componentIm = self.getTextComponent(fileName, components, image)
+        text_fullIm = self.getTextFullImage(fileName, image, fig_text)
+        text_ROI = text_ROI = self.getTextEast(fileName, image, fig_text)
+        text_componentIm = self.getTextComponent(fileName, components, image, fig_text)
         
         for ((startX1, startY1, endX1, endY1), op1, prob1) in text_componentIm:
             for ((startX2, startY2, endX2, endY2), op2, prob2) in text_fullIm:
-                print("Comparing %s within %s\n"% (op2, op1))             
+                #print("Comparing %s within %s\n"% (op2, op1))             
              
                 if merge._is_rectangles_inside(Rectangle.from_2_pos(startX1, startY1, endX1, endY1), Rectangle.from_2_pos(startX2, startY2, endX2, endY2)):
-                    print("removing op2 = %s"%(op2))                    
+                    #print("removing op2 = %s"%(op2))                    
                     text_fullIm.remove(((startX2, startY2, endX2, endY2), op2, prob2))
                     break
                 
         component_number = 0     
         for ((startX, startY, endX, endY), op, prob) in text_fullIm:
-             print("========")
-             print("Component %d: Position: (%d %d %d %d), text: %s, confidence = %d\n"% (component_number, startX, startY, endX, endY, op, prob))             
+             #print("========")
+             #print("Component %d: Position: (%d %d %d %d), text: %s, confidence = %d\n"% (component_number, startX, startY, endX, endY, op, prob))             
              component_number = component_number + 1 
              
         
@@ -158,7 +203,7 @@ class TextDetectAll:
         text_ROI = sorted(text_ROI, key=lambda r:r[0][1])
         text_componentIm = sorted(text_componentIm, key=lambda r:r[0][1])
         ################ Find if there are same text extracted from multiple detection methods, then keep only the best one #####################
-        temp_combine = self.mergeOverlappingTextROI(text_fullIm, text_ROI)
+        temp_combine = self.mergeOverlappingTextROI(text_fullIm, text_ROI, fig_text)
         combined_results = temp_combine.copy()
         combined_results = [combined_results[i] for i in range(len(combined_results)) if i == 0 or combined_results[i] != combined_results[i-1]]
         combined_results = sorted(combined_results, key=lambda r:r[0][1])
@@ -173,11 +218,12 @@ class TextDetectAll:
                 merged_rec_pos = merge._merge_2_rectangles(Rectangle.from_2_pos(tup[0][0][0],tup[0][0][1],tup[0][0][2],tup[0][0][3]), 
                                                  Rectangle.from_2_pos(tup[1][0][0],tup[1][0][1],tup[1][0][2],tup[1][0][3]))
                            
-                if re.search(tup[0][1], tup[1][1], flags = 0) is not None:
+                
+                if re.match('^[0-9a-zA-Z]*$',tup[0][1].lower().replace(" ", "")) and re.search(tup[0][1].lower().replace(" ", ""), tup[1][1].lower().replace(" ", ""), flags = 0) is not None:
                     merged_text = tup[1][1]
                     merged_conf = tup[1][2]
                         
-                elif re.search(tup[1][1], tup[0][1], flags = 0) is not None:
+                elif re.match('^[0-9a-zA-Z]*$',tup[1][1].lower().replace(" ", "")) and re.search(tup[1][1].lower().replace(" ", ""), tup[0][1].lower().replace(" ", ""), flags = 0) is not None:
                     merged_text = tup[0][1]
                     merged_conf = tup[0][2]
                         
@@ -231,6 +277,12 @@ class TextDetectAll:
             if find == 0:
                 clean_combined_results.append(((startX, startY, endX, endY), op, prob))
                 
+        component_number = 1
+        for ((startX, startY, endX, endY), op, prob) in clean_combined_results:
+             component_number = component_number + 1 
+             cv2.rectangle(final_text_im, (startX, startY), (endX, endY), (0, 0, 255), 1)
+             cv2.putText(final_text_im, op, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
         
+        clean_combined_results = sorted(clean_combined_results, key=lambda r:r[0][1])
         return clean_combined_results
         

@@ -1,0 +1,927 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Mutual Learning to Adapt for Joint Human Parsing and Pose Estimation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">ECE Department</orgName>
+								<orgName type="institution">National University of Singapore</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+							<email>yanshuicheng@360.cn</email>
+							<affiliation key="aff0">
+								<orgName type="department">ECE Department</orgName>
+								<orgName type="institution">National University of Singapore</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Qihoo 360 AI Institute</orgName>
+								<address>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Mutual Learning to Adapt for Joint Human Parsing and Pose Estimation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>Human Pose Estimation · Human Parsing · Mutual Learn- ing</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. This paper presents a novel Mutual Learning to Adapt model (MuLA) for joint human parsing and pose estimation. It effectively exploits mutual benefits from both tasks and simultaneously boosts their performance. Different from existing post-processing or multi-task learning based methods, MuLA predicts dynamic task-specific model parameters via recurrently leveraging guidance information from its parallel tasks. Thus MuLA can fast adapt parsing and pose models to provide more powerful representations by incorporating information from their counterparts, giving more robust and accurate results. MuLA is implemented with convolutional neural networks and end-to-end trainable. Comprehensive experiments on benchmarks LIP and extended PASCALPerson-Part demonstrate the effectiveness of the proposed MuLA model with superior performance to well established baselines.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Human parsing and pose estimation are two crucial yet challenging tasks for human body configuration analysis in 2D monocular images, which aim at segmenting human body into semantic parts and allocating body joints for human instances respectively. Recently, they have drawn increasing attention due to their wide applications, e.g., human behavior analysis <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b8">9]</ref>, person-identification <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b19">20]</ref> and video surveillance <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b29">30]</ref>. Although analyzing human body from different perspectives, these two tasks are highly correlated and could provide beneficial clues for each other. Human pose can offer structure information for body part segmentation and labeling, and on the other hand human parsing can facilitate localizing body joints in difficult scenarios. <ref type="figure" target="#fig_0">Fig. 1</ref> gives examples where considering such mutual guidance information between the two tasks can correct labeling and localization errors favorably, as highlighted in <ref type="figure" target="#fig_0">Fig. 1 (b)</ref>, and improve parsing and pose estimation results, as shown in <ref type="figure" target="#fig_0">Fig. 1 (c)</ref>.</p><p>Motivated by the above observation, some efforts <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b9">10]</ref> have been made to extract and use such guidance information to improve performance of (a) (b) (c) the two tasks mutually. However, existing methods usually train the task-specific models separately and leverage the guidance information for post-processing, suffering several drawbacks. First, they heavily rely on hand-crafted features extracted from outputs of one task to assist the other, in an ad hoc manner. Second, they only utilize guidance information in inference procedure and fail to enhance model capacity during training. Third, they are one-stop solutions and too rigid to fully utilize enhanced models and iteratively improve the results. Last but not least, the models are not end-to-end learnable.</p><p>Targeting at these drawbacks, we propose a novel Mutual Learning to Adapt (MuLA) model to sufficiently and systematically exploit mutual guidance information between human parsing and pose estimation. In particular, our MuLA has a carefully designed interweaving architecture that enables effective betweentask cooperation and mutual learning. Moreover, instead of simply fusing learned features from two tasks as in existing works, MuLA introduces a learning to adapt mechanism where the guidance information from one task can be effectively transferred to modify model parameters for the other parallel task, leading to augmented representation and better performance. In addition, MuLA is capable of recurrently performing model adaption by transforming estimation results to the representation space and thus can continuously refine semantic part labels and body joint locations based on enhanced models in the previous iteration.</p><p>Specifically, the MuLA model includes a representation encoding module, a mutual adaptation module and a classification module. The representation encoding module encodes input images into preliminary representations for human parsing and pose estimation individually, and meanwhile provides guidance for model adaptation. With such guidance information, the mutual adaptation module learns to dynamically predict model parameters for augmenting representations by incorporating useful prior learned from the other task, enabling effective between-task interaction and cooperation in model training. Introduc-ing such a mutual adaptation module improves the learning process of one task towards benefiting the other, providing easily transferable information between tasks. In addition, these dynamic parameters are efficiently learned in a oneshot manner according to different inputs, leading to fast and robust model adaptation. MuLA fuses mutually-tailored representations with the preliminary ones in a residual manner to produce augmented representations for making final prediction, through the classification modules. MuLA also allows for iterative model adaption and improvement by transforming estimation results to the representation space, which serve as enhanced input for the next stage. The proposed MuLA is implemented with deep Convolutional Neural Networks and is end-to-end learnable.</p><p>We evaluate the proposed MuLA model on Look into Person (LIP) <ref type="bibr" target="#b9">[10]</ref> and extended PASCAL-Person-Part <ref type="bibr" target="#b23">[24]</ref> benchmarks. The experiment results well demonstrate its superiority over existing methods in exploiting mutual guidance information for joint human parsing and pose estimation. Our contributions are summarized in four aspects. First, we propose a novel end-to-end learnable model for jointly learning human parsing and pose estimation. Second, we propose a novel mutual adaptation module for dynamic interaction and cooperation between two tasks. Third, the proposed model is capable of iteratively exploiting mutual guidance information to consistently improve performance of two tasks. Fourth, we achieve new state-of-the-art on LIP dataset, and outperform the previous best model for joint human parsing and pose estimation on extended PASCAL-Person-Part dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Due to their close correlations, recent works have exploited human parsing (human pose estimation) to assist human pose estimation (human parsing) or leveraged their mutual benefits to jointly improve the performance for both tasks.</p><p>In <ref type="bibr" target="#b11">[12]</ref>, ladicky et al. proposed to utilize body parts as additional constraint for the pose estimation model. Given locations of all joints, they introduced a body part mask component to predict labels of pixels belonging to each body part, which can be optimized with the overall model together. In <ref type="bibr" target="#b24">[25]</ref>, Xia et al. proposed to exploit pose estimation results to guide human parsing by leveraging joint locations to extract segment proposals for semantic parts, which are selected and assembled using an And-Or graph to output a parse of the person. In <ref type="bibr" target="#b9">[10]</ref>, Gong et al. proposed to improve human parsing with pose estimation in a self-supervised structure-sensitive manner through weighting segmentation loss with joint structure loss. Similar to <ref type="bibr" target="#b9">[10]</ref>, Zhao et al. <ref type="bibr" target="#b27">[28]</ref> proposed to improve human parsing via regarding human pose structure from a global perspective for feature aggregation considering the importance of different positions. Yamaguchi et al. <ref type="bibr" target="#b25">[26]</ref> proposed to optimize human parsing and pose estimation and improve the performance of two tasks in an alternative manner: utilizing pose estimation results to generate body part locations for human parsing and then exploiting human parsing results to update appearance features in the pose estimation model Image <ref type="figure">Fig. 2</ref>. Illustration of overall architecture of the proposed Mutual Learning to Adapt model (MuLA) for joint human parsing and pose estimation. Given an input image, MuLA utilizes the novel mutual adaptation module to build dynamic interaction and cooperation between parsing and pose estimation models in an iterative way for fully exploiting their mutual benefits to simultaneously improve their performance for refining joint locations. Dong et al. <ref type="bibr" target="#b7">[8]</ref> proposed a Hybrid Parsing Model for unified human parsing and pose estimation under the And-Or graph framework. They utilized body joints to assist human parsing via constructing the mixture of joint-group templates for body part representation, and exploited body parts to improve human pose estimation through forming parselets to constrain the position and co-occurrence of body joints. In <ref type="bibr" target="#b23">[24]</ref>, Xia et al. proposed to utilize deep learning models for joint human parsing and pose estimation. They utilized parsing results for hand-crafted features to assist pose estimation by considering relationships of body joints and parts, and then exploited the generated pose estimation results to construct joint label maps and skeleton maps for refining human parsing. With the powerful deep learning models, they achieved superior performance over previous methods.</p><p>Despite previous success, existing methods suffer from limitations of handcrafted features relying on estimation results for exploiting guidance information to improve the counterpart models. In contrast, the proposed Mutal Learning to Adapt model can mutually learn to fast adapt the model of one task conditioned on representations of the other for specific inputs. In addition, MuLA utilizes the guidance information in both training and inference phases for joint human parsing and pose estimation. Moreover, it is end-to-end learnable via implementation with CNNs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">The Proposed Approach</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Formulation</head><p>For an RGB image I∈R H×W ×3 with height H and width W , we use</p><formula xml:id="formula_0">S={s i } H×W i=1</formula><p>to denote the human parsing result of I, where s i ∈{0, . . . , P } is the semantic part label of the ith pixel and P is the total number of semantic part categories. Specially, 0 represents the background category. We use J={(</p><formula xml:id="formula_1">x i , y i )} N i=1</formula><p>to denote body joint locations of the human instance in I, where (x i , y i ) represents the spatial coordinates of the ith body joint and N is the number of joint categories. Our goal is to design a unified model for simultaneously predicting human parsing S and pose J via fully exploiting their mutual benefits to boost performance for both tasks. Existing methods for joint human parsing and pose estimation usually extract hand-crafted features from the output of one task to assist the other task at post-processing. They can neither extract powerful features nor strengthen the models. Targeting at such limitations, we propose a Mutual Learning to Adapt (MuLA) model to substantially exploit mutual benefits from human parsing and pose estimation towards effectively improving performance of the counterpart models, through learning to adapt model parameters. In the following, we use g [ψ,ψ * ] (·) and h [φ,φ * ] (·) to denote the parsing and pose models respectively, with parameters specified in the subscripts. Specifically, ψ * and φ * denote parameters that are adaptable to the other task. Then, our proposed MuLA is formulated as following recurrent learning process:</p><formula xml:id="formula_2">S (t) = g [ψ (t) ,ψ (t) * ] (F (t) S ), where ψ (t) * = h ′ (F (t) J ,Ĵ), J (t) = h [φ (t) ,φ (t) * ] (F (t) J ), where φ (t) * = g ′ (F (t) S ,Ŝ),<label>(1)</label></formula><p>where t is the iteration index,Ŝ andĴ are parsing and pose annotations for the input image I, and F</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>(t)</head><p>S and F</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>(t)</head><p>J denote the extracted features for parsing and pose prediction respectively. Note, at the beginning,</p><formula xml:id="formula_3">F (1) S =F (1) J =I.</formula><p>The above formulation in Eqn. (1) highlights the most distinguishing feature of MuLA from existing methods: MuLA explicitly adapts some model parameters of one task (e.g. parsing model parameter ψ * ) to the guidance information of the other task (e.g. pose estimation) via adapting functions h ′ (·, ·) and g ′ (·, ·). In this way, the adaptive parameters ψ (t) * and φ (t) * encode useful information from the parallel tasks. With these parameters, the MuLA model can learn complementary representations and boost performance for both human parsing and pose estimation tasks, by more flexibly and effectively exploiting interaction and cooperation between them. In addition, MuLA bases ψ (t) * and φ (t) * on the input images. Different inputs would modify the model parameters dynamically, making the model robust to various testing senarios. Moreover, MuLA has the ability to iteratively exploit mutual guidance information between two tasks via the recurrent learning process and thus continuously improves both models.</p><p>The overall architecture of MuLA is shown in <ref type="figure">Fig. 2</ref>. Concretely, MuLA presents an interweaving architecture and consists of three components: a representation encoding module, a mutual adaptation module and a classification module. The representation encoding module consists of two encoders E S ψ   (·) to learn to predict these adaptive parameters. For reliable and robust parameter prediction, we take the highest-level representation from E S ψ</p><formula xml:id="formula_4">(t) e (·) and E J φ (t) e (·) as mutual guidance information. Namely, A ψ (t) a (·) and A φ (t) a (·) take E S ψ (t) e (F (t) S ) and E J φ (t) e (F (t)</formula><p>J ) as inputs and output φ (t) * and ψ (t) * . Formally,</p><formula xml:id="formula_5">ψ (t) * = h ′ (F (t) J ,Ĵ) := A φ (t) a E J φ (t) e (F (t) J ) , φ (t) * = g ′ (F (t) S ,Ŝ) := A ψ (t) a E S ψ (t) e (F (t) S ) .<label>(2)</label></formula><p>Here ψ (t) * and φ (t) * can tailor preliminary representations extracted by ψ</p><formula xml:id="formula_6">(t)</formula><p>e and φ (t) e for better human parsing and pose estimation via leveraging their mutual guidance information. We utilize the tailored representations extracted by ψ (t) e and φ (t) e together with ψ (t) * and φ (t) * for making final predictions, and use E</p><formula xml:id="formula_7">S [ψ (t) e ,ψ (t) * ] (·) and E J [φ (t) e ,φ (t) * ]</formula><p>(·) to denote the derived adaptive encoders in MuLA.</p><p>The mutual adaptation module allows for dynamic interaction and cooperation between two tasks within MuLA for fully exploiting their mutual benefits.</p><p>MuLA uses two classifiers C S ψ</p><formula xml:id="formula_8">(t) w (·) and C J φ (t) w</formula><p>(·) following the mutual adaptation module for predicting human parsing S (t) and pose</p><formula xml:id="formula_9">J (t) . Specifically, [ψ (t) e , ψ (t) w ] and [φ (t) e , φ (t)</formula><p>w ] together instantiate parameters ψ (t) and φ (t) in Eqn. <ref type="formula" target="#formula_2">(1)</ref>, respectively. For iteratively exploiting mutual guidance information, we design two mapping modules M S ψ</p><formula xml:id="formula_10">(t) m (·, ·) and M J φ (t) m (·, ·) to map representations from E S [ψ (t) e ,ψ (t) * ] (·) and E J [φ (t) e ,φ (t) * ]</formula><p>(·) together with prediction results S (t) and</p><formula xml:id="formula_11">J (t) into inputs F (t+1) S and F (t+1) J</formula><p>for the next stage. Namely, J provide preliminary representations at the start of the next stage and avoid learning from scratch at each stage. In addition, S (t) and J (t) offer additional guidance information for generating better prediction results and alleviate learning difficulties in subsequent stages <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b14">15]</ref>.</p><formula xml:id="formula_12">F (t+1) S = M S ψ (t) m E S [ψ (t) e ,ψ (t) * ] (F (t) S ), S (t) and F (t+1) J = M J φ (t) m E J [φ (t) e ,φ (t) * ] (F (t) J ), J (t) .<label>(3)</label></formula><p>To train MuLA, we add groundtruth supervisionŜ andĴ for human parsing and pose estimation at each stage, and define the following loss function:</p><formula xml:id="formula_13">L = T t=1 L S C S ψ (t) w E S [ψ (t) e ,ψ (t) * ] (F (t) S ) ,Ŝ + βL J C J φ (t) w E J [φ (t) e ,φ (t) * ] (F (t) J ) ,Ĵ<label>(4)</label></formula><p>where T denotes the total number of iterations in MuLA, L S (·, ·) and L J (·, ·) represent loss functions for human parsing and pose estimation, respectively, and β is a weight coefficient for balancing L S (·, ·) and L J (·, ·). In next subsection, we will provide details on implementation of MuLA. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Implementation</head><p>We implement MuLA with deep Convolutional Neural Networks (CNNs), and show architecture details in <ref type="figure" target="#fig_5">Fig. 3 (a)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Representation Encoding Module</head><p>This module is composed of two encoders E S ψ  <ref type="bibr" target="#b18">[19]</ref> and Hourglass network <ref type="bibr" target="#b14">[15]</ref>. VGG network is a general architecture widely applied in various vision tasks <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b4">5]</ref>. We utilize its fully convolutional version with 16 layers, denoted as VGG16-FCN, for both tasks. In addition, we modify VGG16-FCN to reduce the total stride from 32 to 8 via removing the last two max-pooing layers, aiming to enlarge feature maps for improving part labeling and joint localization accuracy. The Hourglass network has a U-shape architecture which is initially designed for human pose estimation. We extend it to parsing by making the output layer aim for semantic part labeling instead of joint confidence regression. Other configurations of Hourglass network exactly follow <ref type="bibr" target="#b14">[15]</ref>. Note that paring and pose encoders need not have the same architecture as they are independent from each other.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Mutual Adaptation Module This module includes two adapters</head><note type="other">A φ (t) a (·) and A ψ (t) a (·) to predict adaptive parameters ψ (t) * and φ (t) * which are used to tailor preliminary representations R (t) S and R (t) J . In particular, we implement A ψ (t) a (·) and A φ (t) a</note><p>(·) with the same small CNN for predicting convolution kernels of counterpart models, as shown in <ref type="figure" target="#fig_5">Fig. 3 (b)</ref>. The adapter networks take R</p><note type="other">(t) S and R (t) J as inputs and output tensors φ (t) * ∈R h×h×c and ψ (t) * ∈R h×h×c as convolution kernels, where h is the kernel size and c=c i ×c o is the number of kernels with input and output channel number c i and c o , respectively.</note><p>However, it is not feasible to directly predict all the convolution kernels due to their large scale. To reduce the number of kernels to predict by adapters A ψ (t) a (·) and A φ (t) a (·), we follow <ref type="bibr" target="#b1">[2]</ref> to use a way analogous to SVD for decomposing parameters ψ (t) * and φ</p><formula xml:id="formula_14">(t) * via ψ (t) * = U (t) S ⊗ ψ (t) * ⊗ c V (t) S and φ (t) * = U (t) J ⊗ φ (t) * ⊗ c V (t) J ,<label>(5)</label></formula><p>where ⊗ denotes convolution operation, ⊗ c denotes channel-wise convolution operation, U   For tailoring preliminary represenations with adaptive parameters, we utilize dynamic convolution layers for direclty applying ψ (t) * and φ (t) * to conduct convolution operations on R (t) S and R</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>(t)</head><p>J , which is implemented by just replacing static convolution kernels with the predicted dynamic ones in the traditional convolution layer:</p><formula xml:id="formula_15">R (t) S * = ψ (t) * ⊗ R (t) S = U (t) S ⊗ ψ (t) * ⊗ c V (t) S ⊗ R (t) S , R (t) J * = φ (t) * ⊗ R (t) J = U (t) J ⊗ φ (t) * ⊗ c V (t) J ⊗ R (t) J ,<label>(6)</label></formula><p>where R (t) S * and R (t) J * are dynamic representations learned from the guidance information of task counterparts, overcoming drawbacks of existing methods with hand-crafted features from estimation results. In addition, R (t) S * and R (t) J * are efficiently generated in a one-shot manner, avoiding the time-consuming iterative updating scheme utilized by traditional methods for representation learning. We implement U J for better labeling semantic parts and localizing body joints. We fuse complementary representations and preliminary ones via addition in a residual manner for generating tailored representationsR </p><formula xml:id="formula_16">R (t) S = R (t) S + R (t) S * andR (t) J = R (t) J + R (t) J * .<label>(7)</label></formula><p>Classification Module Given representationsR</p><formula xml:id="formula_17">(t) S andR (t)</formula><p>J , we apply two linear classifiers C S ψ (t) w (·) and C J φ (t) w (·) for predicting semantic part probability maps S (t) and body joint confidence maps J (t) , respectively. In particular, we implement classifiers with 1×1 convolution layers.</p><p>After getting S (t) and J (t) , the mapping modules M S ψ and J (t) to map predictions into the representation space. We also apply 1×1 convolutions onR At the inference phase, MuLA simultaneously estimates parsing and pose for an input image in one forward pass. The semantic part probability maps S <ref type="bibr">(T )</ref> and body joint confidence maps J (T ) from the last stage of MuLA are used for final predictions. In particular, for human parsing, the category with maximum probability at each position of S (T ) is output as the semantic part label. For pose estimation, in the single-person case, we take the position with maximum confidence for each confidence map in J (T ) as the location of each type of body joints; in the multi-person case, we perform Non-Maximum Suppression (NMS) on each confidence map in J (T ) for generating joint candidates.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Experimental Setup</head><p>Datasets We evaluate the proposed MuLA model on two benchmarks for simultaneous human parsing and pose estimation: the Look into Person (LIP) dataset <ref type="bibr" target="#b9">[10]</ref> and extended PASCAL-Person-Part dataset <ref type="bibr" target="#b23">[24]</ref>. The LIP dataset includes 50,462 single-person images collected from various realistic scenarios, with pixel-wise annotations provided for 19 categories of semantic parts and location annotations for 16 types of body joints. In particular, LIP images are split into 30,462 for training, 10,000 for validation and 10,000 for testing. The extended PASCAL-Person-Part is a challenging multi-person dataset, containing annotations for 14 body joints and 6 semantic parts. In total, there are 3,533 images, which are split into 1,716 for training and 1,817 for testing. Data Augmentation We conduct data augmentation strategies commonly used in previous works <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b2">3]</ref>   based on the person center with translational offset in [−40px, 40px], and random horizontally mirroring. We resize and pad augmented training samples into 256×256 as input to CNNs. Implementation We train MuLA from scratch for LIP and extended PASCALPerson-Part datasets with their own training samples, separately. For multiperson pose estimation on extended PASCAL-Person-Part dataset, we follow the method proposed in <ref type="bibr" target="#b15">[16]</ref>. It partitions joint candidates into corresponding persons via a dense regression branch in the pose model of MuLA for transforming joint candidates into the centroid embedding space. We implement MuLA with PyTorch <ref type="bibr" target="#b16">[17]</ref> and use RMSProp <ref type="bibr" target="#b20">[21]</ref> as the optimizer. We set the initial learning rate as 0.0025 and drop it with multiplier 0.5 at the 150th, 170th, 200th and 230th epochs. We train MuLA for 250 epochs in total. We perform multi-scale testing to produce final predictions for both human parsing and pose estimation. Our codes and pre-trained models will be made available.</p><p>Metrics Following conventions, Mean Intersection-over-Union (mIOU) <ref type="bibr" target="#b9">[10]</ref> is used for evaluating human parsing performance. We use PCK <ref type="bibr" target="#b26">[27]</ref> and Mean Average Precision (mAP) <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b15">16]</ref> for measuring accuracy of single-and multiperson pose estimation, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Results on LIP Dataset</head><p>Ablation Analysis We evaluate the proposed MuLA model with two kinds of backbone architectures, i.e., the VGG16-FCN and Hourglass networks, for both human parsing and pose estimation as mentioned in Sec. 3.2. Firstly, we conduct ablation experiments on LIP validation set with VGG16-FCN based model, denoted as VGG16-FCN-MuLA, to investigate efficacy of MuLA on leveraging mutual guidance information to simultaneously improve parsing and pose performance. The results are shown in <ref type="table">Table 1</ref>. To demonstrate effectiveness of the adaptive representations learned by MuLA, we compare with prevalent strategies that directly fuse representations from parallel models, including addition, multiplication, concatenation. We denote these baselines as VGG16-FCN-Add/Multi/Concat respectively. To evaluate the advantages of the interweaving architecture of MuLA, we also compare it with traditional multitask learning framework for joint human parsing and pose estimation, implemented by adding both parsing and pose supervision on a single VGG16-FCN, denoted as VGG16-FCN-MTL. To investigate effects of the residual architecture followed by the adaptation modules, we wipe off mutual interaction between tasks through replacing dynamic convolution layers with traditional convolution layers. Such a variant is denoted as VGG16-FCN-Self. To validate advantages of bidirectionally utilizing guidance information between two tasks, we simplify MuLA by alternatively removing parsing and pose adapters, resulting in single-direction adaptation models, denoted as VGG16-FCN-LA-Pose and VGG16-FCN-LA-Parsing.</p><p>From <ref type="table">Table 1</ref>, we can see that the proposed VGG16-FCN-MuLA significantly improves performance of baseline VGG16-FCN by a large margin on both human parsing and pose estimation, from 34.5% to 40.2% mIoU and 69.1% to 76.0% PCK, respectively. These results clearly show efficacy of MuLA on exploiting mutual benefits to jointly enhance model performance. We can also observe direct fusion of representations from both models as VGG16-FCN-Add/Multi/Concat cannot sufficiently utilize guidance information, resulting in very limited performance improvement. In contrast to these naive fusion strategies, VGG16-FCNMuLA can learn more powerful representations via dynamically adapting parameters. Traditional multi-task learning framework VGG16-FCN-MTL suffers performance decline for both parsing and pose estimation, due to limitations brought by its tied architecture trying to learn single representation for both tasks. In contrast, MuLA learns separate representations for each task, providing a flexible and effective model for multi-task learning. Adding a residual architecture to the adaptation modules only slightly improves performance for both tasks, revealing performance gain is not simply from network architecture engineering. Instead, MuLA indeed learns useful complementary representations.</p><p>Single-direction learning to adapt variants VGG16-FCN-LA-Pose/Parsing can successfully leverage parsing (or pose) information to adapt pose (or parsing respectively) models, leading to performance improvement. This verifies effectiveness of our proposed learning to adapt module in exploiting guidance information from parallel models. However, we can also observe such single-direction learning harms performance of "source" tasks, due to over-concentration on the "target" tasks. It demonstrates the necessity of mutual learning for simultaneously boosting performance of human parsing and pose estimation.</p><p>To evaluate the power of MuLA on iteratively exploiting mutual benefits between human parsing and pose estimation, we further perform ablation studies with the Hourglass based model. The results are summarized in <ref type="table" target="#tab_1">Table 2</ref>. We use HG-ms-nu-MuLA to denote the model containing m stages each with n-unit depth (32-layer per unit depth per Hourglass module is the basic configuration in <ref type="bibr" target="#b14">[15]</ref>). Specially, HG-0s-1u-MuLA denotes independent Hourglass networks (without mutual learning to adapt) are utilized for the two tasks. We purposively make all stages have the same architecture for disentangling effects of architecture variations on performance. In particular, HG-2s-1u-MuLA (1st/2nd  <ref type="bibr" target="#b6">[7]</ref> 87.4</p><p>Our model 87.5 Stage) denotes ablation cases of HG-2s-1u-MuLA where only the 1st or 2nd stage contains the module for mutual-learning to adapt. We use HG-k×nu to denote standard Hourglass network with k stacked Hourglass modules of n-unit depth.</p><p>From <ref type="table" target="#tab_1">Table 2</ref>, we can observe that increasing the number of stages in MuLA from 0 to 5 can continuously improve the performance for both tasks, from 38.5% to 49.3% mIoU for human parsing and 78.8% to 85.4% PCK for pose estimation. Comparing HG-2s-1u-MuLA with HG-2×1u, we can find the proposed MuLA model can learn valuable representations from model counterparts rather than benefiting from stacking Hourglass modules. Comparing HG-2s-1u-MuLA with HG-2s-1u-MuLA (1st/2nd Stage), we can see that removing mutual-learning process at any stage will always harm the performance for both parsing and pose estimation, demonstrating that the proposed adaptation module is effective at leveraging mutual guidance information and necessary to be applied for all the stages in MuLA. In addition, we find using more than 5 stages for MuLA will not bring observable improvement. Hence, we set T =5 for efficiency.</p><p>Comparisons with State-of-the-arts We compare our model HG-5s-1u-MuLA with state-of-the-arts for both human parsing and pose estimation on LIP dataset. The results are shown in <ref type="table" target="#tab_2">Table 3 and 4.</ref> For human pose estimation, the method in <ref type="bibr" target="#b6">[7]</ref> wins the first place in Human Pose Estimation track in the 1st LIP Challenge. It extensively exploits adversarial training strategies. The pyramid stream network introduces top-down pathway and lateral connections to combine features of different levels for recurrently refining joint confidence maps. BUPTMM-POSE and Hybrid Pose machines are from combining the Hourglass network and Convolutional Pose Machines. From <ref type="table" target="#tab_2">Table 3</ref>, we can find our model achieves superior accuracy over all these strong baselines. It achieves new state-of-the-art 87.5% PCK on the LIP dataset. <ref type="table" target="#tab_3">Table 4</ref> shows comparison with state-of-the-arts for human parsing. In addition to mIoU, we also report pixel accuracy and mean accuracy, following conventions <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b4">5]</ref>. In particular, the methods in <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28]</ref> utilize human pose information as extra supervision to assist human parsing via introducing a structuresensitive loss based on body joint locations. We can observe that our model outperforms all previous methods consistently for all the evaluation metrics. It gives new state-of-the-art 88.5% pixel accuracy, 60.5% mean accuracy and 49.3% mIoU. This demonstrates our learning to adapt module indeed provides a more  <ref type="table">Table 6</ref>. Results on the PASCALPerson-Part dataset for Human Parsing</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Methods mIoU</head><p>Attention+SSL <ref type="bibr" target="#b9">[10]</ref> 59.4 SS-NAN <ref type="bibr" target="#b27">[28]</ref> 62.4 Xia et al. <ref type="bibr" target="#b23">[24]</ref> 64.4</p><p>Our baseline (w/o MuLA) 62.9 Our model 65.1 effective way for exploiting human pose information to guide human parsing than the other sophisticated strategies like structure-sensitive loss in <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28]</ref>. Qualitative Results <ref type="figure" target="#fig_14">Fig. 4 (a)</ref> shows qualitative results to visually illustrate the efficacy of MuLA in mutually boosting human parsing and pose estimation. We can observe that MuLA can exploit body part information from human parsing to constrain body joint locations, e.g., from the 1st and 2nd examples. On the other hand, MuLA can use human pose to provide structure information to benefit human parsing by improving accuracy of semantic part labeling, as shown in the 3rd and 4th examples. Moreover, we can see that MuLA simultaneously improves both parsing and pose quality for all the examples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Results on PASCAL-Person-Part Dataset</head><p>Different from LIP dataset, the extended PASCAL-Person-Part dataset presents more challenging pose estimation problems due to existence of multiple persons. As mentioned in Sec. 4.1, we utilize the model in <ref type="bibr" target="#b15">[16]</ref> as the pose model in MuLA for partitioning joint candidates to corresponding person instances. We exploit Hourglass network based MuLA with 5 stages for experiments. The results are shown in <ref type="table" target="#tab_4">Table 5</ref> and 6. We can see that our baseline models achieves 38.6% mAP and 62.9% mIoU for multi-person pose estimation and human parsing. With the proposed MuLA model, the performance for two tasks can be improved to 39.9% mAP and 65.1% mIoU, respectively. We also observe that our model achieves superior performance over previous methods for both tasks. In particular, <ref type="bibr" target="#b23">[24]</ref> presents the state-of-the-art model for joint human parsing and pose estimation via exploiting hand-crafted features from estimation results as post-processing. The superior performance of our model over <ref type="bibr" target="#b23">[24]</ref> further demonstrates the effectiveness of learning to adapt with mutual guidance information for enhancing models for joint human parsing and pose estimation.</p><p>We visualize human parsing and multi-person pose estimation results in <ref type="figure" target="#fig_14">Fig. 4  (b)</ref>. We can see that MuLA can use body joint information to recover missing detected parts, e.g., left arm of left person in the 1st example and right arm of right person in the 2nd example. In addition, MuLA can also utilize semantic part information to constrain body joint location, e.g., right knee of the right person in the 1st example and left ankle of the left person in the 2nd example. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>In this paper, we present a novel Mutual Learning to Adapt (MuLA) model for solving the challenging joint human parsing and pose estimation problem. MuLA uses a new interweaving architecture to leverage their mutual guidance information to boost their performance simultaneously. In particular, MuLA achieves dynamic interaction and cooperation between these two tasks by mutually learning to adapt parameters of parallel models for tailoring their preliminary representations by injecting information from the other one. MuLA can iteratively weave mutual guidance information for continuously improving performance for both tasks. It effectively overcomes limitations of previous works that exploit mutual benefits between two tasks through using hand-crafted features in the post-processing. Comprehensive experiments on benchmarks have clearly verified the efficacy of MuLA for joint human parsing and pose estimation. In particular, MuLA achieved new state-of-the-art for both human parsing and pose estimation tasks on the LIP dataset, and outperformed all previous methods devoted to jointly performing these two tasks on PASCAL-Person-Part dataset.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 .</head><label>1</label><figDesc>Fig. 1. Illustration of our motivation for joint human parsing and pose estimation. (a) Input image. (b) Results from independent models. (c) Results of the proposed MuLA model. MuLA can leverage mutual guidance information between human parsing and pose estimation to improve performance of both tasks, as shown with highlighted body parts and joints. Best viewed in color</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>-level preliminary representations for human parsing and pose estimation. The mutual adaptation module targets at adapting parameters ψ (t) * and φ</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>information from the parallel tasks. Inspired by the "Learning to Learn" framework [2], for achieving fast and effective adaptation, within func- tions g ′ (·, ·) and h ′ (·, ·), we design two learnable adapters A ψ</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. (a) The CNN implementation of MuLA for one stage. Given inputs F (t) S and F (t) J at stage t, the parsing and pose encoders generate preliminary representations R (t) S</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>J</head><label></label><figDesc>for estimating parsing and pose results, as well as for predicting adaptive parameters. We implement Estate-of-the-art architectures: the VGG network</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head></head><label></label><figDesc>parameters and can be viewed as parameter bases, and ψ (t) * ∈R h×h×ci and φ (t) * ∈R h×h×ci are the actual param- eters to predict by A φ</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head></head><label></label><figDesc>). In this way, the number of predicted parameters can be reduced by an order of magnitude.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_12"><head></head><label></label><figDesc>next stage. Following [15], we use 1×1 convolutions on S (t)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_13"><head>J.</head><label></label><figDesc>to map highest-level representations of the previous stage into preliminary representations for the following stage. We integrate these two representations via addition for obtaining FTraining and Inference As exhibited in the loss function in Eqn. (4), we apply both parsing and pose supervision at each mutual learning stage for training the MuLA model. In particular, we utilize CrossEntropy loss and Mean Square Error loss for parsing and pose models respectively. MuLA is end-to-end trainable by gradient back propagation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_14"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. Qualitative results on (a) LIP and (b) extended PASCAL-Person-Part dataset. For each column, the first two rows are results of the baseline model HG-5×1u without exploiting mutual guidance information and the last two rows are results of the proposed model HG-5s-1u-MuLA. Best viewed in color</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Hourglass network based ab- lation studies on LIP validation set</figDesc><table>Methods 
+PCK mIOU 
+
+HG-0s-1u-MuLA 
+78.8 38.5 
+HG-1s-1u-MuLA 
+82.2 43.5 
+
+HG-2×1u 
+80.8 41.3 
+HG-2s-1u-MuLA (1st Stage) 82.8 45.5 
+HG-2s-1u-MuLA (2nd Stage) 83.1 45.6 
+HG-2s-1u-MuLA 
+84.4 46.9 
+
+HG-3s-1u-MuLA 
+85.0 47.8 
+HG-4s-1u-MuLA 
+85.1 48.9 
+HG-5s-1u-MuLA 
+85.4 49.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 .</head><label>3</label><figDesc>Comparison with state-of- the-arts on LIP for human pose esti- mation task</figDesc><table>Methods 
+PCK 
+
+Hybrid Pose Machine 
+77.2 
+BUPTMM-POSE 
+80.2 
+Pyramid Stream Network 82.1 
+Chou et al. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 .</head><label>4</label><figDesc>Comparison with state-of- the-arts on LIP for human parsing task</figDesc><table>Methods 
+PixelAcc MeanAcc mIoU 
+
+SegNet [1] 
+69.0 
+24.0 
+18.2 
+FCN-8s [13] 
+76.1 
+36.8 
+28.3 
+DeepLabV2 [4] 
+82.7 
+51.6 
+41.6 
+Attention [5] 
+83.4 
+54.4 
+42.9 
+Attention+SSL [10] 
+84.4 
+54.9 
+44.7 
+SS-NAN [28] 
+87.6 
+56.0 
+47.9 
+
+Our model 
+88.5 
+60.5 
+49.3 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 5 .</head><label>5</label><figDesc>Results on the PASCAL- Person-Part dataset for Human Pose Estimation</figDesc><table>Methods 
+mAP 
+
+Chen and Yuille [6] 
+21.8 
+Insafutdinov et al. [11] 
+28.6 
+Xia et at. [24] 
+39.2 
+
+Our baseline (w/o MuLA) 38.6 
+Our model 
+39.9 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>Jiashi Feng was partially supported by NUS IDS R-263-000-C67-646, ECRA R-263-000-C87-133 and MOE Tier-II R-263-000-D17-112.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Segnet: A deep convolutional encoder-decoder architecture for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page">12</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Learning feedforward one-shot learners</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bertinetto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">F</forename><surname>Henriques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Valmadre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Realtime multi-person 2d pose estimation using part affinity fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">9</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Deeplab: Semantic image segmentation with deep convolutional nets, atrous convolution, and fully connected crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ICLR</publisher>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Attention to scale: Scaleaware semantic image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Parsing occluded people by flexible compositions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2015 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Self adversarial training for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Chou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Chien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshops</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Towards unified human parsing and pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Concepts not alone: Exploring pairwise relationships for zero-shot video activity recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>De Melo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>AAAI</publisher>
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Look into person: Self-supervised structuresensitive learning and a new benchmark for human parsing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR (2017) 1, 3, 9</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Deepercut: A deeper, stronger, and faster multi-person pose estimation model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Insafutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Human pose estimation using a joint pixelwise and part-wise formulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Application of an incremental svm algorithm for on-line human recognition from video surveillance using texture and color features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Boukharouba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Boonaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fleury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lecoeuche</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neurocomputing</title>
+		<imprint>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Stacked hourglass networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Generative partition networks for multi-person pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Nie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.07422</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>Pytorch</publisher>
+			<biblScope unit="page">10</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICLR</title>
+		<imprint>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Pose-driven deep convolutional model for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Tian</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">COURSERA: Neural Networks for Machine Learning</title>
+		<imprint>
+			<biblScope unit="page">10</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">An approach to pose-based action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramakrishna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+		<title level="m">Convolutional pose machines</title>
+		<imprint>
+			<publisher>CVPR</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Joint multi-person pose estimation and semantic part segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR (2017) 1, 3, 4</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Pose-guided human parsing by an and/or graph using pose-context features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Parsing clothing in fashion photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">H</forename><surname>Kiapour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">E</forename><surname>Ortiz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Articulated human detection with flexible mixtures of parts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page">10</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Selfsupervised neural aggregation networks for human parsing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Nie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshops</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Unsupervised salience learning for person reidentification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Sparseness meets deepness: 3d human pose estimation from monocular video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leonardos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">G</forename><surname>Derpanis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Daniilidis</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

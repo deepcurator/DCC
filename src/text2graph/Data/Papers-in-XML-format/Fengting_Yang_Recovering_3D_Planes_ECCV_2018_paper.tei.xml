@@ -1,0 +1,860 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:18+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Recovering 3D Planes from a Single Image via Convolutional Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fengting</forename><surname>Yang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">The Pennsylvania State University</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zihan</forename><surname>Zhou</surname></persName>
+							<email>zzhou@ist.psu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">The Pennsylvania State University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Recovering 3D Planes from a Single Image via Convolutional Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>
+					<term>3D reconstruction</term>
+					<term>plane segmentation</term>
+					<term>deep learning</term>
+				</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. In this paper, we study the problem of recovering 3D planar surfaces from a single image of man-made environment. We show that it is possible to directly train a deep neural network to achieve this goal. A novel plane structure-induced loss is proposed to train the network to simultaneously predict a plane segmentation map and the parameters of the 3D planes. Further, to avoid the tedious manual labeling process, we show how to leverage existing large-scale RGB-D dataset to train our network without explicit 3D plane annotations, and how to take advantage of the semantic labels come with the dataset for accurate planar and non-planar classification. Experiment results demonstrate that our method significantly outperforms existing methods, both qualitatively and quantitatively. The recovered planes could potentially benefit many important visual tasks such as vision-based navigation and human-robot interaction.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Automatic 3D reconstruction from a single image has long been a challenging problem in computer vision. Previous work have demonstrated that an effective approach to this problem is exploring structural regularities in man-made environments, such as planar surfaces, repetitive patterns, symmetries, rectangles and cuboids <ref type="bibr" target="#b11">[12]</ref>, <ref type="bibr" target="#b20">[21]</ref>, <ref type="bibr" target="#b13">[14]</ref>, <ref type="bibr" target="#b14">[15]</ref>, <ref type="bibr" target="#b32">[33]</ref>, <ref type="bibr" target="#b27">[28]</ref>, <ref type="bibr" target="#b4">[5]</ref>. Further, the 3D models obtained by harnessing such structural regularities are often attractive in practice, because they provide a high-level, compact representation of the scene geometry, which is desirable for many applications such as large-scale map compression, semantic scene understanding, and human-robot interaction.</p><p>In this paper, we study how to recover 3D planes -arguably the most common structure in man-made environments -from a single image. In the literature, several methods have been proposed to fit a scene with a piecewise planar model. These methods typically take a bottom-up approach: First, geometric primitives such as straight line segments, corners, and junctions are detected in the image. Then, planar regions are discovered by grouping the detected primitives based on their spatial relationships. For example, <ref type="bibr" target="#b5">[6]</ref>, <ref type="bibr" target="#b26">[27]</ref>, <ref type="bibr" target="#b2">[3]</ref>, <ref type="bibr" target="#b33">[34]</ref> first detect line segments in the image, and then cluster them into several classes, each associated with a prominent vanishing point. <ref type="bibr" target="#b20">[21]</ref> further detects junctions formed by multiple intersecting planes to generate model hypotheses. Meanwhile, <ref type="bibr" target="#b15">[16]</ref>, <ref type="bibr" target="#b8">[9]</ref>, <ref type="bibr" target="#b10">[11]</ref> take a learning-based approach to predict the orientations of local image patches, and then group the patches with similar orientations to form planar regions.</p><p>However, despite its popularity, there are several inherent difficulties with the bottom-up approach. First, geometric primitives may not be reliably detected in man-made environments (e.g., due to the presence of poorly textured or specular surfaces). Therefore, it is very difficult to infer the geometric properties of such surfaces. Second, there are often a large number of irrelevant features or outliers in the detected primitives (e.g., due to presence of non-planar objects), making the grouping task highly challenging. This is the main reason why most existing methods resort to rather restrictive assumptions, e.g., requiring "Manhattan world" scenes with three mutually-orthogonal dominant directions or a "box" room model, to filter outliers and produce reasonable results. But such assumptions greatly limit the applicability of those methods in practice.</p><p>In view of these fundamental difficulties, we take a very different route to 3D plane recovery in this paper. Our method does not rely on grouping lowlevel primitives such as line segments and image patches. Instead, inspired by the recent success of convolutional neural networks (CNNs) in object detection and semantic segmentation, we design a novel, end-to-end trainable network to directly identify all planar surfaces in the scene, and further estimate their parameters in the 3D space. As illustrated in <ref type="figure" target="#fig_0">Fig. 1</ref>, the network takes a single image as input, and outputs (i) a segmentation map that identifies the planar surfaces in the image and (ii) the parameters of each plane in the 3D space, thus effectively creating a piecewise planar model for the scene.</p><p>One immediate difficulty with our learning-based approach is the lack of training data with annotated 3D planes. To avoid the tedious manual labeling process, we propose a novel plane structure-induced loss which essentially casts our problem as one of single-image depth prediction. Our key insight here is that, if we can correctly identify the planar regions in the image and predict the plane parameters, then we can also accurately infer the depth in these regions.</p><p>In this way, we are able to leverage existing large-scale RGB-D datasets to train our network. Moreover, as pixel-level semantic labels are often available in these datasets, we show how to seamlessly incorporate the labels into our network to better distinguish planar and non-planar objects.</p><p>In summary, the contributions of this work are: (i) We design an effective, end-to-end trainable deep neural network to directly recover 3D planes from a single image. (ii) We develop a novel learning scheme that takes advantage of existing RGB-D datasets and the semantic labels therein to train our network without extra manual labeling effort. Experiment results demonstrate that our method significantly outperforms, both qualitatively and quantitatively, existing plane detection methods. Further, our method achieves real-time performance at the testing time, thus is suitable for a wide range of applications such as visual localization and mapping, and human-robot interaction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>3D plane recovery from a single image. Existing approaches to this problem can be roughly grouped into two categories: geometry-based methods and appearance-based methods. Geometry-based methods explicitly analyze the geometric cues in the 2D image to recover 3D information. For example, under the pinhole camera model, parallel lines in 3D space are projected to converging lines in the image plane. The common point of intersection, perhaps at infinity, is called the vanishing point <ref type="bibr" target="#b12">[13]</ref>. By detecting the vanishing points associated with two sets of parallel lines on a plane, the plane's 3D orientation can be uniquely determined <ref type="bibr" target="#b5">[6]</ref>, <ref type="bibr" target="#b26">[27]</ref>, <ref type="bibr" target="#b2">[3]</ref>. Another important geometric primitive is the junction formed by two or more lines of different orientations. Several work make use of junctions to generate plausible 3D plane hypotheses or remove impossible ones <ref type="bibr" target="#b20">[21]</ref>, <ref type="bibr" target="#b33">[34]</ref>. And a different approach is to detect rectangular structures in the image, which are typically formed by two sets of orthogonal lines on the same plane <ref type="bibr" target="#b25">[26]</ref>. However, all these methods rely on the presence of strong regular structures, such as parallel or orthogonal lines in a Manhattan world scene, hence have limited applicability in practice.</p><p>To overcome this limitation, appearance-based methods focus on inferring geometric properties of an image from its appearance. For example, <ref type="bibr" target="#b15">[16]</ref> proposes a diverse set of features (e.g., color, texture, location and shape) and uses them to train a model to classify each superpixel in an image into discrete classes such as "support" and "vertical (left/center/right)". <ref type="bibr" target="#b10">[11]</ref> uses a learning-based method to predict continuous 3D orientations at a given image pixel. Further, <ref type="bibr" target="#b8">[9]</ref> automatically learns meaningful 3D primitives for single image understanding. Our method also falls into this category. But unlike existing methods which take a bottom-up approach by grouping local geometric primitives, our method trains a network to directly predict global 3D plane structures. Recently, <ref type="bibr" target="#b21">[22]</ref> also proposes a deep neural network for piecewise planar reconstruction from a single image. But its training requires ground truth 3D planes and does not take advantage of the semantic labels in the dataset.</p><p>Machine learning and geometry. There is a large body of work on developing machine learning techniques to infer pixel-level geometric properties of the scene, mostly in the context of depth prediction <ref type="bibr" target="#b29">[30]</ref>, <ref type="bibr" target="#b6">[7]</ref> and surface normal prediction <ref type="bibr" target="#b7">[8]</ref>, <ref type="bibr" target="#b17">[18]</ref>. But few work has been done on detecting mid/hightlevel 3D structures with supervised data. A notable exception which is also related to our problem is the line of research on indoor room layout estimation <ref type="bibr" target="#b13">[14]</ref>, <ref type="bibr" target="#b14">[15]</ref>, <ref type="bibr" target="#b27">[28]</ref>, <ref type="bibr" target="#b4">[5]</ref>, <ref type="bibr" target="#b19">[20]</ref>. In these work, however, the scene geometry is assumed to follow a simple "box" model which consists of several mutually orthogonal planes (e.g., ground, ceiling, and walls). In contrast, our work aims to detect 3D planes under arbitrary configurations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Method</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Difficulty in Obtaining Ground Truth Plane Annotations</head><p>As most computer vision problems, a large-scale dataset with ground truth annotations is needed to effectively train the neural network for our task. Unfortunately, since the planar regions often have complex boundaries in an image, manual labeling of such regions could be very time-consuming. Further, it is unclear how to extract precise 3D plane parameters from an image.</p><p>To avoid the tedious manual labeling process, one strategy is to automatically convert the per-pixel depth maps in existing RGB-D datasets into planar surfaces. To this end, existing multi-model fitting algorithms can be employed to cluster 3D points derived from the depth maps. However, this is not an easy task either. Here, the fundamental difficulty lies in the choice of a proper threshold in practice to distinguish the inliers of a model instance (e.g., 3D points on a particular plane) from the outliers, regardless of which algorithm one chooses.</p><p>To illustrate this difficulty, we use the SYNTHIA dataset <ref type="bibr" target="#b28">[29]</ref> which provides a large number of photo-realistic synthetic images of urban scenes and the corresponding depth maps (see Section 4.1 for more details). The dataset is generated by rendering a virtual city created using the Unity game development platform. Thus, the depth maps are noise-free. To detect planes from the 3D point cloud, we apply a popular multi-model fitting method called J-Linkage <ref type="bibr" target="#b30">[31]</ref>. Similar to the RANSAC technique, this method is based on sampling consensus. We refer interested readers to <ref type="bibr" target="#b30">[31]</ref> for a detailed description of the method.</p><p>A key parameter of J-Linkage is a threshold ǫ which controls the maximum distance between a model hypothesis (i.e., a plane) and the data points belonging to the hypothesis. In <ref type="figure" target="#fig_1">Fig. 2</ref>, we show example results produced by J-Linkage with different choices of ǫ. As one can see in <ref type="figure" target="#fig_1">Fig. 2(c)</ref>, when a small threshold (ǫ = 0.5) is used, the method breaks the building facade on the right into two planes. This is because the facade is not completely planar due to small indentations (e.g., the windows). When a large threshold (ǫ = 2) is used ( <ref type="figure" target="#fig_1">Fig. 2(d)</ref>), the stairs on the building on the left are incorrectly grouped with another building. Also, some objects (e.g., cars, pedestrians) are merged with the ground. If we use these results as ground truth to train a deep neural network, the network will also likely learn the systematic errors in the estimated planes. And the problem becomes even worse if we want to train our network on real datasets. Due to the limitation of existing 3D acquisition systems (e.g., RGB-D cameras and LIDAR devices) and computational tools, the depth maps in these datasets are often noisy and of limited resolution and limited reliable range. Clustering based on such depth maps is prone to errors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">A New Plane Structure-Induced Loss</head><p>The challenge in obtaining reliable labels motivates us to develop alternative training schemes for 3D plane recovery. Specifically, we ask the following question: Can we leverage the wide availability of large-scale RGB-D and/or 3D datasets to train a network to recognize geometric structures such as planes without obtaining ground truth annotations about the structures? To address this question, our key insight is that, if we can recover 3D planes from the image, then we can use these planes to (partially) explain the scene geometry, which is generally represented by a 3D point cloud. Specifically, let</p><formula xml:id="formula_0">{I i , D i } n i=1</formula><p>denote a set of n training RGB image and depth map pairs with known camera intrinsic matrix K.</p><p>1 Then, for any pixel q . = [x, y, 1] T (in homogeneous coordinates) on image I i , it is easy to compute the corresponding 3D point as Q = D i (q) · K −1 q. Further, let n ∈ R 3 represents a 3D plane in the scene. If Q lies on the plane, then we have n T Q = 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>2</head><p>With the above observation, assuming there are m planes in the image I i , we can now train a network to simultaneously output (i) a per-pixel probability map S i , where S i (q) is an (m+1)-dimensional vector with its j-th element S j i (q) indicating the probability of pixel q belonging to the j-th plane, <ref type="bibr" target="#b2">3</ref> and (ii) the 1 Without loss of generality, we assume a constant K for all images in the dataset. <ref type="bibr" target="#b1">2</ref> A common way to represent a 3D plane is (ñ, d) whereñ is a normal vector and d is the distance to the camera center. In this paper, we choose a more succinct parametrization: n . =ñ/d. Note that n can uniquely identify a 3D plane, assuming the plane is not through the camera center (which is valid for real world images). <ref type="bibr" target="#b2">3</ref> In this paper, we use j = 0 to denote the "non-planar" class.</p><formula xml:id="formula_1">plane parameters Π i = {n j i } m j=1</formula><p>, by minimizing the following objective function:</p><formula xml:id="formula_2">L = n i=1 m j=1 q S j i (q) · |(n j i ) T Q − 1| + α n i=1 L reg (S i ),<label>(1)</label></formula><p>where L reg (S i ) is a regularization term preventing the network from generating a trivial solution S 0 i (·) ≡ 1, i.e., classifying all pixels as non-planar, and α is a weight balancing the two terms.</p><p>Before proceeding, we make two important observations about our formulation Eq. (1). First, the term |(n j i )</p><p>T Q − 1| measures the deviation of a 3D scene point Q from the j-th plane in I i , parameterized by n j i . In general, for a pixel q in the image, we know from perspective geometry that the corresponding 3D point must lie on a ray characterized by λK −1 q, where λ is the depth at q. If this 3D point is also on the j-th plane, we must have</p><formula xml:id="formula_3">(n j i ) T · λK −1 q = 1 =⇒ λ = 1 (n j i ) T · K −1 q .<label>(2)</label></formula><p>Hence, in this case, λ can be regarded as the depth at q constrained by n j i . Now, we can rewrite the term as:</p><formula xml:id="formula_4">|(n j i ) T Q − 1| = |(n j i ) T D i (q) · K −1 q − 1| = |D i (q)/λ − 1|.<label>(3)</label></formula><p>Thus, the term |(n j i ) T Q − 1| essentially compares the depth λ induced by the j-th predicted plane with the ground truth D i (q), and penalizes the difference between them. In other words, our formulation casts the 3D plane recovery problem as a depth prediction problem.</p><p>Second, Eq. (1) couples plane segmentation and plane parameter estimation in a loss that encourages consistent explanations of the visual world through the recovered plane structure. It mimics the behavior of biological agents (e.g., humans) which also employ structural priors for 3D visual perception of the world <ref type="bibr" target="#b31">[32]</ref>. This is in contrast to alternative methods that rely on ground truth plane segmentation maps and plane parameters as direct supervision signals to tackle the two problems separately.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Incorporating Semantics for Planar/Non-Planar Classification</head><p>Now we turn our attention to the regularization term L reg (S i ) in Eq. (1). Intuitively, we wish to use the predicted planes to explain as much scene geometry as possible. Therefore, a natural choice of L reg (S i ) is to encourage plane predictions by minimizing the cross-entropy loss with constant label 1 at each pixel. Specifically, let p plane (q) = m j=1 S j i (q) be the sum of probabilities of pixel q being assigned to each plane, we write</p><formula xml:id="formula_5">L reg (S i ) = q −1 · log(p plane (q)) − 0 · log(1 − p plane (q)).<label>(4)</label></formula><p>Note that, while the above term effectively encourages the network to explain every pixel in the image using the predicted plane models, it treats all pixels equally. However, in practice, some objects are more likely to form meaningful planes than others. For example, a building facade is often regarded as a planar surface, whereas a pedestrian or a car is typically viewed as non-planar. In other words, if we can incorporate such high-level semantic information into our training scheme, the network is expected to achieve better performance in differentiating planar vs. non-planar surfaces.</p><p>Motivated by this observation, we propose to further utilize the semantic labels in the existing datasets. Take the SYNTHIA dataset as an example. The dataset provides precise pixel-level semantic annotations for 13 classes in urban scenes. For our purpose, we group these classes into "planar" = {building, fence, road, sidewalk, lane-marking} and "non-planar" = {sky, vegetation, pole, car, traffic signs, pedestrians, cyclists, miscellaneous}. Then, let z(q) = 1 if pixel q belongs to one of the "planar" classes, and z(q) = 0 otherwise, we can revise our regularization term as:</p><formula xml:id="formula_6">L reg (S i ) = q −z(q) · log(p plane (q)) − (1 − z(q)) · log(1 − p plane (q)).<label>(5)</label></formula><p>Note that the choices of planar/non-planar classes are dataset-and problemdependent. For example, one may argue that "sky" can be viewed as plane at infinity, thus should be included in the "planar" classes. Regardless the particular choices, we emphasize that here we provide a flexible way to incorporate high-level semantic information (generated by human annotators) to the plane detection problem. This is in contrast to traditional geometric methods that solely rely on a single threshold to distinguish planar vs. non-planar surfaces.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Network Architecture</head><p>In this paper, we choose a fully convolutional network (FCN), following its recent success in various pixel-level prediction tasks such as semantic segmentation <ref type="bibr" target="#b22">[23]</ref>, <ref type="bibr" target="#b1">[2]</ref> and scene flow estimation <ref type="bibr" target="#b24">[25]</ref>. <ref type="figure">Fig. 3</ref> shows the overall architecture of our proposed network. To simultaneously estimate the plane segmentation map and plane parameters, our network consists of two prediction branches, as we elaborate below.</p><p>Plane segmentation map. To predict the plane segmentation map, we use an encoder-decoder design with skip connections and multi-scale side predictions, similar to the DispNet architecture proposed in <ref type="bibr" target="#b24">[25]</ref>. Specifically, the encoder takes the whole image as input and produces high-level feature maps via a convolutional network. The decoder then gradually upsamples the feature maps via deconvolutional layers to make final predictions, taking into account also the features from different encoder layers. The multi-scale side predictions further allow the network to be trained with deep supervision. We use ReLU for all layers except for the prediction layers, where the softmax function is applied.  <ref type="figure">Fig. 3</ref>. Network architecture. The width and height of each block indicates the channel and the spatial dimension of the feature map, respectively. Each reduction (or increase) in size indicates a change by a factor of 2. The first convolutional layer has 32 channels. The filter size is 3 except for the first four convolutional layers (7, 7, 5, 5).</p><p>Plane parameters. The plane parameter prediction branch shares the same high-level feature maps with the segmentation branch. The branch consists of two stride-2 convolutional layers (3 × 3 × 512) followed by a 1 × 1 × 3m convolutional layer to output the parameters of the m planes. Global average pooling is then used to aggregate predictions across all spatial locations. We use ReLU for all layers except for the last layer, where no activation is applied. Implementation details. Our network is trained from scratch using the publicly available Tensorflow framework. By default, we set the weight in Eq. <ref type="formula" target="#formula_2">(1)</ref> as α = 0.1, and the number of planes as m = 5. During training, we adopt the Adam <ref type="bibr" target="#b16">[17]</ref> method with β 1 = 0.99 and β 2 = 0.9999. The batch size is set to 4, and the learning rate is set to 0.0001. We also augment the data by scaling the images with a random factor in [1, 1.15] followed by a random cropping. Convergence is reached at about 500K iterations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section, we conduct experiments to study the performance of our method, and compare it to existing ones. All experiments are conducted on one Nvidia GTX 1080 Ti GPU device. At testing time, our method runs at about 60 frames per second, thus are suitable for potential real-time applications. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Datasets and Ground Truth Annotations</head><p>SYNTHIA: The recent SYNTHIA dataset <ref type="bibr" target="#b28">[29]</ref> comprises more than 200,000 photo-realistic images rendered from virtual city environments with precise pixelwise depth maps and semantic annotations. Since the dataset is designed to facilitate autonomous driving research, all frames are acquired from a virtual car as it navigates in the virtual city. The original dataset contains seven different scenarios. For our experiment, we select three scenarios (SEQS-02, 04, and 05) that represents city street views. For each scenario, we use the sequences for all four seasons (spring, summer, fall, and winter). Note that, to simulate real traffic conditions, the virtual car makes frequent stops during navigation. As a result, the dataset has many near-identical frames. We filter these redundant frames using a simple heuristic based on the vehicle speed. Finally, from the remaining frames, we randomly sample 8,000 frames as the training set and another 100 frames as the testing set.</p><p>For quantitative evaluation, we need to label all the planar regions in the test images. As we discussed in Section 3.1, automatic generation of ground truth plane annotations is difficult and error-prone. Thus, we adopt a semiautomatic method to interactively determine the ground truth labels with user input. To label one planar surface in the image, we ask the user to draw a quadrilateral region within that surface. Then, we fit a plane to the 3D points (derived from the ground truth depth map) that fall into that region to obtain the plane parameters and an instance-specific estimate of the variance of the distance distribution between the 3D points and the fitted plane. Note that, with the instance-specific variance estimate, we are able to handle surfaces with varying degrees of deviation from a perfect plane, but are commonly regarded as "planes" by humans. Finally, we use the plane parameters and the variance estimate to find all pixels that belong to the plane. We repeat this process until all planes in the image are labeled. Cityscapes: Cityscapes <ref type="bibr" target="#b3">[4]</ref> contains a large set of real street-view video sequences recorded in different cities. From the 3,475 images with publicly available fine semantic annotations, we randomly select 100 images for testing, and use the rest for training. To generate the planar/non-planar masks for training, we label pixels in the following classes as "planar" = {ground, road, sidewalk, parking, rail track, building, wall, fence, guard rail, bridge, and terrain}.</p><p>In contrast to SYNTHIA, the depth maps in Cityscapes are highly noisy because they are computed from stereo correspondences. Fitting planes on such data is extremely difficult even with user input. Therefore, to identify planar surfaces in the image, we manually label the boundary of each plane using polygons, and further leverage the semantic annotations to refine it by ensuring that the plane boundary aligns with the object boundary, if they overlap.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Methods for Comparison</head><p>As discussed in Section 2, a common approach to plane detection is to use geometric cues such as vanishing points and junction features. However, such methods all make strong assumptions on the scene geometry, e.g., a "box"-like model for indoor scenes or a "vertical-ground" configuration for outdoor scenes. They would fail when these assumptions are violated, as in the case of SYNTHIA and Cityscapes datasets. Thus, we do not compare to these methods. Instead, we compare our method to the following appearance-based methods:</p><p>Depth + Multi-model Fitting: For this approach, we first train a deep neural network to predict pixel-level depth from a single image. We directly adopt the DispNet architecture <ref type="bibr" target="#b24">[25]</ref> and train it from scratch with ground truth depth data. Following recent work on depth prediction <ref type="bibr" target="#b18">[19]</ref>, we minimize the berHu loss during training.</p><p>To find 3D planes, we have then applied two different multi-model fitting algorithms, namely J-Linkage <ref type="bibr" target="#b30">[31]</ref> and RansaCov <ref type="bibr" target="#b23">[24]</ref>, on the 3D points derived from the predicted depth map. We call the corresponding methods Depth + J-Linkage and Depth + RansaCov, respectively. For fair comparison, we only keep the top-5 planes detected by each method. As mentioned earlier, a key parameter in these methods is the distance threshold ǫ. We favor them by running J-Linkage or RansaCov multiple times with various values of ǫ and retaining the best results. Geometric Context (GC) <ref type="bibr" target="#b15">[16]</ref>: This method uses a number of hand-crafted local image features to predict discrete surface layout labels. Specifically, it trains decision tree classifiers to label the image into three main geometric classes {support, vertical, sky}, and further divide the "vertical" class into five subclasses {left, center, right, porous, solid}. Among these labels, we consider the "support" class and "left", "center", "right" subclasses as four different planes, and the rest as non-planar.</p><p>To retrain their classifiers using our training data, we translate the labels in SYNTHIA dataset into theirs <ref type="bibr" target="#b4">5</ref> and use the source code provided by the authors <ref type="bibr" target="#b5">6</ref> . We found that this yields better performance on our testing set than the pretrained classifiers provided by the authors. We do not include this method in the experiment on Cityscapes dataset because it is difficult to determine the orientation of the vertical structures from the noisy depth maps.</p><p>Finally, we note that there is another closely related work <ref type="bibr" target="#b10">[11]</ref>, which also detects 3D planes from a single image. Unfortunately, the source code needed to train this method on our datasets is currently unavailable. And it is reported in <ref type="bibr" target="#b10">[11]</ref> that its performance on plane detection is on par with that of GC. Thus, we decided to compare our method to GC instead.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Experiment Results</head><p>Plane segmentation. <ref type="figure" target="#fig_4">Fig. 4</ref> shows example plane segmentation results on SYNTHIA dataset. We make several important observations below.</p><p>First, Neither Depth + J-Linkage nor Depth + RansaCov performs well on the test images. In many cases, they fail to recover the individual planar surfaces (except the ground). To understand the reason, we show the 3D point cloud derived from the predicted depth map in <ref type="figure" target="#fig_5">Fig. 5</ref>. As one can see, the point cloud tends to be very noisy, making the task of choosing a proper threshold ǫ in the multi-model fitting algorithm extremely hard, if possible at all -if ǫ is small, it would not be able to tolerate the large noises in the point cloud; if ǫ is large, it would incorrectly merge multiple planes/objects into one cluster. Also, these methods are unable to distinguish planar and non-planar objects due to lack of ability to reason about the scene semantics.</p><p>Second, GC does a relatively good job in identifying major scene categories (e.g., separating the ground, sky from buildings). However, it has difficulty in determining the orientation of vertical structures (e.g., <ref type="figure" target="#fig_4">Fig. 4</ref>, first and fifth rows). This is mainly due to the coarse categorization (left/center/right) used by this method. In complex scenes, such a discrete categorization is often ineffective and ambiguous. Also, recall that GC is unable to distinguish planes that have the same orientation but are at different distances (e.g., <ref type="figure" target="#fig_4">Fig. 4, fourth row)</ref>, not to mention finding the precise 3D plane parameters.  Third, our method successfully detects most prominent planes in the scene, while excluding non-planar objects (e.g., trees, cars, light poles). This is no surprise because our supervised framework implicitly encodes high-level semantic information as it learns from the labeled data provided by humans. Interestingly, one may observe that, in the last row of <ref type="figure" target="#fig_4">Fig. 4</ref>, our method classifiers the unpaved ground next to the road as non-planar. This is because such surfaces are not considered part of the road in the original SYNTHIA labels. <ref type="figure" target="#fig_5">Fig. 5</ref> further shows some piecewise planar 3D models obtained by our method.</p><p>For quantitative evaluation, we use three popular metrics <ref type="bibr" target="#b0">[1]</ref> to compare the plane segmentation maps obtained by an algorithm with the ground truth: Rand index (RI), variation of information (VOI), and segmentation covering (SC). <ref type="table" target="#tab_0">Table 1</ref>(left) compares the performance of all methods on SYNTHIA dataset. As one can see, our method outperforms existing methods by a significant margin w.r.t all evaluation metrics. <ref type="table" target="#tab_0">Table 1</ref>(right) further reports the segmentation accuracies on Cityscapes dataset. We test our method under two settings: (i) directly applying our model trained on SYNTHIA dataset, and (ii) fine-tuning our network on Cityscapes dataset. Again, our method achieves the best performance among all methods. Moreover, fine-tuning on the Cityscapes dataset significantly boost the performance of our network, despite that the provided depth maps are very noisy. Finally, we show example segmentation results on Cityscapes in <ref type="figure" target="#fig_6">Fig. 6</ref>. Depth prediction. To further evaluate the quality of the 3D planes estimated by our method, we compare the depth maps derived from the 3D planes with those obtained via standard depth prediction pipeline (see Section 4.2 for details). Recall that our method outputs a per-pixel probability map S(q). For each pixel q in the test image, we pick the 3D plane with the maximum probability to compute our depth map. We exclude pixels which are considered as "non-planar" by our method, since our network is not designed to make depth predictions in that case.</p><p>As shown in <ref type="table" target="#tab_1">Table 2</ref>, our method achieves competitive results on both datasets, but the accuracies are slightly lower than those of standard depth prediction pipeline. The decrease in accuracy may be partly attributed to that our method is designed to recover large planar structures in the scene, therefore ignores small variations and details in the scene geometry.</p><p>Failure cases. <ref type="figure">Fig. 7</ref> shows typical failure cases of our method, which include occasionally separating one plane into two (first column) or merging multiple planes into one (second column). Interestingly, for the formal case, one can still obtain a decent 3D model <ref type="figure" target="#fig_5">(Fig. 5, last row)</ref>, suggesting opportunities to further refine our results via post-processing. Our method also has problem with curved surfaces (third column).</p><p>Other failures are typically associated with our assumption that there are at most m = 5 planes in the scene. For example, in <ref type="figure">Fig. 7</ref>, fourth column, the building on the right has a large number of facades. And it becomes even more difficult when multiple planes are at great distance (fifth column). We leave adaptively choosing the plane number in our framework for future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>This paper has presented a novel approach to recovering 3D planes from a single image using convolutional neural networks. We have demonstrated how to train the network, without 3D plane annotations, via a novel plane structure-induced loss. In fact, the idea of exploring structure-induced loss to train neural networks is by no means restricted to planes. We plan to generalize the idea to detect other geometric structures, such as rectangles and cuboids.</p><p>Another promising direction for future work would be to improve the generalizability of the networks via unsupervised learning, as suggested by <ref type="bibr" target="#b9">[10]</ref>. For example, it is interesting to probe the possibility of training our network without depth information, which is hard to obtain in many real world applications. Acknowledgement. This work is supported in part by a startup fund from Penn State and a hardware donation from Nvidia.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 .</head><label>1</label><figDesc>Fig. 1. We propose a new, end-to-end trainable deep neural network to recover 3D planes from a single image. (a) Given an input image, the network simultaneously predicts (i) a plane segmentation map that partitions the image into planar surfaces plus non-planar objects, and (ii) the plane parameters {nj} m j=1 in 3D space. (b) With the output of our network, a piecewise planar 3D model of the scene can be easily created.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 2 .</head><label>2</label><figDesc>Fig. 2. Difficulty in obtaining ground truth plane annotations. (a-b): Original image and depth map. (c-d): Plane fitting results generated by J-Linkage with ǫ = 0.5 and ǫ = 2, respectively.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. Plane segmentation results on SYNTHIA. From left to right: Input image; Ground truth; Depth + J-Linkage; Depth + RansaCov; Geometric Context; Ours.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 5 .</head><label>5</label><figDesc>Fig. 5. Comparison of 3D models. First column: Input image. Second and third columns: Model generated by depth prediction. Fourth and fifth columns: Model generated by our method.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Fig. 6 .</head><label>6</label><figDesc>Fig. 6. Plane segmentation results on Cityscapes. From left to right: Input image; Ground truth; Depth + J-Linkage; Depth + RansaCov; Ours (w/o fine-tuning); Ours (w/ fine-tuning).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Plane segmentation results. Left: SYNTHIA. Right: Cityscapes. Method RI VOI SC Depth+J-Linkage 0.825 1.948 0.589 Depth+RansaCov 0.810 2.274 0.550 Geo. Context [16] 0.846 1.626 0.636 Ours 0.925 1.129 0.797Ours (w/o fine-tuning) 0.759 1.834 0.597 Ours (w/ fine-tuning) 0.884 1.239 0.769</figDesc><table>Method 
+RI VOI SC 
+Depth+J-Linkage 
+0.713 2.668 0.450 
+Depth+RansaCov 
+0.705 2.912 0.431 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Depth prediction results. Method Abs Rel Sq Rel RMSE RMSE log δ &lt; 1.25 δ &lt; 1.25 2 δ &lt; 1.25Fig. 7. Failure examples.</figDesc><table>3 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Please refer to supplementary materials for additional experiment results about (i) the choice of plane number and (ii) the effect of semantic labels.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">sky→sky, {road, sidewalk, lane-marking}→support, and the rest→vertical. For the "building" and "fence" classes in the SYNTHIA dataset, we fit 3D planes at different orientations to determine the appropriate subclass label (i.e., left/center/right). 6 http://dhoiem.cs.illinois.edu/</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Contour detection and hierarchical image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="898" to="916" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Segnet: A deep convolutional encoder-decoder architecture for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2481" to="2495" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Fast automatic single-view 3-d reconstruction of urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Barinova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Konushin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yakubenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Konushin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="100" to="113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">The cityscapes dataset for semantic urban scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cordts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Rehfeld</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enzweiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3213" to="3223" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Delay: Robust spatial layout estimation for cluttered indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dasgupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="616" to="624" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Automatic single-image 3d reconstructions of indoor manhattan world scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Delage</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="305" to="321" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Depth map prediction from a single image using a multi-scale deep network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Puhrsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS. pp</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2366" to="2374" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Data-driven 3d primitives for single image understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3392" to="3399" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Unfolding an indoor origami world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV. pp</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="687" to="702" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Unsupervised CNN for single view depth estimation: Geometry to the rescue</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Garg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">G V</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Carneiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">D</forename><surname>Reid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="740" to="756" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Recognising planes in a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Haines</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Calway</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1849" to="1861" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Bottom-up/top-down image parsing by attribute graph grammar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Zhu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="1778" to="1785" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Multiple View Geometry in Computer Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2000" />
+			<publisher>Cambridge University Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Recovering the spatial layout of cluttered rooms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Forsyth</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1849" to="1856" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Thinking inside the box: Using appearance models and context based on room geometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Forsyth</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="224" to="237" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Recovering surface layout from an image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">75</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="151" to="172" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<idno>CoRR abs/1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Discriminatively trained dense surface normal estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zeisl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV. pp</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="468" to="484" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Deeper depth prediction with fully convolutional residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laina</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rupprecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Belagiannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tombari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="239" to="248" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Roomnet: End-toend room layout estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="4875" to="4884" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Geometric reasoning for single image structure recovery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="2136" to="2143" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Planenet: Piece-wise planar reconstruction from a single rgb image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ceylan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Yumer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3431" to="3440" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Multiple models fitting as a set coverage problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Magri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fusiello</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3318" to="3326" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">A large dataset to train convolutional networks for disparity, optical flow, and scene flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Häusser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4040" to="4048" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Detection and matching of rectilinear structures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Micusík</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wildenauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kosecka</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Towards detection of orthogonal planes in monocular images of indoor environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Micusík</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wildenauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vincze</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA. pp</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="999" to="1004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Manhattan junction catalogue for spatial reasoning of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramalingam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Pillai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taguchi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3065" to="3072" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">The SYNTHIA dataset: A large collection of synthetic images for semantic segmentation of urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sellart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Materzynska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vázquez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>López</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR. pp</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3234" to="3243" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Make3d: Learning 3d scene structure from a single still image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="824" to="840" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Robust multiple structures estimation with j-linkage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Toldo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fusiello</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV. pp</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="537" to="547" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">On the role of structure in vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Witkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Tenenbaum</surname></persName>
+		</author>
+		<editor>Beck, J., Hope, B., Rosenfeld, A.</editor>
+		<imprint>
+			<date type="published" when="1983" />
+			<publisher>Academic Press</publisher>
+			<biblScope unit="page" from="481" to="543" />
+		</imprint>
+	</monogr>
+	<note>Human and Machine Vision</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Localizing 3d cuboids in single-view images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS. pp</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="755" to="763" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Efficient 3D room shape recovery from a single panorama</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

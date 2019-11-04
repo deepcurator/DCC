@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:25+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Fast Algorithms for Convolutional Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Lavin</surname></persName>
+							<email>alavin@acm.org</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Nervana Systems</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Gray</surname></persName>
+							<email>sgray@nervanasys.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Nervana Systems</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Fast Algorithms for Convolutional Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Deep convolutional neural networks take GPU- </p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Deep convolutional neural networks (convnets) achieve state of the art results on image recognition problems <ref type="bibr" target="#b10">[12]</ref> <ref type="bibr" target="#b6">[8]</ref>. The networks take several days of GPU time to train and require significant compute resources during classification as well. Larger data sets and models lead to better accuracy but also increase computation time. Therefore progress in deep neural networks is limited by how fast the networks can be computed.</p><p>Likewise the application of convnets to low latency inference problems, such as pedestrian detection in self driving car video imagery, is limited by how fast a small set of images, possibly a single image, can be classified.</p><p>Distributed training of convnets can be achieved by partitioning each batch of examples across the nodes of a cluster and accumulating weight updates across the nodes. A large batch size adversely affects convergence of the network, so the minimum batch size that can be computed efficiently places an upper limit on cluster size <ref type="bibr" target="#b7">[9,</ref><ref type="bibr" target="#b5">7]</ref>.</p><p>State of the art convnet architectures for image recognition use deep networks of 3 × 3 convolutional layers, because they achieve better accuracy with fewer weights than shallow networks with larger filters <ref type="bibr" target="#b10">[12,</ref><ref type="bibr" target="#b6">8]</ref>.</p><p>Therefore there is a strong need for fast convnet algorithms for small batch sizes and small filters. However conventional convnet libraries require large batch sizes and large filters for fast operation.</p><p>This paper introduces a new class of fast algorithms for convolutional neural networks based on the minimal filtering algorithms discovered by Toom <ref type="bibr" target="#b12">[14]</ref> and Cook <ref type="bibr" target="#b2">[4]</ref> and generalized by Winograd <ref type="bibr" target="#b14">[16]</ref>. The algorithms can reduce the arithmetic complexity of a convnet layer by up to a factor of 4 compared to direct convolution. Almost all of the arithmetic is performed by dense matrix multiplies of sufficient dimensions to be computed efficiently, even when the batch size is very small. The memory requirements are also light compared to the conventional FFT convolution algorithm. These factors make practical implementations possible. Our implementation for NVIDIA Maxwell GPUs achieves state of the art throughput for all batch sizes measured, from 1 to 64, while using at most 16MB of workspace memory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>The FFT and convolution theorem have been used to reduce the arithmetic complexity of convnet layers, first by Mathieu et al. <ref type="bibr" target="#b9">[11]</ref>, then refined by Vasilache et al. <ref type="bibr" target="#b13">[15]</ref>, and then implemented in the NVIDIA cuDNN library [1].</p><p>The Strassen algorithm for fast matrix multiplication <ref type="bibr" target="#b11">[13]</ref> was used by Cong and Xiao <ref type="bibr" target="#b1">[3]</ref> to reduce the number of convolutions in a convnet layer, thereby reducing its total arithmetic complexity. The authors also suggested that more techniques from arithmetic complexity theory might be applicable to convnets.</p><p>Various approaches have been attempted to reduce the complexity of convnets by quantizing or otherwise approximating the convolutional layer. We consider these approaches as orthogonal and complementary to those that exploit algebraic structure, and therefore declare them outside the scope of this paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Convolutional Neural Networks</head><p>A convnet layer correlates a bank of K filters with C channels and size R × S against a minibatch of N images with C channels and size H ×W . We denote filter elements as G k,c,u,v and image elements as D i,c,x,y .</p><p>The computation of a single convnet layer output Y i,k,x,y is given by the formula:</p><formula xml:id="formula_0">Y i,k,x,y = C c=1 R v=1 S u=1 D i,c,x+u,y+v G k,c,u,v<label>(1)</label></formula><p>and we can write the output of an entire image/filter pair as</p><formula xml:id="formula_1">Y i,k = C c=1 D i,c * G k,c<label>(2)</label></formula><p>where * denotes 2D correlation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Fast Algorithms</head><p>It has been known since at least 1980 that the minimal filtering algorithm for computing m outputs with an r-tap FIR filter, which we call F (m, r), requires</p><formula xml:id="formula_2">µ(F (m, r)) = m + r − 1<label>(3)</label></formula><p>multiplications <ref type="bibr">[16, p. 39]</ref>. Also, we can nest minimal 1D algorithms F (m, r) and F (n, s) to form minimal 2D algorithms for computing m × n outputs with an r × s filter, which we call F (m × n, r × s). These require</p><formula xml:id="formula_3">µ(F (m × n, r × s)) = µ(F (m, r))µ(F (n, s)) = (m + r − 1)(n + s − 1)<label>(4)</label></formula><p>multiplications <ref type="bibr" target="#b15">[17]</ref>. We can continue to nest 1D algorithms to form algorithms for multi-dimensional FIR filters. It is interesting to note that in 1D, 2D, and multidimensions, the minimal algorithm requires a number of multiplications equal to the number of inputs. In other words, to compute F (m, r) we must access an interval of m + r − 1 data values, and to compute F (m × n, r × s) we must access a tile of (m + r − 1) × (n + s − 1) data values. Therefore the minimal filtering algorithm requires one multiplication per input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">F(2x2,3x3)</head><p>The standard algorithm for F (2, 3) uses 2 × 3 = 6 multiplications. Winograd <ref type="bibr">[16, p. 43]</ref> documented the following minimal algorithm:</p><formula xml:id="formula_4">F (2, 3) = d 0 d 1 d 2 d 1 d 2 d 3   g 0 g 1 g 2   = m 1 + m 2 + m 3 m 2 − m 3 − m 4<label>(5)</label></formula><p>where</p><formula xml:id="formula_5">m 1 = (d 0 − d 2 )g 0 m 4 = (d 1 − d 3 )g 2 m 2 = (d 1 + d 2 ) g 0 + g 1 + g 2 2 m 3 = (d 2 − d 1 ) g 0 − g 1 + g 2 2</formula><p>This algorithm uses just 4 multiplications and is therefore minimal by the formula µ(F (2, 3)) = 2 + 3 − 1 = 4. It also uses 4 additions involving the data, 3 additions and 2 multiplications by a constant involving the filter (the sum g0 + g2 can be computed just once), and 4 additions to reduce the products to the final result.</p><p>Fast filtering algorithms can be written in matrix form as:</p><formula xml:id="formula_6">Y = A T (Gg) ⊙ (B T d)<label>(6)</label></formula><p>where ⊙ indicates element-wise multiplication. For F (2, 3), the matrices are:</p><formula xml:id="formula_7">B T =     1 0 −1 0 0 1 1 0 0 −1 1 0 0 1 0 −1     G =     1 0 0 1 2 1 2 1 2 1 2 − 1 2 1 2 0 0 1     A T = 1 1 1 0 0 1 −1 −1 g = g 0 g 1 g 2 T d = d 0 d 1 d 2 d 3 T<label>(7)</label></formula><p>A minimal 1D algorithm F (m, r) is nested with itself to obtain a minimal 2D algorithm, F (m × m, r × r) like so:</p><formula xml:id="formula_8">Y = A T [GgG T ] ⊙ [B T dB] A<label>(8)</label></formula><p>where now g is an r × r filter and d is an (m + r − 1) × (m + r − 1) image tile. The nesting technique can be generalized for non-square filters and outputs, F (m × n, r × s), by nesting an algorithm for F (m, r) with an algorithm for F (n, s). F (2 × 2, 3 × 3) uses 4 × 4 = 16 multiplications, whereas the standard algorithm uses 2 × 2 × 3 × 3 = 36. This is an arithmetic complexity reduction of Algorithms for F (m × m, r × r) can be used to compute convnet layers with r × r kernels. Each image channel is divided into tiles of size (m + r − 1) × (m + r − 1), with r − 1 elements of overlap between neighboring tiles, yielding P = ⌈H/m⌉⌈W/m⌉ tiles per channel, C. F (m × m, r × r) is then computed for each tile and filter combination in each channel, and the results are summed over all channels.</p><p>Substituting U = GgG T and V = B T dB, we have:</p><formula xml:id="formula_9">Y = A T U ⊙ V A<label>(9)</label></formula><p>Labeling tile coordinates as ( x, y), we rewrite the convnet layer formula (2) for a single image i, filter k, and tile coordinate ( x, y) as:</p><formula xml:id="formula_10">Y i,k, x, y = C c=1 D i,c, x, y * G k,c = C c=1 A T U k,c ⊙ V c,i, x, y A = A T C c=1 U k,c ⊙ V c,i, x, y A<label>(10)</label></formula><p>Thus we can reduce over C channels in transform space, and only then apply the inverse transform A to the sum. This amortizes the cost of the inverse transform over the number of channels.</p><p>We examine the sum</p><formula xml:id="formula_11">M k,i, x, y = C c=1 U k,c ⊙ V c,i, x, y<label>(11)</label></formula><p>and simplify the notation by collapsing the image/tile coordinates (i, x, y) down to a single dimension, b. We also label each component of the element-wise multiplication separately, as (ξ, ν), yielding:</p><formula xml:id="formula_12">M (ξ,ν) k,b = C c=1 U (ξ,ν) k,c V (ξ,ν) c,b<label>(12)</label></formula><p>This equation is just a matrix multiplication, so we can write:</p><formula xml:id="formula_13">M (ξ,ν) = U (ξ,ν) V (ξ,ν)<label>(13)</label></formula><p>Matrix multiply has efficient implementations on CPU, GPU, and FPGA platforms, owing to its high computational intensity. Thus we have arrived at the practical implementation for the fast algorithm listed in Algorithm 1.</p><p>Winograd documented a technique for generating the minimal filtering algorithm F (m, r) for any choice of m and r. The construction uses the Chinese remainder theorem to produce a minimal algorithm for linear convolution, which is equivalent to polynomial multiplication, then transposes the linear convolution algorithm to yield a minimal filtering algorithm. The reader is referred to Winograd's seminal book <ref type="bibr" target="#b14">[16]</ref>, or Blahut's book <ref type="bibr" target="#b0">[2]</ref> for a modern treatment of the subject. We provide derivations of the specific algorithms used in this paper in the supplementary material.</p><p>Algorithm 1 Compute Convnet Layer with Winograd Minimal Filtering Algorithm F (m × m, r × r) P = N ⌈H/m⌉⌈W/m⌉ is the number of image tiles. α = m + r − 1 is the input tile size. Neighboring tiles overlap by r − 1.</p><formula xml:id="formula_14">d c,b ∈ R α×α is input tile b in channel c. g k,c ∈ R r×r is filter k in channel c. G, B</formula><p>T , and A T are filter, data, and inverse transforms.</p><formula xml:id="formula_15">Y k,b ∈ R m×m is output tile b in filter k. for k = 0 to K do for c = 0 to C do u = Gg k,c G T ∈ R α×α Scatter u to matrices U: U (ξ,ν) k,c = u ξ,ν for b = 0 to P do for c = 0 to C do v = B T d c,b B ∈ R α×α Scatter v to matrices V: V (ξ,ν) c,b = v ξ,ν for ξ = 0 to α do for ν = 0 to α do M (ξ,ν) = U (ξ,ν) V (ξ,ν) for k = 0 to K do for b = 0 to P do Gather m from matrices M: m ξ,ν = M (ξ,ν) k,b Y k,b = A T mA</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">F(3x3,2x2)</head><p>Training a network using stochastic gradient descent requires computation of the gradients with respect to the inputs and weights. For a convnet layer, the gradient with respect to the inputs is a convolution of the next layer's backpropagated error, of dimension N × K × H × W , with a flipped version of the layer's R × S filters. Therefore it can be computed using the same algorithm that is used for forward propagation.</p><p>The gradient with respect to the weights is a convolution of the layer inputs with the backpropagated errors, producing R × S outputs per filter and channel. Therefore we need to compute the convolution F (R×S, H ×W ), which is impractical because H ×W is much too large for our fast algorithms. Instead we decompose this convolution into a direct sum of smaller convolutions, for example F (3 × 3, 2 × 2). Here the algorithm's 4 × 4 tiles are overlapped by 2 pixels in each dimension, and the 3 × 3 outputs are summed over all tiles to form F (3 × 3, H × W ).</p><p>The transforms for F (3 × 3, 2 × 2) are given by:</p><formula xml:id="formula_16">B T =     1 0 −1 0 0 1 1 0 0 −1 1 0 0 −1 0 1     A T =   1 1 1 0 0 1 −1 0 0 1 1 1   , G =     1 0 1 2 1 2 1 2 − 1 2 0 1    <label>(14)</label></formula><p>With (3 + 2 − 1) 2 = 16 multiplies versus direct convolution's 3 × 3 × 2 × 2 = 36 multiplies, it achieves the same 36/16 = 2.25 arithmetic complexity reduction as the corresponding forward propagation algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">F(4x4,3x3)</head><p>A minimal algorithm for F (4, 3) has the form: </p><formula xml:id="formula_17">B T =         4 0 −5 0 1 0 0 −4 −4 1 1 0 0 4 −4 −1 1 0 0 −2 −1 2 1 0 0 2 −1 −2 1 0 0 4 0 −5 0 1         G =        </formula><formula xml:id="formula_18">        A T =     1 1 1 1 1 0 0 1 −1 2 −2 0 0 1 1 4 4 0 0 1 −1 8 −8 1     (15)</formula><p>The data transform uses 12 floating point instructions, the filter transform uses 8, and the inverse transform uses 10.</p><p>Applying the nesting formula yields a minimal algorithm for F (4 × 4, 3 × 3) that uses 6 × 6 = 36 multiplies, while the standard algorithm uses 4 × 4 × 3 × 3 = 144. This is an arithmetic complexity reduction of 4.</p><p>The 2D data transform uses 12(6 + 6) = 144 floating point instructions, the filter transform uses 8(3 + 6) = 72, and the inverse transform uses 10(6 + 4) = 100.</p><p>The number of additions and constant multiplications required by the minimal Winograd transforms increases quadratically with the tile size <ref type="bibr">[10, p. 211]</ref>. Thus for large tiles, the complexity of the transforms will overwhelm any savings in the number of multiplications.</p><p>The magnitude of the transform matrix elements also increases with increasing tile size. This effectively reduces the numeric accuracy of the computation, so that for large tiles, the transforms cannot be computed accurately <ref type="bibr">[16, p. 28]</ref>.</p><p>Convnets require surprisingly little numeric precision <ref type="bibr" target="#b3">[5,</ref><ref type="bibr" target="#b4">6]</ref>. This implies that we can sacrifice some numeric accuracy in the filtering computation without affecting the accuracy of the convnet. We examine the possibility of F (6 × 6, 3 × 3) in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Fast Fourier Transform</head><p>The Fast Fourier Transform (FFT) can be used to produce a tiled convolution algorithm that has the same form as Algorithm 1. The main difference is that the transform matrices are replaced with FFT and inverse FFT, and point-wise multiplication of complex FFT components yields cyclic convolution. Only m × n components of the (m + r − 1) × (n + s − 1) cyclic convolution are valid, the rest must be discarded, and the tiles must be overlapped by r − 1 and s − 1 in order to recompute the discarded outputs. This technique is referred to as overlap and save <ref type="bibr">[2, p. 195]</ref>.</p><p>The similarity of overlap and save to our approach makes for an easy comparison. With FFT based convolution, the multiply stage still uses 1 multiply per input, but now the operands are complex numbers. Direct multiplication of complex numbers requires 4 real multiplications. Thankfully, a couple of tricks reduce the complexity further.</p><p>The Fourier transform of a real signal has Hermitian symmetry, which reduces the number of unique products in each U ⊙V by almost half. FFT based convnet implementations have exploited this property <ref type="bibr" target="#b9">[11,</ref><ref type="bibr" target="#b13">15]</ref>. Specifically, the discrete Fourier transform of a α × α array of real values can be represented with an array of α × (⌊ Using the standard algorithm for multiplying complex numbers, this equals 4(⌊ α 2 ⌋ + 1)/α &gt; 2 real multiplies per input.</p><p>Another technique, which to our knowledge has not been used in convnets, is to use a fast algorithm to multiply complex numbers with 3 real multiplications <ref type="bibr" target="#b14">[16]</ref>:</p><formula xml:id="formula_19">(x 0 + ix 1 )(y 0 + iy 1 ) = [x 0 y 0 − x 1 y 1 , i(x 0 y 1 + x 1 y 0 )] = [u c v a + u a v c , i(u a v c − u b v b )]<label>(16)</label></formula><p>where An FFT based convnet algorithm can incorporate this by modifying the FFT transforms of the filter and data to output the the real valued matrices (U a , U b , U c ) and (V a , V b , V c ) instead of the complex valued matrices U and V . This adds 2 floating point instructions per output to the filter transform, and 1 to the data transform. It also increases the memory footprint of each matrix by half.</p><formula xml:id="formula_20">u a = x 0 u b = x 0 + x 1 u c = x 1 − x 0 , v a = y 0 v b = y 1 v c = y 0 + y 1 (17) Tile Winograd FFT α ′ β ′ γ ′ δ ′ α ′ β ′ , γ ′ ,</formula><p>Then we can calculate M = U V using 3 calls to a standard real matrix multiply function (e.g. SGEMM):</p><formula xml:id="formula_21">T = U a V c M 1 = −U b V b + T, M 0 = U c V a + T M = (M 0 , iM 1 )<label>(18)</label></formula><p>The accumulation of temporary matrix T is performed using regular SGEMM with β = 1 and C = T , at the cost of adding 2 floating point instructions per output. We can think of these instructions as adding to the inverse transform cost. The temporary matrix T increases memory use by half, so that the total workspace size is approximately twice that of FFT based convolution with direct CGEMM.</p><p>Combining Hermitian symmetry with fast CGEMM gives us a multiplication stage with 3(⌊ α 2 ⌋ + 1)/α &gt; 1.5 real multiplies per input. Recall that the multiply stage of the Winograd algorithms is always 1 real multiply per input. Thus even with fast CGEMM, FFT base convolution must use a significantly larger tile size in order to rival the arithmetic complexity of the Winograd algorithms.</p><p>For the FFT transform itself, we consider the split-radix FFT algorithm, which is the minimal practical FFT algorithm when N is a power of 2 [10, p. 150]. We assume the 2D FFT transform is constructed using row-column composition, and borrow the complexity figures from the DSP Handbook <ref type="bibr">[10,</ref>   <ref type="table">Table 2</ref>. Normalized arithmetic complexity for FFT filtering with fast CGEMM. Fast CGEMM uses 3 real multiplies per complex multiply instead of 4, but has slightly greater transform overhead and uses more memory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Arithmetic Complexity Analysis</head><p>In our model of fast convnets, the arithmetic complexity of the multiplication stage is:</p><formula xml:id="formula_22">X = N ⌈H/m⌉⌈W/n⌉CK(m + R − 1)(n + S − 1) (19)</formula><p>When m = n = 1, the formula equals the arithmetic complexity of direct convolution. Therefore direct convolution is the minimal algorithm for F (1 × 1, R × S)</p><p>Although our analysis employs minimal convolutions, the convnet layer itself is still not minimal because it performs more convolutions than are strictly necessary. We could reduce the number of convolutions by employing Strassen recursions as in <ref type="bibr" target="#b1">[3]</ref>, but each recursion reduces all 3 dimensions of our matrices by half while providing only an <ref type="bibr">8 7</ref> reduction in arithmetic complexity. The matrix multiplications cannot be computed efficiently if C or K is too small. Fast convolution alone provides a 2.25 or larger arithmetic complexity reduction while shrinking only the largest dimension of the matrix, P . Still, for layers with large C, K, and P , it may be worthwhile to perform Strassen recursions in addition to fast convolution. We leave this as an area for further research.</p><p>In order to simplify the equations, we will henceforth assume that W/m and H/n have no remainders. We also assume square filters and blocks, R = S and m = n.</p><p>The multiplication complexity can be rewritten as:</p><formula xml:id="formula_23">X = (m + R − 1) 2 /m 2 N HW CK = α ′ N HW CK<label>(20)</label></formula><p>where α = (m + R − 1)</p><formula xml:id="formula_24">2 and α ′ = α/m 2</formula><p>The total arithmetic complexities of the data, filter, and inverse transforms can be written as:</p><formula xml:id="formula_25">T (D) = β/m 2 N HW C T (F ) = γCK T (I) = δ/m 2 N HW K (21)</formula><p>where β, γ, and δ are the number of floating point instructions used by the corresponding transforms for single tiles. Dividing the complexity of each transform by X yields its relative complexity:</p><formula xml:id="formula_26">T (D)/X = β/(Kα 2 ) = β ′ /K T (F )/X = γ/(N HW α 2 /m 2 ) = γ/(P α 2 ) = γ ′ /P T (I)/X = δ/(Cα 2 ) = δ ′ /C<label>(22)</label></formula><p>We call β ′ , γ ′ , and δ ′ the normalized arithmetic complexities of the data, filter, and inverse transforms, respectively. P = N HW/m 2 is the number of tiles per channel. Adding the terms for each stage gives the total arithmetic complexity of the convnet layer:</p><formula xml:id="formula_27">L = α ′ (1 + β ′ /K + γ ′ /P + δ ′ /C)N HW CK<label>(23)</label></formula><p>In order to achieve a large speedup, the multiplication complexity α ′ must be as small as possible, and the transform complexities β ′ , γ ′ , and δ ′ must each be small compared with K, P , and C, respectively.</p><p>For direct convolution,</p><formula xml:id="formula_28">α ′ = α 2 = R 2 and β ′ = γ ′ = δ ′ = 0.</formula><p>Therefore the maximum speedup of a fast algorithm versus direct convolution is R 2 /α ′ . We list the normalized transform complexity for different tile sizes and algorithms in <ref type="table">Tables 1 and 2</ref>. Due to its similarity to our approach, FFT based convolution complexity can also be measured with Equation 23.</p><p>FFT based convnet layers with direct CGEMM must use tile size at least 64 × 64 to equal the multiplication stage complexity of Winograd F (4 × 4, 3 × 3) and its 6 × 6 tile, but then it incurs much greater transform overhead. Also a 64 × 64 tile will waste computation on many unwanted pixels for images with sizes that are not close to a multiple of 62 × 62. Even for moderate size layers, a moderate to large minibatch must be used, or there will be too few tiles to compute the CGEMM efficiently. Finally, the memory used by a single transformed filter channel is 64 × 64 = 4096 units, which is a large expansion of the 3 × 3 = 9 unit filter. The 6x6 tile of F (4 × 4) expands the same filter to 6 × 6 = 36 units.</p><p>FFT based convnet layers with fast CGEMM can be much more competitive with Winograd algorithms. They have multiplication stage parity with tile size 16, and reasonable transform complexity. Also tile size 16 generates a reasonably large number of tiles with large convnet layers or moderate batch size.</p><p>Even with fast CGEMM, the larger tile size compared to Winograd means FFT based convnet implementations must have a large memory workspace to hold transformed data. A decent amount of transformed data must be held in order to amortize transform cost and to generate matrices with large enough dimensions so that the multiply stage is efficient. This is problematic for current GPUs, which have a limited amount of on chip memory. CPUs have large caches and might therefore compute FFT based convolution more efficiently.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">GPU Implementation</head><p>We implemented F <ref type="figure" target="#fig_2">(2 × 2, 3 × 3)</ref> for NVIDIA Maxwell GPUs and tested on the NVIDIA Titan X model.</p><p>The small 4 × 4 tile size and light weight transforms of F (2 × 2, 3 × 3) make possible a fused implementation of the algorithm stages, where the the data and filter transform, 16 batched matrix multiplies (GEMMs), and inverse transform are all computed in the same block. Another resource limit is the instruction cache, which can only fit about 720 instructions. Our main loop is larger than this, but aligning the start of the loop with the 128 byte instruction cache-line boundary helps mitigate the cost of a cache miss.</p><p>The 16 batched GEMMs compute 32×32 outputs, which enables us to fit the workspace in the registers and shared memory of a single block and still have 2 active blocks per SM for latency hiding. Zero padding is implicit through use of predicates. If the predicate deselects a global image load, the zero value is loaded with a dual issued I2I instruction.</p><p>Image data is stored in CHWN order to facilitate contiguous and aligned memory loads, significantly reducing over-fetch. We employ a "super blocking" strategy to load 32 tiles of size 4 × 4 from a configurable number of images, rows, and columns. For N &gt;= 32, we load tiles from 32 separate images. For N &lt; 32, we load a super block of X × Y = 32/N tiles per image. This strategy facilitates efficient loads with small batch sizes, as the W × N dimensions of the input data are contiguous in memory. Furthermore, the 2 pixel overlap between adjacent tiles causes high L1 cache hit rates when using several tiles in a super block.</p><p>We also employ L2 cache blocking to increase the re-use of overlapping blocks. Since the number of image tiles is typically much larger than the number of filters, our block mapping iterates over a group of up to 128 filters in the inner loop, and then iterates over all image tiles in the second loop. All channels of the filter group fit in L2 cache, so each filter will only be loaded once from DDR memory, and each image tile will be loaded ⌈K/128⌉ times as we iterate over the filter groups. This strategy reduces DDR memory bandwidth by almost half.</p><p>We implemented a version of our kernel that loads fp16 data, which decreases global memory bandwidth. We also implemented a variant that we call "FX" that runs a filter transform kernel first and stores the result in a workspace buffer. The convolution kernel loads transformed filter values from the workspace as needed. The size of the workspace is only 16KC units of memory, which equals just 16MB when K = C = 512 and data is fp32.  <ref type="table">Table 3</ref>. Convolution layers of VGG network E. All layers uses 3 × 3 filters. Depth indicates the number of times a given layer shape occurs in the network. GFLOPs is weighted by depth and assumes N=1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Experiments</head><p>We ran accuracy and speed experiments with VGG Network E <ref type="bibr" target="#b10">[12]</ref>. This is a deep network that uses 3×3 filters exclusively in the convolution layers, which are summarized in <ref type="table">Table 3</ref>.</p><p>We tested the accuracy of our fast algorithms with both single precision (fp32) and half precision (fp16) data and filters. In all tests we used fp32 arithmetic instructions. We used random data and filters from the uniform distribution [−1, 1] and measured absolute element error. Ground truth was computed by direct convolution using a double precision accumulator for reductions.</p><p>We measured the speed of our GPU implementation of F (2 × 2, 3 × 3) and compared with cuDNN v3 [1] on a superclocked NVIDIA Titan X GPU. We disabled boost clock and observed a maximum clock rate of 1126MHz. The GPU has 3072 cores, yielding a device peak throughput of 2 × 3072 × 1126 = 6.96 TFLOPS.</p><p>Speed for a given layer was calculated by dividing the number of GFLOPs of computation required by direct convolution, as tabulated in 3, by the run time in milliseconds to yield Effective TFLOPS. The reduction of arithmetic complexity allows fast algorithms to have Effective TFLOPS that can exceed device peak throughput.</p><p>Total GFLOPs and run time were calculated by weighting the GFLOPs and run time for each layer by its depth, and total throughput was calculated as the ratio of the two. <ref type="table" target="#tab_4">Table 4</ref> shows the numeric accuracy of the different convolution layer algorithms tested with single precision (fp32) and half precision (fp16) input data and filters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8.">Results</head><p>F (2 × 2, 3 × 3) is actually slightly more accurate than direct convolution. Its simple transforms do not lose much precision, and its multiplication stage performs a reduction over C channels, rather than the RSC filter elements reduced by direct convolution. F (4 × 4, 3 × 3) has a larger error, but it is still more accurate than direct convolution with fp16 data.</p><p>All tested algorithms are equally accurate with fp16 data. Here accuracy is limited by the precision of the inputs. Because direct convolution is accurate enough for training and inference with low precision data <ref type="bibr" target="#b3">[5,</ref><ref type="bibr" target="#b4">6]</ref>, we conclude that F (4 × 4, 3 × 3) is too. <ref type="table" target="#tab_5">Table 5</ref> and <ref type="table">Table 6</ref> show the total throughput for VGG Network E layers for cuDNN and our F (2×2, 3×3) implementation for fp32 and fp16 data for different batch sizes.</p><p>For fp32 data, F (2 × 2, 3 × 3) is 1.48X at N = 64 and 2.26X as fast at N = 1. The throughput at N = 16 is 9.49 TFLOPS. For fp16 data, F (2×2, 3×3) extends its lead over cuDNN, recording 10.28 TFLOPS throughput for N = 64. N = 8 performance is still very good at 9.57 TFLOPS. <ref type="figure" target="#fig_3">Figure 1</ref> shows throughput by layer. Hatch marks indicate the layers where cuDNN used the FFT algorithm, otherwise direct convolution was used. For F (2 × 2, 3 × 3), hatch marks indicate that the external filter transform (FX) was used, otherwise the fused transform was faster.</p><p>cuDNN's FFT algorithm performs poorly for intermediate values of N , under 2 TFLOPS. This suggests that the FFT convolution implementation either uses large tiles, or possibly just a single tile per image, as in <ref type="bibr" target="#b13">[15]</ref>, which leads to inefficient multiplication stages unless N is large. At large N , cuDNN FFT performs much better, but stays well under 8 TFLOPS.</p><p>F (2×2, 3×3) performs better than cuDNN at every layer and batch size, except layer conv1.1, which contributes less than 0.5% of the total network computation.</p><p>In general, we found that the FX variant of our implementation performed best unless the number of filters and channels was very large. Computing the filter transform is heavily memory bound, therefore transforming a larger filter bank decreases computational efficiency.</p><p>The worst F (2 × 2, 3 × 3) performance occurs for the 14×14 layers when N = 1. In this case the 8×4 superblock runs over the image boundary and computes unwanted pixels. Throughput on this layer configuration is still over 5 TFLOPS, where cuDNN performance is just 1.6 TFLOPS.</p><p>cuDNN FFT uses a global memory workspace up to 2.6 GB in our experiments. By contrast, our fused F (2 × 2, 3 × 3) implementation does not use any global workspace, and the FX variant uses no more than 16 MB.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="9.">Conclusion</head><p>We introduced a new class of fast algorithms for convolutional neural networks based on Winograd's minimial filtering algorithms. These algorithms excel with small filters and minibatches due to the fact that they compute minimal    <ref type="table">Table 6</ref>. cuDNN versus F (2 × 2, 3 × 3) performance on VGG Network E with fp16 data.</p><p>arithmetic complexity convolution over small tiles of the input data. The use of small tiles also reduces the size of the algorithm workspace, which can lead to more efficient implementations. For these reasons, our GPU implementation of the F (2 × 2, 3 × 3) Winograd algorithm is faster than NVIDIA cuDNN v3 FFT on all layers of the VGG network and batch sizes 1 to 64. We expect to increase performance again when F (4 × 4, 3 × 3) is implemented.  </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>The data transform uses 32 additions, the filter transform uses 28 floating point instructions, and the inverse transform uses 24 additions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>α 2 ⌋</head><label>2</label><figDesc>+ 1) complex values. Furthermore U H V H = (U V ) H , so the products of the missing values can be reconstructed simply by taking the complex conjugate of the computed values. Thus the multiply stage of the FFT convnet algorithm with tile size α = m + r − 1 requires N ⌈</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. VGG net Effective TFLOPS vs. batch size for cuDNN and F (2 × 2, 3 × 3) on a 6.96 TFLOPS NVIDIA Titan X GPU.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>pp. 173,175] for Table 1.</figDesc><table>Tile 
+FFT with Fast CGEMM 
+α 
+
+′ 
+
+β 
+
+′ 
+
+γ 
+
+′ 
+
+δ 
+
+′ 
+
+8 
+3.33 
+3.77 
+4.30 
+4.30 
+16 
+2.20 
+6.23 
+6.82 
+6.82 
+32 
+1.81 
+8.94 
+9.57 
+9.57 
+64 
+1.65 11.72 12.36 12.36 
+128 1.57 14.48 15.14 15.14 
+256 1.54 17.22 17.88 17.88 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 4 .</head><label>4</label><figDesc>Maximum element error on VGG network layers. With fp32 data, F (2×2, 3×3) is more accurate than direct convolution. With fp16 data, all algorithms are equally accurate.</figDesc><table>N 
+cuDNN 
+F(2x2,3x3) 
+Speedup 
+msec TFLOPS 
+msec TFLOPS 
+1 
+12.52 
+3.12 
+5.55 
+7.03 
+2.26X 
+2 
+20.36 
+3.83 
+9.89 
+7.89 
+2.06X 
+4 104.70 
+1.49 
+17.72 
+8.81 
+5.91X 
+8 241.21 
+1.29 
+33.11 
+9.43 
+7.28X 
+16 203.09 
+3.07 
+65.79 
+9.49 
+3.09X 
+32 237.05 
+5.27 132.36 
+9.43 
+1.79X 
+64 394.05 
+6.34 266.48 
+9.37 
+1.48X 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 5 .</head><label>5</label><figDesc>cuDNN versus F (2 × 2, 3 × 3) performance on VGG Network E with fp32 data. Throughput is measured in Effective TFLOPS, the ratio of direct algorithm GFLOPs to run time.</figDesc><table>N 
+cuDNN 
+F(2x2,3x3) 
+Speedup 
+msec TFLOPS 
+msec TFLOPS 
+1 
+14.58 
+2.68 
+5.53 
+7.06 
+2.64X 
+2 
+20.94 
+3.73 
+9.83 
+7.94 
+2.13X 
+4 104.19 
+1.50 
+17.50 
+8.92 
+5.95X 
+8 241.87 
+1.29 
+32.61 
+9.57 
+7.42X 
+16 204.01 
+3.06 
+62.93 
+9.92 
+3.24X 
+32 236.13 
+5.29 123.12 
+10.14 
+1.92X 
+64 395.93 
+6.31 242.98 
+10.28 
+1.63X 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head></head><label></label><figDesc>Implementations of our algorithms are available as open source in the Neon machine learning framework at https://github.com/NervanaSystems/neon</figDesc><table>0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv1.1 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv1.2 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv2.1 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv2.2 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+Effective 
+
+TFLOPS 
+vgg.conv3.1 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv3.2 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv4.1 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv4.2 
+
+1 
+2 
+4 
+8 
+16 
+32 
+64 
+
+Batch Size 
+
+0 
+2 
+4 
+6 
+8 
+10 
+12 
+
+vgg.conv5 
+
+cuDNN 
+cuDNN FFT 
+cudNN fp16 
+cudNN FFT fp16 
+
+F(2x2,3x3) 
+F(2x2,3x3) FX 
+F(2x2,3x3) fp16 
+F(2x2,3x3) FX fp16 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Fast algorithms for signal processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blahut</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>Cambridge University Press</publisher>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Minimizing computation in convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Cong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bingjun</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Artificial Neural Networks and Machine Learning-ICANN 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">On the minimum computation time for multiplication</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sa Cook</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Doctoral diss., Harvard U</title>
+		<meeting><address><addrLine>Cambridge, Mass</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="1966" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Low precision arithmetic for deep learning. CoRR, abs/1412</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Courbariaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeanpierre</forename><surname>David</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">7024</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Deep learning with limited numerical precision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Suyog</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ankur</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kailash</forename><surname>Gopalakrishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pritish</forename><surname>Narayanan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.02551</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Model accuracy and runtime tradeoff in distributed deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Suyog</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wei</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josh</forename><surname>Milthrope</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.04210</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1404.5997</idno>
+		<title level="m">One weird trick for parallelizing convolutional neural networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">The Digital Signal Processing Handbook. Number v. 2 in Electrical engineering handbook series</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Madisetti</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CRC</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Fast training of convolutional networks through ffts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michaël</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mikael</forename><surname>Henaff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<idno>abs/1312.5851</idno>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Gaussian elimination is not optimal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volker Strassen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Numerische Mathematik</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="354" to="356" />
+			<date type="published" when="1969" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">The complexity of a scheme of functional elements realizing the multiplication of integers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Andrei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Toom</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Soviet Mathematics Doklady</title>
+		<imprint>
+			<date type="published" when="1963" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="714" to="716" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Fast convolutional nets with fbfft: A GPU performance evaluation. CoRR, abs/1412</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Vasilache</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michaël</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Soumith</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Serkan</forename><surname>Piantino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">7580</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Arithmetic complexity of computations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shmuel</forename><surname>Winograd</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1980" />
+			<biblScope unit="volume">33</biblScope>
+			<pubPlace>Siam</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">On multiplication of polynomials modulo a polynomial</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shmuel</forename><surname>Winograd</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Computing</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="225" to="229" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1366 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Decoupled Parallel Backpropagation with Convergence Guarantee</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhouyuan</forename><surname>Huo</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bin</forename><surname>Gu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qian</forename><surname>Yang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Heng</forename><surname>Huang</surname></persName>
+						</author>
+						<title level="a" type="main">Decoupled Parallel Backpropagation with Convergence Guarantee</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Backpropagation algorithm is indispensable for the training of feedforward neural networks. It requires propagating error gradients sequentially from the output layer all the way back to the input layer. The backward locking in backpropagation algorithm constrains us from updating network layers in parallel and fully leveraging the computing resources. Recently, several algorithms have been proposed for breaking the backward locking. However, their performances degrade seriously when networks are deep. In this paper, we propose decoupled parallel backpropagation algorithm for deep learning optimization with convergence guarantee. Firstly, we decouple the backpropagation algorithm using delayed gradients, and show that the backward locking is removed when we split the networks into multiple modules. Then, we utilize decoupled parallel backpropagation in two stochastic methods and prove that our method guarantees convergence to critical points for the non-convex problem. Finally, we perform experiments for training deep convolutional neural networks on benchmark datasets. The experimental results not only confirm our theoretical analysis, but also demonstrate that the proposed method can achieve significant speedup without loss of accuracy.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>We have witnessed a series of breakthroughs in computer vision using deep convolutional neural networks <ref type="bibr" target="#b14">(LeCun et al., 2015)</ref>. Most neural networks are trained using stochastic gradient descent (SGD) or its variants in which the gradients of the networks are computed by backpropagation algorithm <ref type="bibr" target="#b19">(Rumelhart et al., 1988)</ref>. As shown in <ref type="figure" target="#fig_1">Figure 1</ref>, the backpropagation algorithm consists of two processes, the  We split a multilayer feedforward neural network into three modules. Each module is a stack of layers. Backpropagation algorithm requires running forward pass (from 1 to 3) and backward pass (from 4 to 6) in sequential order. For example, module A cannot perform step 6 before receiving δ t A which is an output of step 5 in module B.</p><p>forward pass to compute prediction and the backward pass to compute gradient and update the model. After computing prediction in the forward pass, backpropagation algorithm requires propagating error gradients from the top (output layer) all the way back to the bottom (input layer). Therefore, in the backward pass, all layers, or more generally, modules, of the network are locked until their dependencies have executed.</p><p>The backward locking constrains us from updating models in parallel and fully leveraging the computing resources. It has been shown in practice <ref type="bibr" target="#b13">(Krizhevsky et al., 2012;</ref><ref type="bibr" target="#b20">Simonyan &amp; Zisserman, 2014;</ref><ref type="bibr" target="#b21">Szegedy et al., 2015;</ref><ref type="bibr" target="#b6">He et al., 2016;</ref><ref type="bibr" target="#b8">Huang et al., 2016)</ref> and in theory <ref type="bibr" target="#b5">(Eldan &amp; Shamir, 2016;</ref><ref type="bibr" target="#b23">Telgarsky, 2016;</ref><ref type="bibr" target="#b1">Bengio et al., 2009</ref>) that depth is one of the most critical factors contributing to the success of deep learning. From AlexNet with 8 layers <ref type="bibr" target="#b13">(Krizhevsky et al., 2012)</ref> to ResNet-101 with more than one hundred layers <ref type="bibr" target="#b6">(He et al., 2016)</ref>, the forward and backward time grow from (4.31ms and 9.58ms) to (53.38ms and 103.06ms) when we train the networks on Titan X with the input size of 16×3×224×224 <ref type="bibr" target="#b10">(Johnson, 2017)</ref>. Therefore, parallelizing the backward pass can greatly reduce the training time when the backward time is about twice of the forward time. We can easily split a deep neural network into modules like Figure 1 and distribute them across multiple GPUs. However, because of the backward locking, all GPUs are idle before receiving error gradients from dependent modules in the backward pass.</p><p>There have been several algorithms proposed for breaking the backward locking. For example, <ref type="bibr" target="#b9">(Jaderberg et al., 2016;</ref><ref type="bibr" target="#b4">Czarnecki et al., 2017)</ref> proposed to remove the lockings in backpropagation by employing additional neural networks to approximate error gradients. In the backward pass, all modules use the synthetic gradients to update weights of the model without incurring any delay. <ref type="bibr" target="#b15">(Nøkland, 2016;</ref><ref type="bibr" target="#b0">Balduzzi et al., 2015)</ref> broke the local dependencies between successive layers and made all hidden layers receive error information from the output layer directly. In <ref type="bibr">(CarreiraPerpinan &amp; Wang, 2014;</ref><ref type="bibr" target="#b22">Taylor et al., 2016)</ref>, the authors loosened the exact connections between layers by introducing auxiliary variables. In each layer, they imposed equality constraint between the auxiliary variable and activation, and optimized the new problem using Alternating Direction Method which is easy to parallel. However, for the convolutional neural network, the performances of all above methods are much worse than backpropagation algorithm when the network is deep.</p><p>In this paper, we focus on breaking the backward locking in backpropagtion algorithm for training feedforward neural networks, such that we can update models in parallel without loss of accuracy. The main contributions of our work are as follows:</p><p>• Firstly, we decouple the backpropagation using delayed gradients in Section 3 such that all modules of the network can be updated in parallel without backward locking.</p><p>• Then, we propose two stochastic algorithms using decoupled parallel backpropagation in Section 3 for deep learning optimization.</p><p>• We also provide convergence analysis for the proposed method in Section 4 and prove that it guarantees convergence to critical points for the non-convex problem.</p><p>• Finally, we perform experiments for training deep convolutional neural networks in Section 5, experimental results verifying that the proposed method can significantly speed up the training without loss of accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Backgrounds</head><p>We begin with a brief overview of the backpropagation algorithm for the optimization of neural networks. Suppose that we want to train a feedforward neural network with L layers, each layer taking an input h l−1 and producing an activation h l = F l (h l−1 ; w l ) with weight w l . Letting d be the dimension of weights in the network, we have</p><formula xml:id="formula_0">w = [w 1 , w 2 , ..., w L ] ∈ R d .</formula><p>Thus, the output of the network can be represented as h L = F (h 0 ; w), where h 0 denotes the input data x. Taking a loss function f and targets y, the training problem is as follows:</p><formula xml:id="formula_1">min w=[w1,...,w L ]</formula><p>f (F (x; w), y).</p><p>(1)</p><p>In the following context, we use f (w) for simplicity.</p><p>Gradients based methods are widely used for deep learning optimization <ref type="bibr" target="#b18">(Robbins &amp; Monro, 1951;</ref><ref type="bibr" target="#b17">Qian, 1999;</ref><ref type="bibr" target="#b7">Hinton et al., 2012;</ref><ref type="bibr" target="#b11">Kingma &amp; Ba, 2014)</ref>. In iteration t, we put a data sample x i(t) into the network, where i(t) denotes the index of the sample. According to stochastic gradient descent (SGD), we update the weights of the network through:</p><formula xml:id="formula_2">w t+1 l = w t l − γ t ∇f l,x i(t) (w t ) l , ∀l ∈ {1, 2, ..., L} (2)</formula><p>where γ t is the stepsize and ∇f l,x i(t) (w t ) ∈ R d is the gradient of the loss function (1) with respect to the weights at layer l and data sample x i(t) , all the coordinates in other than layer l are 0. We always utilize backpropagation algorithm to compute the gradients <ref type="bibr" target="#b19">(Rumelhart et al., 1988)</ref>. The backpropagation algorithm consists of two passes of the network: in the forward pass, the activations of all layers are calculated from l = 1 to L as follows:</p><formula xml:id="formula_3">h t l = F l (h t l−1 ; w l );<label>(3)</label></formula><p>in the backward pass, we apply chain rule for gradients and repeatedly propagate error gradients through the network from the output layer l = L to the input layer l = 1:</p><formula xml:id="formula_4">∂f (w t ) ∂w t l = ∂h t l ∂w t l ∂f (w t ) ∂h t l ,<label>(4)</label></formula><formula xml:id="formula_5">∂f (w t ) ∂h t l−1 = ∂h t l ∂h t l−1 ∂f (w t ) ∂h t l ,<label>(5)</label></formula><p>where we let ∇f l,</p><formula xml:id="formula_6">x i(t) (w t ) = ∂f (w t ) ∂w t l</formula><p>. From equations <ref type="formula" target="#formula_4">(4)</ref> and <ref type="formula" target="#formula_5">(5)</ref>, it is obvious that the computation in layer l is dependent on the error gradient ∂f (w t ) ∂h t l from layer l+1. Therefore, the backward locking constrains all layers from updating before receiving error gradients from the dependent layers. When the network is very deep or distributed across multiple resources, the backward locking is the main bottleneck in the training process.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Decoupled Parallel Backpropagation</head><p>In this section, we propose to decouple the backpropagation algorithm using delayed gradients (DDG). Suppose we split a L-layer feedforward neural network to K modules, such that the weights of the network are divided into K groups. Therefore, we have w = [w G(1) , w G(2) , ..., w G(K) ] where G(k) denotes layer indices in the group k. We split a multilayer feedforward neural network into three modules (A, B and C), where each module is a stack of layers. After executing the forward pass (from 1 to 3) to predict, our proposed method allows all modules to run backward pass (4) using delayed gradients without locking. Particularly, module A can perform the backward pass using the stale error gradient δ </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Backpropagation Using Delayed Gradients</head><p>In iteration t, data sample x i(t) is input to the network. We run the forward pass from module k = 1 to k = K. In each module, we compute the activations in sequential order as equation <ref type="formula" target="#formula_3">(3)</ref>. In the backward pass, all modules except the last one have delayed error gradients in store such that they can execute the backward computation without locking. The last module updates with the up-to-date gradients. In particular, module k keeps the stale error gradient</p><formula xml:id="formula_7">∂f (w t−K+k ) ∂h t−K+k L k ,</formula><p>where L k denotes the last layer in module k. Therefore, the backward computation in module k is as follows:</p><formula xml:id="formula_8">∂f (w t−K+k ) ∂w t−K+k l = ∂h t−K+k l ∂w t−K+k l ∂f (w t−K+k ) ∂h t−K+k l ,<label>(6)</label></formula><formula xml:id="formula_9">∂f (w t−K+k ) ∂h t−K+k l−1 = ∂h t−K+k l ∂h t−K+k l−1 ∂f (w t−K+k ) ∂h t−K+k l .<label>(7)</label></formula><p>where ∈ G(k). Meanwhile, each module also receives error gradient from the dependent module for further computation. From <ref type="formula" target="#formula_8">(6)</ref> and <ref type="formula" target="#formula_9">(7)</ref>, we can know that the stale error gradients in all modules are of different time delay. From module k = 1 to k = K, their corresponding time delays are from K − 1 to 0. Delay 0 indicates that the gradients are up-to-date. In this way, we break the backward locking and achieve parallel update in the backward pass. <ref type="figure" target="#fig_2">Figure 2</ref> shows an example of the decoupled backpropagation, where error gradients δ := ∂f (w) ∂h .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Speedup of Decoupled Parallel Backpropagation</head><p>When K = 1, there is no time delay and the proposed method is equivalent to the backpropagation algorithm. When K = 1, we can distribute the network across multiple GPUs and fully leverage the computing resources. <ref type="table" target="#tab_0">Table 1</ref> lists the computation time when we sequentially allocate the network across K GPUs. When T F is necessary to compute accurate predictions, we can accelerate the training by re- </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method</head><p>Computation Time Backpropagation</p><formula xml:id="formula_10">T F + T B DDG T F + T B K</formula><p>ducing the backward time. Because T B is much large than T F , we can achieve huge speedup even K is small.</p><p>Relation to model parallelism: Model parallelism usually refers to filter-wise parallelism <ref type="bibr" target="#b24">(Yadan et al., 2013)</ref>. For example, we split a convolutional layer with N filters into two GPUs, each part containing N 2 filters. Although the filterwise parallelism accelerates the training when we distribute the workloads across multiple GPUs, it still suffers from the backward locking. We can think of DDG algorithm as layer-wise parallelism. It is also easy to combine filter-wise parallelism with layer-wise parallelism for further speedup.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Stochastic Methods Using Delayed Gradients</head><p>After computing the gradients of the loss function with respect to the weights of the model, we update the model using delayed gradients.</p><formula xml:id="formula_11">Letting ∇f G(k),x i(t−K+k) w t−K+k :=    l∈G(k) ∂f (w t−K+k ) ∂w t−K+k l if t − K + k ≥ 0 0 otherwise ,<label>(8)</label></formula><p>for any k ∈ {1, 2, ..., K}, we update the weights in module k following SGD:</p><formula xml:id="formula_12">w t+1 G(k) = w t G(k) − γ t [∇f G(k),x i(t−K+k) w t−K+k ] G(k) .<label>(9)</label></formula><p>where γ t denotes stepsize. Different from SGD, we update the weights with delayed gradients. Besides, the delayed iteration (t − K + k) for group k is also deterministic. We summarize the proposed method in Algorithm 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1 SGD-DDG</head><p>Require:</p><formula xml:id="formula_13">Initial weights w 0 = [w 0 G(1) , ..., w 0 G(K) ] ∈ R d ;</formula><p>Stepsize sequence {γ t }; 1: for t = 0, 1, 2, . . . , T − 1 do 2:</p><formula xml:id="formula_14">for k = 1, . . . , K in parallel do 3:</formula><p>Compute delayed gradient:</p><formula xml:id="formula_15">g t k ← ∇f G(k),x i(t−K+k) w t−K+k G(k) ; 4:</formula><p>Update weights:</p><formula xml:id="formula_16">w t+1 G(k) ← w t G(k) − γ t · g t k ;</formula><p>5:</p><p>end for 6: end for Moreover, we can also apply the delayed gradients to other variants of SGD, for example Adam in Algorithm 2. In each iteration, we update the weights and moment vectors with delayed gradients. We analyze the convergence for Algorithm 1 in Section 4, which is the basis of analysis for other methods.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Convergence Analysis</head><p>In this section, we establish the convergence guarantees to critical points for Algorithm 1 when the problem is nonconvex. Analysis shows that our method admits similar convergence rate to vanilla stochastic gradient descent <ref type="bibr" target="#b2">(Bottou et al., 2016)</ref>. Throughout this paper, we make the following commonly used assumptions:</p><formula xml:id="formula_17">Assumption 1 (Lipschitz-continuous gradient) The gradi- ent of f (w) is Lipschitz continuous with Lipschitz constant L &gt; 0, such that ∀w, v ∈ R d : ∇f (w) − ∇f (v) 2 ≤ L w − v 2 (10)</formula><p>Assumption 2 (Bounded variance) To bound the variance of the stochastic gradient, we assume the second moment of the stochastic gradient is upper bounded, such that there exists constant M ≥ 0, for any sample x i and ∀w ∈ R d :</p><formula xml:id="formula_18">∇f xi (w) 2 2 ≤ M<label>(11)</label></formula><p>Because of the unnoised stochastic gradient E [∇f xi (w)] = ∇f (w) and the equation regarding variance</p><formula xml:id="formula_19">E ∇f xi (w) − ∇f (w) 2 2 = E ∇f xi (w) 2 2 − ∇f (w) 2</formula><p>2 , the variance of the stochastic gradient is guaranteed to be less than M .</p><p>Under Assumption 1 and 2, we obtain the following lemma about the sequence of objective functions.</p><p>Lemma 1 Assume Assumption 1 and 2 hold. In addition, we let σ := max t γ max{0,t−K+1} γt</p><formula xml:id="formula_20">and M K = KM +σK 4 M .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 2 Adam-DDG</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Require:</head><p>Initial weights:</p><formula xml:id="formula_21">w 0 = [w 0 G(1) , ..., w 0 G(K) ] ∈ R d ;</formula><p>Stepsize: γ; Constant = 10 −8 ; Exponential decay rates: β 1 = 0.9 and β 2 = 0.999 ; First moment vector: m 0 G(k) ← 0, ∀k ∈ {1, 2, ..., K}; Second moment vector: v 0 G(k) ← 0, ∀k ∈ {1, 2, ..., K}; 1: for t = 0, 1, 2, . . . , T − 1 do 2:</p><formula xml:id="formula_22">for k = 1, . . . , K in parallel do 3:</formula><p>Compute delayed gradient:</p><formula xml:id="formula_23">g t k ← ∇f G(k),x i(t−K+k) w t−K+k G(k) ; 4:</formula><p>Update biased first moment estimate:</p><formula xml:id="formula_24">m t+1 G(k) ← β 1 · m t G(k) + (1 − β 1 ) · g t k 5:</formula><p>Update biased second moment estimate:</p><formula xml:id="formula_25">v t+1 G(k) ← β 2 · v t G(k) + (1 − β 2 ) · (g t k ) 2 6:</formula><p>Compute bias-correct first moment estimate:</p><formula xml:id="formula_26">m t+1 G(k) ← m t+1 G(k) /(1 − β t+1 1 ) 7:</formula><p>Compute bias-correct second moment estimate:</p><formula xml:id="formula_27">v t+1 G(k) ← v t+1 G(k) /(1 − β t+1 2 ) 8:</formula><p>Update weights:</p><formula xml:id="formula_28">w t+1 G(k) ← w t G(k) −γ ·m t+1 G(k) / v t+1 G(k) + 9:</formula><p>end for 10: end for</p><p>The iterations in Algorithm 1 satisfy the following inequality, for all t ∈ N:</p><formula xml:id="formula_29">E f (w t+1 ) − f (w t ) ≤ − γ t 2 ∇f (w t ) 2 2 + γ 2 t LM K (12)</formula><p>From Lemma 1, we can observe that the expected decrease of the objective function is controlled by the stepsize γ t and M K . Therefore, we can guarantee that the values of objective functions are decreasing as long as the stepsizes γ t are small enough such that the right-hand side of <ref type="formula">(12)</ref> is less than zero. Using the lemma above, we can analyze the convergence property for Algorithm 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Fixed Stepsize γ t</head><p>Firstly, we analyze the convergence for Algorithm 1 when γ t is fixed and prove that the learned model will converge sub-linearly to the neighborhood of the critical points.</p><p>Theorem 1 Assume Assumption 1 and 2 hold and the fixed stepsize sequence {γ t } satisfies γ t = γ and γL ≤ 1, ∀t ∈ {0, 1, ..., T − 1}. In addition, we assume w * to be the optimal solution to f (w) and let σ = 1 such that M K = KM + K 4 M . Then, the output of Algorithm 1 satisfies that: In Theorem 1, we can observe that when T → ∞, the average norm of the gradients is upper bounded by 2γLM K . The number of modules K affects the value of the upper bound. Selecting a small stepsize γ allows us to get better neighborhood to the critical points, however it also seriously decreases the speed of convergence.</p><formula xml:id="formula_30">1 T T −1 t=0 E ∇f (w t ) 2 2 ≤ 2 f (w 0 ) − f (w * ) γT + 2γLMK (13)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Diminishing Stepsize γ t</head><p>In this section, we prove that Algorithm 1 with diminishing stepsizes can guarantee the convergence to critical points for the non-convex problem.</p><p>Theorem 2 Assume Assumption 1 and 2 hold and the diminishing stepsize sequence {γ t } satisfies γ t = γ0 1+t and γ t L ≤ 1, ∀t ∈ {0, 1, ..., T − 1}. In addition, we assume w * to be the optimal solution to f (w) and let σ = K such</p><formula xml:id="formula_31">that M K = KM + K 5 M . Setting Γ T = T −1 t=0</formula><p>γ t , then the output of Algorithm 1 satisfies that:</p><formula xml:id="formula_32">1 Γ T T −1 t=0 γ t E ∇f (w t ) 2 2 ≤ 2 f (w 0 ) − f (w * ) Γ T + 2 T −1 t=0 γ 2 t LM K Γ T (14)</formula><p>Corollary 1 Since γ t = γ0 t+1 , the stepsize requirements in <ref type="bibr" target="#b18">(Robbins &amp; Monro, 1951)</ref> are satisfied that:</p><formula xml:id="formula_33">lim T →∞ T −1 t=0 γ t = ∞ and lim T →∞ T −1 t=0 γ 2 t &lt; ∞.<label>(15)</label></formula><p>Therefore, according to Theorem 2, when T → ∞, the right-hand side of <ref type="formula" target="#formula_4">(14)</ref> converges to 0.</p><p>Corollary 2 Suppose w s is chosen randomly from {w t }</p><p>T −1 t=0 with probabilities proportional to {γ t } T −1 t=0 . According to Theorem 2, we can prove that Algorithm 1 guarantees convergence to critical points for the non-convex problem:</p><formula xml:id="formula_34">lim s→∞ E ∇f (w s ) 2 2 = 0<label>(16)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>In this section, we experiment with ResNet <ref type="bibr" target="#b6">(He et al., 2016)</ref> on image classification benchmark datasets: CIFAR-10 and CIFAR-100 <ref type="bibr" target="#b12">(Krizhevsky &amp; Hinton, 2009)</ref>. In section 5.1, we evaluate our method by varying the positions and the number of the split points in the network; In section 5.2 we use our method to optimize deeper neural networks and show that its performance is as good as the performance of backpropagation; finally, we split and distribute the ResNet-110 across GPUs in Section 5.3, results showing that the proposed method achieves a speedup of two times without loss of accuracy.</p><p>Implementation Details: We implement DDG algorithm using PyTorch library <ref type="bibr" target="#b16">(Paszke et al., 2017)</ref>. The trained network is split into K modules where each module is running on a subprocess. The subprocesses are spawned using multiprocessing package 1 such that we can fully leverage  multiple processors on a given machine. Running modules on different subprocesses make the communication very difficult. To make the communication fast, we utilize the shared memory objects in the multiprocessing package. As in <ref type="figure" target="#fig_2">Figure 2</ref>, every two adjacent modules share a pair of activation (h) and error gradient (δ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Comparison of BP, DNI and DDG</head><p>In this section, we train ResNet-8 on CIFAR-10 on a single Titan X GPU. The architecture of the ResNet-8 is in <ref type="table" target="#tab_3">Table 2</ref>. All experiments are run for 300 epochs and optimized using Adam optimizer <ref type="bibr" target="#b11">(Kingma &amp; Ba, 2014</ref>) with a batch size of 128. The stepsize is initialized at 1 × 10 −3 . We augment the dataset with random cropping, random horizontal flipping and normalize the image using mean and standard deviation. There are three compared methods in this experiment:</p><p>• BP: Adam optimizer in Pytorch uses backpropagation algorithm with data parallelism <ref type="bibr" target="#b19">(Rumelhart et al., 1988)</ref> to compute gradients.</p><p>• DNI: Decoupled neural interface (DNI) in <ref type="bibr" target="#b9">(Jaderberg et al., 2016)</ref>. Following <ref type="bibr" target="#b9">(Jaderberg et al., 2016)</ref>, the synthetic network is a stack of three convolutional layers with L 5 × 5 filters with resolution preserving padding. The filter depth L is determined by the position of DNI. We also input label information into the synthetic network to increase final accuracy. • DDG: Adam optimizer using delayed gradients in Algorithm 2.</p><p>Impact of split position (depth). The position (depth) of the split points determines the number of layers using delayed gradients. Stale or synthetic gradients will induce noises in the training process, affecting the convergence of the objective. <ref type="figure">Figure 3</ref> exhibits the experimental results when there is only one split point with varying positions. In the first column, we know that all compared methods have similar performances when the split point is at layer 1. DDG performs consistently well when we place the split point at deeper positions 3, 5 or 7. On the contrary, the performance of DNI degrades as we vary the positions and it cannot even converge when the split point is at layer 7.</p><p>Impact of the number of split points. From equation <ref type="formula" target="#formula_9">(7)</ref>, we know that the maximum time delay is determined by the number of modules K. Theorem 2 also shows that K affects the convergence rate. In this experiment, we vary the number of split points in the network from 2 to 4 and plot the results in <ref type="figure" target="#fig_4">Figure 4</ref>. It is easy to observe that DDG performs as well as BP, regardless of the number of split points in the network. However, DNI is very unstable when we place more split points, and cannot even converge sometimes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Optimizing Deeper Neural Networks</head><p>In this section, we employ DDG to optimize two very deep neural networks (ResNet-56 and ResNet-110) on CIFAR-10 and CIFAR-100. Each network is split into two modules at the center. We use SGD with the momentum of 0.9 and the stepsize is initialized to 0.01. Each model is trained for 300 epochs and the stepsize is divided by a factor of 10 at 150 and 225 epochs. The weight decay constant is set to 5 × 10 −4 . We perform the same data augmentation as in section 5.1. Experiments are run on a single Titan X GPU. <ref type="figure">Figure 7</ref> presents the experimental results of BP and DDG. We do not compare DNI because its performance is far worse when models are deep. Figures in the first column present the convergence of loss regarding epochs, showing that DDG and BP admit similar convergence rates. We can also observe that DDG converges faster when we compare the loss regarding computation time in the second column of <ref type="figure">Figure 7</ref>. In the experiment, the "Volatile GPU Utility" is about 70% when we train the models with BP. Our method runs on two subprocesses such that it fully leverages the computing capacity of the GPU. We can draw similar conclusions when we compare the Top 1 accuracy in the third and fourth columns of <ref type="figure">Figure 7</ref>. In <ref type="table" target="#tab_4">Table 3</ref>, we list the best Top 1 accuracy on the test data of CIFAR-10 and CIFAR-100. We can observe that DDG can obtain comparable or better accuracy even when the network is deep.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Scaling the Number of GPUs</head><p>In this section, we split ResNet-110 into K modules and allocate them across K Titan X GPUs sequentially. We do  <ref type="figure">Figure 7</ref>. Training and testing curves for ResNet-56 and ResNet-110 on CIFAR-10 and CIFAR-100. Column 1 and 2 present the loss function value regrading epochs and computation time respectively; Column 3 and 4 present the Top 1 classification accuracy regrading epochs and computation time. For DDG, there is only one split point at the center of the network.</p><p>not consider filter-wise model parallelism in this experiment. The selections of the parameters in the experiment are similar to Section 5.2. From <ref type="figure">Figure 5</ref>, we know that training networks in multiple GPUs does not affect the convergence rate. For comparison, we also count the computation time of backpropagation algorithm on a single GPU. The computation time is worse when we run backpropagation algorithm on multiple GPUs because of the communication overhead.</p><p>In <ref type="figure">Figure 6</ref>, we can observe that forward time only accounts for about 32% of the total computation time for backpropagation algorithm. Therefore, backward locking is the main bottleneck. In <ref type="figure">Figure 6</ref>, it is obvious that when we increase the number of GPUs from 2 to 4, our method reduces about 30% to 50% of the total computation time. In other words, DDG achieves a speedup of about 2 times without loss of accuracy when we train the networks across 4 GPUs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>In this paper, we propose decoupled parallel backpropagation algorithm, which breaks the backward locking in backpropagation algorithm using delayed gradients. We then apply the decoupled parallel backpropagation to two stochastic methods for deep learning optimization. In the theoretical section, we also provide convergence analysis and prove that the proposed method guarantees convergence to critical points for the non-convex problem. Finally, we perform experiments on deep convolutional neural networks, results verifying that our method can accelerate the training significantly without loss of accuracy.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>Proceedings of the 35 th International Conference on Machine Learning, Stockholm, Sweden, PMLR 80, 2018. Copyright 2018 by the author(s).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. We split a multilayer feedforward neural network into three modules. Each module is a stack of layers. Backpropagation algorithm requires running forward pass (from 1 to 3) and backward pass (from 4 to 6) in sequential order. For example, module A cannot perform step 6 before receiving δ</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. We split a multilayer feedforward neural network into three modules (A, B and C), where each module is a stack of layers. After executing the forward pass (from 1 to 3) to predict, our proposed method allows all modules to run backward pass (4) using delayed gradients without locking. Particularly, module A can perform the backward pass using the stale error gradient δ</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>module B for the update of the next iteration.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Training and testing curves regarding epochs for ResNet-8 on CIFAR-10. Upper: Loss function values regarding epochs; Bottom: Top1 classification accuracies regarding epochs. For DNI and DDG, the number of split points in the network ranges from 2 to 4.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>Figure 5. Training and testing loss curves for ResNet-110 on CIFAR-10 using multiple GPUs. (5a) Loss function value regarding epochs. (5b) Loss function value regarding computation time.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Comparisons of computation time when the network is sequentially distributed across K GPUs. TF and TB denote the forward and backward time for backpropagation algorithm.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Training and testing curves regarding epochs for ResNet-8 on CIFAR-10. Upper: Loss function values regarding epochs; Bottom: Top 1 classification accuracies regarding epochs. We split the network into two modules such that there is only one split point in the network for DNI and DDG.</figDesc><table>0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1 
+
+1.2 
+
+1.4 
+
+1.6 
+
+Loss 
+
+Split point at layer 1 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1 
+
+1.2 
+
+1.4 
+
+1.6 
+
+Loss 
+
+Split point at layer 3 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1 
+
+1.2 
+
+1.4 
+
+1.6 
+
+1.8 
+
+Loss 
+
+Split point at layer 5 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+10 0 
+
+Loss 
+
+Split point at layer 7 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+40 
+
+45 
+
+50 
+
+55 
+
+60 
+
+65 
+
+70 
+
+75 
+
+80 
+
+85 
+
+90 
+
+Top1 Accuracy % 
+
+Split point at layer 1 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Top1 Accuracy % 
+
+Split point at layer 3 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Top1 Accuracy % 
+
+Split point at layer 5 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Top1 Accuracy % 
+
+Split point at layer 7 
+
+BP Train 
+DNI Train 
+DDG Train 
+BP Test 
+DNI Test 
+DDG Test 
+
+Figure 3. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Architectural details. Units denotes the number of resid-</figDesc><table>ual units in each group. Each unit is a basic residual block without 
+bottleneck. Channels indicates the number of filters used in each 
+unit in each group. 
+
+Architecture 
+Units 
+Channels 
+ResNet-8 
+1-1-1 
+16-16-32-64 
+ResNet-56 
+9-9-9 
+16-16-32-64 
+ResNet-110 
+18-18-18 16-16-32-64 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 .</head><label>3</label><figDesc>The</figDesc><table>best Top 1 classification accuracy (%) for ResNet-56 
+and ResNet-110 on the test data of CIFAR-10 and CIFAR-100. 
+
+Architecture 
+CIFAR-10 
+CIFAR-100 
+BP 
+DDG 
+BP 
+DDG 
+ResNet-56 
+93.12 93.11 69.79 70.17 
+ResNet-110 93.53 93.41 71.90 71.39 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head></head><label></label><figDesc>Loss ResNet-110 on CIFAR-100ResNet-110 on CIFAR-100ResNet-110 on CIFAR-100</figDesc><table>0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+10 -3 
+
+10 -2 
+
+10 -1 
+
+10 0 
+
+10 1 
+
+Loss 
+
+ResNet-56 on CIFAR-10 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+78 
+
+80 
+
+82 
+
+84 
+
+86 
+
+88 
+
+90 
+
+92 
+
+94 
+
+96 
+
+98 
+
+Top1 Accuracy % 
+
+ResNet-56 on CIFAR-10 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+1000 
+2000 
+3000 
+4000 
+5000 
+6000 
+7000 
+8000 
+9000 
+
+Time (s) 
+
+78 
+
+80 
+
+82 
+
+84 
+
+86 
+
+88 
+
+90 
+
+92 
+
+94 
+
+96 
+
+98 
+
+Top1 Accuracy % 
+
+ResNet-56 on CIFAR-10 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+10 -3 
+
+10 -2 
+
+10 -1 
+
+10 0 
+
+10 1 
+
+Loss 
+
+ResNet-110 on CIFAR-10 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+78 
+
+80 
+
+82 
+
+84 
+
+86 
+
+88 
+
+90 
+
+92 
+
+94 
+
+96 
+
+98 
+
+Top1 Accuracy % 
+
+ResNet-110 on CIFAR-10 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+2000 
+4000 
+6000 
+8000 
+10000 
+12000 
+14000 
+16000 
+
+Time (s) 
+
+78 
+
+80 
+
+82 
+
+84 
+
+86 
+
+88 
+
+90 
+
+92 
+
+94 
+
+96 
+
+98 
+
+Top1 Accuracy % 
+
+ResNet-110 on CIFAR-10 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+10 -2 
+
+10 -1 
+
+10 0 
+
+10 1 
+
+Loss 
+
+ResNet-56 on CIFAR-100 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Top1 Accuracy % 
+
+ResNet-56 on CIFAR-100 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+1000 
+2000 
+3000 
+4000 
+5000 
+6000 
+7000 
+8000 
+9000 
+
+Time (s) 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Top1 Accuracy % 
+
+ResNet-56 on CIFAR-100 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+10 -2 
+
+10 -1 
+
+10 0 
+
+10 1 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+50 
+100 
+150 
+200 
+250 
+300 
+
+Epoch 
+
+45 
+
+50 
+
+55 
+
+60 
+
+65 
+
+70 
+
+75 
+
+80 
+
+85 
+
+90 
+
+95 
+
+Top1 Accuracy % 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+0 
+2000 
+4000 
+6000 
+8000 
+10000 
+12000 
+14000 
+16000 
+
+Time (s) 
+
+45 
+
+50 
+
+55 
+
+60 
+
+65 
+
+70 
+
+75 
+
+80 
+
+85 
+
+90 
+
+95 
+
+Top1 Accuracy % 
+
+BP Train 
+DDG Train 
+BP Test 
+DDG Test 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Department of Electrical and Computer Engineering, University of Pittsburgh, Pittsburgh, PA, United States. Correspondence to: Heng Huang &lt;henghuanghh@gmail.com&gt;.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">https://docs.python.org/3/library/multiprocessing.html#module-multiprocessing</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>This work was partially supported by U.S. NIH R01 AG049371, NSF IIS 1302675, IIS 1344152, DBI 1356628,  IIS 1619308, IIS 1633753.  </p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Kickback cuts backprop&apos;s red-tape: Biologically plausible credit assignment in neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Balduzzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Vanchinathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Buhmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="485" to="491" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Learning deep architectures for ai. Foundations and trends R in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1" to="127" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Optimization methods for large-scale machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">E</forename><surname>Curtis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.04838</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Distributed optimization of deeply nested systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Carreira-Perpinan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Artificial Intelligence and Statistics</title>
+		<imprint>
+			<biblScope unit="page" from="10" to="19" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Understanding synthetic gradients and decoupled neural interfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">M</forename><surname>Czarnecki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Świrszcz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00522</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The power of depth for feedforward neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Eldan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Shamir</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Learning Theory</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="907" to="940" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Neural networks for machine learning-lecture 6a-overview of mini-batch gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Der Maaten</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.06993</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">L. Densely connected convolutional networks. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">M</forename><surname>Czarnecki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.05343</idno>
+		<title level="m">Decoupled neural interfaces using synthetic gradients</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Benchmarks for popular cnn models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<ptr target="https://github.com/jcjohnson/cnn-benchmarks" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Deep learning. Nature</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">521</biblScope>
+			<biblScope unit="page" from="436" to="444" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Direct feedback alignment provides learning in deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Nøkland</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1037" to="1045" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Automatic differentiation in pytorch</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paszke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Chanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Devito</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Desmaison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Antiga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lerer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">On the momentum term in gradient descent learning algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Qian</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural networks</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="145" to="151" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">A stochastic approximation method. The annals of mathematical statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Robbins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Monro</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1951" />
+			<biblScope unit="page" from="400" to="407" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning representations by back-propagating errors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">E</forename><surname>Rumelhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cognitive modeling</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Training neural networks without gradients: A scalable admm approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Burmeister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Patel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Goldstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2722" to="2731" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Telgarsky</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.04485</idno>
+		<title level="m">Benefits of depth in neural networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Yadan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.5853</idno>
+		<title level="m">Multigpu training of convnets</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
