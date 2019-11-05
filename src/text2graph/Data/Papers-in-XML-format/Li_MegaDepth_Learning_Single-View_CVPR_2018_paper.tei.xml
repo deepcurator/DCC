@@ -1,0 +1,1237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:10+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">MegaDepth: Learning Single-View Depth Prediction from Internet Photos</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhengqi</forename><surname>Li</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science &amp; Cornell Tech</orgName>
+								<orgName type="institution">Cornell University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Noah</forename><surname>Snavely</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science &amp; Cornell Tech</orgName>
+								<orgName type="institution">Cornell University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">MegaDepth: Learning Single-View Depth Prediction from Internet Photos</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>1</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Predicting 3D shape from a single image is an important capability of visual reasoning, with applications in robotics, graphics, and other vision tasks such as intrinsic images. While single-view depth estimation is a challenging, underconstrained problem, deep learning methods have recently driven significant progress. Such methods thrive when trained with large amounts of data. Unfortunately, fully general training data in the form of (RGB image, depth map) pairs is difficult to collect. Commodity RGB-D sensors such as Kinect have been widely used for this purpose <ref type="bibr" target="#b33">[34]</ref>, but are limited to indoor use. Laser scanners have enabled important datasets such as Make3D <ref type="bibr" target="#b28">[29]</ref> and KITTI <ref type="bibr" target="#b24">[25]</ref>, but such devices are cumbersome to operate (in the case of industrial scanners), or produce sparse depth maps (in the case of LIDAR). Moreover, both Make3D and KITTI are collected in specific scenarios (a university campus, and atop a car, respectively). Training data can also be generated through crowdsourcing, but this approach has so far been limited to gathering sparse ordinal relationships or surface normals <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5]</ref>.</p><p>In this paper, we explore the use of a nearly unlimited source of data for this problem: images from the Internet from overlapping viewpoints, from which structure-from-motion (SfM) and multi-view stereo (MVS) methods can automatically produce dense depth. Such images have been widely used in research on large-scale 3D reconstruction <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b7">8]</ref>. We propose to use the outputs of these systems as the inputs to machine learning methods for single-view depth prediction. By using large amounts of diverse training data from photos taken around the world, we seek to learn to predict depth with high accuracy and generalizability. Based on this idea, we introduce MegaDepth (MD), a largescale depth dataset generated from Internet photo collections, which we make fully available to the community.</p><p>To our knowledge, ours is the first use of Internet SfM+MVS data for single-view depth prediction. Our main contribution is the MD dataset itself. In addition, in creating MD, we found that care must be taken in preparing a dataset from noisy MVS data, and so we also propose new methods for processing raw MVS output, and a corresponding new loss function for training models with this data. Notably, because MVS tends to not reconstruct dynamic objects (people, cars, etc), we augment our dataset with ordinal depth relationships automatically derived from semantic segmentation, and train with a joint loss that includes an ordinal term. In our experiments, we show that by training on MD, we can learn a model that works well not only on images of new scenes, but that also generalizes remarkably well to completely different datasets, including Make3D, KITTI, and DIW-achieving much better generalization than prior datasets. <ref type="figure" target="#fig_0">Figure 1</ref> shows example results spanning different test sets from a network trained solely on our MD dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Single-view depth prediction. A variety of methods have been proposed for single-view depth prediction, most recently by utilizing machine learning <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b27">28]</ref>. A standard approach is to collect RGB images with ground truth depth, and then train a model (e.g., a CNN) to predict depth from RGB <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b18">19]</ref>. Most such methods are trained on a few standard datasets, such as NYU <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b33">34]</ref>, Make3D <ref type="bibr" target="#b28">[29]</ref>, and KITTI <ref type="bibr" target="#b10">[11]</ref>, which are captured using RGB-D sensors (such as Kinect) or laser scanning. Such scanning methods have important limitations, as discussed in the introduction. Recently, Novotny et al. <ref type="bibr" target="#b25">[26]</ref> trained a network on 3D models derived from SfM+MVS on videos to learn 3D shapes of single objects. However, their method is limited to images of objects, rather than scenes.</p><p>Multiple views of a scene can also be used as an implicit source of training data for single-view depth prediction, by utilizing view synthesis as a supervisory signal <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b42">43]</ref>. However, view synthesis is only a proxy for depth, and may not always yield high-quality learned depth. Ummenhofer et al. <ref type="bibr" target="#b35">[36]</ref> trained from overlapping image pairs taken with a single camera, and learned to predict image matches, camera poses, and depth. However, it requires two input images at test time.</p><p>Ordinal depth prediction. Another way to collect depth data for training is to ask people to manually annotate depth in images. While labeling absolute depth is challenging, people are good at specifying relative (ordinal) depth relationships (e.g., closer-than, further-than) <ref type="bibr" target="#b11">[12]</ref>. Zoran et al. <ref type="bibr" target="#b43">[44]</ref> used such relative depth judgments to predict ordinal relationships between points using CNNs. Chen et al. leveraged crowdsourcing of ordinal depth labels to create a large dataset called "Depth in the Wild" <ref type="bibr" target="#b3">[4]</ref>. While useful for predicting depth ordering (and so we incorporate ordinal data automatically generated from our imagery), the Euclidean accuracy of depth learned solely from ordinal data is limited.</p><p>Depth estimation from Internet photos. Estimating geometry from Internet photo collections has been an active research area for a decade, with advances in both structure from motion <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b29">30]</ref> and multi-view stereo <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b31">32]</ref>. These techniques generally operate on 10s to 1000s of images. Using such methods, past work has used retrieval and SfM to build a 3D model seeded from a single image <ref type="bibr" target="#b30">[31]</ref>, or registered a photo to an existing 3D model to transfer depth <ref type="bibr" target="#b39">[40]</ref>. However, this work requires either having a detailed 3D model of each location in advance, or building one at run-time. Instead, we use SfM+MVS to train a network that generalizes to novel locations and scenarios.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">The MegaDepth Dataset</head><p>In this section, we describe how we construct our dataset. We first download Internet photos from Flickr for a set of well-photographed landmarks from the Landmarks10K dataset <ref type="bibr" target="#b20">[21]</ref>. We then reconstruct each landmark in 3D using state-of-the-art SfM and MVS methods. This yields an SfM model as well as a dense depth map for each reconstructed image. However, these depth maps have significant noise and outliers, and training a deep network on this raw depth data will not yield a useful predictor. Therefore, we propose a series of processing steps that prepare these depth maps for use in learning, and additionally use semantic segmentation to automatically generate ordinal depth data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Photo calibration and reconstruction</head><p>We build a 3D model from each photo collection using COLMAP, a state-of-art SfM system <ref type="bibr" target="#b29">[30]</ref> (for reconstructing camera poses and sparse point clouds) and MVS system <ref type="bibr" target="#b31">[32]</ref> (for generating dense depth maps). We use COLMAP because we found that it produces high-quality 3D models via its careful incremental SfM procedure, but other such systems could be used. COLMAP produces a depth map D for every reconstructed photo I (where some pixels of D can be empty if COLMAP was unable to recover a depth), as well as other outputs, such as camera parameters and sparse SfM points plus camera visibility. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Depth map refinement</head><p>The raw depth maps from COLMAP contain many outliers from a range of sources, including: (1) transient objects (people, cars, etc.) that appear in a single image but nonetheless are assigned (incorrect) depths, (2) noisy depth discontinuities, and (3) bleeding of background depths into foreground objects. Other MVS methods exhibit similar problems due to inherent ambiguities in stereo matching. <ref type="figure" target="#fig_1">Figure 2</ref>(b) shows two example depth maps produced by COLMAP that illustrate these issues. Such outliers have a highly negative effect on the depth prediction networks we seek to train. To address this problem, we propose two new depth refinement methods designed to generate high-quality training data:</p><p>First, we devise a modified MVS algorithm based on COLMAP, but more conservative in its depth estimates, based on the idea that we would prefer less training data over bad training data. COLMAP computes depth maps iteratively, at each stage trying to ensure geometric consistency between nearby depth maps. One adverse effect of this strategy is that background depths can tend to "eat away" at foreground objects, because one way to increase consistency between depth maps is to consistently predict the background depth (see <ref type="figure" target="#fig_1">Figure 2</ref> (top)). To counter this effect, at each depth inference iteration in COLMAP, we compare the depth values at each pixel before and after the update and keep the smaller (closer) of the two. We then apply a median filter to remove unstable depth values. We describe our modified MVS algorithm in detail in the supplemental material.</p><p>Second, we utilize semantic segmentation to enhance and filter the depth maps, and to yield large amounts of ordinal depth comparisons as additional training data. The second row of <ref type="figure" target="#fig_1">Figure 2</ref> shows an example depth map computed with our object-aware filtering. We now describe our use of semantic segmentation in detail.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Depth enhancement via semantic segmentation</head><p>Multi-view stereo methods can have problems with a number of object types, including transient objects such as people and cars, difficult-to-reconstruct objects such as poles and traffic signals, and sky regions. However, if we can understand the semantic layout of an image, then we can attempt to mitigate these issues, or at least identify problematic pixels. We have found that deep learning methods for semantic segmentation are starting to become reliable enough for this use <ref type="bibr" target="#b40">[41]</ref>.</p><p>We propose three new uses of semantic segmentation in the creation of our dataset. First, we use such segmentations to remove spurious MVS depths in foreground regions. Second, we use the segmentation as a criterion to categorize each photo as providing either Euclidean depth or ordinal depth data. Finally, we combine semantic information and MVS depth to automatically annotate ordinal depth relationships, which can be used to help training in regions that cannot be reconstructed by MVS. Semantic filtering. To process a given photo I, we first run semantic segmentation using PSPNet <ref type="bibr" target="#b40">[41]</ref>, a recent segmentation method, trained on the MIT Scene Parsing dataset (consisting of 150 semantic categories) <ref type="bibr" target="#b41">[42]</ref>. We then divide the pixels into three subsets by predicted semantic category:</p><p>1. Foreground objects, denoted F , corresponding to objects that often appear in the foreground of scenes, including static foreground objects (e.g., statues, fountains) and dynamic objects (e.g., people, cars).</p><p>2. Background objects, denoted B, including buildings, towers, mountains, etc. (See supplemental material for full details of the foreground/background classes.) 3. Sky, denoted S, which is treated as a special case in the depth filtering described below.</p><p>We use this semantic categorization of pixels in several ways. As illustrated in <ref type="figure" target="#fig_1">Figure 2</ref> (bottom), transient objects such as people can result in spurious depths. To remove these from each image I, we consider each connected component C of the foreground mask F . If &lt; 50% of pixels in C have a reconstructed depth, we discard all depths from C. We use a threshold of 50%, rather than simply removing all foreground depths, because pixels on certain objects in F (such as sculptures) can indeed be accurately reconstructed (and we found that PSPNet can sometimes mistake sculptures and people for one another). This simple filtering of foreground depths yields large improvements in depth map quality. Additionally, we remove reconstructed depths that fall inside the sky region S, as such depths tend to be spurious. Euclidean vs. ordinal depth. For each 3D model we have thousands of reconstructed Internet photos, and ideally we would use as much of this depth data as possible for training. However, some depth maps are more reliable than others, due to factors such as the accuracy of the estimated camera pose or the presence of large occluders. Hence, we found that it is beneficial to limit training to a subset of highly reliable depth maps. We devise a simple but effective way to compute a subset of high-quality depth maps, by thresholding by the fraction of reconstructed pixels. In particular, if ≥ 30% of an image I (ignoring the sky region S) consists of valid depth values, then we keep that image as training data for learning Euclidean depth. This criterion prefers images without large transient foreground objects (e.g., "no selfies"). At the same time, such foreground-heavy images are extremely useful for another purpose: automatically generating training data for learning ordinal depth relationships.</p><p>Automatic ordinal depth labeling. As noted above, transient or difficult to reconstruct objects, such as people, cars, and street signs are often missing from MVS reconstructions. Therefore, using Internet-derived data alone, we will lack ground truth depth for such objects, and will likely do a poor job of learning to reconstruct them. To address this issue, we propose a novel method of automatically extracting ordinal depth labels from our training images based on their estimated 3D geometry and semantic segmentation. Let us denote as O ("Ordinal") the subset of photos that do not satisfy the "no selfies" criterion described above. For each image I ∈ O, we compute two regions, F ord ∈ F (based on semantic information) and B ord ∈ B (based on 3D geometry information), such that all pixels in F ord are likely closer to the camera than all pixels in B ord . Briefly, F ord consists of large connected components of F , and B ord consists of large components of B that also contain valid depths in the last quartile of the full depth range for I (see supplementary for full details). We found this simple approach works very well (&gt; 95% accuracy in pairwise ordinal relationships), likely because natural photos tend to be composed in certain common ways. Several examples of our automatic ordinal depth labels are shown in <ref type="figure" target="#fig_2">Figure 3.</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Creating a dataset</head><p>We use the approach above to densely reconstruct 200 3D models from landmarks around the world, representing about 150K reconstructed images. After our proposed filtering, we are left with 130K valid images. Of these 130K photos, around 100K images are used for Euclidean depth data, and the remaining 30K images are used to derive ordinal depth data. We also include images from <ref type="bibr" target="#b17">[18]</ref> in our training set. Together, this data comprises the MegaDepth (MD) dataset, available at http://www.cs.cornell.edu/ projects/megadepth/.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Depth estimation network</head><p>This section presents our end-to-end deep learning algorithm for predicting depth from a single photo.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Network architecture</head><p>We evaluated three networks used in prior work on singleview depth prediction: VGG <ref type="bibr" target="#b5">[6]</ref>, the "hourglass" network <ref type="bibr" target="#b3">[4]</ref>, and a ResNet architecture <ref type="bibr" target="#b18">[19]</ref>. Of these, the hourglass network performed best, as described in Section 5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Loss function</head><p>The 3D data produced by SfM+MVS is only up to an unknown scale factor, so we cannot compare predicted and ground truth depths directly. However, as noted by Eigen and Fergus <ref type="bibr" target="#b6">[7]</ref>, the ratios of pairs of depths are preserved under scaling (or, in the log-depth domain, the difference between pairs of log-depths). Therefore, we solve for a depth map in the log domain and train using a scale-invariant loss function, L si . L si combines three terms:</p><formula xml:id="formula_0">L si = L data + αL grad + βL ord .<label>(1)</label></formula><p>Scale-invariant data term. We adopt the loss of Eigen and Fergus <ref type="bibr" target="#b6">[7]</ref>, which computes the mean square error (MSE) of the difference between all pairs of log-depths in linear time.</p><p>Suppose we have a predicted log-depth map L, and a ground truth log depth map L * . L i and L * i denote corresponding individual log-depth values indexed by pixel position i. We denote R i = L i − L * i and define:</p><formula xml:id="formula_1">L data = 1 n n i=1 (R i ) 2 − 1 n 2 n i=1 R i 2<label>(2)</label></formula><p>where n is the number of valid depths in the ground truth depth map. Multi-scale scale-invariant gradient matching term. To encourage smoother gradient changes and sharper depth discontinuities in the predicted depth map, we introduce a multi-scale scale-invariant gradient matching term L grad , defined as an ℓ 1 penalty on differences in log-depth gradients between the predicted and ground truth depth map:</p><formula xml:id="formula_2">L grad = 1 n k i ∇ x R k i + ∇ y R k i<label>(3)</label></formula><p>where R k i is the value of the log-depth difference map at position i and scale k. Because the loss is computed at  multiple scales, L grad captures depth gradients across large image distances. In our experiments, we use four scales. We illustrate the effect of L grad in <ref type="figure" target="#fig_3">Figure 4</ref>.</p><p>Robust ordinal depth loss. Inspired by Chen et al. <ref type="bibr" target="#b3">[4]</ref>, our ordinal depth loss term L ord utilizes the automatic ordinal relations described in Section 3.3. During training, for each image in our ordinal set O, we pick a single pair of pixels (i, j), with pixel i and j either belonging to the foreground region F ord or the background region B ord . L ord is designed to be robust to the small number of incorrectly ordered pairs.</p><formula xml:id="formula_3">L ord = log (1 + exp (P ij )) if P ij ≤ τ log 1 + exp P ij + c if P ij &gt; τ<label>(4)</label></formula><p>where</p><formula xml:id="formula_4">P ij = −r * ij (L i − L j )</formula><p>and r * ij is the automatically labeled ordinal depth relation between i and j (r * ij = 1 if pixel i is further than j and −1 otherwise). c is a constant set so that L ord is continuous. L ord encourages the depth difference of a pair of points to be large (and ordered) if our automatic labeling method judged the pair to have a likely depth ordering. We illustrate the effect of L ord in <ref type="figure" target="#fig_4">Figure 5</ref>. In our tests, we set τ = 0.25 based on cross-validation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Evaluation</head><p>In this section, we evaluate our networks on a number of datasets, and compare to several state-of-art depth prediction algorithms, trained on a variety of training data. In our evaluation, we seek to answer several questions, including:</p><p>• How well does our model trained on MD generalize to new Internet photos from never-before-seen locations? • How important is our depth map processing? What is the effect of the terms in our loss function? • How well does our model trained on MD generalize to other types of images from other datasets?</p><p>The third question is perhaps the most interesting, because the promise of training on large amounts of diverse data is good generalization. Therefore, we run a set of experiments training on one dataset and testing on another, and show that our MD dataset gives the best generalization performance. We also show that our depth refinement strategies are essential for achieving good generalization, and show that our proposed loss function-combining scale-invariant data terms with an ordinal depth loss-improves prediction performance both quantitatively and qualitatively. Experimental setup. Out of the 200 reconstructed models in our MD dataset, we randomly select 46 to form a test set (locations never seen during training). For the remaining 154 models, we randomly split images from each individual model into training and validation sets with a ratio of 96% and 4% respectively. We set α = 0.5 and β = 0.1 using cross-validation. We implement our networks in PyTorch <ref type="bibr" target="#b0">[1]</ref>, and train using Adam <ref type="bibr" target="#b16">[17]</ref> for 30 epochs with batch size 32.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Evaluation and ablation study on MD test set</head><p>In this subsection, we describe experiments where we train on our MD training set and test on the MD test set. Error metrics. For numerical evaluation, we use two scaleinvariant error measures (as with our loss function, we use scale-invariant measures due to the scale-free nature of SfM models). The first measure is the scale-invariant RMSE (si-RMSE) (Equation 2), which measures precise numerical depth accuracy. The second measure is based on the preservation of depth ordering. In particular, we use a measure similar to <ref type="bibr" target="#b43">[44,</ref><ref type="bibr" target="#b3">4]</ref> that we call the SfM Disagreement Rate (SDR). SDR is based on the rate of disagreement with ordinal depth relationships derived from estimated SfM points. We use sparse SfM points rather than dense MVS because we found that sparse SfM points capture some structures not reconstructed by MVS (e.g., complex objects such as lampposts). We define SDR(D, D * ), the ordinal disagreement rate between the predicted (non-log) depth map D = exp(L) and ground-truth SfM depths D * , as:    <ref type="table">Table 3</ref>: Results on three different test sets with and without our depth refinement methods. Raw MD indicates raw depth data; Clean MD indicates depth data using our refinement methods. Lower is better for all error measures.</p><formula xml:id="formula_5">SDR(D, D * ) = 1 n i,j∈P ✶ ord(D i , D j ) = ord(D * i , D * j ) (5)</formula><p>where P is the set of pairs of pixels with available SfM depths to compare, n is the total number of pairwise comparisons, and ord(·, ·) is one of three depth relations (furtherthan, closer-than, and same-depth-as):</p><formula xml:id="formula_6">ord(Di, Dj) =        1 if D i D j &gt; 1 + δ −1 if D i D j &lt; 1 − δ 0 if 1 − δ ≤ D i D j ≤ 1 + δ<label>(6)</label></formula><p>We also define SDR = and SDR = as the disagreement rate with ord(D * i , D * j ) = 0 and ord(D * i , D * j ) = 0 respectively. In our experiments, we set δ = 0.1 for tolerance to uncertainty in SfM points. For efficiency, we sample SfM points from the full set to compute this error term. Effect of network and loss variants. We evaluate three popular network architectures for depth prediction on our MD test set: the VGG network used by Eigen et al. <ref type="bibr" target="#b5">[6]</ref>, an "hourglass"(HG) network <ref type="bibr" target="#b3">[4]</ref>, and ResNets <ref type="bibr" target="#b18">[19]</ref>. To compare our loss function to that of Eigen et al. <ref type="bibr" target="#b5">[6]</ref>, we also test the same network and loss function as <ref type="bibr" target="#b5">[6]</ref> trained on MD.</p><p>[6] uses a VGG network with a scale-invariant loss plus single scale gradient matching term. Quantitative results are shown in <ref type="table" target="#tab_1">Table 1</ref> and qualitative comparisons are shown in <ref type="figure" target="#fig_5">Figure 6</ref>. We also evaluate variants of our method trained using only some of our loss terms: (1) a version with only the scale-invariant data term L data (the same loss as in <ref type="bibr" target="#b6">[7]</ref>), (2) a version that adds our multi-scale gradient matching loss L grad , and (3) the full version including L grad and the ordinal depth loss L ord . Results are shown in <ref type="table" target="#tab_2">Table 2</ref>.</p><p>As shown in <ref type="table" target="#tab_1">Tables 1 and 2</ref>, the HG architecture achieves the best performance of the three architectures, and training with our full loss yields significantly better performance compared to other loss variants, including that of <ref type="bibr" target="#b5">[6]</ref> (first row of <ref type="table" target="#tab_1">Table 1</ref>). <ref type="figure" target="#fig_5">Figure 6</ref> shows that our joint loss helps preserve the structure of the depth map and capture nearby objects such as people and buses.</p><p>Finally, we experiment with training our network on MD with and without our proposed depth refinement methods, testing on three datasets: KITTI, Make3D, and DIW. The results, shown in <ref type="table">Table 3</ref>, show that networks trained on raw MVS depth do not generalize well. Our proposed refinements significantly boost prediction performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Generalization to other datasets</head><p>A powerful application of our 3D-reconstruction-derived training data is to generalize to outdoor images beyond landmark photos. To evaluate this capability, we train our model on MD and test on three standard benchmarks: Make3D <ref type="bibr" target="#b27">[28]</ref>, KITTI <ref type="bibr" target="#b10">[11]</ref>, and DIW <ref type="bibr" target="#b3">[4]</ref>-without seeing training data from these datasets. Since our depth prediction is defined up to a scale factor, for each dataset, we align each prediction with the ground truth by a scalar computed as the median ratio between ground truth and predicted depth.</p><p>Make3D. To test on Make3D, we follow the protocol of prior work <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b18">19]</ref>,resizing all images to 345 × 460, and removing ground truth depths larger than 70m (since Make3D data is unreliable at large distances). We train our network only on MD using our full loss. <ref type="table">Table 4</ref> shows numerical results, including comparisons to several methods trained on both Make3D and non-Make3D data. Our network trained on MD has the best performance among all non-Make3D-trained models and outperforms the second best non-Make3D-trained model (trained on DIW) by a large margin. Our model even outperforms several models trained directly on Make3D. Finally, the last row of <ref type="table">Table 4</ref> shows that our model fine-tuned on Make3D achieves better performance than the state-of-the-art. <ref type="figure" target="#fig_6">Figure 7</ref> visualizes depth predictions from our model and several other nonMake3D-trained models. Our predictions achieve preserve the structure of the depth maps significantly better. . VGG * prediction using the loss and network of <ref type="bibr" target="#b5">[6]</ref>. (d) GT-masked version of (c). (e) Depth prediction from a ResNet <ref type="bibr" target="#b18">[19]</ref>. (f) GT-masked version of (e). (g) Depth prediction from an hourglass (HG) network <ref type="bibr" target="#b3">[4]</ref> . (h) GT-masked version of (g).  <ref type="table">Table 4</ref>: Results on the Make3D test set for various training datasets and approaches. The first column indicates the training dataset. Lower is better for all error metrics.</p><p>KITTI. Next, we evaluate our model on the KITTI test set based on the split of <ref type="bibr" target="#b6">[7]</ref>. As with our Make3D experiments, we do not use images from KITTI during training. The KITTI dataset is very different from ours, consisting of driving sequences that include objects, such as sidewalks, cars, and people, that are difficult to reconstruct with SfM/MVS. Nevertheless, as shown in <ref type="table" target="#tab_5">Table 5</ref>, our MD-trained network still outperforms approaches trained on non-KITTI datasets and has comparable performance with networks directly trained on KITTI. In particular, our performance is similar to the method of Zhou et al. <ref type="bibr" target="#b42">[43]</ref> trained on the Cityscapes (CS) dataset. CS also consists of driving image sequences quite similar to KITTI's. In contrast, our MD dataset contains much more diverse scenes. Finally, the last row of <ref type="table" target="#tab_5">Table 5</ref> shows that we can achieve state-of-the-art performance by fine-tuning our network on KITTI training data. <ref type="figure" target="#fig_7">Figure 8</ref> shows visual comparisons between our results and models trained on other non-KITTI datasets. One can see that we    <ref type="bibr" target="#b18">[19]</ref> 45.30 Liu et al. <ref type="bibr" target="#b21">[22]</ref> 28.27</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Make3D</head><p>Laina et al. <ref type="bibr" target="#b18">[19]</ref> 31.65 Liu et al. <ref type="bibr" target="#b21">[22]</ref> 29.58 MD Ours 22.97 <ref type="table">Table 6</ref>: Results on the DIW test set for various training datasets and approaches. Columns are as in <ref type="table">Table 4</ref>.</p><p>(a) Image (b) NYU <ref type="bibr" target="#b5">[6]</ref> (c) KITTI <ref type="bibr" target="#b12">[13]</ref> (d) Make3D <ref type="bibr" target="#b21">[22]</ref> (e) MD <ref type="figure">Figure 9</ref>: Depth predictions on the DIW test set.</p><p>(Blue=near, red=far.) None of the models were trained on DIW data.</p><p>achieve much better visual quality compared to other non-KITTI datasets, and our predictions can reasonably capture nearby objects such as traffic signs, cars, and trees, due to our ordinal depth loss. DIW. Finally, we test our network on DIW dataset <ref type="bibr" target="#b3">[4]</ref>. DIW, like our dataset, consists of Internet photos with more general scene structures. Each image in DIW has just a single pair of points with human-annotated ordinal depth relationship. As with Make3D and KITTI, we do not use data from DIW during training. For DIW, results are evaluated using the Weighted Human Disagreement Rate (WHDR), which measures the frequency of disagreement between predicted depth maps and human annotations on a test set. Numerical results are shown in <ref type="table">Table 6</ref>. Our MD-trained network again has the best performance among all non-DIW trained models, and achieves performance comparable to that of Chen et al. <ref type="bibr" target="#b3">[4]</ref>, which is directly trained on DIW. <ref type="figure">Figure 9</ref> visualizes our predictions and those of other non-DIW-trained networks on DIW test images. Our predictions achieve visually better depth relationships. Our method even works reasonably well for challenging scenes such as offices and close-ups.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We presented a new use for Internet-derived SfM+MVS data: generating large amounts of training data for singleview depth prediction. We demonstrated that this data can be used to predict state-of-the-art depth maps for locations never observed during training, and generalizes very well to other datasets. However, our method also has a number of limitations. MVS methods still do not perfectly reconstruct even static scenes, particularly when there are oblique surfaces (e.g., ground), thin or complex objects (e.g., lampposts), and difficult materials (e.g., shiny glass). Our method does not predict metric depth; future work in SfM could use learning or semantic information to correctly scale scenes. Our dataset is currently biased towards outdoor landmarks, though by scaling to much larger input photo collections we will find more diverse scenes. Despite these limitations, our work points towards the Internet as an intriguing, useful source of data for geometric learning problems.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: We use large Internet image collections, combined with 3D reconstruction and semantic labeling methods, to generate large amounts of training data for single-view depth prediction. (a), (b), (e): Example input RGB images. (c), (d), (f): Depth maps predicted by our MegaDepth-trained CNN (blue=near, red=far). For these results, the network was not trained on Make3D and KITTI data.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Comparison between MVS depth maps with and without our proposed refinement/cleaning methods. The raw MVS depth maps (middle) exhibit depth bleeding (top) or incorrect depth on people (bottom). Our methods (right) can correct or remove such outlier depths.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Examples of automatic ordinal labeling. Blue mask: foreground (F ord ) derived from semantic segmentation. Red mask: background (B ord ) derived from reconstructed depth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: Depth prediction with and without L grad . L grad encourages the prediction to match the depth gradient of the ground truth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: Depth prediction with and without L ord . L ord tends to corrects ordinal depth relations for hard-to-construct objects such as the person in the first row and the tree in the second row.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>Figure 6: Depth predictions on MD test set. (Blue=near, red=far.) For visualization, we mask out the detected sky region. In the columns marked (M), we apply the mask from the GT depth map (indicating valid reconstructed depths) to the prediction map, to aid comparison with GT. (a) Input photo. (b) Ground truth COLMAP depth map (GT). VGG * prediction using the loss and network of [6]. (d) GT-masked version of (c). (e) Depth prediction from a ResNet [19]. (f) GT-masked version of (e). (g) Depth prediction from an hourglass (HG) network [4] . (h) GT-masked version of (g).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 :</head><label>7</label><figDesc>Figure 7: Depth predictions on Make3D. (Blue=near, red=far.) The last four columns show the results of the best models trained on non-Make3D datasets (last column is our result).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 :</head><label>8</label><figDesc>Figure 8: Depth predictions on KITTI. (Blue=near, red=far.) None of the models were trained on KITTI data.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Results on the MD test set (places unseen during training) for several network architectures. For VGG *</figDesc><table>we use the same loss and network architecture as in [6] for 
+comparison to [6]. Lower is better. 
+
+Method 
+si-RMSE SDR 
+= % SDR 
+= % SDR% 
+
+L data only 
+0.146 
+32.32 
+29.96 
+30.08 
++L grad 
+0.111 
+25.17 
+27.32 
+26.11 
++L grad +L ord 
+0.099 
+25.17 
+23.80 
+24.39 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Results</figDesc><table>on MD test set (places unseen during 
+training) for different loss configurations. Lower is better. 
+
+Test set 
+Error measure Raw MD Clean MD 
+
+Make3D RMS 
+11.41 
+5.493 
+Abs Rel 
+0.614 
+0.298 
+log10 
+0.386 
+0.115 
+
+KITTI 
+RMS 
+12.15 
+6.874 
+RMS(log) 
+0.582 
+0.336 
+Abs Rel 
+0.433 
+0.282 
+Sq Rel 
+3.927 
+2.223 
+
+DIW 
+WHDR% 
+31.32 
+22.97 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 5 :</head><label>5</label><figDesc>Results on the KITTI test set for various train- ing datasets and approaches. Columns are as in Table 4.</figDesc><table>Training set Method 
+WHDR% 
+
+DIW 
+Chen et al. [4] 
+22.14 
+
+KITTI 
+Zhou et al. [43] 
+31.24 
+Godard et al. [13] 
+30.52 
+
+NYU 
+Eigen et al. [6] 
+25.70 
+Laina et al. </table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Project website: http://www.cs.cornell.edu/projects/ megadepth/ (a) Internet photo of Colosseum (b) Image from Make3D (c) Our single-view depth prediction (d) Our single-view depth prediction (e) Image from KITTI (f) Our single-view depth prediction</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments. We thank the anonymous reviewers for their valuable comments. This work was funded by the National Science Foundation under grant IIS-1149393.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pytorch</surname></persName>
+		</author>
+		<ptr target="http://pytorch.org" />
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Building Rome in a day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Coupled depth learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">H</forename><surname>Baig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Torresani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Winter Conf. on Computer Vision (WACV)</title>
+		<meeting>Winter Conf. on Computer Vision (WACV)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Single-image depth perception in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="730" to="738" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Surface normals in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1557" to="1566" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Predicting depth, surface normals and semantic labels with a common multi-scale convolutional architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2650" to="2658" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Depth map prediction from a single image using a multi-scale deep network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Puhrsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2366" to="2374" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Building Rome on a cloudless day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Georgel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Raguram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-H</forename><surname>Jen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Dunn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Clipp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Towards internet-scale multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1434" to="1441" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Unsupervised CNN for single view depth estimation: Geometry to the rescue</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Garg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Carneiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="740" to="756" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? The KITTI Vision Benchmark Suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Micro perceptual human computation for visual tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">I</forename><surname>Gingold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cohen-Or</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graphics</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Unsupervised monocular depth estimation with left-right consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Godard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">Mac</forename><surname>Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multi-view stereo for community photo collections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Goesele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Geometric context from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="654" to="661" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Depth extraction from video using non-parametric sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Karsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="775" to="788" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Tanks and temples: Benchmarking large-scale scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Knapitsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graphics</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deeper depth prediction with fully convolutional residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laina</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rupprecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Belagiannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tombari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int. Conf. on 3D Vision (3DV)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="239" to="248" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Depth and surface normal estimation from monocular images using regression on deep features and hierarchical CRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Hengel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1119" to="1127" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Worldwide pose estimation using 3D point clouds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Huttenlocher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Large-Scale Visual Geo-Localization</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="147" to="163" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deep convolutional neural fields for depth estimation from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Learning depth from single monocular images using deep convolutional neural fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Trans. Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="page" from="2024" to="2039" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Discrete-continuous depth estimation from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="716" to="723" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Object scene flow for autonomous vehicles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Menze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Learning 3d object categories by looking around them</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Novotny</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Larlus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5218" to="5227" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Monocular depth estimation using neural regression forest</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Todorovic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Learning depth from single monocular images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">H</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Make3D: Learning 3D scene structure from a single still image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Trans. Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Structure-from-motion revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schonberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4104" to="4113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">From single image query to detailed 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schönberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Radenovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Pixelwise view selection for unstructured multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Schönberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="501" to="518" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Indoor scene segmentation using a structured light sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshops</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Indoor segmentation and support inference from RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="746" to="760" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Photo tourism: Exploring photo collections in 3D</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Trans. Graphics (SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Demon: Depth and motion network for learning monocular stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ummenhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uhrig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="5622" to="5631" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Towards linear-time incremental structure from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int. Conf. on 3D Vision (3DV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Deep3D: Fully automatic 2D-to-3D video conversion with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. European Conf. on Computer Vision (ECCV)</title>
+		<meeting>European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Multiscale continuous CRFs as sequential deep networks for monocular depth estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ricci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sebe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Personal photograph enhancement using internet photo collections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Georgel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Visualization and Computer Graphics</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Pyramid scene parsing network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Qi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Scene parsing through ade20k dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Puig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Barriuso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of depth and ego-motion from video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Computer Vision and Pattern Recognition (CVPR</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Learning ordinal relationships for mid-level vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zoran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Int. Conf. on Computer Vision (ICCV)</title>
+		<meeting>Int. Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="388" to="396" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

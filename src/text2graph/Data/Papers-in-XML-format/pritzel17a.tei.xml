@@ -1,0 +1,1568 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Neural Episodic Control</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benigno</forename><surname>Uria</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sriram</forename><surname>Srinivasan</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adrià</forename><surname>Puigdomènech Badia</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Demis</forename><surname>Hassabis</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charles</forename><surname>Blundell</surname></persName>
+						</author>
+						<title level="a" type="main">Neural Episodic Control</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Deep reinforcement learning methods attain super-human performance in a wide range of environments. Such methods are grossly inefficient, often taking orders of magnitudes more data than humans to achieve reasonable performance. We propose Neural Episodic Control: a deep reinforcement learning agent that is able to rapidly assimilate new experiences and act upon them. Our agent uses a semi-tabular representation of the value function: a buffer of past experience containing slowly changing state representations and rapidly updated estimates of the value function. We show across a wide range of environments that our agent learns significantly faster than other state-of-the-art, general purpose deep reinforcement learning agents.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Deep reinforcement learning agents have achieved state-ofthe-art results in a variety of complex environments <ref type="bibr" target="#b24">(Mnih et al., 2015;</ref>, often surpassing human performance . Although the final performance of these agents is impressive, these techniques usually require several orders of magnitude more interactions with their environment than a human in order to reach an equivalent level of expected performance. For example, in the Atari 2600 set of environments , deep Q-networks  require more than 200 hours of gameplay in order to achieve scores similar to those a human player achieves after two hours <ref type="bibr" target="#b20">(Lake et al., 2016)</ref>. The glacial learning speed of deep reinforcement learning has several plausible explanations and in this work we focus on addressing these: 1. Stochastic gradient descent optimisation requires the use of small learning rates. Due to the global approximation nature of neural networks, high learning rates cause catastrophic interference <ref type="bibr" target="#b22">(McCloskey &amp; Cohen, 1989)</ref>. Low learning rates mean that experience can only be incorporated into a neural network slowly. 2. Environments with a sparse reward signal can be difficult for a neural network to model as there may be very few instances where the reward is non-zero. This can be viewed as a form of class imbalance where low-reward samples outnumber high-reward samples by an unknown number. Consequently, the neural network disproportionately underperforms at predicting larger rewards, making it difficult for an agent to take the most rewarding actions. 3. Reward signal propagation by value-bootstrapping techniques, such as Q-learning, results in reward information being propagated one step at a time through the history of previous interactions with the environment. This can be fairly efficient if updates happen in reverse order in which the transitions occur. However, in order to train on uncorrelated minibatches DQN-style, algorithms train on randomly selected transitions, and, in order to further stabilise training, require the use of a slowly updating target network further slowing down reward propagation. In this work we shall focus on addressing the three concerns listed above; we must note, however, that other recent advances in exploration <ref type="bibr" target="#b30">(Osband et al., 2016)</ref>, hierarchical reinforcement learning <ref type="bibr" target="#b44">(Vezhnevets et al., 2016)</ref> and transfer learning <ref type="bibr" target="#b33">(Rusu et al., 2016;</ref><ref type="bibr" target="#b9">Fernando et al., 2017</ref>) also make substantial contributions to improving data efficiency in deep reinforcement learning over baseline agents. In this paper we propose Neural Episodic Control (NEC), a method which tackles the limitations of deep reinforcement learning listed above and demonstrates dramatic improvements on the speed of learning for a wide range of environments. Critically, our agent is able to rapidly latch onto highly successful strategies as soon as they are experienced, instead of waiting for many steps of optimisation (e.g., stochastic gradient descent) as is the case with DQN <ref type="bibr" target="#b24">(Mnih et al., 2015)</ref> and A3C . Our work is in part inspired by the hypothesised role of the Hippocampus in decision making <ref type="bibr" target="#b21">(Lengyel &amp; Dayan, 2007;</ref><ref type="bibr" target="#b7">Blundell et al., 2016)</ref> and also by recent work on one-shot learning  and learning to remember rare events with neural networks <ref type="bibr" target="#b17">(Kaiser et al., 2016)</ref>. Our agent uses a semi-tabular representation of its experience of the environment possessing several of the features of episodic memory such as long term memory, sequentiality, and context-based lookups. The semi-tabular representation is an append-only memory that binds slow-changing keys to fast updating values and uses a context-based lookup on the keys to retrieve useful values during action selection by the agent. Thus the agent's memory operates in much the same way that traditional table-based RL methods map from state and action to value estimates. A unique aspect of the memory in contrast to other neural memory architectures for reinforcement learning (explained in more detail in Section 3) is that the values retrieved from the memory can be updated much faster than the rest of the deep neural network. This helps alleviate the typically slow weight updates of stochastic gradient descent applied to the whole network and is reminiscent of work on fast weights <ref type="bibr" target="#b0">(Ba et al., 2016;</ref><ref type="bibr" target="#b15">Hinton &amp; Plaut, 1987)</ref>, although the architecture we present is quite different. Another unique aspect of the memory is that unlike other memory architectures such as LSTM and the differentiable neural computer (DNC; <ref type="bibr" target="#b11">Graves et al., 2016)</ref>, our architecture does not try to learn when to write to memory, as this can be slow to learn and take a significant amount of time. Instead, we elect to write all experiences to the memory, and allow it to grow very large compared to existing memory architectures (in contrast to <ref type="bibr" target="#b28">Oh et al. (2015)</ref>; <ref type="bibr" target="#b11">Graves et al. (2016)</ref> where the memory is wiped at the end of each episode). Reading from this large memory is made efficient using kd-tree based nearest neighbour algorithm <ref type="bibr" target="#b6">(Bentley, 1975)</ref>. The remainder of the paper is organised as follows: in Section 2 we review deep reinforcement learning, in Section 3 the Neural Episodic Control algorithm is described, in Section 4 we report experimental results in the Atari Learning Environment, in Section 5 we discuss other methods that use memory for reinforcement learning, and finally in Section 6 we outline future work and summarise the main advantages of the NEC algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Deep Reinforcement Learning</head><p>The action-value function of a reinforcement learning agent <ref type="bibr" target="#b40">(Sutton &amp; Barto, 1998)</ref> </p><formula xml:id="formula_0">is defined as Q π (s, a) = E π [ t γ t r t | s, a]</formula><p>, where a is the initial action taken by the agent in the initial state s and the expectation denotes that the policy π is followed thereafter. The discount factor γ ∈ (0, 1) trades off favouring short vs. long term rewards. Deep Q-Network agents (DQN; <ref type="bibr" target="#b24">Mnih et al., 2015)</ref> use Qlearning <ref type="bibr" target="#b47">(Watkins &amp; Dayan, 1992)</ref> to learn a value function Q(s t , a t ) to rank which action a t is best to take in each state s t at step t. The agent then executes an -greedy policy based upon this value function to trade-off exploration and exploitation: with probability the agent picks an action uniformly at random, otherwise it picks the action a t = arg max a Q(s t , a). In DQN, the action-value function Q(s t , a t ) is parameterised by a convolutional neural network that takes a 2D pixel representation of the state s t as input, and outputs a vector containing the value of each action at that state. When the agent observes a transition, DQN stores the (s t , a t , r t , s t+1 ) tuple in a replay buffer, the contents of which are used for training. This neural network is trained by minimizing the squared error between the network's output and the Q-learning target y t = r t + γ max aQ (s t+1 , a), for a subset of transitions sampled at random from the replay buffer. The target networkQ(s t+1 , a) is an older version of the value network that is updated periodically. The use of a target network and uncorrelated samples from the replay buffer are critical for stable training. A number of extensions have been proposed that improve DQN. Double DQN  reduces bias on the target calculation. Prioritised Replay <ref type="bibr" target="#b36">(Schaul et al., 2015b)</ref> further improves Double DQN by optimising the replay strategy. Several authors have proposed methods of improving reward propagation and the back up mechanism of Q learning <ref type="bibr" target="#b27">Munos et al., 2016;</ref><ref type="bibr" target="#b14">He et al., 2016)</ref> by incorporating on-policy rewards or by adding constraints to the optimisation. Q * (λ)  and Retrace(λ)  change the form of the Q-learning target to incorporate on-policy samples and fluidly switch between on-policy learning and off-policy learning. <ref type="bibr" target="#b27">Munos et al. (2016)</ref> show that by incorporating on-policy samples allows an agent to learn faster in Atari environments, indicating that reward propagation is indeed a bottleneck to efficiency in deep reinforcement learning. A3C ) is another well known deep reinforcement learning algorithm that is very different from DQN. It is based upon a policy gradient, and learns both a policy and its associated value function, which is learned entirely on-policy (similar to the λ = 1 case of Q(λ)). Interestingly, <ref type="bibr" target="#b25">Mnih et al. (2016)</ref> also added an LSTM memory to the otherwise convolutional neural network architecture to give the agent a notion of memory, although this did not have significant impact on the performance on Atari games.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Neural Episodic Control</head><p>Our agent consists of three components: a convolutional neural network that processes pixel images s, a set of memory modules (one per action), and a final network that converts read-outs from the action memories into Q(s, a) values. For the convolutional neural network we use the same architecture as DQN <ref type="bibr" target="#b24">(Mnih et al., 2015)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Differentiable Neural Dictionary</head><p>For each action a ∈ A, NEC has a simple memory module M a = (K a , V a ), where K a and V a are dynamically sized arrays of vectors, each containing the same number of vectors. The memory module acts as an arbitrary association from keys to corresponding values, much like the dictionary data type found in programs. Thus we refer to this kind of memory module as a differentiable neural dictionary (DND). There are two operations possible on a DND: lookup and write, as depicted in <ref type="figure">Figure 1</ref>. Performing a lookup on a DND maps a key h to an output value o:</p><formula xml:id="formula_1">o = i w i v i ,<label>(1)</label></formula><p>where v i is the ith element of the array V a and</p><formula xml:id="formula_2">w i = k(h, h i )/ j k(h, h j ),<label>(2)</label></formula><p>where h i is the ith element of the array K a and k(x, y) is a kernel between vectors x and y, e.g., Gaussian kernel. Thus the output of a lookup in a DND is a weighted sum of the values in the memory, whose weights are given by normalised kernels between the lookup key and the corresponding key in memory. To make queries into very large memories scalable we shall make two approximations in practice: firstly, we shall limit (1) to the top p-nearest neighbours (typically p = 50). Secondly, we use an approximate nearest neighbours algorithm to perform the lookups, based upon kd-trees <ref type="bibr" target="#b6">(Bentley, 1975)</ref>. After a DND is queried, a new key-value pair is written into the memory. The key written corresponds to the key that was looked up. The associated value is application-specific (below we specify the update for the NEC agent). Writes to a DND are append-only: keys and values are written to the memory by appending them onto the end of the arrays K a and V a respectively. If a key already exists in the memory, then its corresponding value is updated, rather than being duplicated. Note that a DND is a differentiable version of the memory module described in <ref type="bibr" target="#b7">Blundell et al. (2016)</ref>. It is also a generalisation to the memory and lookup schemes described in <ref type="bibr" target="#b45">Vinyals et al. (2016)</ref>; <ref type="bibr" target="#b17">Kaiser et al. (2016)</ref> for classification. <ref type="figure" target="#fig_1">Figure 2</ref> shows a DND as part of the NEC agent for a single action, whilst Algorithm 1 describes the general outline of the NEC algorithm. The pixel state s is processed by a convolutional neural network to produce a key h. The key h is then used to lookup a value from the DND, yielding weights w i in the process for each element of the memory arrays. Finally, the output is a weighted sum of the values in the DND. The values in the DND, in the case of an NEC agent, are the Q values corresponding to the state that originally resulted in the corresponding key-value pair to be written to the memory. Thus this architecture produces an estimate of Q(s, a) for a single given action a. The architecture is replicated once for each action a the agent can take, with the convolutional part of the network shared among each separate DND M a . The NEC agent acts by taking the action with the highest Q-value estimate at each time step. In practice, we use -greedy policy during training with a low . </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Agent Architecture</head><formula xml:id="formula_3">Append (h, Q (N ) (s t , a t )) to M at . Append (s t , a t , Q (N ) (s t , a t )) to D.</formula><p>Train on a random minibatch from D. end for end for 3.3. Adding (s, a) pairs to memory As an NEC agent acts, it continually adds new key-value pairs to its memory. Keys are appended to the memory of the corresponding action, taking the value of the query key h encoded by the convolutional neural network. We now turn to the question of an appropriate corresponding value. In <ref type="bibr" target="#b7">Blundell et al. (2016)</ref>, Monte Carlo returns were written to memory. We found that a mixture of Monte Carlo returns (on-policy) and off-policy backups worked better and so for NEC we elect to use N -step Q-learning as in <ref type="bibr" target="#b25">Mnih et al. (2016)</ref> (see also <ref type="bibr" target="#b48">Watkins, 1989;</ref><ref type="bibr" target="#b31">Peng &amp; Williams, 1996)</ref>. This adds the following N on-policy rewards and bootstraps the sum of discounted rewards for the rest of the trajectory, off-policy. The N -step Q-value estimate is then</p><formula xml:id="formula_4">Q (N ) (s t , a) = N −1 j=0 γ j r t+j + γ N max a Q(s t+N , a ) . (3)</formula><p>The bootstrap term of (3), max a Q(s t+N , a ) is found by querying all memories M a for each action a and taking the highest estimated Q-value returned. Note that the earliest such values can be added to memory is N steps after a particular (s, a) pair occurs. When a state-action value is already present in a DND (i.e the key h corresponding to the visited state is already in K a ), the corresponding value present in V a , Q i , is updated in the same way as the classic tabular Q-learning algorithm:</p><formula xml:id="formula_5">Q i ← Q i + α(Q (N ) (s, a) − Q i ) .<label>(4)</label></formula><p>where α is the learning rate of the Q update. If the state is not already present Q (N ) (s t , a) is appended to V a and h is appended to K a . Note that our agent learns the value function in much the same way that a classic tabular Q-learning agent does, except that the Q-table grows with time. We found that α could take on a high value, allowing repeatedly visited states with a stable representation to rapidly update Writing Lookup <ref type="figure">Figure 1</ref>. Illustration of operations on a Differentiable Neural Dictionary.</p><p>their value function estimate. Additionally, batching up memory updates (e.g., after each episode) helps with computational performance. We overwrite the item that has least recently been a neighbour when we reach the memory's maximum capacity.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Learning</head><p>Agent parameters are updated by minimising the L 2 loss between the predicted Q value for a given action and the Q (N ) estimate on randomly sampled mini-batches from a replay buffer. In particular, we store tuples (s t , a t , R t ) in the replay buffer, where N is the horizon of the N -step Q rule, and R t = Q (N ) (s t , a) plays the role of the target network seen in DQN (our replay buffer is significantly smaller than DQN's). These (s t , a t , R t )-tuples are then sampled uniformly at random to form minibatches for training. Note that the architecture in <ref type="figure" target="#fig_1">Figure 2</ref> is entirely differentiable and so we can minimize this loss by gradient descent. Backpropagation updates the weights and biases of the convolutional embedding network and the keys and values of each actionspecific memory using gradients of this loss, using a lower learning rate than is used for updating pairs after queries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We investigated whether neural episodic control allows for more data efficient learning in practice in complex domains. As a problem domain we chose the Atari Learning Environment(ALE; . We tested our method on the 57 Atari games used by <ref type="bibr" target="#b35">Schaul et al. (2015a)</ref>, which form an interesting set of tasks as they contain diverse challenges such as sparse rewards and vastly different magnitudes of scores across games. Most common algorithms applied in these domains, such as variants of DQN and A3C, require in the thousands of hours of in-game time, i.e. they are data inefficient. We consider 5 variants of A3C and DQN as baselines as well as MFEC . We compare to the basic implementations of A3C  and DQN <ref type="bibr" target="#b24">(Mnih et al., 2015)</ref>. We also compare to two algorithms incorporating λ returns <ref type="bibr" target="#b39">(Sutton, 1988)</ref> aiming at more data efficiency by faster propagation of credit assignments, namely Q * (λ)  and Retrace(λ) . We also compare to DQN with Prioritised Replay, which improves data efficiency by replaying more salient transitions more frequently. We did not directly compare to DRQN <ref type="bibr" target="#b13">(Hausknecht &amp; Stone, 2015)</ref> nor FRMQN <ref type="bibr" target="#b29">(Oh et al., 2016)</ref> as results were not available for all Atari games. Note that in the case of DRQN, reported performance is lower than that of Prioritised Replay. All algorithms were trained using discount rate γ = 0.99, except MFEC that uses γ = 1. In our implementation of MFEC we used random projections as an embedding function, since in the original publication it obtained better performance on the Atari games tested. In terms of hyperparameters for NEC, we chose the same convolutional architecture as DQN, and store up to 5 × 10 5 memories per action. We used the RMSProp algorithm <ref type="bibr" target="#b41">(Tieleman &amp; Hinton, 2012)</ref> for gradient descent training. We apply the same preprocessing steps as <ref type="bibr" target="#b24">(Mnih et al., 2015)</ref>, including repeating each action four times. For the N -step Q estimates we picked a horizon of N = 100. Our replay buffer stores the only last 10 5 states (as opposed to 10 6 for DQN) observed and their N -step Q estimates. We do one replay update for every 16 observed frames with a minibatch of size 32. We set the number of nearest neighbours p = 50 in all our experiments. For the kernel function we chose a function that interpolates between the mean for short distances and weighted inverse distance for large distances, more precisely:</p><formula xml:id="formula_6">k(h, h i ) = 1 h − h i 2 2 + δ .<label>(5)</label></formula><p>Intuitively, when all neighbours are far away we want to avoid putting all weight onto one data point. A Gaussian kernel, for example, would exponentially suppress all neighbours except for the closest one. The kernel we chose has the advantage of having heavy tails. This makes the algorithm more robust and we found it to be less sensitive to kernel hyperparameters. We set δ = 10 −3 . In order to determine whether an key corresponding to a given state is already present in the table we store a hash of the observation for each state and check whether the hash is present when inserting. In order to tune the remaining hyperparameters (SGD learning-rate, fast-update learning-rate α in Equation 4, dimensionality of the embeddings, Q (N ) in Equation 3, andgreedy exploration-rate) we ran a hyperparameter sweep on six games: Beam Rider, Breakout, Pong, Q*Bert, Seaquest and Space Invaders. We picked the hyperparameter values that performed best on the median for this subset of games (a common cross validation procedure described by , and adhered to by <ref type="bibr" target="#b24">Mnih et al. (2015)</ref>). Data efficiency results are summarised in Table 1. In the small data regime (less than 20 million frames) NEC clearly outperforms all other algorithms. The difference is especially pronounced before 5 million frames have been observed. Only at 40 million frames does DQN with Prioritised Replay outperform NEC on average; note that this corresponds to 185 hours of gameplay. In order to provide a more detailed picture of NEC's performance, Figures 3 to 7 show learning curves on 6 games (Alien, Bowling, Boxing, Frostbite, HERO, Ms. Pac-Man, Pong), where several stereotypical cases of NEC's performance can be observed 1 . All learning curves show the average performance over 5 different initial random seeds. We evaluate MFEC and NEC every 200.000 frames, and the other algorithms are evaluated every million steps. Across most games, NEC is significantly faster at learning in the initial phase (see also Table 1), only comparable to MFEC, which also uses an episodic-like Q-function. NEC also outperforms MFEC on average (see <ref type="table">Table 2</ref>). In contrast with MFEC, NEC uses the reward signal to learn an embedding adequate for value interpolation. This difference is especially significant in games where a few pixels determine the value of each action. The simpler version of MFEC uses an approximation to L2 distances 1 Videos and complementary graphical material can be found at https://sites.google.com/view/necicml in pixel-space by means of random projections, and cannot focus on the small but most relevant details. Another version of MFEC calculated distances on the latent representation of a variational autoencoder <ref type="bibr" target="#b18">(Kingma &amp; Welling, 2013)</ref> trained to model frames. This latent representation does not depend on rewards and will be subject to irrelevant details like, for example, the display of the current score. A3C, DQN and related algorithms require rewards to be clipped to the range [−1, 1] for training stability 2 <ref type="bibr" target="#b24">(Mnih et al., 2015)</ref>. NEC and MFEC do not require reward clipping, which results in qualitative changes in behaviour and better performance relative to other algorithms on games requiring clipping (Bowling, Frostbite, H.E.R.O., Ms. PacMan, and Alien out of the seven shown). Alien and Ms. Pac-Man both involve controlling a character, where there is an easy way to collect small rewards by collecting items of which there are plenty, while avoiding enemies, which are invulnerable to the agent. On the other hand the agent can pick up a special item making enemies vulnerable, allowing the agent to attack them and get significantly larger rewards than from collecting the small rewards. Agents trained using existing parametric methods tend to show little interest in this as clipping implies there  <ref type="table">Table 2</ref>. Mean human-normalised scores for several algorithms at different points in training is no difference between large and small rewards. Therefore, as NEC does not need reward clipping, it can strongly outperform other algorithms, since NEC is maximising the non-clipped score (the true score). This can also be seen when observing the agents play: parametric methods will tend to collect small rewards, while NEC will try to actively make the enemies vulnerable and attack them to get large rewards. NEC also outperforms the other algorithms on Pong and Boxing where reward clipping does not affect any of the algorithms as all original rewards are in the range [−1, 1]; as can be expected, NEC does not outperform others in terms of maximally achieved score, but it is vastly more data efficient.</p><p>In <ref type="figure">Figure 10</ref> we show a chart of human-normalised scores across all 57 Atari games at 10 million frames comparing to Prioritised Replay and MFEC. The human normalised score is computed as (s Agent − s Random )/(s Human − s Random ), where s Random denotes the score achieved by an agent picking actions uniformly at random. We rank the games independently for each algorithm, and on the y-axis the deciles are shown.</p><p>We can see that NEC gets to a human level performance in about 25% of the games within 10 million frames. As we can see NEC outperforms MFEC and Prioritised Replay.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Related work</head><p>There has been much recent work on memory architectures for neural networks (LSTM; <ref type="bibr" target="#b16">Hochreiter &amp; Schmidhuber, 1997)</ref>, DNC , memory networks <ref type="bibr" target="#b38">(Sukhbaatar et al., 2015;</ref><ref type="bibr" target="#b23">Miller et al., 2016)</ref>). Recurrent neural network representations of memory (LSTMs and DNCs) are trained by truncated backpropagation through time, and are subject to the same slow learning of non-recurrent neural networks. Some of these models have been adapted to their use in RL agents (LSTMs; <ref type="bibr">Bakker et al., 2003;</ref><ref type="bibr" target="#b13">Hausknecht &amp; Stone, 2015)</ref>, DNCs , memory networks <ref type="bibr" target="#b29">(Oh et al., 2016)</ref>. However, the contents of these memories is  typically reset at the beginning of every episode. This is appropriate when the goal of the memory is tracking previous observations in order to maximise rewards in partially observable or non-Markovian environments. Therefore, these implementations can be thought of as a type of working memory, and solve a different problem than the one addressed in this work. RNNs can learn to quickly write highly rewarding states into memory and may even be able to learn entire reinforcement learning algorithms <ref type="bibr" target="#b46">(Wang et al., 2016;</ref><ref type="bibr" target="#b8">Duan et al., 2016)</ref>. However, doing so can take an arbitrarily long time and the learning time likely scales strongly with the complexity of the task. The work of <ref type="bibr" target="#b29">Oh et al. (2016)</ref> is also reminiscent of the ideas presented here. They introduced (FR)MQN, an adaptation of memory networks used in the top layers of a Q-network. <ref type="bibr" target="#b17">Kaiser et al. (2016)</ref> introduced a differentiable layer of keyvalue pairs that can be plugged into a neural network. This layer uses cosine similarity to calculate a weighted average of the values associated with the k most similar memories. Their use of a moving average update rule is reminiscent of the one presented in Section 3. The authors reported results on a set of supervised tasks, however they did not consider applications to reinforcement learning. Other deep RL methods keep a history of previous experience. Indeed, DQN itself has an elementary form of memory: the replay buffer  central to its stable training can be viewed as a memory that is frequently replayed to distil the contents into DQN's value network. <ref type="bibr" target="#b19">Kumaran et al. (2016)</ref> suggest that training on replayed experiences from the replay buffer in DQN is similar to the replay of experiences from episodic memory during sleep in animals. DQN's replay buffer differs from most other work on memory for deep reinforcement learning in its sheer scale: it is common for DQN's replay buffer to hold millions of (s, a, r, s ) tuples. The use of local regression techniques for Q-function approximation has been suggested before: <ref type="bibr" target="#b34">Santamaría et al. (1997)</ref> proposed the use of k-nearest-neighbours regression with a heuristic for adding memories based on the distance to previous memories. <ref type="bibr" target="#b26">Munos &amp; Moore (1998)</ref> proposed barycentric interpolators to model the value function and proved their convergence to the optimal value function under mild conditions, but no empirical results were presented. <ref type="bibr" target="#b10">Gabel &amp; Riedmiller (2005)</ref> also suggested the use of local regression, under the paradigm of case-based-reasoning that included heuristics for the deletion of stored cases. <ref type="bibr">Blundell et al. (2016, MFEC)</ref> recently used local regression for Q-function estimation using the mean of the k-nearest neighbours, except in the case of an exact match of the query point, in which case the stored value was returned. They also propose the use of the latent variable obtained from a variational autoencoder <ref type="bibr" target="#b32">(Rezende et al., 2014)</ref> as an embedding space, <ref type="figure">Figure 10</ref>. Human-normalised scores of games, independently ranked per algorithm; labels on y-axis denote quantiles.</p><p>but showed random projections often obtained better results.</p><p>In contrast with the ideas presented here, none of the localregression work aforementioned uses the reward signal to learn an embedding space of covariates in which to perform the local-regression. We learn this embedding space using temporal-difference learning; a crucial difference, as we showed in the experimental comparison to MFEC.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Discussion</head><p>We have proposed Neural Episodic Control (NEC): a deep reinforcement learning agent that learns significantly faster than other baseline agents on a wide range of Atari 2600 games. At the core of NEC is a memory structure: a Differentiable Neural Dictionary (DND), one for each potential action. NEC inserts recent state representations paired with corresponding value functions into the appropriate DND. Our experiments show that NEC requires an order of magnitude fewer interactions with the environment than agents previously proposed for data efficiency, such as Prioritised Replay <ref type="bibr" target="#b36">(Schaul et al., 2015b)</ref> and Retrace(λ) . We speculate that NEC learns faster through a combination of three features of the agent: the memory architecture (DND), the use of N -step Q estimates, and a state representation provided by a convolutional neural network. The memory architecture, DND, rapidly integrates recent experience-state representations and corresponding value estimates-allowing this information to be quickly modify future behaviour. Such memories persist across many episodes, and we use a fast approximate nearest neighbour algorithm (kd-trees) to ensure that they can be efficiently accessed. Estimating Q-values by using the N -step Q value function interpolates between Monte Carlo value estimates and backed up off-policy estimates. Monte Carlo value estimates reflect the rewards an agent is actually receiving, whilst backed up off-policy estimates should be more representative of the value function at the optimal policy, but evolve much slower. By using both estimates, NEC can trade-off between these two estimation procedures and their relative strengths and weaknesses (speed of reward propagation vs optimality). Finally, by having a slow changing, stable representation provided by a convolutional neural network, keys stored in the DND remain relative stable. Our work suggests that non-parametric methods are a promising addition to the deep reinforcement learning toolbox, especially where data efficiency is paramount. In our experiments we saw that at the beginning of learning NEC outperforms other agents in terms of learning speed. We saw that later in learning Prioritised Replay has higher performance than NEC. We leave it to future work to further improve NEC so that its long term final performance is significantly superior to parametric agents. Another avenue of further research would be to apply the method discussed in this paper to a wider range of tasks such as visually more complex 3D worlds or real world tasks where data efficiency is of great importance.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>Proceedings of the 34 th International Conference on Machine Learning, Sydney, Australia, PMLR 70, 2017. Copyright 2017 by the author(s).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Architecture of episodic memory module for a single action a. Pixels representing the current state enter through a convolutional neural network on the bottom left and an estimate of Q(s, a) exits top right. Gradients flow through the entire architecture.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Learning curve on Bowling.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Learning curve on Frostbite.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Learning curve on H.E.R.O.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. Learning curve on Ms. Pac-Man.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Figure 7. Learning curve on Alien.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .</head><label>8</label><figDesc>Figure 8. Learning curve on Pong.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 9 .</head><label>9</label><figDesc>Figure 9. Learning curve on Boxing.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Algorithm 1 Neural Episodic Control D: replay memory. M a : a DND for each action a. N : horizon for N -step Q estimate. for each episode do for t = 1, 2, . . . , T do Receive observation s t from environment with em- bedding h. Estimate Q(s t , a) for each action a via (1) from M a a t ← -greedy policy based on Q(s t , a) Take action a t , receive reward r t+1</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">See Pop-Art (van Hasselt et al., 2016) for a DQN-like algorithm that does not require reward-clipping. NEC also outperforms Pop-Art.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>The authors would like to thank Daniel Zoran, Dharshan Kumaran, Jane Wang, Dan Belov, Ruiqi Guo, Yori Zwols, Jack Rae, Andreas Kirsch, Peter Dayan, David Silver and many others at DeepMind for insightful discussions and feedback. We also thank Georg Ostrovski, Tom Schaul, and Hubert Soyer for providing baseline learning curves.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Using fast weights to attend to the recent past</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volodymyr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Leibo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Joel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Catalin</forename><surname>Ionescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances In Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4331" to="4339" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bakker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhumatiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Viktor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gabriel</forename><surname>Gruener</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neural</forename><forename type="middle">Episodic</forename><surname>Control</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">A robot that reinforcement-learns to identify and memorize important previous observations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+				<title level="m">IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="430" to="435" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">The arcade learning environment: An evaluation platform for general agents</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Naddaf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bowling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Artificial Intelligence Research</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="page" from="253" to="279" />
+			<date type="published" when="2013-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The arcade learning environment: An evaluation platform for general agents</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Naddaf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yavar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Bowling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Artif. Intell. Res.(JAIR)</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="page" from="253" to="279" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Multidimensional binary search trees used for associative searching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jon</forename><surname>Bentley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Louis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="509" to="517" />
+			<date type="published" when="1975-09" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Charles</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Uria</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Benigno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yazhe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Avraham</forename><surname>Ruderman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><forename type="middle">Z</forename><surname>Leibo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rae</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hassabis</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.04460</idno>
+		<title level="m">Demis. Model-free episodic control</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Rl 2 : Fast reinforcement learning via slow reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yan</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><forename type="middle">L</forename><surname>Bartlett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pieter</forename><surname>Abbeel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.02779</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chrisantha</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Banarse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dylan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zwols</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrei</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Daan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pathnet</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.08734</idno>
+		<title level="m">Evolution channels gradient descent in super neural networks</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Cbr for state value function approximation in reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Gabel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Riedmiller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Case-Based Reasoning</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="206" to="221" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Hybrid computing using a neural network with dynamic external memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Greg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Reynolds</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Malcolm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Harley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ivo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grabska-Barwińska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Agnieszka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergio</forename><surname>Colmenarejo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gómez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Grefenstette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Edward</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ramalho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tiago</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Agapiou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">538</biblScope>
+			<biblScope unit="issue">7626</biblScope>
+			<biblScope unit="page" from="471" to="476" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Q (\ lambda) with off-policy corrections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anna</forename><surname>Harutyunyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Stepleton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rémi</forename><surname>Munos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Algorithmic Learning Theory</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="305" to="320" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Deep recurrent qlearning for partially observable mdps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthew</forename><surname>Hausknecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Stone</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1507.06527</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Learning to play in a day: Faster deep reinforcement learning by optimality tightening</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><forename type="middle">S</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Alexander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Peng</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.01606</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Using fast weights to deblur old memories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">C</forename><surname>Plaut</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the ninth annual conference of the Cognitive Science Society</title>
+		<meeting>the ninth annual conference of the Cognitive Science Society</meeting>
+		<imprint>
+			<date type="published" when="1987" />
+			<biblScope unit="page" from="177" to="186" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<idno type="doi">10.1162/neco.1997.9.8.1735</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Comput</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Learning to remember rare events</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lukasz</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nachum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ofir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aurko</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Max</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<title level="m">Auto-encoding variational bayes</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">What learning systems do intelligent agents need? complementary learning systems theory updated</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dharshan</forename><surname>Kumaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Demis</forename><surname>Hassabis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">L</forename><surname>Mcclelland</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Trends in Cognitive Sciences</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="512" to="534" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Building machines that learn and think like people</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brenden</forename><forename type="middle">M</forename><surname>Lake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ullman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tomer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tenenbaum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Joshua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gershman</forename><surname>Samuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1604.00289</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Hippocampal contributions to control: The third way</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lengyel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dayan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="page" from="889" to="896" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Catastrophic interference in connectionist networks: The sequential learning problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Mccloskey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neal</forename><forename type="middle">J</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Psychology of learning and motivation</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="page" from="109" to="165" />
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Keyvalue memory networks for directly reading documents</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fisch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jesse</forename><surname>Dodge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Karimi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Amir-Hossein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antoine</forename><surname>Bordes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Weston</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.03126</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volodymyr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Koray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrei</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><surname>Veness</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><forename type="middle">G</forename><surname>Bellemare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><forename type="middle">K</forename><surname>Fidjeland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Georg</forename><surname>Ostrovski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page" from="529" to="533" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Asynchronous methods for deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volodymyr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adria</forename><surname>Badia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Puigdomenech</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mehdi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">P</forename><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Harley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Koray</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Barycentric interpolators for continuous space and time reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Remi</forename><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moore</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">W</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="1024" to="1030" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Safe and efficient off-policy reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rémi</forename><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Stepleton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anna</forename><surname>Harutyunyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><surname>Bellemare</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1046" to="1054" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Action-conditional video prediction using deep networks in atari games</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junhyuk</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xiaoxiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Honglak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lewis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Satinder</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2845" to="2853" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Control of memory, active perception, and action in minecraft</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junhyuk</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chockalingam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Valliappa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Honglak</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 33rd International Conference on Machine Learning</title>
+		<meeting>The 33rd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2790" to="2799" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Deep exploration via bootstrapped dqn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Osband</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Pritzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Van</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Benjamin</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances In Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4026" to="4034" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Incremental multi-step q-learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jing</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">1-3</biblScope>
+			<biblScope unit="page" from="283" to="290" />
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Danilo</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jimenez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daan</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 31st International Conference on Machine Learning</title>
+		<meeting>The 31st International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1278" to="1286" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrei</forename><forename type="middle">A</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Neil</forename><forename type="middle">C</forename><surname>Rabinowitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Desjardins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Guillaume</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Soyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hubert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kirkpatrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>James</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Koray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Razvan</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hadsell</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.04671</idno>
+		<title level="m">Raia. Progressive neural networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Experiments with reinforcement learning in problems with continuous state and action spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Juan</forename><forename type="middle">C</forename><surname>Santamaría</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Richard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ram</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashwin</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Adaptive behavior</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="163" to="217" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Prioritized experience replay</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Quan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ioannis</forename><surname>Antonoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<idno>abs/1511.05952</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Schaul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Quan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ioannis</forename><surname>Antonoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.05952</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">Prioritized experience replay. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Mastering the game of go with deep neural networks and tree search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aja</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Guez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Arthur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sifre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Laurent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Den Driessche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>George</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schrittwieser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Julian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Antonoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ioannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Panneershelvam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Veda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lanctot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Marc</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">529</biblScope>
+			<biblScope unit="issue">7587</biblScope>
+			<biblScope unit="page" from="484" to="489" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">End-to-end memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sukhbaatar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sainbayar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fergus</forename><surname>Rob</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2440" to="2448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Learning to predict by the methods of temporal differences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="9" to="44" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Reinforcement learning: An introduction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">G</forename><surname>Barto</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<publisher>MIT press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tijmen</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">COURSERA: Neural Networks for Machine Learning</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Learning functions across many orders of magnitudes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Van Hasselt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Guez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hessel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016-02" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Deep reinforcement learning with double q-learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Hasselt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arthur</forename><surname>Guez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Silver</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2094" to="2100" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Strategic attentive writer for learning macro-actions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Vezhnevets</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Volodymyr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Agapiou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>John</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3486" to="3494" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Matching networks for one shot learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lillicrap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wierstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Daan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="3630" to="3638" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+		<title level="m" type="main">Learning to reinforcement learn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jane</forename><forename type="middle">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zeb</forename><surname>Kurth-Nelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tirumala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dhruva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Soyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hubert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><forename type="middle">Z</forename><surname>Leibo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Munos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Remi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Charles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dharshan</forename><surname>Kumaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matt</forename><surname>Botvinick</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.05763</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Watkins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Peter</forename><surname>Dayan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">3-4</biblScope>
+			<biblScope unit="page" from="279" to="292" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Learning from delayed rewards</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher John Cornish</forename><surname>Watkins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hellaby</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1989" />
+		</imprint>
+		<respStmt>
+			<orgName>University of Cambridge England</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

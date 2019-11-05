@@ -1,0 +1,988 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Deep High Dynamic Range Imaging with Large Foreground Motions</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shangzhe</forename><surname>Wu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">The Hong Kong University of Science and Technology</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Tencent Youtu</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">University of Oxford</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Deep High Dynamic Range Imaging with Large Foreground Motions</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>High Dynamic Range Imaging · Computational Photogra- phy</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. This paper proposes the first non-flow-based deep framework for high dynamic range (HDR) imaging of dynamic scenes with large-scale foreground motions. In state-of-the-art deep HDR imaging, input images are first aligned using optical flows before merging, which are still error-prone due to occlusion and large motions. In stark contrast to flow-based methods, we formulate HDR imaging as an image translation problem without optical flows. Moreover, our simple translation network can automatically hallucinate plausible HDR details in the presence of total occlusion, saturation and under-exposure, which are otherwise almost impossible to recover by conventional optimization approaches. Our framework can also be extended for different reference images. We performed extensive qualitative and quantitative comparisons to show that our approach produces excellent results where color artifacts and geometric distortions are significantly reduced compared to existing state-of-the-art methods, and is robust across various inputs, including images without radiometric calibration.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Off-the-shelf digital cameras typically fail to capture the entire dynamic range of a 3D scene. In order to produce high dynamic range (HDR) images, custom captures and special devices have been proposed <ref type="bibr" target="#b28">[25,</ref><ref type="bibr" target="#b9">8,</ref><ref type="bibr" target="#b27">24]</ref>. Unfortunately, they are usually too heavy and/or too expensive for capturing fleeting moments to cherish, which are typically photographed using cellphone cameras. The other more practical approach is to merge several low dynamic range (LDR) images captured at different exposures. If the LDR images are perfectly aligned, in other words no camera motion or object motion is observed, the merging problem is considered almost solved <ref type="bibr" target="#b18">[17,</ref><ref type="bibr" target="#b0">1]</ref>. However, foreground and background misalignments <ref type="figure">Fig. 1</ref>. Our goal is to produce an HDR image from a stack of LDR images that can be corrupted by large foreground motions, such as images shown on the left. Our resulted HDR image is displayed after tonemapping. On the right, the first two columns show that the optical flow alignment used by Kalantari <ref type="bibr" target="#b15">[14]</ref> introduces severe geometric distortions and color artifacts, which are unfortunately preserved in the final HDR results. The last three columns compare the results produced by other state-of-theart methods and ours where no optical flow alignment is used. Our simple network produces high quality ghost-free HDR image in the presence of large-scale saturation and foreground motions.</p><p>are unavoidable in the presence of large-scale foreground motions in addition to small camera motions. While the latter can be resolved to a large extent by homography transformation <ref type="bibr" target="#b30">[26]</ref>, foreground motions, on the other hand, will make the composition nontrivial. Many existing solutions tackling this issue are prone to introducing artifacts or ghosting in the final HDR image <ref type="bibr" target="#b16">[15,</ref><ref type="bibr" target="#b35">31,</ref><ref type="bibr" target="#b15">14]</ref>, or fail to incorporate misaligned HDR contents by simply rejecting the pixels in misaligned regions as outliers <ref type="bibr" target="#b17">[16,</ref><ref type="bibr" target="#b10">9,</ref><ref type="bibr" target="#b21">19</ref>], see <ref type="figure">Fig. 1</ref>.</p><p>Recent works have been proposed to learn this composition process using deep neural networks <ref type="bibr" target="#b15">[14]</ref>. In <ref type="bibr" target="#b15">[14]</ref>, they first used optical flow to align input LDR images, followed by feeding the aligned LDRs into a convolutional neural network (CNN) to produce the final HDR image. Optical flows are often unreliable, especially for images captured with different exposure levels, which inevitably introduce artifacts and distortions in the presence of large object motions. Although in <ref type="bibr" target="#b15">[14]</ref> it was claimed that the network is able to resolve these issues in the merging process, failure cases still exist as shown in <ref type="figure">Fig. 1</ref>, where color artifacts and geometry distortions are quite apparent in the final results.</p><p>In contrast, we regard merging multiple exposure shots into an HDR image as an image translation problem, which have been actively studied in recent years. In <ref type="bibr" target="#b12">[11]</ref> a powerful solution was proposed to learn a mapping between images in two domains using a Generative Adversarial Network (GAN). Meanwhile, CNNs have been demonstrated to have the ability to learn misalignment <ref type="bibr" target="#b2">[2]</ref> and hallucinate missing details <ref type="bibr" target="#b34">[30]</ref>. Inspired by these works, we believe that optical flow may be an overkill for HDR imaging. In this paper, we propose a simple end-to-end network that can learn to translate multiple LDR images into a ghost-free HDR image even in the presence of large foreground motions.</p><p>In summary, our method has the following advantages. First, unlike <ref type="bibr" target="#b15">[14]</ref>, our network is trained end-to-end without optical flow alignment, thus intrinsically avoiding artifacts and distortions caused by erroneous flows. In stark contrast to prevailing flow-based HDR imaging approaches <ref type="bibr" target="#b15">[14]</ref>, this provides a novel perspective and significant insights for HDR imaging, and is much faster and more practical. Second, our network can hallucinate plausible details that are totally missing or their presence is extremely weak in all LDR inputs. This is particularly desirable when dealing with large foreground motions, because usually some contents are not captured in all LDRs due to saturation and occlusion. Finally, the same framework can be easily extended to more LDR inputs, and possibly with any specified reference image. We perform extensive qualitative and quantitative comparisons, and show that our simple network outperforms the state-of-the-art approaches in HDR synthesis, including both learning based or optimization based methods. We also show that our network is robust across various kinds of input LDRs, including images with different exposure separations and images without correct radiometric calibration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Over the past decades, many research works have been dedicated to the problem of HDR imaging. As mentioned above, one practical solution is to compose an HDR image from a stack of LDR images. Early works such as <ref type="bibr" target="#b18">[17,</ref><ref type="bibr" target="#b0">1]</ref> produce excellent results for static scenes and static cameras.</p><p>To deal with camera motions, previous works <ref type="bibr" target="#b16">[15,</ref><ref type="bibr" target="#b30">26,</ref><ref type="bibr" target="#b13">12]</ref> register the LDR images before merging them into the final HDR image. Since many image registration algorithms depend on the brightness consistence assumptions, the brightness changes are often addressed by mapping the images to another domain, such as luminance domain or gradient domain, before estimating the transformation.</p><p>Compared to camera motions, object motions are much harder to handle. A number of methods reject the moving pixels using weightings in the merging process <ref type="bibr" target="#b17">[16,</ref><ref type="bibr" target="#b10">9]</ref>. Another approach is to detect and resolve ghosting after the merging <ref type="bibr" target="#b4">[4,</ref><ref type="bibr" target="#b23">21]</ref>. Such methods simply ignore the misaligned pixels, and fail to fully utilize available contents to generate an HDR image.</p><p>There are also more complicated methods <ref type="bibr" target="#b16">[15,</ref><ref type="bibr" target="#b35">31]</ref> that rely on optical flow or its variants to address dense correspondence between image pixels. However, optical flow often results in artifacts and distortions when handling large displacements, introducing extra complication in the merging step. Among the works in this category, <ref type="bibr" target="#b15">[14]</ref> produces perhaps the best results, and is highly related to our work. The authors proposed a CNN that learns to merge LDR images aligned using optical flow into the final HDR image. Our method is different from theirs in that we do not use optical flow for alignment, which intrinsically avoids the artifacts and distortions that are present in their results. We provide concrete comparisons in the later sections. Our framework is composed of three components: encoder, merger and decoder. Different exposure inputs are passed to different encoders, and concatenated before going through the merger and the decoder. We experimented with two structures, Unet and ResNet. We use skip-connections between the mirrored layers. The output HDR of the decoder is tonemapped before it can be displayed.</p><p>Another approach to address the dense correspondence is patch-based system <ref type="bibr" target="#b26">[23,</ref><ref type="bibr" target="#b11">10]</ref>. Although these methods produce excellent results, the running time is much longer, and often fail in the presence of large motions and large saturated regions.</p><p>A more recent work <ref type="bibr" target="#b3">[3]</ref> attempts to reconstruct a HDR image from one single LDR image using CNN. Although their network can hallucinate details in regions where input LDRs exhibit only very weak response, one intrinsic limitation of their approach is the total reliance on one single input LDR image, which often fails in highly contrastive scenes due to large-scale saturation. Therefore, we intend to explore better solutions to merge HDR contents from multiple LDR images, which can easily be captured in a burst, for instance, using cellphone cameras.</p><p>Typically, to produce an HDR image also involves other processing, including radiometric calibration, tone-mapping and dynamic range compression. Our work is focused on the merging process. Besides, there are also more expensive solutions that use special devices to capture a higher dynamic range <ref type="bibr" target="#b28">[25,</ref><ref type="bibr" target="#b9">8,</ref><ref type="bibr" target="#b27">24]</ref> and directly produce HDR images. For a complete review of the problem, readers may refer to <ref type="bibr" target="#b6">[5]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Approach</head><p>We formulate the problem of HDR imaging as an image translation problem. Similar to <ref type="bibr" target="#b15">[14]</ref>, given a set of LDR images {I 1 , I 2 , ..., I k }, we define a reference image I r . In our experiments, we use three LDRs, and set the middle exposure shot as reference. The same network can be extended to deal with more LDR inputs, and possibly with any specified reference image. We provide results in Section 5.3 to substantiate such robustness.</p><p>Specifically, our goal is to learn a mapping from a stack of LDR images {I 1 , I 2 , I 3 } to a ghost-free HDR image H that is aligned with the reference LDR input I r (same as I 2 ), and contains the maximum possible HDR contents. These contents are either obtained directly from LDR inputs, or from hallucinations when they are completely missing. We focus on handling large foreground motions, and assume the input LDR images, which are typically taken in a burst, have small background motions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Network Architecture</head><p>We capitalize on a translation network to learn such a mapping. As shown in <ref type="figure">Fig. 2</ref>, our framework is essentially a symmetric encoder-decoder architecture, with two variants, Unet and ResNet.</p><p>Unet <ref type="bibr" target="#b25">[22]</ref> is a common tool for translation learning. It is essentially an encoder-decoder architecture, with skip-connections that forward the output of the encoder layer (conv) directly to the input of the corresponding decoder layer (deconv) through channel-wise concatenation. In recent image translation works, such as <ref type="bibr" target="#b12">[11]</ref>, Unet has been demonstrated to be powerful in a wide range of tasks. However, unlike <ref type="bibr" target="#b12">[11]</ref> where Unet was used in an adversarial setting, we may not need a discriminator network in HDR imaging, because the mapping from LDR to HDR is relatively easy to learn, compared to other scenarios in <ref type="bibr" target="#b12">[11]</ref>, where the two images domains are much more distinct, such as edge ↔ photo.</p><p>In addition to simple Unet, we also experimented with another structure, ResNet, similar to Image Transformation Networks proposed in <ref type="bibr" target="#b14">[13]</ref>, which simply replaces the middle layers with residual blocks <ref type="bibr" target="#b8">[7]</ref>. Similar structure is also used in recent translation works <ref type="bibr" target="#b33">[29]</ref>. In this paper, we name the this structure ResNet, as opposed to the previous one, Unet. We compare their performance in later sections.</p><p>The overall architecture can be conceptually divided into three components: encoder, merger and decoder. Since we have multiple exposure shots, intuitively we may have separate branches to extract different types of information from different exposure inputs. Instead of duplicating the whole network, which may defer the merging, we separate the first two layers as encoders for each exposure inputs. After extracting the features, the network learns to merge them, mostly in the middle layers, and to decode them into an HDR output, mostly in the last few layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Processing Pipeline and Loss Function</head><p>Given a stack of LDR images, if they are not in RAW format, we first linearize the images using the estimated inverse of Camera Response Function (CRF) <ref type="bibr" target="#b7">[6]</ref>, which is often referred to as radiometric calibration. We then apply gamma correction to produce the input to our system. Although this process is technically important in order to recover the accurate radiance map, in practice, our system could also produce visually plausible approximation without radiometric calibration, such as examples shown in <ref type="figure">Fig. 10</ref>. This is because the gamma function can be a rough approximation of the CRF.</p><p>We denote the set of input LDRs by I = {I 1 , I 2 , I 3 }, sorted by their exposure biases. We first map them to H = {H 1 , H 2 , H 3 } in the HDR domain. We use simple gamma encoding for this mapping:</p><formula xml:id="formula_0">H i = I γ i t i , γ &gt; 1<label>(1)</label></formula><p>where t i is the exposure time of image I i . Note that we use H to denote the target HDR image, and H i to denote the LDR inputs mapped to HDR domain. The values of I i , H i and H are bounded between 0 and 1. We then concatenate I and H channel-wise into a 6-channel input and feed it directly to the network. This is also suggested in <ref type="bibr" target="#b15">[14]</ref>. The LDRs facilitate the detection of misalignments and saturation, while the exposure-adjusted HDRs improve the robustness of the network across LDRs with various exposure levels. Our network f is thus defined as:</p><formula xml:id="formula_1">Ĥ = f (I, H)<label>(2)</label></formula><p>whereĤ is the estimated HDR image, and is also bounded between 0 and 1. Since HDR images are usually displayed after tonemapping, we compute the loss function on the tonemapped HDR images, which is more effective than directly computed in the HDR domain. In <ref type="bibr" target="#b15">[14]</ref> the author proposed to use µ-law, which is commonly used for range compression in audio processing:</p><formula xml:id="formula_2">T (H) = log(1 + µH) log(1 + µ)<label>(3)</label></formula><p>where H is an HDR image, and µ is a parameter controlling the level of compression. We set µ to 5000. Although there are other powerful tonemappers, most of them are typically complicated and not fully differentiable, which makes them not suitable for training a neural network. Finally, our loss function is defined as:</p><formula xml:id="formula_3">L Unet = T (Ĥ) − T (H) 2<label>(4)</label></formula><p>where H is the ground truth HDR image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Datasets</head><p>We used the dataset provided by <ref type="bibr" target="#b15">[14]</ref> for training and testing. Although other HDR datasets are available, many of them either do not have ground truth HDR images, or contain only a very limited number of scenes. This dataset contains 89 scenes with ground truth HDR images. As described in <ref type="bibr" target="#b15">[14]</ref>, for each scene, 3 different exposure shots were taken while object was moving, and another 3 shots were taken while object remained static. The static sets are used to produce ground truth HDR with reference to the medium exposure shot. This medium exposure reference shot then replaces the medium exposure shot in the dynamic sets. All images are resized to 1000 × 1500. Each set consists of LDR images with exposure biases of {−2.0, 0.0, +2.0} or {−3.0, 0.0, +3.0}. We also tested our trained models on Sen's dataset <ref type="bibr" target="#b26">[23]</ref> and Tursun's dataset <ref type="bibr" target="#b31">[27,</ref><ref type="bibr" target="#b32">28]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Data Preparation</head><p>To focus on handling foreground motions, we first align the background using simple homography transformation, which does not introduce artifacts and distortions. This makes the learning more effective than directly trained without background alignment. Comparison and discussion are provided in Section 5.4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Data Augmentation and Patch Generation</head><p>The dataset was split into 74 training examples and 15 testing examples by <ref type="bibr" target="#b15">[14]</ref>. For the purpose of efficient training, instead of feeding the original full-size image into our model, we crop the images into 256 × 256 patches with a stride of 64, which produces around 19000 patches. We then perform data augmentation (flipping and rotation), further increasing the training data by 8 times.</p><p>In fact, a large portion of these patches contain only background regions, and exhibit little foreground motions. To keep the training focused on foreground motions, we detect large motion patches by thresholding the structural similarity between different exposure shots, and replicate these patches in the training set. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Experiments and Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1">Implementation Details</head><p>We first perform radiometric calibration and map the input LDRs to HDR domain. Each of the resulted radiance maps is channel-wise concatenated with the LDR image respectively, and then separately fed into different encoders. After 2 layers, all feature maps are then concatenated channel-wise for merging.</p><p>The encoding layers are convolution layers with a stride of 2, while the decoding layers are deconvolution layers kernels with a stride of 1/2. The output of the last deconvolution layer is connected to a flat-convolution layer to produce the final HDR. All layers use 5 × 5 kernels, and are followed by batch normalization (except the first layer and the output layer) and leaky ReLU (encoding layers) or ReLU (decoding layers). The channel numbers are doubled each layer from 64 to 512 during encoding and halved from 512 to 64 during decoding.  <ref type="bibr" target="#b15">[14]</ref>. Images are obtained from the Kalantari's dataset <ref type="bibr" target="#b15">[14]</ref> and Tursun's dataset <ref type="bibr" target="#b31">[27,</ref><ref type="bibr" target="#b32">28]</ref>. <ref type="figure">Fig. 5</ref>. Example of hallucination. The left is generated using only medium exposure shot, and the right is generated using low, medium and high exposure shots. Images are obtained from the Kalantari's dataset <ref type="bibr" target="#b15">[14]</ref>.</p><p>For Unet structure, 256 × 256 input patches are passed through 8 encoding layers to produce a 1 × 1 × 512 block, followed by 8 decoding layers plus an output layer to produce a 256 × 256 HDR patch. Our ResNet is different only in that after 3 encoding layers, the 32 × 32 × 256 block is passed through 9 residual blocks with 3 × 3 kernels, followed by 3 decoding layers and an output layer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2">Running Time</head><p>We report running time comparison with other methods in <ref type="table" target="#tab_0">Table 1</ref>. Although our network is trained with GPU, other conventional optimization methods are optimized with CPU. For fair comparison, we evaluated all methods under CPU environment, on a PC with i7-4790K (4.0GHz) and 32GB RAM. We tested all methods using 3 LDR images of size 896 × 1408 as input. Note that the optical flow alignment used in <ref type="bibr" target="#b15">[14]</ref> takes 59.4s on average. When run with GPU (Titan X Pascal), our Unet and ResNet take 0.225s and 0.239s respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3">Evaluation and Comparison</head><p>We perform quantitative and qualitative evaluations, and compare results with the state-of-the-art methods, including two patch-based methods <ref type="bibr" target="#b26">[23,</ref><ref type="bibr" target="#b11">10]</ref>, motion rejection method <ref type="bibr" target="#b21">[19]</ref>, the flow-based method with CNN merger <ref type="bibr" target="#b15">[14]</ref>, and the single image HDR imaging <ref type="bibr" target="#b3">[3]</ref>. For all methods, we used the codes provided by the authors. Note that all the HDR images are displayed after tonemapping using Photomatix [20], which is different from the tonemapper used in training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Quantitative Comparison</head><p>We compute the PSNR and SSIM scores between the generated HDR and the ground truth HDR, both before and after tonemapping using µ-law. We also compute the HDR-VDP-2 <ref type="bibr" target="#b19">[18]</ref>, a metric specifically designed for measuring the visual quality of HDR images. For the two parameters used to compute the HDR-VDP-2 scores, we set the diagonal display size to 24 inches, and the viewing distance to 0.5 meter. We did not compare with <ref type="bibr" target="#b21">[19]</ref> and <ref type="bibr" target="#b3">[3]</ref> quantitatively, since the former is optimized for more than 5 LDR inputs and the latter produces unbounded HDR results. <ref type="table">Table 2</ref> shows quantitative comparison of our networks against the stateof-the-art methods. Note that all results are calculated on the Kalantari's test set <ref type="bibr" target="#b15">[14]</ref>. While <ref type="bibr" target="#b15">[14]</ref> results in slightly higher PSNR scores, our methods result in comparable SSIM scores and slightly higher HDR-VDP-2 scores. Besides, ResNet seems to yield higher scores than Unet. <ref type="figure" target="#fig_1">Fig. 3</ref> compares the testing results against state-ofthe-art methods. In regions with no object motions, all methods produce decent results. However, when large object motion is present in saturated regions, <ref type="bibr">[23,</ref>   10, 14] tend to produce unsightly artifacts. Flow-based method <ref type="bibr" target="#b15">[14]</ref> also produces geometric distortions. Because Oh's method <ref type="bibr" target="#b21">[19]</ref> uses rank minimization, which generally requires more inputs, it results in ghosting artifacts when applied with 3 inputs. Since HDRCNN <ref type="bibr" target="#b3">[3]</ref> estimates the HDR image using only one single reference LDR image, it does not suffer from object motions, but tends to produce less sharp results and fail in large saturated regions, as shown in <ref type="figure">Fig. 1</ref>. Our two networks produce comparably good results, free of obvious artifacts and distortions. In general, ResNet seems to consistently outperform Unet.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Qualitative Comparison</head><p>Comparison against Flow-Based Method In addition to <ref type="figure" target="#fig_1">Fig. 1 and Fig. 3</ref>, <ref type="figure" target="#fig_2">Fig. 4</ref> illustrates our advantages over Kalantari's method <ref type="bibr" target="#b15">[14]</ref>, where optical flow alignment introduces severe distortions and color artifacts. Our method does not rely on erroneous optical flow, which intrinsically avoids such distortions, and is also much more efficient computationally.</p><p>Hallucination One important feature of our method is the capability of hallucinating missing details that are nearly impossible to recover using conventional optimization approaches. As shown in <ref type="figure">Fig. 5</ref>, when given only the medium exposure, our network is able to properly hallucinate the grass texture in the saturated regions. When given also two other exposure shots, our network is able to incorporate the additional information such as the ground texture.</p><p>In <ref type="figure" target="#fig_3">Fig. 6</ref>, we examine the effectiveness of hallucination, by comparing our results to others with no hallucination. Hallucination can be very useful in dynamic scenes, since contents in over-exposed or under-exposed regions are often missing in all LDRs due to total occlusions caused by object motions.</p><p>Highlight In addition to <ref type="figure" target="#fig_2">Fig. 4</ref>, where we show that our method outperforms <ref type="bibr" target="#b15">[14]</ref> in highlight regions, <ref type="figure" target="#fig_4">Fig. 7</ref> compares our highlight details against others. While other methods often fail to recover details in highlight regions and introduce artifacts and distortions, our method generally works well. Specifically, Hu's method <ref type="bibr" target="#b11">[10]</ref> performs poorly in general at highlight regions, and other methods can only partially recover the details. Kalantari's method <ref type="bibr" target="#b15">[14]</ref> tends to introduce evident distortions and color artifacts as shown in <ref type="figure" target="#fig_4">Fig. 7</ref>.  Different Reference Image <ref type="figure" target="#fig_5">Fig. 8</ref> illustrates another advantage of our image translation formulation: the flexibility in choosing different reference images. Currently this is achieved by re-arranging the input LDRs. For example, using only low and high exposure shots and feeding them to the network in the order of {Low-Low-Medium} will result in a pseudo-HDR image with reference to the low exposure shot. Technically, this output does not represent the accurate radiance values, but is perceptually compelling and similar to real HDR images. Our framework may be extended to directly output multiple HDR images with different reference images, if trained in such a fashion, although we do not have appropriate datasets to corroborate this.</p><p>More Input LDRs Our framework can potentially be extended for supporting more than 3 input LDRs. This is useful, because more LDRs capture more contents and improve the robustness. Although we do not have a suitable dataset to fully explore this, we decided to conduct a brief experiment using Sen's dataset <ref type="bibr" target="#b26">[23]</ref>. We used their produced HDR images as ground truth for training, which are yet to be perfect to be used as ground truth, but sufficient for our purpose of testing such extensibility. Using this dataset, we tested our framework using 5 LDR inputs. <ref type="figure">Fig. 9</ref> compares our results with others. Interestingly, while Sen's <ref type="bibr" target="#b26">[23]</ref> results using 5 inputs do not seem to be clearly better than those using 3 inputs, in our results, the details in saturated and under-exposed regions are markedly improved by using more input LDRs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Cellphone Example</head><p>We also tested our model on novel cellphone images for proof of practicality, shown in <ref type="figure">Fig. 10</ref>. Our network produces good results in various kinds of settings. The input images were captured using different cellphones with different camera response functions. It is worth noting that when producing these pseudo-HDR examples, we did not perform radiometric calibration. This again demonstrates the robustness of our network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4">Discussion on Background Alignment</head><p>In all our experiments and comparisons, since we are focused on handling large foreground motions, we align the backgrounds of the LDR inputs using homography transformation. Without background alignment, we found that our network tends to produce blurry edges where background is largely misaligned, as shown in <ref type="figure" target="#fig_7">Fig. 11</ref>. This can be due to the confusion caused by the background motion, which CNN is generally weak at dealing with. However, such issues can be easily resolved using simple homography transformation that almost perfectly aligns the background in most cases. Recall that in practice, the LDR inputs can be captured in a burst within a split second using nowadays handheld devices.</p><p>Nevertheless, homography is not always perfect. One particular case where homography may not produce perfect alignment is the existence of parallax effects in saturated regions. The final HDR output may be blurry. See <ref type="figure" target="#fig_8">Fig. 12</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusion and Future Work</head><p>In this paper, we demonstrate that the problem of HDR imaging can be formulated as an image translation problem and tackled using deep CNNs. We conducted extensive quantitative and qualitative experiments to show that our non-flow-based CNN approach outperforms the state-of-the-arts, especially in the presence of large foreground motions. In particular, our simple translation network intrinsically avoids distortions and artifacts produced by erroneous optical flow alignment, and is computationally much more efficient. Furthermore, our network can hallucinate plausible details in largely saturated regions with large foreground motions, and recovers highlight regions better than other methods. Our system can also be easily extended with more inputs, and with different reference images, not limited to the medium exposure LDR. It is also robust across different inputs, including images that are not radiometrically calibrated.</p><p>While our advantages are clear, it is yet to be a perfect solution. We also observe challenges of recovering massive saturated regions with minimal number of input LDRs. In the future, we would attempt to incorporate high-level knowledge to facilitate such recovery, and devise a more powerful solution.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>Fig. 2. Our framework is composed of three components: encoder, merger and decoder. Different exposure inputs are passed to different encoders, and concatenated before going through the merger and the decoder. We experimented with two structures, Unet and ResNet. We use skip-connections between the mirrored layers. The output HDR of the decoder is tonemapped before it can be displayed.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Fig. 3 .</head><label>3</label><figDesc>Fig. 3. Comparison against several state-of-the-art methods. In the upper half of the figure, the left column shows in the input LDRs, the middle is our tonemapped HDR result, and the last three columns show three zoomed-in LDR regions marked in the HDR image. The lower half compares the zoomed-in HDR regions of our results against others. The numbers in brackets at the bottom indicate the PSNR of the tonemapped images. Images are obtained from the Kalantari's test set [14].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 4 .</head><label>4</label><figDesc>Fig. 4. Comparison against flow-based method [14]. Images are obtained from the Kalantari's dataset [14] and Tursun's dataset [27, 28].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Fig. 6 .</head><label>6</label><figDesc>Fig. 6. Comparison of hallucinated details. Our network hallucinates the missing trunk texture, while others may fail. Images are obtained from the Kalantari's dataset [14].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 7 .</head><label>7</label><figDesc>Fig. 7. Comparison of highlight regions. Examples come from the Sen's dataset [23].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 8 .</head><label>8</label><figDesc>Fig. 8. Results with different reference images. The first row shows three LDR inputs, and the second row shows the corresponding HDR results with reference to each input.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Fig. 9 .Fig. 10 .</head><label>910</label><figDesc>Fig. 9. Results with more input LDRs. The integers in the parentheses indicate the number of LDR images used to generate produce the HDR.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Fig. 11 .</head><label>11</label><figDesc>Fig. 11. This example illustrates the effect of background alignment.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Fig. 12 .</head><label>12</label><figDesc>Fig. 12. Blurry results caused by parallax effects, which cannot be resolved by homography transformation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Comparison of average running time on the test set under CPU environment.</figDesc><table>Sen [23] Hu [10] Kalantari [14] HDRCNN [3] Ours Unet Ours ResNet 
+Time (s) 261 
+137 
+72.1 
+12.6 
+11.9 
+14.7 
+
+Table 2. Quantitative comparisons of the results on Kalantari's test set [14]. The first 
+two rows are PSNR/SSIM computed using tonemapped outputs and ground truth, 
+and the following two rows are PSNR/SSIM computed using linear images and ground 
+truth. The last row is HDR-VDP-2 [18] sores. All values are the average across 15 
+testing images in the original test set. 
+
+Sen [23] Hu [10] Kalantari [14] Ours Unet Ours ResNet 
+PSNR-T 
+40.80 35.79 
+42.70 
+40.81 
+41.65 
+SSIM-T 
+0.9808 0.9717 
+0.9877 
+0.9844 
+0.9860 
+PSNR-L 
+38.11 30.76 
+41.22 
+40.52 
+40.88 
+SSIM-L 
+0.9721 0.9503 
+0.9845 
+0.9837 
+0.9858 
+HDR-VDP-2 59.38 57.05 
+63.98 
+64.88 
+64.90 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">⋆ This work was partially done when Shangzhe Wu was an intern at Tencent Youtu.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgement This work was supported in part by Tencent Youtu.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Deep HDR with Large Foreground Motions</head></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Recovering High Dynamic Range Radiance Maps from Photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">E</forename><surname>Debevec</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 24th Annual Conference on Computer Graphics and Interactive Techniques</title>
+		<meeting>the 24th Annual Conference on Computer Graphics and Interactive Techniques<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM Press/Addison-Wesley Publishing Co</publisher>
+			<date type="published" when="1997" />
+			<biblScope unit="page" from="369" to="378" />
+		</imprint>
+	</monogr>
+	<note>SIGGRAPH &apos;97</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1145/258734.258884</idno>
+		<ptr target="https://doi.org/10.1145/258734.258884" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">FlowNet: Learning Optical Flow with Convolutional Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ilg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Häusser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hazırbaş</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Golkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Smagt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<ptr target="http://lmb.informatik.uni-freiburg.de/Publications/2015/DFIB15" />
+	</analytic>
+	<monogr>
+		<title level="m">IEEE ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">HDR image reconstruction from a single exposure using deep cnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Eilertsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kronander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Denes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mantiuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Unger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Artifactfree High Dynamic Range imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Gelfandz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tico</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pulli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2009 IEEE International Conference on Computational Photography (ICCP)</title>
+		<imprint>
+			<date type="published" when="2009-04" />
+			<biblScope unit="page" from="1" to="7" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1109/ICCPHOT.2009.5559003</idno>
+		<ptr target="https://doi.org/10.1109/ICCPHOT.2009.5559003" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Stack-Based Algorithms for HDR Capture and Reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dufaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">L</forename><surname>Callet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Mantiuk</surname></persName>
+		</author>
+		<idno type="doi">10.1016/B978-0-08-100412-8.00003-6</idno>
+		<ptr target="https://doi.org/10.1016/B978-0-08-100412-8.00003-6" />
+		<editor>Mrak, M.</editor>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>Academic Press</publisher>
+			<biblScope unit="page" from="85" to="119" />
+		</imprint>
+	</monogr>
+	<note>High Dynamic Range Video</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Determining the camera response from images: what is knowable?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Grossberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Nayar</surname></persName>
+		</author>
+		<idno type="doi">10.1109/TPAMI.2003.1240119</idno>
+		<ptr target="https://doi.org/10.1109/TPAMI.2003.1240119" />
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1455" to="1467" />
+			<date type="published" when="2003-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Deep Residual Learning for Image Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno>CoRR abs/1512.03385</idno>
+		<ptr target="http://arxiv.org/abs/1512.03385" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Flexisp: A flexible camera image processing framework</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Heide</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Steinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">T</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rouf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pajk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Reddy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Heidrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Egiazarian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kautz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pulli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2014-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Ghost-Free High Dynamic Range Imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">S</forename><surname>Heo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">U</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Moon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cha</surname></persName>
+		</author>
+		<idno type="doi">10.1007/978-3-642-19282-139</idno>
+		<ptr target="https://doi.org/10.1007/978-3-642-19282-139" />
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>Springer</publisher>
+			<biblScope unit="page" from="486" to="500" />
+			<pubPlace>Berlin Heidelberg; Berlin, Heidelberg</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pulli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<title level="m">HDR Deghosting: How to deal with Saturation? In: IEEE CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Image-to-Image Translation with Conditional Adversarial Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Automatic High-Dynamic Range Image Generation for Dynamic Scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Loscos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ward</surname></persName>
+		</author>
+		<idno type="doi">10.1109/MCG.2008.23</idno>
+		<ptr target="https://doi.org/10.1109/MCG.2008.23" />
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Computer Graphics and Applications</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="84" to="93" />
+			<date type="published" when="2008-03" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Perceptual losses for real-time style transfer and super-resolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Alahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Deep High Dynamic Range Imaging of Dynamic Scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">K</forename><surname>Kalantari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ramamoorthi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">High Dynamic Range Video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Uyttendaele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Winder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<idno type="doi">10.1145/882262.882270</idno>
+		<ptr target="https://doi.org/10.1145/882262.882270" />
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="319" to="325" />
+			<date type="published" when="2003-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Ghost Removal in High Dynamic Range Images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">A</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Akyuz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Reinhard</surname></persName>
+		</author>
+		<idno type="doi">10.1109/ICIP.2006.312892</idno>
+		<ptr target="https://doi.org/10.1109/ICIP.2006.312892" />
+	</analytic>
+	<monogr>
+		<title level="m">2006 International Conference on Image Processing</title>
+		<imprint>
+			<date type="published" when="2006-10" />
+			<biblScope unit="page" from="2005" to="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">On Being &apos;Undigital&apos; With Digital Cameras: Extending Dynamic Range By Combining Differently Exposed Pictures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">W</forename><surname>Picard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Imaging Science and Technology</title>
+		<meeting>Imaging Science and Technology</meeting>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="page" from="442" to="448" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">HDR-VDP-2: A Calibrated Visual Metric for Visibility and Quality Predictions in All Luminance Conditions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mantiuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Rempel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Heidrich</surname></persName>
+		</author>
+		<idno>1-40:14</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1145/2010324.1964935</idno>
+		<ptr target="https://doi.org/10.1145/2010324.1964935" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Robust High Dynamic Range Imaging by Rank Minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">H</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">W</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">S</forename><surname>Kweon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1219" to="1232" />
+			<date type="published" when="2015-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1109/TPAMI.2014.236133820.Photomatix:Photomatix.https:/www.hdrsoft.com</idno>
+		<ptr target="https://doi.org/10.1109/TPAMI.2014.236133820.Photomatix:Photomatix.https://www.hdrsoft.com" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Reconstruction of High Contrast Images for Dynamic Scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Raman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Visual Computer</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="1099" to="1114" />
+			<date type="published" when="2011-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1007/s00371-011-0653-0</idno>
+		<ptr target="https://doi.org/10.1007/s00371-011-0653-0" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">U-Net: Convolutional Networks for Biomedical Image Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ronneberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<ptr target="https://doi.org/0.1007/978-3-319-24574-428" />
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>Springer International Publishing</publisher>
+			<biblScope unit="page" from="234" to="241" />
+			<pubPlace>Cham</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Robust Patch-Based HDR Reconstruction of Dynamic Scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">K</forename><surname>Kalantari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yaesoubi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Darabi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Goldman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Convolutional Sparse Coding for High Dynamic Range Imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Serrano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Heide</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gutierrez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wetzstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Masia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A Versatile HDR Video Production System</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Tocci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Tocci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM TOG</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1" to="41" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title/>
+		<idno type="doi">10.1145/2010324.1964936</idno>
+		<ptr target="https://doi.org/10.1145/2010324.1964936" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Image Registration for Multi-exposure High Dynamic Range Image Acquisition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tomaszewska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mantiuk</surname></persName>
+		</author>
+		<ptr target="http://wscg.zcu.cz/wscg2007/Papers2007/full/B13-full.pdf" />
+	</analytic>
+	<monogr>
+		<title level="m">International Conference in Central Europe on Computer Graphics and Visualization, WSCG&apos;07</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">The State of the Art in HDR Deghosting: A Survey and Evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">T</forename><surname>Tursun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Akyüz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Erdem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Erdem</surname></persName>
+		</author>
+		<idno type="doi">10.1111/cgf.12593</idno>
+		<ptr target="https://doi.org/10.1111/cgf.12593" />
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="683" to="707" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">An Objective Deghosting Quality Metric for HDR Images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">T</forename><surname>Tursun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Akyüz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Erdem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Erdem</surname></persName>
+		</author>
+		<idno type="doi">10.1111/cgf.12818</idno>
+		<ptr target="https://doi.org/10.1111/cgf.12818" />
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="139" to="152" />
+			<date type="published" when="2016-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE ICCV</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Deep Cascaded Bi-Network for Face Hallucination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Freehand HDR Imaging of Moving Scenes with Simultaneous Resolution Enhancement</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zimmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bruhn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weickert</surname></persName>
+		</author>
+		<idno type="doi">10.1111/j.1467-8659.2011.01870.x</idno>
+		<ptr target="https://doi.org/10.1111/j.1467-8659.2011.01870.x" />
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="405" to="414" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

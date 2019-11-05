@@ -1,0 +1,1070 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning to Prune Deep Neural Networks via Layer-wise Optimal Brain Surgeon</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xin</forename><surname>Dong</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shangyu</forename><surname>Chen</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sinno</forename><forename type="middle">Jialin</forename><surname>Pan</surname></persName>
+							<email>sinnopan@ntu.edu.sg</email>
+							<affiliation key="aff2">
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning to Prune Deep Neural Networks via Layer-wise Optimal Brain Surgeon</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>How to develop slim and accurate deep neural networks has become crucial for realworld applications, especially for those employed in embedded systems. Though previous work along this research line has shown some promising results, most existing methods either fail to significantly compress a well-trained deep network or require a heavy retraining process for the pruned deep network to re-boost its prediction performance. In this paper, we propose a new layer-wise pruning method for deep neural networks. In our proposed method, parameters of each individual layer are pruned independently based on second order derivatives of a layer-wise error function with respect to the corresponding parameters. We prove that the final prediction performance drop after pruning is bounded by a linear combination of the reconstructed errors caused at each layer. By controlling layer-wise errors properly, one only needs to perform a light retraining process on the pruned network to resume its original prediction performance. We conduct extensive experiments on benchmark datasets to demonstrate the effectiveness of our pruning method compared with several state-of-the-art baseline methods. Codes of our work are released at: https://github.com/csyhhu/L-OBS.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Intuitively, deep neural networks <ref type="bibr" target="#b0">[1]</ref> can approximate predictive functions of arbitrary complexity well when they are of a huge amount of parameters, i.e., a lot of layers and neurons. In practice, the size of deep neural networks has been being tremendously increased, from LeNet-5 with less than 1M parameters <ref type="bibr" target="#b1">[2]</ref> to VGG-16 with 133M parameters <ref type="bibr" target="#b2">[3]</ref>. Such a large number of parameters not only make deep models memory intensive and computationally expensive, but also urge researchers to dig into redundancy of deep neural networks. On one hand, in neuroscience, recent studies point out that there are significant redundant neurons in human brain, and memory may have relation with vanishment of specific synapses <ref type="bibr" target="#b3">[4]</ref>. On the other hand, in machine learning, both theoretical analysis and empirical experiments have shown the evidence of redundancy in several deep models <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b5">6]</ref>. Therefore, it is possible to compress deep neural networks without or with little loss in prediction by pruning parameters with carefully designed criteria.</p><p>However, finding an optimal pruning solution is NP-hard because the search space for pruning is exponential in terms of parameter size. Recent work mainly focuses on developing efficient algorithms to obtain a near-optimal pruning solution <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b10">11]</ref>. A common idea behind most exiting approaches is to select parameters for pruning based on certain criteria, such as increase in training error, magnitude of the parameter values, etc. As most of the existing pruning criteria are designed heuristically, there is no guarantee that prediction performance of a deep neural network can be preserved after pruning. Therefore, a time-consuming retraining process is usually needed to boost the performance of the trimmed neural network.</p><p>Instead of consuming efforts on a whole deep network, a layer-wise pruning method, Net-Trim, was proposed to learn sparse parameters by minimizing reconstructed error for each individual layer <ref type="bibr" target="#b5">[6]</ref>. A theoretical analysis is provided that the overall performance drop of the deep network is bounded by the sum of reconstructed errors for each layer. In this way, the pruned deep network has a theoretical guarantee on its error. However, as Net-Trim adopts 1 -norm to induce sparsity for pruning, it fails to obtain high compression ratio compared with other methods <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b10">11]</ref>.</p><p>In this paper, we propose a new layer-wise pruning method for deep neural networks, aiming to achieve the following three goals: 1) For each layer, parameters can be highly compressed after pruning, while the reconstructed error is small. 2) There is a theoretical guarantee on the overall prediction performance of the pruned deep neural network in terms of reconstructed errors for each layer. 3) After the deep network is pruned, only a light retraining process is required to resume its original prediction performance. To achieve our first goal, we borrow an idea from some classic pruning approaches for shallow neural networks, such as optimal brain damage (OBD) <ref type="bibr" target="#b11">[12]</ref> and optimal brain surgeon (OBS) <ref type="bibr" target="#b12">[13]</ref>. These classic methods approximate a change in the error function via functional Taylor Series, and identify unimportant weights based on second order derivatives. Though these approaches have proven to be effective for shallow neural networks, it remains challenging to extend them for deep neural networks because of the high computational cost on computing second order derivatives, i.e., the inverse of the Hessian matrix over all the parameters. In this work, as we restrict the computation on second order derivatives w.r.t. the parameters of each individual layer only, i.e., the Hessian matrix is only over parameters for a specific layer, the computation becomes tractable. Moreover, we utilize characteristics of back-propagation for fully-connected layers in well-trained deep networks to further reduce computational complexity of the inverse operation of the Hessian matrix. To achieve our second goal, based on the theoretical results in <ref type="bibr" target="#b5">[6]</ref>, we provide a proof on the bound of performance drop before and after pruning in terms of the reconstructed errors for each layer. With such a layer-wise pruning framework using second-order derivatives for trimming parameters for each layer, we empirically show that after significantly pruning parameters, there is only a little drop of prediction performance compared with that before pruning. Therefore, only a light retraining process is needed to resume the performance, which achieves our third goal.</p><p>The contributions of this paper are summarized as follows. 1) We propose a new layer-wise pruning method for deep neural networks, which is able to significantly trim networks and preserve the prediction performance of networks after pruning with a theoretical guarantee. In addition, with the proposed method, a time-consuming retraining process for re-boosting the performance of the pruned network is waived. 2) We conduct extensive experiments to verify the effectiveness of our proposed method compared with several state-of-the-art approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Works and Preliminary</head><p>Pruning methods have been widely used for model compression in early neural networks <ref type="bibr" target="#b6">[7]</ref> and modern deep neural networks <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b10">11]</ref>. In the past, with relatively small size of training data, pruning is crucial to avoid overfitting. Classical methods include OBD and OBS. These methods aim to prune parameters with the least increase of error approximated by second order derivatives. However, computation of the Hessian inverse over all the parameters is expensive. In OBD, the Hessian matrix is restricted to be a diagonal matrix to make it computationally tractable. However, this approach implicitly assumes parameters have no interactions, which may hurt the pruning performance. Different from OBD, OBS makes use of the full Hessian matrix for pruning. It obtains better performance while is much more computationally expensive even using Woodbury matrix identity <ref type="bibr" target="#b13">[14]</ref>, which is an iterative method to compute the Hessian inverse. For example, using OBS on VGG-16 naturally requires to compute inverse of the Hessian matrix with a size of 133M × 133M.</p><p>Regarding pruning for modern deep models, Han et al. <ref type="bibr" target="#b8">[9]</ref> proposed to delete unimportant parameters based on magnitude of their absolute values, and retrain the remaining ones to recover the original prediction performance. This method achieves considerable compression ratio in practice. However, as pointed out by pioneer research work <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b12">13]</ref>, parameters with low magnitude of their absolute values can be necessary for low error. Therefore, magnitude-based approaches may eliminate wrong parameters, resulting in a big prediction performance drop right after pruning, and poor robustness before retraining <ref type="bibr" target="#b14">[15]</ref>. Though some variants have tried to find better magnitude-based criteria <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b16">17]</ref>, the significant drop of prediction performance after pruning still remains. To avoid pruning wrong parameters, Guo et al. <ref type="bibr" target="#b10">[11]</ref> introduced a mask matrix to indicate the state of network connection for dynamically pruning after each gradient decent step. Jin et al. <ref type="bibr" target="#b17">[18]</ref> proposed an iterative hard thresholding approach to re-activate the pruned parameters after each pruning phase.</p><p>Besides Net-trim, which is a layer-wise pruning method discussed in the previous section, there is some other work proposed to induce sparsity or low-rank approximation on certain layers for pruning <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref>. However, as the 0 -norm or the 1 -norm sparsity-induced regularization term increases difficulty in optimization, the pruned deep neural networks using these methods either obtain much smaller compression ratio <ref type="bibr" target="#b5">[6]</ref> compared with direct pruning methods or require retraining of the whole network to prevent accumulation of errors <ref type="bibr" target="#b9">[10]</ref>.</p><p>Optimal Brain Surgeon As our proposed layer-wise pruning method is an extension of OBS on deep neural networks, we briefly review the basic of OBS here. Consider a network in terms of parameters w trained to a local minimum in error. The functional Taylor series of the error w.r.t. w is:</p><formula xml:id="formula_0">δE = ∂E ∂w δw + 1 2 δw Hδw + O δw 3</formula><p>, where δ denotes a perturbation of a corresponding variable,</p><formula xml:id="formula_1">H ≡ ∂ 2 E/∂w 2 ∈ R m×m</formula><p>is the Hessian matrix, where m is the number of parameters, and O( δΘ l 3 ) is the third and all higher order terms. For a network trained to a local minimum in error, the first term vanishes, and the term O( δΘ l 3 ) can be ignored. In OBS, the goal is to set one of the parameters to zero, denoted by w q (scalar), to minimize δE in each pruning iteration. The resultant optimization problem is written as follows,</p><formula xml:id="formula_2">min q 1 2 δw Hδw, s.t. e q δw + w q = 0,<label>(1)</label></formula><p>where e q is the unit selecting vector whose q-th element is 1 and otherwise 0. As shown in <ref type="bibr" target="#b20">[21]</ref>, the optimization problem <ref type="formula" target="#formula_2">(1)</ref> can be solved by the Lagrange multipliers method. Note that a computation bottleneck of OBS is to calculate and store the non-diagonal Hesssian matrix and its inverse, which makes it impractical on pruning deep models which are usually of a huge number of parameters.</p><p>3 Layer-wise Optimal Brain Surgeon</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Problem Statement</head><p>Given a training set of n instances, {(x j , y j )} n j=1 , and a well-trained deep neural network of L layers (excluding the input layer) <ref type="bibr" target="#b0">1</ref> . Denote the input and the output of the whole deep neural network by</p><formula xml:id="formula_3">X = [x 1 , ..., x n ] ∈ R d×n and Y ∈ R n×1</formula><p>, respectively. For a layer l, we denote the input and output of the layer by</p><formula xml:id="formula_4">Y l−1 = [y l−1 1 , ..., y l−1 n ] ∈ R m l−1 ×n and Y l = [y l 1 , ..., y l n ] ∈ R m l ×n</formula><p>, respectively, where y l i can be considered as a representation of x i in layer l, and</p><formula xml:id="formula_5">Y 0 = X, Y L = Y, and m 0 = d. Using one forward-pass step, we have Y l = σ(Z l ), where Z l = W l Y l−1</formula><p>with W l ∈ R m l−1 ×m l being the matrix of parameters for layer l, and σ(·) is the activation function. For convenience in presentation and proof, we define the activation function σ(·) as the rectified linear unit (ReLU) <ref type="bibr" target="#b21">[22]</ref>. We further denote by</p><formula xml:id="formula_6">Θ l ∈ R m l−1 m l ×1 the vectorization of W l . For a well-trained neural network, Y l , Z l and Θ *</formula><p>l are all fixed matrixes and contain most information of the neural network. The goal of pruning is to set the values of some elements in Θ l to be zero.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Layer-Wise Error</head><p>During layer-wise pruning in layer l, the input Y l−1 is fixed as the same as the well-trained network. Suppose we set the q-th element of Θ l , denoted by Θ l <ref type="bibr">[q]</ref> , to be zero, and get a new parameter vector, denoted byΘ l . With Y l−1</p><p>, we obtain a new output for layer l, denoted byŶ </p><formula xml:id="formula_7">ε l = 1 n n j=1 (ŷ l j − y l j ) (ŷ l j − y l j ) = 1 √ n Ŷ l − Y l F ,<label>(2)</label></formula><p>where · F is the Frobenius Norm. Note that for any single parameter pruning, one can compute its error ε l q , where 1 ≤ q ≤ m l−1 m l , and use it as a pruning criterion. This idea has been adopted by some existing methods <ref type="bibr" target="#b14">[15]</ref>. However, in this way, for each parameter at each layer, one has to pass the whole training data once to compute its error measure, which is very computationally expensive. A more efficient approach is to make use of the second order derivatives of the error function to help identify importance of each parameter.</p><p>We first define an error function E(·) as</p><formula xml:id="formula_8">E l = E(Ẑ l ) = 1 n Ẑ l − Z l 2 F ,<label>(3)</label></formula><p>where Z l is outcome of the weighted sum operation right before performing the activation function σ(·) at layer l of the well-trained neural network, andẐ l is outcome of the weighted sum operation after pruning at layer l . Note that Z l is considered as the desired output of layer l before activation. The following lemma shows that the layer-wise error is bounded by the error defined in (3).</p><p>Lemma 3.1. With the error function (3) and Y l = σ(Z l ), the following holds:</p><formula xml:id="formula_9">ε l ≤ E(Ẑ l ).</formula><p>Therefore, to find parameters whose deletion (set to be zero) minimizes (2) can be translated to find parameters those deletion minimizes the error function (3). Following <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b12">13]</ref>, the error function can be approximated by functional Taylor series as follows,</p><formula xml:id="formula_10">E(Ẑ l ) − E(Z l ) = δE l = ∂E l ∂Θ l δΘ l + 1 2 δΘ l H l δΘ l + O δΘ l 3 ,<label>(4)</label></formula><p>where δ denotes a perturbation of a corresponding variable, H l ≡ ∂ 2 E l /∂Θ l 2 is the Hessian matrix w.r.t. Θ l , and O( δΘ l 3 ) is the third and all higher order terms. It can be proven that with the error function defined in (3), the first (linear) term</p><formula xml:id="formula_11">∂E l ∂Θ l Θ l =Θ * l and O( δΘ l 3 ) are equal to 0.</formula><p>Suppose every time one aims to find a parameter Θ l [q] to set to be zero such that the change δE l is minimal. Similar to OBS, we can formulate it as the following optimization problem:</p><formula xml:id="formula_12">min q 1 2 δΘ l H l δΘ l , s.t. e q δΘ l + Θ l [q] = 0,<label>(5)</label></formula><p>where e q is the unit selecting vector whose q-th element is 1 and otherwise 0. By using the Lagrange multipliers method as suggested in <ref type="bibr" target="#b20">[21]</ref>, we obtain the closed-form solutions of the optimal parameter pruning and the resultant minimal change in the error function as follows,</p><formula xml:id="formula_13">δΘ l = − Θ l [q] [H −1 l ] qq H −1 l e q , and L q = δE l = 1 2 (Θ l [q] ) 2 [H −1 l ] qq .<label>(6)</label></formula><p>Here L q is referred to as the sensitivity of parameter Θ l <ref type="bibr">[q]</ref> . Then we select parameters to prune based on their sensitivity scores instead of their magnitudes. As mentioned in section 2, magnitude-based criteria which merely consider the numerator in (6) is a poor estimation of sensitivity of parameters. Moreover, in (6), as the inverse Hessian matrix over the training data is involved, it is able to capture data distribution when measuring sensitivities of parameters.</p><p>After pruning the parameter, Θ l <ref type="bibr">[q]</ref> , with the smallest sensitivity, the parameter vector is updated viâ</p><formula xml:id="formula_14">Θ l = Θ l +δΘ l .</formula><p>With Lemma 3.1 and (6), we have that the layer-wise error for layer l is bounded by</p><formula xml:id="formula_15">ε l q ≤ E(Ẑ l ) = E(Ẑ l ) − E(Z l ) = √ δE l = |Θ l [q] | 2[H −1 l ] qq .<label>(7)</label></formula><p>Note that first equality is obtained because of the fact that E(Z l ) = 0. It is worth to mention that though we merely focus on layer l, the Hessian matrix is still a square matrix with size of m l−1 m l × m l−1 m l . However, we will show how to significantly reduce the computation of H −1 l for each layer in Section 3.4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Layer-Wise Error Propagation and Accumulation</head><p>So far, we have shown how to prune parameters for each layer, and estimate their introduced errors independently. However, our aim is to control the consistence of the network's final output Y L before and after pruning. To do this, in the following, we show how the layer-wise errors propagate to final output layer, and the accumulated error over multiple layers will not explode.</p><note type="other">Theorem 3.2. Given a pruned deep network via layer-wise pruning introduced in Section 3.2, each layer has its own layer-wise error ε l for 1 ≤ l ≤ L, then the accumulated error of ultimate network outputε</note><formula xml:id="formula_16">L = 1 √ n Ỹ L − Y L F obeys: ε L ≤ L−1 k=1 L l=k+1 Θ l F √ δE k + √ δE L ,<label>(8)</label></formula><formula xml:id="formula_17">whereỸ l = σ(Ŵ lỸ l−1 ), for 2 ≤ l ≤ L denotes 'accumulated pruned output' of layer l, and Y 1 = σ(Ŵ 1 X).</formula><p>Theorem 3.2 shows that: 1) Layer-wise error for a layer l will be scaled by continued multiplication of parameters' Frobenius Norm over the following layers when it propagates to final output, i.e., the L−l layers after the l-th layer; 2) The final error of ultimate network output is bounded by the weighted sum of layer-wise errors. The proof of Theorem 3.2 can be found in Appendix.</p><p>Consider a general case with <ref type="formula" target="#formula_13">(6)</ref> and <ref type="formula" target="#formula_16">(8)</ref>: parameter Θ l <ref type="bibr">[q]</ref> who has the smallest sensitivity in layer l is pruned by the i-th pruning operation, and this finally adds</p><formula xml:id="formula_18">L k=l+1</formula><p>Θ k F √ δE l to the ultimate network output error. It is worth to mention that although it seems that the layer-wise error is scaled by a quite large product factor, S l = L k=l+1 Θ k F when it propagates to the final layer, this scaling is still tractable in practice because ultimate network output is also scaled by the same product factor compared with the output of layer l. For example, we can easily estimate the norm of ultimate network output via,</p><formula xml:id="formula_19">Y L F ≈ S 1 Y 1 F .</formula><p>If one pruning operation in the 1st layer causes the layer-wise error √ δE 1 , then the relative ultimate output error is</p><formula xml:id="formula_20">ξ L r = Ỹ L − Y L F Y L F ≈ √ δE 1 1 n Y 1 F .</formula><p>Thus, we can see that even S 1 may be quite large, the relative ultimate output error would still be about</p><formula xml:id="formula_21">√ δE 1 / 1 n Y 1</formula><p>F which is controllable in practice especially when most of modern deep networks adopt maxout layer <ref type="bibr" target="#b22">[23]</ref> as ultimate output. Actually, S 0 is called as network gain representing the ratio of the magnitude of the network output to the magnitude of the network input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">The Proposed Algorithm</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.1">Pruning on Fully-Connected Layers</head><p>To selectively prune parameters, our approach needs to compute the inverse Hessian matrix at each layer to measure the sensitivities of each parameter of the layer, which is still computationally expensive though tractable. In this section, we present an efficient algorithm that can reduce the size of the Hessian matrix and thus speed up computation on its inverse. </p><formula xml:id="formula_22">H l ≡ ∂ 2 E l ∂(Θ l ) 2 = 1 n n j=1 ∂z l j ∂Θ l ∂z l j ∂Θ l − ∂ 2 z l j ∂(Θ l ) 2 (ẑ l j −z l j )</formula><p>. Note that for most casesẑ l j is quite close to z l j , we simply ignore the term containingẑ l j −z l j . Even in the late-stage of pruning when this difference is not small, we can still ignore the corresponding term <ref type="bibr" target="#b12">[13]</ref>. For layer l that has m l output units, z    , where w i is the i-th column of W l . As z l 1j is the layer output before activation function, its gradient is simply to calculate, and more importantly all output units's gradients are equal to the layer input:</p><formula xml:id="formula_23">H l = 1 n n j=1 H j l = 1 n n j=1 m l i=1 ∂z l ij ∂Θ l ∂z l ij ∂Θ l ,<label>(9)</label></formula><formula xml:id="formula_24">∂z l ij ∂w k = y l−1 j if k = i, otherwise ∂z l ij ∂w k = 0.</formula><p>An illustrated example is shown in <ref type="figure" target="#fig_6">Figure 1</ref>, where we ignore the scripts j and l for simplicity in presentation.</p><p>It can be shown that the block diagonal square matrix H . In addition, normally</p><formula xml:id="formula_25">Ψ l = 1 n n j=1 ψ j</formula><p>l is degenerate and its pseudo-inverse can be calculated recursively via Woodbury matrix identity <ref type="bibr" target="#b12">[13]</ref>:</p><formula xml:id="formula_26">(Ψ l j+1 ) −1 = (Ψ l j ) −1 − (Ψ l j ) −1 y l−1 j y l−1 j (Ψ l j ) −1 n + y l−1 j+1 (Ψ l j ) −1 y l−1 j+1</formula><p>, where Ψ is O nm 2 l−1 . To make the estimated minimal change of the error function optimal in (6), the layer-wise Hessian matrices need to be exact. Since the layer-wise Hessian matrices only depend on the corresponding layer inputs, they are always able to be exact even after several pruning operations. The only parameter we need to control is the layer-wise error ε l . Note that there may be a "pruning inflection point" after which layer-wise error would drop dramatically. In practice, user can incrementally increase the size of pruned parameters based on the sensitivity L q , and make a trade-off between the pruning ratio and the performance drop to set a proper tolerable error threshold or pruning ratio.</p><p>The procedure of our pruning algorithm for a fully-connected layer l is summarized as follows.</p><p>Step 1: Get layer input y l−1 from a well-trained deep network.</p><p>Step 2: Calculate the Hessian matrix H lii , for i = 1, ..., m l , and its pseudo-inverse over the dataset, and get the whole pseudo-inverse of the Hessian matrix.</p><p>Step 3: Compute optimal parameter change δΘ l and the sensitivity L q for each parameter at layer l.</p><p>Set tolerable error threshold .</p><p>Step 4: Pick up parameters Θ l <ref type="bibr">[q]</ref> 's with the smallest sensitivity scores.</p><p>Step 5: If L q ≤ , prune the parameter Θ l [q] 's and get new parameter values viaΘ l = Θ l + δΘ l , then repeat Step 4; otherwise stop pruning.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.2">Pruning on Convolutional Layers</head><p>It is straightforward to generalize our method to a convolutional layer and its variants if we vectorize filters of each channel and consider them as special fully-connected layers that have multiple inputs (patches) from a single instance. Consider a vectorized filter w i of channel i, 1 ≤ i ≤ m l , it acts similarly to parameters which are connected to the same output unit in a fully-connected layer. However, the difference is that for a single input instance j, every filter step of a sliding window across of it will extract a patch C jn from the input volume. Similarly, each pixel z l ijn in the 2-dimensional activation map that gives the response to each patch corresponds to one output unit in a fully-connected layer. Hence, for convolutional layers, (9) is generalized as</p><formula xml:id="formula_27">H l = 1 n n j=1 m l i=1 jn ∂z l ijn ∂[w1,...,wm l ]</formula><p>, where H l is a block diagonal square matrix whose diagonal blocks are all the same. Then, we can slightly revise the computation of the Hessian matrix, and extend the algorithm for fully-connected layers to convolutional layers.</p><p>Note that the accumulated error of ultimate network output can be linearly bounded by layer-wise error as long as the model is feed-forward. Thus, L-OBS is a general pruning method and friendly with most of feed-forward neural networks whose layer-wise Hessian can be computed expediently with slight modifications. However, if models have sizable layers like ResNet-101, L-OBS may not be economical because of computational cost of Hessian, which will be studied in our future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section, we verify the effectiveness of our proposed Layer-wise OBS (L-OBS) using various architectures of deep neural networks in terms of compression ratio (CR), error rate before retraining, and the number of iterations required for retraining to resume satisfactory performance. CR is defined as the ratio of the number of preserved parameters to that of original parameters, lower is better. We conduct comparison results of L-OBS with the following pruning approaches: 1) Randomly pruning, 2) OBD <ref type="bibr" target="#b11">[12]</ref>, 3) LWC <ref type="bibr" target="#b8">[9]</ref>, 4) DNS <ref type="bibr" target="#b10">[11]</ref>, and 5) Net-Trim <ref type="bibr" target="#b5">[6]</ref>. The deep architectures used for experiments include: LeNet-300-100 <ref type="bibr" target="#b1">[2]</ref> and LeNet-5 <ref type="bibr" target="#b1">[2]</ref> on the MNIST dataset, CIFAR-Net 2 <ref type="bibr" target="#b23">[24]</ref> on the CIFAR-10 dataset, AlexNet <ref type="bibr" target="#b24">[25]</ref> and VGG-16 <ref type="bibr" target="#b2">[3]</ref> on the ImageNet ILSVRC-2012 dataset. For experiments, we first well-train the networks, and apply various pruning approaches on networks to evaluate their performance. The retraining batch size, crop method and other hyper-parameters are under the same setting as used in LWC. Note that to make comparisons fair, we do not adopt any other pruning related methods like Dropout or sparse regularizers on MNIST. In practice, L-OBS can work well along with these techniques as shown on CIFAR-10 and ImageNet.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Overall Comparison Results</head><p>The overall comparison results are shown in <ref type="table" target="#tab_1">Table 1</ref>. In the first set of experiments, we prune each layer of the well-trained LeNet-300-100 with compression ratios: 6.7%, 20% and 65%, achieving slightly better overall compression ratio (7%) than LWC (8%). Under comparable compression ratio, L-OBS has quite less drop of performance (before retraining) and lighter retraining compared with LWC whose performance is almost ruined by pruning. Classic pruning approach OBD is also compared though we observe that Hessian matrices of most modern deep models are strongly non-diagonal in practice. Besides relative heavy cost to obtain the second derivatives via the chain rule, OBD suffers from drastic drop of performance when it is directly applied to modern deep models.</p><p>To properly prune each layer of LeNet-5, we increase tolerable error threshold from relative small initial value to incrementally prune more parameters, monitor model performance, stop pruning and set until encounter the "pruning inflection point" mentioned in Section 3.4. In practice, we prune each layer of LeNet-5 with compression ratio: 54%, 43%, 6% and 25% and retrain pruned model with much fewer iterations compared with other methods (around 1 : 1000). As DNS retrains the pruned network after every pruning operation, we are not able to report its error rate of the pruned network before retraining. However, as can be seen, similar to LWC, the total number of iterations used by DNS for rebooting the network is very large compared with L-OBS. Results of retraining iterations of DNS are reported from <ref type="bibr" target="#b10">[11]</ref> and the other experiments are implemented based on TensorFlow <ref type="bibr" target="#b25">[26]</ref>. In addition, in the scenario of requiring high pruning ratio, L-OBS can be quite flexibly adopted to an iterative version, which performs pruning and light retraining alternatively to obtain higher pruning ratio with relative higher cost of pruning. With two iterations of pruning and retraining, L-OBS is able to achieve as the same pruning ratio as DNS with much lighter total retraining: 643 iterations on LeNet-300-100 and 841 iterations on LeNet-5.</p><p>Regarding comparison experiments on CIFAR-Net, we first well-train it to achieve a testing error of 18.57% with Dropout and Batch-Normalization. We then prune the well-trained network with LWC and L-OBS, and get the similar results as those on other network architectures. We also observe that LWC and other retraining-required methods always require much smaller learning rate in retraining. This is because representation capability of the pruned networks which have much fewer parameters is damaged during pruning based on a principle that number of parameters is an important factor for representation capability. However, L-OBS can still adopt original learning rate to retrain the pruned networks. Under this consideration, L-OBS not only ensures a warm-start for retraining, but also finds important connections (parameters) and preserve capability of representation for the pruned network instead of ruining model with pruning.</p><p>Regarding AlexNet, L-OBS achieves an overall compression ratio of 11% without loss of accuracy with 2.9 hours on 48 Intel Xeon(R) CPU E5-1650 to compute Hessians and 3.1 hours on NVIDIA Tian X GPU to retrain pruned model (i.e. 18.1K iterations). The computation cost of the Hessian inverse in L-OBS is negligible compared with that on heavy retraining in other methods. This claim can also be supported by the analysis of time complexity. As mentioned in Section 3.4, the time complexity of calculating H as shown in experiments, complexity of calculating the Hessian (inverse) in L-OBS is quite economic. More interestingly, there is a trade-off between compression ratio and pruning (including retraining) cost. Compared with other methods, L-OBS is able to provide fast-compression: prune AlexNet to 16% of its original size without substantively impacting accuracy (pruned top-5 error 20.98%) even without any retraining. We further apply L-OBS to VGG-16 that has 138M parameters. To achieve more promising compression ratio, we perform pruning and retraining alteratively twice. As can be seen from the table, L-OBS achieves an overall compression ratio of 7.5% without loss  We also apply L-OBS on ResNet-50 <ref type="bibr" target="#b26">[27]</ref>. From our best knowledge, this is the first work to perform pruning on ResNet. We perform pruning on all the layers: All layers share a same compression ratio, and we change this compression ratio in each experiments. The results are shown in <ref type="figure">Figure 2</ref>(a). As we can see, L-OBS is able to maintain ResNet's accuracy (above 85%) when the compression ratio is larger than or equal to 45%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Comparison between L-OBS and Net-Trim</head><p>As our proposed L-OBS is inspired by Net-Trim, which adopts 1 -norm to induce sparsity, we conduct comparison experiments between these two methods. In Net-Trim, networks are pruned by formulating layer-wise pruning as a optimization: min  <ref type="table" target="#tab_2">Table 2</ref>, under the same pruned error rate, CR of L-OBS outnumbers that of the Net-Trim by about six times. In addition, Net-Trim encounters explosion of memory and time on large-scale datasets and large-size parameters. Specifically, space complexity of the positive semidefinite matrix Q in quadratic constraints used in Net-Trim for optimization is O 2nm 2 l m l−1 . For example, Q requires about 65.7Gb for 1,000 samples on MNIST as illustrated in <ref type="figure">Figure 2(b)</ref>. Moreover, Net-Trim is designed for multi-layer perceptrons and not clear how to deploy it on convolutional layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>We have proposed a novel L-OBS pruning framework to prune parameters based on second order derivatives information of the layer-wise error function and provided a theoretical guarantee on the overall error in terms of the reconstructed errors for each layer. Our proposed L-OBS can prune considerable number of parameters with tiny drop of performance and reduce or even omit retraining. More importantly, it identifies and preserves the real important part of networks when pruning compared with previous methods, which may help to dive into nature of neural networks.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>whole training data as the layer-wise error:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>For each layer l, according to the definition of the error function used in Lemma 3.1, the first derivative of the error function with respect toΘ l is, and the Hessian matrix is defined as:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>, . . . , z l m l j ], the Hessian matrix can be calculated via</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>Hessian matrix for a single instance j at layer l, H j l , is a block diagonal square matrix of the size m l−1 × m l . Specifically, the gradient of the first output unit z l 1j w.s.t.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>− 1 .</head><label>1</label><figDesc>The size of Ψ l is then reduced to m l−1 , and the computational complexity of calculating H −1 l</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>.</head><label></label><figDesc>Assume that neural networks are retrained via SGD, then the approximate time complexity of retraining is O (IdM ), where d is the size of the mini-batch, M and I are the total numbers of parameters and iterations, respectively.and retraining in other methods always requires millions of iterations (Id n)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>F</head><label></label><figDesc>W l W l 1 s.t. σ(W l Y l−1 )in L-OBS. Due to memory limitation of Net-Trim, we only prune the middle layer of LeNet-300-100 with L-OBS and Net-Trim under the same setting. As shown in</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>3×1 . Then the Hessian matrix of z 1 w.r.t. all parameters is denoted by H's elements are zero except for those corresponding to W * 1 (the 1st column of W), which is denoted by H 11 . H</figDesc><table>H 11 
+
+H 22 
+
+H 33 
+
+W 11 
+
+W 21 
+
+W 31 
+
+W 41 
+
+y 1 
+
+y 2 
+
+y 3 
+
+y 4 
+
+z 1 
+
+z 2 
+
+z 3 
+
+H ∈ R 
+
+12×12 
+
+H 11 , H 22 , H 33 ∈ R 
+
+4×4 
+
+Figure 1: Illustration of shape of Hessian. For feed-forward neural networks, unit z 1 gets its 
+activation via forward propagation: z = W y, where W ∈ R 
+
+4×3 
+
+, y = [y 1 , y 2 , y 3 , y 4 ] ∈ R 
+
+4×1 
+
+, 
+and z = [z 1 , z 2 , z 3 ] ∈ R 
+
+[z1] 
+
+. As illustrated in the figure, H 
+
+[z1] 
+
+[z2] 
+
+and H 
+
+[z3] 
+
+are similar. More importantly, 
+H 
+−1 = diag(H 
+
+−1 
+
+11 , H 
+
+−1 
+
+22 , H 
+
+−1 
+
+33 ), and H 11 = H 22 = H 33 . As a result, one only needs to compute 
+H 
+
+−1 
+
+11 to obtain H 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Overall comparison results. (For iterative L-OBS, err. after pruning regards the last pruning stage.)</figDesc><table>Method 
+Networks 
+Original error 
+CR 
+Err. after pruning 
+Re-Error 
+#Re-Iters. 
+
+Random 
+LeNet-300-100 
+1.76% 
+8% 
+85.72% 
+2.25% 
+3.50 × 10 
+
+5 
+
+OBD 
+LeNet-300-100 
+1.76% 
+8% 
+86.72% 
+1.96% 
+8.10 × 10 
+
+4 
+
+LWC 
+LeNet-300-100 
+1.76% 
+8% 
+81.32% 
+1.95% 
+1.40 × 10 
+
+5 
+
+DNS 
+LeNet-300-100 
+1.76% 
+1.8% 
+-
+1.99% 
+3.40 × 10 
+
+4 
+
+L-OBS 
+LeNet-300-100 
+1.76% 
+7% 
+3.10% 
+1.82% 
+510 
+L-OBS (iterative) 
+LeNet-300-100 
+1.76% 
+1.5% 
+2.43% 
+1.96% 
+643 
+
+OBD 
+LeNet-5 
+1.27% 
+8% 
+86.72% 
+2.65% 
+2.90 × 10 
+
+5 
+
+LWC 
+LeNet-5 
+1.27% 
+8% 
+89.55% 
+1.36% 
+9.60 × 10 
+
+4 
+
+DNS 
+LeNet-5 
+1.27% 
+0.9% 
+-
+1.36% 
+4.70 × 10 
+
+4 
+
+L-OBS 
+LeNet-5 
+1.27% 
+7% 
+3.21% 
+1.27% 
+740 
+L-OBS (iterative) 
+LeNet-5 
+1.27% 
+0.9% 
+2.04% 
+1.66% 
+841 
+
+LWC 
+CIFAR-Net 
+18.57% 
+9% 
+87.65% 
+19.36% 
+1.62 × 10 
+
+5 
+
+L-OBS 
+CIFAR-Net 
+18.57% 
+9% 
+21.32% 
+18.76% 
+1020 
+
+DNS 
+AlexNet (Top-1 / Top-5 err.) 
+43.30 / 20.08% 
+5.7% 
+-
+43.91 / 20.72% 
+7.30 × 10 
+
+5 
+
+LWC 
+AlexNet (Top-1 / Top-5 err.) 
+43.30 / 20.08% 
+11% 
+76.14 / 57.68% 
+44.06 / 20.64% 
+5.04 × 10 
+
+6 
+
+L-OBS 
+AlexNet (Top-1 / Top-5 err.) 
+43.30 / 20.08% 
+11% 
+50.04 / 26.87% 
+43.11 / 20.01% 
+1.81 × 10 
+
+4 
+
+DNS 
+VGG-16 (Top-1 / Top-5 err.) 
+31.66 / 10.12% 
+7.5% 
+-
+63.38% / 38.69% 
+1.07 × 10 
+
+6 
+
+LWC 
+VGG-16 (Top-1 / Top-5 err.) 
+31.66 / 10.12% 
+7.5% 
+73.61 / 52.64% 
+32.43 / 11.12% 
+2.35 × 10 
+
+7 
+
+L-OBS (iterative) 
+VGG-16 (Top-1 / Top-5 err.) 
+31.66 / 10.12% 
+7.5% 
+37.32 / 14.82% 
+32.02 / 10.97% 
+8.63 × 10 
+
+4 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Comparison of Net-Trim and Layer-wise OBS on the second layer of LeNet-300-100.of accuracy taking 10.2 hours in total on 48 Intel Xeon(R) CPU E5-1650 to compute the Hessian inverses and 86.3K iterations to retrain the pruned model.</figDesc><table>Method 
+ξ 
+
+2 
+r 
+
+Pruned Error 
+CR 
+Method 
+ξ 
+
+2 
+r 
+
+Pruned Error 
+CR 
+
+Net-Trim 
+0.13 
+13.24% 
+19% 
+Net-Trim 
+0.62 
+28.45% 
+7.4% 
+L-OBS 
+0.70 
+11.34% 
+3.4% 
+L-OBS 
+0.37 
+4.56% 
+7.4% 
+L-OBS 
+0.71 
+10.83% 
+3.8% 
+Net-Trim 
+0.71 
+47.69% 
+4.2% 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">For simplicity in presentation, we suppose the neural network is a feed-forward (fully-connected) network. In Section 3.4, we will show how to extend our method to filter layers in Convolutional Neural Networks.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">A revised AlexNet for CIFAR-10 containing three convolutional layers and two fully connected layers.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This work is supported by NTU Singapore Nanyang Assistant Professorship (NAP) grant M4081532.020, Singapore MOE AcRF Tier-2 grant MOE2016-T2-2-060, and Singapore MOE AcRF Tier-1 grant 2016-T1-001-159.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">521</biblScope>
+			<biblScope unit="issue">7553</biblScope>
+			<biblScope unit="page" from="436" to="444" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Léon</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Ultrastructural evidence for synaptic scaling across the wake/sleep cycle</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luisa</forename><surname>De Vivo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michele</forename><surname>Bellesi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Marshall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">A</forename><surname>Bushong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Giulio</forename><surname>Ellisman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chiara</forename><surname>Tononi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cirelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">355</biblScope>
+			<biblScope unit="issue">6324</biblScope>
+			<biblScope unit="page" from="507" to="510" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Predicting parameters in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Misha</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Babak</forename><surname>Shakibi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laurent</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Nando De Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2148" to="2156" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Net-trim: A layer-wise convex pruning of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Aghasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Romberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Pruning algorithms-a survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Russell</forename><surname>Reed</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE transactions on Neural Networks</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="740" to="747" />
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Compressing deep convolutional networks using vector quantization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yunchao</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liu</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ming</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lubomir</forename><surname>Bourdev</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6115</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Learning both weights and connections for efficient neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Song</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Pool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1135" to="1143" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Sparsifying neural network connections for face recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaogang</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoou</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4856" to="4864" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Dynamic network surgery for efficient dnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yiwen</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anbang</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yurong</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances In Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1379" to="1387" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Optimal brain damage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sara</forename><forename type="middle">A</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">E</forename><surname>Solla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lawrence</forename><forename type="middle">D</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jackel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPs</title>
+		<imprint>
+			<date type="published" when="1989" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="598" to="605" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Second order derivatives for network pruning: Optimal brain surgeon</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Babak</forename><surname>Hassibi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Stork</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="1993" />
+			<biblScope unit="page" from="164" to="164" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Linear systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Kailath</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1980" />
+			<publisher>Prentice-Hall</publisher>
+			<biblScope unit="volume">156</biblScope>
+			<pubPlace>Englewood Cliffs, NJ</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikolas</forename><surname>Wolfe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aditya</forename><surname>Sharma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lukas</forename><surname>Drude</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bhiksha</forename><surname>Raj</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.04465</idno>
+		<title level="m">The incredible shrinking neural network: New perspectives on learning representations through the lens of pruning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hengyuan</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rui</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu-Wing</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chi-Keung</forename><surname>Tang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.03250</idno>
+		<title level="m">Network trimming: A data-driven neuron pruning approach towards efficient deep architectures</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Pruning filters for efficient convnets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hao</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Asim</forename><surname>Kadav</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Igor</forename><surname>Durdanovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hanan</forename><surname>Samet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hans</forename><forename type="middle">Peter</forename><surname>Graf</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.08710</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaojie</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaotong</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiashi</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1607.05423</idno>
+		<title level="m">Training skinny deep neural networks with iterative hard thresholding methods</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cheng</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tong</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaogang</forename><surname>Wang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06067</idno>
+		<title level="m">Convolutional neural networks with low-rank regularization</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Sparse convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Baoyuan</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Min</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hassan</forename><surname>Foroosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marshall</forename><surname>Tappen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marianna</forename><surname>Pensky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="806" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Convex analysis. princeton landmarks in mathematics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tyrrell Rockafellar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deep sparse rectifier neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xavier</forename><surname>Glorot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antoine</forename><surname>Bordes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Aistats</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="page">275</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mehdi</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Aaron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="1319" to="1327" />
+		</imprint>
+	</monogr>
+	<note>Maxout networks. ICML (3</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eugene</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhifeng</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Craig</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeffrey</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthieu</forename><surname>Devin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.04467</idno>
+		<title level="m">Large-scale machine learning on heterogeneous distributed systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

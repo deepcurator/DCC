@@ -1,0 +1,748 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:36+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Full Resolution Image Compression with Recurrent Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">George</forename><surname>Toderici</surname></persName>
+							<email>gtoderici@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Google</forename><surname>Research</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Damien</forename><surname>Vincent</surname></persName>
+							<email>damienv@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nick</forename><surname>Johnston</surname></persName>
+							<email>nickj@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sung</forename><forename type="middle">Jin</forename><surname>Hwang</surname></persName>
+							<email>sjhwang@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Minnen</surname></persName>
+							<email>dminnen@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joel</forename><surname>Shor</surname></persName>
+							<email>joelshor@google.com</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michele</forename><surname>Covell</surname></persName>
+							<email>covell@google.com</email>
+						</author>
+						<title level="a" type="main">Full Resolution Image Compression with Recurrent Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Image compression has traditionally been one of the tasks which neural networks were suspected to be good at, but there was little evidence that it would be possible to train a single neural network that would be competitive across compression rates and image sizes. <ref type="bibr" target="#b17">[17]</ref> showed that it is possible to train a single recurrent neural network and achieve better than state of the art compression rates for a given quality regardless of the input image, but was limited to 32×32 images. In that work, no effort was made to capture the long-range dependencies between image patches.</p><p>Our goal is to provide a neural network which is competitive across compression rates on images of arbitrary size. There are two possible ways to achieve this: 1) design a stronger patch-based residual encoder; and 2) design an entropy coder that is able to capture long-term dependencies between patches in the image. In this paper, we address both problems and combine the two possible ways to improve compression rates for a given quality.</p><p>In order to measure how well our architectures are doing (i.e., "quality"), we cannot rely on typical metrics such as Peak Signal to Noise Ratio (PSNR), or L p differences between compressed and reference images because the human visual system is more sensitive to certain types of distortions than others. This idea was exploited in lossy image compression methods such as JPEG. In order to be able to measure such differences, we need to use a human visual systeminspired measure which, ideally should correlate with how humans perceive image differences. Moreover, if such a metric existed, and were differentiable, we could directly optimize for it. Unfortunately, in the literature there is a wide variety of metrics of varying quality, most of which are non-differentiable. For evaluation purposes, we selected two commonly used metrics, PSNR-HVS <ref type="bibr" target="#b7">[7]</ref> and MS-SSIM <ref type="bibr" target="#b19">[19]</ref>, as discussed in Section 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Previous Work</head><p>Autoencoders have been used to reduce the dimensionality of images <ref type="bibr" target="#b9">[9]</ref>, convert images to compressed binary codes for retrieval <ref type="bibr" target="#b13">[13]</ref>, and to extract compact visual representations that can be used in other applications <ref type="bibr" target="#b18">[18]</ref>. More recently, variational (recurrent) autoencoders have been directly applied to the problem of compression <ref type="bibr" target="#b6">[6]</ref> (with results on images of size up to 64×64 pixels), while non-variational recurrent neural networks were used to implement variablerate encoding <ref type="bibr" target="#b17">[17]</ref>.</p><p>Most image compression neural networks use a fixed compression rate based on the size of a bottleneck layer <ref type="bibr" target="#b1">[2]</ref>. This work extends previous methods by supporting variable rate compression while maintaining high compression rates beyond thumbnail-sized images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Methods</head><p>In this section, we describe the high-level model architectures we explored. The subsections provide additional details about the different recurrent network components in our experiments. Our compression networks are comprised of an encoding network E, a binarizer B and a decoding network D, where D and E contain recurrent network components. The input images are first encoded, and then transformed into binary codes that can be stored or transmitted to the decoder. The decoder network creates an estimate of the original input image based on the received binary code. We repeat this procedure with the residual error, the difference between the original image and the reconstruction from the decoder. <ref type="figure" target="#fig_0">Figure 1</ref> shows the architecture of a single iteration of our model. While the network weights are shared between iterations, the states in the recurrent components are propagated to the next iteration. Therefore residuals are encoded and decoded in different contexts in different iterations. Note that the binarizer B is stateless in our system.</p><p>We can compactly represent a single iteration of our networks as follows:</p><formula xml:id="formula_0">b t = B(E t (r t−1 )),x t = D t (b t ) + γx t−1 ,<label>(1)</label></formula><formula xml:id="formula_1">r t = x −x t , r 0 = x,x 0 = 0<label>(2)</label></formula><p>where D t and E t represent the decoder and encoder with their states at iteration t respectively, b t is the progressive binary representation;x t is the progressive reconstruction of the original image x with γ = 0 for "one-shot" reconstruction or 1 for additive reconstruction (see Section 2.2); and r t is the residual between x and the reconstructionx t . In every iteration, B will produce a binarized bit stream b t ∈ {−1, 1} m where m is the number of bits produced after every iteration, using the approach reported in <ref type="bibr" target="#b17">[17]</ref>. After k iterations, the network produces m · k bits in total. Since our models are fully convolutional, m is a linear function of input size. For image patches of 32×32, m = 128.</p><p>The recurrent units used to create the encoder and decoder include two convolutional kernels: one on the input vector which comes into the unit from the previous layer and the other one on the state vector which provides the recurrent nature of the unit. We will refer to the convolution on the state vector and its kernel as the "hidden convolution" and the "hidden kernel".</p><p>In <ref type="figure" target="#fig_0">Figure 1</ref>, we give the spatial extent of the input-vector convolutional kernel along with the output depth. All convolutional kernels allow full mixing across depth. For example, the unit D-RNN#3 has 256 convolutional kernels that operate on the input vector, each with 3×3 spatial extent and full input-depth extent (128 in this example, since the depth of D-RNN#2 is reduced by a factor of four as it goes through the "Depth-to-Space" unit).</p><p>The spatial extents of the hidden kernels are all 1×1, except for in units D-RNN#3 and D-RNN#4 where the hidden kernels are 3×3. The larger hidden kernels consistently resulted in improved compression curves compared to the 1×1 hidden kernels exclusively used in <ref type="bibr" target="#b17">[17]</ref>.</p><p>During training, a L 1 loss is calculated on the weighted residuals generated at each iteration (see Section 4), so our total loss for the network is:</p><formula xml:id="formula_2">β t |r t |<label>(3)</label></formula><p>In our networks, each 32×32×3 input image is reduced to a 2×2×32 binarized representation per iteration. This results in each iteration representing 1 /8 bit per pixel (bpp). If only the first iteration is used, this would be 192:1 compression, even before entropy coding (Section 3).</p><p>We explore a combination of recurrent unit variants and reconstruction frameworks for our compression systems. We compare these compression results to the results from the deconvolutional network described in <ref type="bibr" target="#b17">[17]</ref>, referred to in this paper as the Baseline network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Types of Recurrent Units</head><p>In this subsection, we introduce the different types of recurrent units that we examined.</p><p>LSTM: One recurrent neural-network element we examine is a LSTM <ref type="bibr" target="#b10">[10]</ref> with the formulation proposed by <ref type="bibr" target="#b20">[20]</ref>. Let x t , c t , and h t denote the input, cell, and hidden states, respectively, at iteration t. Given the current input x t , previous cell state c t−1 , and previous hidden state h t−1 , the new cell state c t and the new hidden state h t are computed as</p><formula xml:id="formula_3">[f, i, o, j] T = [σ, σ, σ, tanh] T (W x t + U h t−1 ) + b , (4) c t = f ⊙ c t−1 + i ⊙ j, (5) h t = o ⊙ tanh(c t ),<label>(6)</label></formula><p>where ⊙ denotes element-wise multiplication, and b is the bias. The activation function σ is the sigmoid function σ(x) = 1/(1 + exp(−x)). The output of an LSTM layer at iteration t is h t . The transforms W and U , applied to x t and h t−1 , respectively, are convolutional linear transformations. That is, they are composites of Toeplitz matrices with padding and stride transformations. The spatial extent and depth of the W convolutions are as shown in <ref type="figure" target="#fig_0">Figure 1</ref>. As pointed out earlier in this section, the U convolutions have the same depths as the W convolutions. For a more in-depth explanation, see <ref type="bibr" target="#b17">[17]</ref>.</p><p>Associative LSTM: Another neural network element we examine is the Associative LSTM <ref type="bibr" target="#b5">[5]</ref>. Associative LSTM extends LSTM using holographic representation.  states are computed as</p><formula xml:id="formula_4">[f,i, o, j, r i , r o ] T = [σ, σ, σ, bnd, bnd, bnd] T (W x t + U h t−1 ) + b ,<label>(7)</label></formula><formula xml:id="formula_5">c t = f ⊙ c t−1 + r i ⊙ i ⊙ j,<label>(8)</label></formula><formula xml:id="formula_6">h t = o ⊙ bnd(r o ⊙ c t ),<label>(9)</label></formula><formula xml:id="formula_7">h t = (Re h t , Im h t ).<label>(10)</label></formula><p>The output of an Associative LSTM at iteration t ish t . The input x t , the outputh t , and the gate values f, i, o are realvalued, but the rest of the quantities are complex-valued. The function bnd(z) for complex z is z if |z| ≤ 1 and is z/|z| otherwise. As in the case of non-associative LSTM, we use convolutional linear transformations W and U . Experimentally, we determined that Associative LSTMs were effective only when used in the decoder. Thus, in all our experiments with Associative LSTMs, non-associative LSTMs were used in the encoder. Gated Recurrent Units: The last recurrent element we investigate is the Gated Recurrent Unit <ref type="bibr" target="#b2">[3]</ref> (GRU). The formulation for GRU, which has an input x t and a hidden state/output h t , is:</p><formula xml:id="formula_8">z t = σ(W z x t + U z h t−1 ), (11) r t = σ(W r x t + U r h t−1 ),<label>(12)</label></formula><formula xml:id="formula_9">h t = (1 − z t ) ⊙ h t−1 + z t ⊙ tanh(W x t + U (r t ⊙ h t−1 )).<label>(13)</label></formula><p>As in the case of LSTM, we use convolutions instead of simple multiplications. Inspired by the core ideas from ResNet <ref type="bibr" target="#b8">[8]</ref> and Highway Networks <ref type="bibr" target="#b16">[16]</ref>, we can think of GRU as a computation block and pass residual information around the block in order to speed up convergence. Since GRU can be seen as a doubly indexed block, with one index being iteration and the other being space, we can formulate a residual version of GRU which now has two residual connections. In the equations below, we use h o t to denote the output of our formulation, which will be distinct from the hidden state h t :</p><formula xml:id="formula_10">h t = (1 − z t ) ⊙ h t−1 + z t ⊙ tanh(W x t + U (r t ⊙ h t−1 )) + α h W h h t−1 , (14) h o t = h t + α x W ox x t .<label>(15)</label></formula><p>where we use α x = α h = 0.1 for all the experiments in this paper. This idea parallels the work done in Higher Order RNNs <ref type="bibr" target="#b15">[15]</ref>, where linear connections are added between iterations, but not between the input and the output of the RNN.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Reconstruction Framework</head><p>In addition to using different types of recurrent units, we examine three different approaches to creating the final image reconstruction from our decoder outputs. We describe those approaches in this subsection, along with the changes needed to the loss function.</p><p>One-shot Reconstruction: As was done in <ref type="bibr" target="#b17">[17]</ref>, we predict the full image after each iteration of the decoder (γ = 0 in (1)). Each successive iteration has access to more bits generated by the encoder which allows for a better reconstruction. We call this approach "one-shot reconstruction". Despite trying to reconstruct the original image at each iteration, we only pass the previous iteration's residual to the next iteration. This reduces the number of weights, and experiments show that passing both the original image and the residual does not improve the reconstructions.</p><p>Additive Reconstruction: In additive reconstruction, which is more widely used in traditional image coding, each iteration only tries to reconstruct the residual from the previous iterations. The final image reconstruction is then the sum of the outputs of all iterations (γ = 1 in (1)).</p><p>Residual Scaling: In both additive and "one shot" reconstruction, the residual starts large, and we expect it to decrease with each iteration. However, it may be difficult for the encoder and the decoder to operate efficiently across a wide range of values. Furthermore, the rate at which the residual shrinks is content dependent. In some patches (e.g., uniform regions), the drop-off will be much more dramatic than in other patches (e.g., highly textured patches). To accommodate these variations, we extend our additive reconstruction architecture to include a content-dependent, iteration-dependent gain factor. <ref type="figure" target="#fig_1">Figure 2</ref> shows the extension that we used. Conceptually, we look at the reconstruction of the previous residual image, r t−1 , and derive a gain multiplier for each patch. We then multiply the target residual going into the current iteration by the gain that is given from processing the previous iteration's output. Equation 1 becomes:</p><formula xml:id="formula_11">g t = G(x t ), b t = B(E t (r t−1 ⊙ ZOH(g t−1 ))),<label>(16)</label></formula><formula xml:id="formula_12">r t−1 = D t (b t ) ⊘ ZOH(g t−1 ),<label>(17)</label></formula><formula xml:id="formula_13">x t =x t−1 +r t−1 , r t = x −x t ,<label>(18)</label></formula><formula xml:id="formula_14">g 0 = 1, r 0 = x.<label>(19)</label></formula><p>where ⊘ is element-wise division and ZOH is spatial upsampling by zero-order hold. G(·) estimates the gain factor, g t , using a five-layer feed-forward convolutional network, each layer with a stride of two. The first four layers give an output depth of 32, using a 3×3 convolutional kernel with an ELU nonlinearity <ref type="bibr" target="#b3">[4]</ref>. The final layer gives an output depth of 1, using a 2×2 convolutional kernel, with an ELU nonlinearity. Since ELU has a range of (−1, ∞) a constant of 2 is added to the output of this network to obtain g t in the range of (1, ∞).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Entropy Coding</head><p>The entropy of the codes generated during inference are not maximal because the network is not explicitly designed to maximize entropy in its codes, and the model does not necessarily exploit visual redundancy over a large spatial extent. Adding an entropy coding layer can further improve the compression ratio, as is commonly done in standard image compression codecs. In this section, the image encoder is a given and is only used as a binary code generator.</p><p>The lossless entropy coding schemes considered here are fully convolutional, process binary codes in progressive order and for a given encoding iteration in raster-scan order. All of our image encoder architectures generate binary codes of the form c(y, x, d) of size H × W × D, where H and W are integer fractions of the image height and width and D is m × the number of iterations. We consider a standard lossless encoding framework that combines a conditional probabilistic model of the current binary code c(y, x, d) with an arithmetic coder to do the actual compression. More formally, given a context T (y, x, d) which depends only on previous bits in stream order, we will estimate P (c(y, x, d) | T (y, x, d)) so that the expected ideal encoded length of c(y, x, d) is the cross entropy between P (c | T ) andP (c | T ). We do not consider the small penalty involved by using a practical arithmetic coder that requires a quantized version ofP (c | T ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Single Iteration Entropy Coder</head><p>We leverage the PixelRNN architecture <ref type="bibr" target="#b14">[14]</ref> and use a similar architecture (BinaryRNN) for the compression of binary codes of a single layer. In this architecture (shown on <ref type="figure" target="#fig_2">Figure 3</ref>), the estimation of the conditional code probabilities for line y depends directly on some neighboring codes but also indirectly on the previously decoded binary codes through a line of states S of size 1 × W × k which captures both some short term and long term dependencies. The state line is a summary of all the previous lines. In practice, we use k = 64. The probabilities are estimated and the state is updated line by line using a 1×3 LSTM convolution.</p><p>The end-to-end probability estimation includes 3 stages. First, the initial convolution is a 7×7 convolution used to increase the receptive field of the LSTM state, the receptive field being the set of codes c(i, j, ·) which can influence the probability estimation of codes c(y, x, ·). As in <ref type="bibr" target="#b14">[14]</ref>, this initial convolution is a masked convolution so as to avoid dependencies on future codes. In the second stage, the line LSTM takes as input the result z 0 of this initial convolution and processes one scan line at a time. Since LSTM hidden states are produced by processing the previous scan lines, the line LSTM captures both short-and long-term dependencies. For the same reason, the input-to-state LSTM transform is also a masked convolution. Finally, two 1×1 convolutions are added to increase the capacity of the network to memorize more binary code patterns. Since we attempt to predict binary codes, the Bernoulli-distribution parameter can be directly estimated using a sigmoid activation in the last convolution.</p><p>We want to minimize the number of bits used after entropy coding, which leads naturally to a cross-entropy loss. In case of {0, 1} binary codes, the cross-entropy loss can be written as:</p><formula xml:id="formula_15">y,x,d −c log 2 (P (c | T )) − (1 − c) log 2 (1 −P (c | T )) (20)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Progressive Entropy Coding</head><p>When dealing with multiple iterations, a baseline entropy coder would be to duplicate the single iteration entropy coder as many times as there are iterations, each iteration having its own line LSTM. However, such an architecture would not capture the redundancy between the iterations. We can augment the data that is passed to the line LSTM of iteration #k with some information coming from the previous layers: the line LSTM in <ref type="figure" target="#fig_2">Figure 3</ref> receives not just z 0 like in the single iteration approach but also z 1 estimated from the previous iteration using a recurrent network as shown on <ref type="figure" target="#fig_3">Figure 4</ref>. Computing z 1 does not require any masked convolution since the codes of the previous layers are fully available.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>Training Setup: In order to evaluate the recurrent models we described, we used two sets of training data. The first dataset is the "32×32" dataset gathered in <ref type="bibr" target="#b17">[17]</ref>. The second dataset takes a random sample of 6 million 1280×720 images on the web, decomposes the images into nonoverlapping 32×32 tiles and samples 100 tiles that have the worst compression ratio when using the PNG compression algorithm. By selecting the patches that compress the least under PNG, we intend to create a dataset with "hardto-compress" data. The hypothesis is that training on such patches should yield a better compression model. We refer to this dataset as the "High Entropy (HE)" dataset.</p><p>All network architectures were trained using the Tensorflow [1] API, with the Adam <ref type="bibr" target="#b11">[11]</ref> optimizer. Each network was trained using learning rates of [0.1, ..., 2]. The L 1 loss (see <ref type="table">Equation 3</ref>) was weighted by β = (s × n) −1 where s is equal to B × H × W × C where B = 32 is the batch size, H = 32 and W = 32 are the image height and width, and C = 3 is the number of color channels. n = 16 is the number of RNN unroll iterations.</p><p>Evaluation Metrics: In order to assess the performance of our models, we use a perceptual, full-reference image metric for comparing original, uncompressed images to compressed, degraded ones. It is important to note that there is no consensus in the field for which metric best represents human perception so the best we can do is sample from the available choices while acknowledging that each metric has its own strengths and weaknesses. We use Multi-Scale Structural Similarity (MS-SSIM) <ref type="bibr" target="#b19">[19]</ref>, a well-established metric for comparing lossy image compression algorithms, and the more recent Peak Signal to Noise Ratio -Human Visual System (PSNR-HVS) <ref type="bibr" target="#b7">[7]</ref>. We apply MS-SSIM to each of the RGB channels independently and average the results, while PSNR-HVS already incorporates color information. MS-SSIM gives a score between 0 and 1, and PSNR-HVS is measured in decibels. In both cases, higher values imply a closer match between the test and reference images. Both metrics are computed for all models over the reconstructed images after each iteration. In order to rank models, we use an aggregate measure computed as the area under the rate-distortion curve (AUC).</p><p>We collect these metrics on the widely used Kodak Photo CD dataset <ref type="bibr" target="#b12">[12]</ref>. The dataset consists of 24 768×512 PNG images (landscape/portrait) which were never compressed with a lossy algorithm.</p><p>Architectures: We ran experiments consisting of {GRU, Residual GRU, LSTM, Associative LSTM} × {One Shot Reconstruction, Additive Reconstruction, Additive Rescaled Residual} and report the results for the best performing models after 1 million training steps.</p><p>It is difficult to pick a "winning" architecture since the two metrics that we are using don't always agree. To further complicate matters, some models may perform better at low bit rates, while others do better at high bit rates. In order to be as fair as possible, we picked those models which had the largest area under the curve, and plotted them in <ref type="figure" target="#fig_5">Figure 5</ref> and <ref type="figure" target="#fig_4">Figure 6</ref>. The effect of the High Entropy training set can be seen in <ref type="table">Table 1</ref>. In general models benefited from being trained on this dataset rather than on the 32×32 dataset, suggesting that it is important to train models using "hard" examples. For examples of compressed images from each method, we refer the reader to the supplemental materials.</p><p>When using the 32×32 training data, GRU (One Shot) had the highest performance in both metrics. The LSTM model with Residual Scaling had the second highest MS-SSIM, while the Residual GRU had the second highest PSNR-HVS. When training on the High Entropy dataset, The One Shot version of LSTM had the highest MS-SSIM, but the worst PSNR-HVS. The GRU with "one shot" reconstruction ranked 2nd highest in both metrics, while the Residual GRU with "one shot" reconstruction had the highest PSNR-HVS.</p><p>We depict the results of compressing image 5 from the Kodak dataset in <ref type="figure" target="#fig_6">Figure 7</ref>. We invite the reader to refer to the supplemental materials for more examples of compressed images from the Kodak dataset.</p><p>Entropy Coding: The progressive entropy coder is trained for a specific image encoder, and we compare a subset of our models. For training, we use a set of 1280×720 images that are encoded using one of the previous image encoders (resulting in a 80×45×32 bitmap or 1 /8 bits per pixel per RNN iteration). <ref type="figure" target="#fig_5">Figure 5</ref> and <ref type="figure" target="#fig_4">Figure 6</ref> show that all models benefit from this additional entropy coding layer. Since the Kodak dataset has relatively low resolution images, the gains are not very significant -for the best models we gained between 5% at 2 bpp, and 32% at 0.25 bpp. The benefit of such a model is truly realized only on large images. We apply the entropy coding model to the Baseline LSTM model, and the bit-rate saving ranges from 25% at 2 bpp to 57% at 0.25 bpp.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussion</head><p>We presented a general architecture for compressing with RNNs, content-based residual scaling, and a new variation of GRU, which provided the highest PSNR-HVS out of the models trained on the high entropy dataset. Because our class of networks produce image distortions that are not well captured by the existing perceptual metrics, it is difficult to declare a best model. However, we provided a set of models which perform well according to these metrics, and on average we achieve better than JPEG performance on both MS-SSIM AUC and PSNR-HVS AUC, both with and without entropy coding. With that said, our models do benefit from the additional step of entropy coding due to the fact that in the early iterations the recurrent encoder models produce spatially correlated codes. Additionally, we are open sourcing our best Residual GRU model and our Entropy Coder training and evaluation in https://github.com/tensorflow/models/tree/master/comp ression.</p><p>The next challenge will be besting compression methods derived from video compression codecs, such as WebP <ref type="table">Table 1</ref>. Performance on the Kodak dataset measured as area under the curve (AUC) for the specified metric, up to 2 bits per pixel. All models are trained up for approximately 1,000,000 training steps. No entropy coding was used. After entropy coding, the AUC will be higher for the network-based approaches.</p><p>Trained on the 32×32 dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Model</head><p>Rank MS-SSIM AUC Rank PSNR-HVS AUC  (which was derived from VP8 video codec), on large images since they employ tricks such as reusing patches that were already decoded. Additionally training the entropy coder (BinaryRNN) and the patch-based encoder jointly and on larger patches should allow us to choose a trade-off between the efficiency of the patch-based encoder and the predictive power of the entropy coder. Lastly, it is important to emphasize that the domain of perceptual differences is In the first row (0.25 bpp) our results are more able to capture color (notice color blocking on JPEG). In the second row (1.00 bpp) our results don't incur the mosquito noise around objects (one example is highlighed with an orange circle). Results at 1 bpp may be difficult to see on printed page. Additional results available in the supplemental materials.</p><p>in active development. None of the available perceptual metrics truly correlate with human vision very well, and if they do, they only correlate for particular types of distortions. If one such metric were capable of correlating with human raters for all types of distortions, we could incorporate it directly into our loss function, and optimize directly for it.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. A single iteration of our shared RNN architecture.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Adding content-dependent, iteration-dependent residual scaling to the additive reconstruction framework. Residual images are of size H×W×3 with three color channels, while gains are of size 1 and the same gain factor is applied to all three channels per pixel.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. Binary recurrent network (BinaryRNN) architecture for a single iteration. The gray area denotes the context that is available at decode time.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Description of neural network used to compute additional line LSTM inputs for progressive entropy coder. This allows propagation of information from the previous iterations to the current.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. Rate distortion curve on the Kodak dataset given as PSNR-HVS vs. bit per pixel (bpp). Dotted lines: before entropy coding, Plain lines: after entropy coding. Top: Two top performing models trained on the 32x32 dataset. Bottom: Two top performing models trained on the High Entropy dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Rate distortion curve on the Kodak dataset given as MS-SSIM vs. bit per pixel (bpp). Dotted lines: before entropy coding, Plain lines: after entropy coding. Left: Two top performing models trained on the 32x32 dataset. Right: Two top performing models trained on the High Entropy dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Figure 7. Comparison of compression results on Kodak Image 5. The top row is target at 0.25 bpp, the bottom row at 1.00 bpp. The left column is JPEG 420 and the right column is our Residual GRU (One Shot) method. The bitrates for our method are before entropy coding. In the first row (0.25 bpp) our results are more able to capture color (notice color blocking on JPEG). In the second row (1.00 bpp) our results don't incur the mosquito noise around objects (one example is highlighed with an orange circle). Results at 1 bpp may be difficult to see on printed page. Additional results available in the supplemental materials.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Trained on the High Entropy dataset.</figDesc><table>GRU (One Shot) 
+1 
+1.8098 
+1 
+53.15 
+LSTM (Residual Scaling) 
+2 
+1.8091 
+4 
+52.36 
+LSTM (One Shot) 
+3 
+1.8062 
+3 
+52.57 
+LSTM (Additive Reconstruction) 
+4 
+1.8041 
+6 
+52.22 
+Residual GRU (One Shot) 
+5 
+1.8030 
+2 
+52.73 
+Residual GRU (Residual Scaling) 
+6 
+1.7983 
+8 
+51.25 
+Associative LSTM (One Shot) 
+7 
+1.7980 
+5 
+52.33 
+GRU (Residual Scaling) 
+8 
+1.7948 
+7 
+51.37 
+
+Baseline [17] 
+1.7225 
+48.36 
+
+LSTM (One Shot) 
+1 
+1.8166 
+8 
+48.86 
+GRU (One Shot) 
+2 
+1.8139 
+2 
+53.07 
+Residual GRU (One Shot) 
+3 
+1.8119 
+1 
+53.19 
+Residual GRU (Residual Scaling) 
+4 
+1.8076 
+7 
+49.61 
+LSTM (Residual Scaling) 
+5 
+1.8000 
+4 
+51.25 
+LSTM (Additive) 
+6 
+1.7953 
+5 
+50.67 
+Associative LSTM (One Shot) 
+7 
+1.7912 
+3 
+52.09 
+GRU (Residual Scaling) 
+8 
+1.8065 
+6 
+49.97 
+
+Baseline LSTM [17] 
+1.7408 
+48.88 
+
+JPEG 
+
+YCbCr 4:4:4 
+1.7748 
+51.28 
+YCbCr 4:2:0 
+1.7998 
+52.61 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Harp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kudlur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Levenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mané</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Steiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Talwar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Viégas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Warden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wicke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zheng</surname></persName>
+		</author>
+		<title level="m">TensorFlow: Large-scale machine learning on heterogeneous systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Software available from tensorflow.org. 5</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">End-to-end optimization of nonlinear transform codes for perceptual quality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ballé</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Laparra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Picture Coding Symposium</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Empirical evaluation of gated recurrent neural networks on sequence modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.3555</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Fast and accurate deep network learning by exponential linear units (elus)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Clevert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Unterthiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Corr</surname></persName>
+		</author>
+		<idno>abs/1511.07289</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Associative long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wayne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Uria</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML 2016</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Towards Conceptual Compression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Besse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jimenez Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+	<note>ArXiv eprints</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A modified psnr metric based on hvs for quality assessment of color images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bhardwaj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Bhateja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEEXplore</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.03385</idno>
+		<title level="m">Deep residual learning for image recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Reducing the dimensionality of data with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">313</biblScope>
+			<biblScope unit="issue">5786</biblScope>
+			<biblScope unit="page" from="504" to="507" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization. CoRR, abs/1412</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">6980</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Kodak lossless true color image suite (PhotoCD PCD0992)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kodak</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Using very deep autoencoders for content-based image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Symposium on Artificial Neural Networks</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">V</forename><surname>Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1601.06759</idno>
+		<title level="m">Pixel recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Soltani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jiang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.00064</idno>
+		<title level="m">Higher order recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Highway networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning: Deep Learning Workshop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Variable rate image compression with recurrent neural networks. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>O&amp;apos;malley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Hwang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Minnen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baluja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Covell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Extracting and composing robust features with denoising autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-A</forename><surname>Manzagol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Multiscale structural similarity for image quality assessment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Bovik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Signals, Systems and Computers</title>
+		<imprint>
+			<publisher>Ieee</publisher>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.2329</idno>
+		<title level="m">Recurrent neural network regularization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

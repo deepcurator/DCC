@@ -1,0 +1,818 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Glow: Generative Flow with Invertible 1×1 Convolutions</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Prafulla</forename><surname>Dhariwal</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">San</forename><surname>Openai</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Francisco</surname></persName>
+						</author>
+						<title level="a" type="main">Glow: Generative Flow with Invertible 1×1 Convolutions</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Flow-based generative models <ref type="bibr" target="#b1">(Dinh et al., 2014)</ref> are conceptually attractive due to tractability of the exact log-likelihood, tractability of exact latent-variable inference, and parallelizability of both training and synthesis. In this paper we propose Glow, a simple type of generative flow using an invertible 1 × 1 convolution. Using our method we demonstrate a significant improvement in log-likelihood on standard benchmarks. Perhaps most strikingly, we demonstrate that a generative model optimized towards the plain log-likelihood objective is capable of efficient realisticlooking synthesis and manipulation of large images. The code for our model is available at https://github.com/openai/glow.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Two major unsolved problems in the field of machine learning are (1) data-efficiency: the ability to learn from few datapoints, like humans; and (2) generalization: robustness to changes of the task or its context. AI systems, for example, often do not work at all when given inputs that are different from their training distribution. A promise of generative models, a major branch of machine learning, * Equal contribution.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Preprint. Work in progress.</head><p>Figure 1: Synthetic celebrities sampled from our model; see Section 3 for architecture and method, and Section 5 for more results.</p><p>is to overcome these limitations by: (1) learning realistic world models, potentially allowing agents to plan in a world model before actual interaction with the world, and (2) learning meaningful features of the input while requiring little or no human supervision or labeling. Since such features can be learned from large unlabeled datasets and are not necessarily task-specific, downstream solutions based on those features could potentially be more robust and more data efficient. In this paper we work towards this ultimate vision, in addition to intermediate applications, by aiming to improve upon the state-of-the-art of generative models.</p><p>Generative modeling is generally concerned with the extremely challenging task of modeling all dependencies within very high-dimensional input data, usually specified in the form of a full joint probability distribution. Since such joint models potentially capture all patterns that are present in the data, the applications of accurate generative models are near endless. Immediate applications are as diverse as speech synthesis, text analysis, semi-supervised learning and model-based control; see Section 4 for references.</p><p>The discipline of generative modeling has experienced enormous leaps in capabilities in recent years, mostly with likelihood-based methods <ref type="bibr" target="#b5">(Graves, 2013;</ref><ref type="bibr">Welling, 2013, 2018;</ref><ref type="bibr" target="#b1">Dinh et al., 2014;</ref><ref type="bibr" target="#b24">van den Oord et al., 2016a)</ref> and generative adversarial networks (GANs) <ref type="bibr" target="#b4">(Goodfellow et al., 2014</ref>) (see Section 4). Likelihood-based methods can be divided into three categories:</p><p>1. Autoregressive models <ref type="bibr" target="#b8">(Hochreiter and Schmidhuber, 1997;</ref><ref type="bibr" target="#b5">Graves, 2013;</ref><ref type="bibr">van den Oord et al., 2016a,b;</ref><ref type="bibr" target="#b24">Van Den Oord et al., 2016)</ref>. Those have the advantage of simplicity, but have as disadvantage that synthesis has limited parallelizability, since the computational length of synthesis is proportional to the dimensionality of the data; this is especially troublesome for large images or video.</p><p>2. Variational autoencoders (VAEs) <ref type="bibr">Welling, 2013, 2018)</ref>, which optimize a lower bound on the log-likelihood of the data. Variational autoencoders have the advantage of parallelizability of training and synthesis, but can be comparatively challenging to optimize .</p><p>3. Flow-based generative models, first described in NICE <ref type="bibr" target="#b1">(Dinh et al., 2014)</ref> and extended in RealNVP <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>. We explain the key ideas behind this class of model in the following sections.</p><p>Flow-based generative models have so far gained little attention in the research community compared to GANs <ref type="bibr" target="#b4">(Goodfellow et al., 2014)</ref> and VAEs <ref type="bibr" target="#b13">(Kingma and Welling, 2013)</ref>. Some of the merits of flow-based generative models include:</p><p>• Exact latent-variable inference and log-likelihood evaluation. In VAEs, one is able to infer only approximately the value of the latent variables that correspond to a datapoint. GAN's have no encoder at all to infer the latents. In reversible generative models, this can be done exactly without approximation. Not only does this lead to accurate inference, it also enables optimization of the exact log-likelihood of the data, instead of a lower bound of it.</p><p>• Efficient inference and efficient synthesis. Autoregressive models, such as the Pixel-CNN (van den <ref type="bibr" target="#b25">Oord et al., 2016b)</ref>, are also reversible, however synthesis from such models is difficult to parallelize, and typically inefficient on parallel hardware. Flow-based generative models like Glow (and RealNVP) are efficient to parallelize for both inference and synthesis.</p><p>• Useful latent space for downstream tasks. The hidden layers of autoregressive models have unknown marginal distributions, making it much more difficult to perform valid manipulation of data. In GANs, datapoints can usually not be directly represented in a latent space, as they have no encoder and might not have full support over the data distribution. <ref type="bibr" target="#b6">(Grover et al., 2018)</ref>. This is not the case for reversible generative models and VAEs, which allow for various applications such as interpolations between datapoints and meaningful modifications of existing datapoints.</p><p>• Significant potential for memory savings. Computing gradients in reversible neural networks requires an amount of memory that is constant instead of linear in their depth, as explained in the RevNet paper <ref type="bibr" target="#b3">(Gomez et al., 2017)</ref>.</p><p>In this paper we propose a new a generative flow coined Glow, with various new elements as described in Section 3. In Section 5, we compare our model quantitatively with previous flows, and in Section 6, we study the qualitative aspects of our model on high-resolution datasets.</p><p>2 Background: Flow-based Generative Models Let x be a high-dimensional random vector with unknown true distribution x ∼ p * (x). We collect an i.i.d. dataset D, and choose a model p θ (x) with parameters θ. In case of discrete data x, the log-likelihood objective is then equivalent to minimizing:</p><formula xml:id="formula_0">L(D) = 1 N N i=1 − log p θ (x (i) )<label>(1)</label></formula><p>In case of continuous data x, we minimize the following:</p><formula xml:id="formula_1">L(D) 1 N N i=1 − log p θ (x (i) ) + c<label>(2)</label></formula><formula xml:id="formula_2">wherex (i) = x (i) + u with u ∼ U(0, a)</formula><p>, and c = −M · log a where a is determined by the discretization level of the data and M is the dimensionality of x. Both objectives (eqs. <ref type="formula" target="#formula_0">(1)</ref> and <ref type="formula" target="#formula_1">(2)</ref>) measure the expected compression cost in nats or bits; see <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>. Optimization is done through stochastic gradient descent using minibatches of data <ref type="bibr" target="#b11">(Kingma and Ba, 2015)</ref>.</p><p>In most flow-based generative models <ref type="bibr" target="#b1">(Dinh et al., 2014</ref><ref type="bibr" target="#b2">(Dinh et al., , 2016</ref>, the generative process is defined as:</p><formula xml:id="formula_3">z ∼ p θ (z) (3) x = g θ (z)<label>(4)</label></formula><p>where z is the latent variable and p θ (z) has a (typically simple) tractable density, such as a spherical multivariate Gaussian distribution: p θ (z) = N (z; 0, I). The function g θ (..) is invertible, also called bijective, such that given a datapoint x, latent-variable inference is done by z = f θ (x) = g −1 θ (x). For brevity, we will omit subscript θ from f θ and g θ .</p><p>We focus on functions where f (and, likewise, g) is composed of a sequence of transformations:</p><formula xml:id="formula_4">f = f 1 • f 2 • · · · • f K , such</formula><p>that the relationship between x and z can be written as:</p><formula xml:id="formula_5">x f1 ←→ h 1 f2 ←→ h 2 · · · f K ←→ z (5)</formula><p>Such a sequence of invertible transformations is also called a (normalizing) flow <ref type="bibr" target="#b20">(Rezende and Mohamed, 2015)</ref>. Under the change of variables of eq. (4), the probability density function (pdf) of the model given a datapoint can be written as:</p><formula xml:id="formula_6">log p θ (x) = log p θ (z) + log | det(dz/dx)| (6) = log p θ (z) + K i=1 log | det(dh i /dh i−1 )|<label>(7)</label></formula><p>where we define h 0 x and h K z for conciseness. The scalar value log | det(dh i /dh i−1 )| is the logarithm of the absolute value of the determinant of the Jacobian matrix (dh i /dh i−1 ), also called the log-determinant. This value is the change in log-density when going from h i−1 to h i under transformation f i . While it may look intimidating, its value can be surprisingly simple to compute for certain choices of transformations, as previously explored in <ref type="bibr" target="#b0">(Deco and Brauer, 1995;</ref><ref type="bibr" target="#b1">Dinh et al., 2014;</ref><ref type="bibr" target="#b20">Rezende and Mohamed, 2015;</ref><ref type="bibr" target="#b12">Kingma et al., 2016)</ref>. The basic idea is to choose transformations whose Jacobian dh i /dh i−1 is a triangular matrix. For those transformations, the log-determinant is simple:</p><formula xml:id="formula_7">log | det(dh i /dh i−1 )| = sum(log |diag(dh i /dh i−1 )|)<label>(8)</label></formula><p>where sum() takes the sum over all vector elements, log() takes the element-wise logarithm, and diag() takes the diagonal of the Jacobian matrix.  We propose a generative flow where each step (left) consists of an actnorm step, followed by an invertible 1 × 1 convolution, followed by an affine transformation <ref type="bibr" target="#b1">(Dinh et al., 2014)</ref>. This flow is combined with a multi-scale architecture (right). See Section 3 and <ref type="table" target="#tab_0">Table 1</ref>. The three main components of our proposed flow, their reverses, and their log-determinants.</p><p>Here, x signifies the input of the layer, and y signifies its output. Both x and y are tensors of shape [h × w × c] with spatial dimensions (h, w) and channel dimension c. With (i, j) we denote spatial indices into tensors x and y. The function NN() is a nonlinear mapping, such as a (shallow) convolutional neural network like in ResNets <ref type="bibr" target="#b7">(He et al., 2016)</ref> and RealNVP <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>.</p><formula xml:id="formula_8">Description Function Reverse Function Log-determinant</formula><p>Actnorm. See Section 3.1.</p><formula xml:id="formula_9">∀i, j : y i,j = s x i,j + b ∀i, j : x i,j = (y i,j − b)/s h · w · sum(log |s|) Invertible 1 × 1 convolution. W : [c × c]. See Section 3.2. ∀i, j : y i,j = Wx i,j ∀i, j : x i,j = W −1 y i,j h · w · log | det(W)| or h · w · sum(log |s|) (see eq. (10))</formula><p>Affine coupling layer. See Section 3.3 and <ref type="bibr" target="#b1">(Dinh et al., 2014)</ref> xa,</p><formula xml:id="formula_10">x b = split(x) (log s, t) = NN(x b ) s = exp(log s) ya = s xa + t y b = x b y = concat(ya, y b ) ya, y b = split(y) (log s, t) = NN(y b ) s = exp(log s) xa = (ya − t)/s x b = y b x = concat(xa, x b )</formula><p>sum(log(|s|))</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Proposed Generative Flow</head><p>We propose a new flow, building on the NICE and RealNVP flows proposed in <ref type="bibr" target="#b1">(Dinh et al., 2014</ref><ref type="bibr" target="#b2">(Dinh et al., , 2016</ref>. It consists of a series of steps of flow, combined in a multi-scale architecture; see <ref type="figure" target="#fig_1">Figure 2</ref>. Each step of flow consists of actnorm (Section 3.1) followed by an invertible 1 × 1 convolution (Section 3.2), followed by a coupling layer (Section 3.3).</p><p>This flow is combined with a multi-scale architecture; due to space constraints we refer to <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref> for more details. This architecture has a depth of flow K, and number of levels L <ref type="figure" target="#fig_1">(Figure 2</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Actnorm: scale and bias layer with data dependent initialization</head><p>In <ref type="bibr" target="#b2">Dinh et al. (2016)</ref>, the authors propose the use of batch normalization <ref type="bibr" target="#b9">(Ioffe and Szegedy, 2015)</ref> to alleviate the problems encountered when training deep models. However, since the variance of activations noise added by batch normalization is inversely proportional to minibatch size per GPU or other processing unit (PU), performance is known to degrade for small per-PU minibatch size. For large images, due to memory constraints, we learn with minibatch size 1 per PU. We propose an actnorm layer (for activation normalizaton), that performs an affine transformation of the activations using a scale and bias parameter per channel, similar to batch normalization. These parameters are initialized such that the post-actnorm activations per-channel have zero mean and unit variance given an initial minibatch of data. This is a form of data dependent initialization . After initialization, the scale and bias are treated as regular trainable parameters that are independent of the data.</p><p>3.2 Invertible 1 × 1 convolution <ref type="bibr" target="#b1">(Dinh et al., 2014</ref><ref type="bibr" target="#b2">(Dinh et al., , 2016</ref> proposed a flow containing the equivalent of a permutation that reverses the ordering of the channels. We propose to replace this fixed permutation with a (learned) invertible 1 × 1 convolution, where the weight matrix is initialized as a random rotation matrix. Note that a 1 × 1 convolution with equal number of input and output channels is a generalization of a permutation operation.</p><p>The log-determinant of an invertible 1 × 1 convolution of a h × w × c tensor h with c × c weight matrix W is straightforward to compute:</p><formula xml:id="formula_11">log det d conv2D(h; W) d h = h · w · log | det(W)|<label>(9)</label></formula><p>The cost of computing or differentiating det(W) is O(c 3 ), which is often comparable to the cost computing conv2D(h; W) which is O(h · w · c 2 ). We initialize the weights W as a random rotation matrix, having a log-determinant of 0; after one SGD step these values start to diverge from 0.</p><p>LU Decomposition. This cost of computing det(W) can be reduced from O(c 3 ) to O(c) by parameterizing W directly in its LU decomposition:</p><formula xml:id="formula_12">W = PL(U + diag(s))<label>(10)</label></formula><p>where P is a permutation matrix, L is a lower triangular matrix with ones on the diagonal, U is an upper triangular matrix with zeros on the diagonal, and s is a vector. The log-determinant is then simply:</p><formula xml:id="formula_13">log | det(W)| = sum(log |s|)<label>(11)</label></formula><p>The difference in computational cost will become significant for large c, although for the networks in our experiments we did not measure a large difference in wallclock computation time.</p><p>In this parameterization, we initialize the parameters by first sampling a random rotation matrix W, then computing the corresponding value of P (which remains fixed) and the corresponding initial values of L and U and s (which are optimized).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Affine Coupling Layers</head><p>A powerful reversible transformation where the forward function, the reverse function and the logdeterminant are computationally efficient, is the affine coupling layer introduced in <ref type="bibr" target="#b1">(Dinh et al., 2014</ref><ref type="bibr" target="#b2">(Dinh et al., , 2016</ref>. See <ref type="table" target="#tab_0">Table 1</ref>. An additive coupling layer is a special case with s = 1 and a log-determinant of 0.</p><p>Zero initialization. We initialize the last convolution of each NN() with zeros, such that each affine coupling layer initially performs an identity function; we found that this helps training very deep networks.</p><p>Split and concatenation. As in <ref type="bibr" target="#b1">(Dinh et al., 2014)</ref>, the split() function splits h the input tensor into two halves along the channel dimension, while the concat() operation performs the corresponding reverse operation: concatenation into a single tensor. In <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>, another type of split was introduced: along the spatial dimensions using a checkerboard pattern. In this work we only perform splits along the channel dimension, simplifying the overall architecture.  Comparison of the three variants -a reversing operation as described in the RealNVP, a fixed random permutation, and our proposed invertible 1 × 1 convolution, with additive (left) versus affine (right) coupling layers. We plot the mean and standard deviation across three runs with different random seeds.</p><p>Permutation. Each step of flow above should be preceded by some kind of permutation of the variables that ensures that after sufficient steps of flow, each dimensions can affect every other dimension. The type of permutation specifically done in <ref type="bibr" target="#b1">(Dinh et al., 2014</ref><ref type="bibr" target="#b2">(Dinh et al., , 2016</ref>) is equivalent to simply reversing the ordering of the channels (features) before performing an additive coupling layer. An alternative is to perform a (fixed) random permutation. Our invertible 1x1 convolution is a generalization of such permutations. In experiments we compare these three choices.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Related Work</head><p>This work builds upon the ideas and flows proposed in <ref type="bibr" target="#b1">(Dinh et al., 2014</ref>) (NICE) and <ref type="bibr" target="#b2">(Dinh et al., 2016</ref>) (RealNVP); comparisons with this work are made throughout this paper. In <ref type="bibr">(Papamakarios et al., 2017) (MAF)</ref>, the authors propose a generative flow based on IAF ; however, since synthesis from MAF is non-parallelizable and therefore inefficient, we omit it from comparisons. Synthesis from autoregressive (AR) models <ref type="bibr" target="#b8">(Hochreiter and Schmidhuber, 1997;</ref><ref type="bibr" target="#b5">Graves, 2013;</ref><ref type="bibr">van den Oord et al., 2016a,b;</ref><ref type="bibr" target="#b24">Van Den Oord et al., 2016)</ref> is similarly non-parallelizable. Synthesis of high-dimensional data typically takes multiple orders of magnitude longer with AR models; see <ref type="bibr" target="#b17">Oord et al., 2017)</ref> for evidence. Sampling 256 × 256 images with our largest models takes less than one second on current hardware.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>2</head><p>GANs <ref type="bibr" target="#b4">(Goodfellow et al., 2014)</ref> are arguably best known for their ability to synthesize large and realistic images <ref type="bibr" target="#b10">(Karras et al., 2017)</ref>, in contrast with likelihood-based methods. Downsides of GANs are their general lack of latent-space encoders, their general lack of full support over the data <ref type="bibr" target="#b6">(Grover et al., 2018)</ref>, their difficulty of optimization, and their difficulty of assessing overfitting and generalization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Quantitative Experiments</head><p>We begin our experiments by comparing how our new flow compares against RealNVP <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>. We then apply our model on other standard datasets and compare log-likelihoods against previous generative models. See the appendix for optimization details. In our experiments, we let each NN() have three convolutional layers, where the two hidden layers have ReLU activation functions and 512 channels. The first and last convolutions are 3 × 3, while the center convolution is 1 × 1, since both its input and output have a large number of channels, in contrast with the first and last convolution. Figure 4: Random samples from the model, with temperature 0.7</p><p>Gains using invertible 1 × 1 Convolution. We choose the architecture described in Section 3, and consider three variations for the permutation of the channel variables -a reversing operation as described in the RealNVP, a fixed random permutation, and our invertible 1 × 1 convolution.</p><p>We compare for models with only additive coupling layers, and models with affine coupling. As described earlier, we initialize all models with a data-dependent initialization which normalizes the activations of each layer. All models were trained with K = 32 and L = 3. The model with 1 × 1 convolution has a negligible 0.2% larger amount of parameters.</p><p>We compare the average negative log-likelihood (bits per dimension) on the CIFAR-10 (Krizhevsky, 2009) dataset, keeping all training conditions constant and averaging across three random seeds. The results are in <ref type="figure" target="#fig_2">Figure 3</ref>. As we see, for both additive and affine couplings, the invertible 1 × 1 convolution achieves a lower negative log likelihood and converges faster. The affine coupling models also converge faster than the additive coupling models. We noted that the increase in wallclock time for the invertible 1 × 1 convolution model was only ≈ 7%, thus the operation is computationally efficient as well.</p><p>Comparison with RealNVP on standard benchmarks. Besides the permutation operation, the RealNVP architecture has other differences such as the spatial coupling layers. In order to verify that our proposed architecture is overall competitive with the RealNVP architecture, we compare our models on various natural images datasets. In particular, we compare on CIFAR-10, ImageNet <ref type="bibr" target="#b21">(Russakovsky et al., 2015)</ref> and LSUN <ref type="bibr" target="#b26">(Yu et al., 2015)</ref> datasets. We follow the same preprocessing as in <ref type="bibr" target="#b2">(Dinh et al., 2016)</ref>. For Imagenet, we use the 32 × 32 and 64 × 64 downsampled version of ImageNet , and for LSUN we downsample to 96 × 96 and take random crops of 64 × 64. We also include the bits/dimension for our model trained on 256 × 256 CelebA HQ used in our qualitative experiments. <ref type="bibr">3</ref> As we see in <ref type="table" target="#tab_2">Table 2</ref>, our model achieves a significant improvement on all the datasets. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Qualitative Experiments</head><p>We now study the qualitative aspects of the model on high-resolution datasets. We choose the CelebA-HQ dataset <ref type="bibr" target="#b10">(Karras et al., 2017)</ref>, which consists of 30000 high resolution images from the CelebA dataset, and train the same architecture as above but now for images at a resolution of 256 2 , K = 32 and L = 6. To improve visual quality at the cost of slight decrease in color fidelity, we train our models on 5-bit images. We aim to study if our model can scale to high resolutions, produce realistic samples, and produce a meaningful latent space. Due to device memory constraints, at these resolutions we work with minibatch size 1 per PU, and use gradient checkpointing <ref type="bibr" target="#b22">(Salimans and Bulatov, 2017)</ref>. In the future, we could use a constant amount of memory independent of depth by utilizing the reversibility of the model <ref type="bibr" target="#b3">(Gomez et al., 2017)</ref>.</p><p>Consistent with earlier work on likelihood-based generative models <ref type="bibr" target="#b19">(Parmar et al., 2018)</ref>, we found that sampling from a reduced-temperature model often results in higher-quality samples. When sampling with temperature T , we sample from the distribution</p><formula xml:id="formula_14">p θ,T (x) ∝ (p θ (x)) T 2</formula><p>. In case of additive coupling layers, this can be achieved simply by multiplying the standard deviation of p θ (z) by a factor of T . <ref type="figure">Figure 4</ref> shows the random samples obtained from our model. The images are extremely high quality for a non-autoregressive likelihood based model. To see how well we can interpolate, we take a pair of real images, encode them with the encoder, and linearly interpolate between the latents to obtain samples. The results in <ref type="figure">Figure 5</ref> show that the image manifold of the generator distribution is extremely smooth and almost all intermediate samples look like realistic faces.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Synthesis and Interpolation.</head><p>Semantic Manipulation. We now consider modifying attributes of an image. To do so, we use the labels in the CelebA dataset. Each image has a binary label corresponding to presence or absence of attributes like smiling, blond hair, young, etc. This gives us 30000 binary labels for each attribute. We then calculate the average latent vector z pos for images with the attribute and z neg for images without, and then use the difference (z pos − z neg ) as a direction for manipulating. Note that this is a relatively small amount of supervision, and is done after the model is trained (no labels were used while training), making it extremely easy to do for a variety of different target attributes. The results are shown in <ref type="figure">Figure 6</ref>.</p><p>Effect of temperature and model depth. <ref type="figure">Figure 8</ref> shows how the sample quality and diversity varies with temperature. The highest temperatures have noisy images, possibly due to overestimating the entropy of the data distribution, and thus we choose a temperature of 0.7 as a sweet spot for diversity and quality of samples. <ref type="figure" target="#fig_5">Figure 9</ref> shows how model depth affects the ability of the model to learn long-range dependencies. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Conclusion</head><p>We propose a new type of flow, coined Glow, and demonstrate improved quantitative performance in terms of log-likelihood on standard image modeling benchmarks. In addition, we demonstrate that when trained on high-resolution faces, our model is able to synthesize realistic images. Our model is, to the best of our knowledge, the first likelihood-based model in the literature that can efficiently synthesize high-resolution natural images. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>C Optimization details</head><p>We use the Adam optimizer <ref type="bibr" target="#b11">(Kingma and Ba, 2015)</ref> with α = 0.001 and default β 1 and β 2 . In out quantitative experiments (Section 5, <ref type="table" target="#tab_2">Table 2</ref>) we used the following hyperparameters <ref type="table" target="#tab_3">(Table 4</ref>). In our qualitative experiments (Section 6), we used the following hyperparameters <ref type="table" target="#tab_4">(Table 5)</ref>  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>D Extra samples from qualitative experiments</head><p>For the class conditional CIFAR-10 and 32×32 ImageNet samples, we used the same hyperparameters as the quantitative experiments, but with a class dependent prior at the top-most level. We also added a classification loss to predict the class label from the second last layer of the encoder, with a weight of λ = 0.01. The results are in <ref type="figure">Figure 10</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>E Extra samples from the quantitative experiments</head><p>For direct comparison with other work, datasets are preprocessed exactly as in <ref type="bibr" target="#b2">Dinh et al. (2016)</ref>. Results are in <ref type="figure">Figure 11</ref> and <ref type="figure" target="#fig_1">Figure 12</ref>. </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>Multi-scale architecture (Dinh et al., 2016).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: We propose a generative flow where each step (left) consists of an actnorm step, followed by an invertible 1 × 1 convolution, followed by an affine transformation (Dinh et al., 2014). This flow is combined with a multi-scale architecture (right). See Section 3 and Table 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Comparison of the three variants -a reversing operation as described in the RealNVP, a fixed random permutation, and our proposed invertible 1 × 1 convolution, with additive (left) versus affine (right) coupling layers. We plot the mean and standard deviation across three runs with different random seeds.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 :Figure 6 :</head><label>56</label><figDesc>Figure 5: Linear interpolation in latent space between real images</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 7 :Figure 8 :</head><label>78</label><figDesc>Figure 7: Samples from model trained on 5-bit LSUN bedrooms, at temperature 0.875. Resolutions 64, 96 and 128 respectively 4</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 9 :</head><label>9</label><figDesc>Figure 9: Samples from shallow model on left vs deep model on right. Shallow model has L = 4 levels, while deep model has L = 6 levels</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 11 : 0 Figure 12 :</head><label>11012</label><figDesc>Figure 11: Samples from 8-bit, 64×64 LSUN bedrooms, church and towers respectively. Temperature 1.0</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc></figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Best results in bits per dimension of our model compared to RealNVP.</figDesc><table>Model 
+CIFAR-10 ImageNet 32x32 ImageNet 64x64 LSUN (bedroom) LSUN (tower) LSUN (church outdoor) 
+
+RealNVP 3.49 
+4.28 
+3.98 
+2.72 
+2.81 
+3.08 
+
+Glow 
+3.35 
+4.09 
+3.81 
+2.38 
+2.46 
+2.67 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 :</head><label>4</label><figDesc>Hyperparameters for results in Section 5, Table 2 Dataset Minibatch Size Levels (L) Depth per level (K) Coupling</figDesc><table>CIFAR-10 
+512 
+3 
+32 
+Affine 
+
+ImageNet, 32×32 512 
+3 
+48 
+Affine 
+
+ImageNet, 64×64 128 
+4 
+48 
+Affine 
+
+LSUN, 64×64 
+128 
+4 
+48 
+Affine 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 5 :</head><label>5</label><figDesc>Hyperparameters for results in Section 6 Dataset Minibatch Size Levels (L) Depth per level (K) Coupling</figDesc><table>LSUN, 64×64, 5-bit 
+128 
+4 
+48 
+Additive 
+
+LSUN, 96×96, 5-bit 
+320 
+5 
+64 
+Additive 
+
+LSUN, 128×128, 5-bit 
+160 
+5 
+64 
+Additive 
+
+CelebA HQ, 256×256, 5-bit 40 
+6 
+32 
+Additive 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">More specifically, generating a 256 × 256 image at batch size 1 takes about 130ms on a single 1080 Ti, and about 550ms on a K80</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Since the original CelebA HQ dataset didn't have a validation set, we separated it into a training set of 27000 images and a validation set of 3000 images</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">For 128 × 128 and 96 × 96 versions, we centre cropped the original image, and downsampled. For 64 × 64 version, we took random crops from the 96 × 96 downsampled image as done in Dinh et al. (2016)</note>
+		</body>
+		<back>
+			<div type="annex">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>A Additional quantitative results</head><p>See <ref type="table">Table 3</ref>.  , 'SAME') logdet += dlogdet</p></div>			</div>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Higher order statistical decorrelation without information loss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Deco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Brauer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="page" from="247" to="254" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Nice: non-linear independent components estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Krueger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.8516</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sohl-Dickstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.08803</idno>
+		<title level="m">Density estimation using Real NVP</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The reversible residual network: Backpropagation without storing activations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">N</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Grosse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2211" to="2221" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2672" to="2680" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Generating sequences with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1308.0850</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Flow-gan: Combining maximum likelihood and adversarial learning in generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Grover</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ermon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI Conference on Artificial Intelligence</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1603.05027</idno>
+		<title level="m">Identity mappings in deep residual networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Long Short-Term Memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<title level="m">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Karras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Aila</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Laine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lehtinen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1710.10196</idno>
+		<title level="m">Progressive growing of gans for improved quality, stability, and variation</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Learning Representations</title>
+		<meeting>the International Conference on Learning Representations</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Improved variational inference with inverse autoregressive flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="4743" to="4751" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Auto-encoding variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2nd International Conference on Learning Representations</title>
+		<meeting>the 2nd International Conference on Learning Representations</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Variational autoencoders. Under Review</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1601.06759</idno>
+		<title level="m">Pixel recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Babuschkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">V D</forename><surname>Driessche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Lockhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">C</forename><surname>Cobo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Stimberg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.10433</idno>
+		<title level="m">Parallel wavenet: Fast high-fidelity speech synthesis</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Masked autoregressive flow for density estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papamakarios</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pavlakou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="2335" to="2344" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Parmar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vaswani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uszkoreit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ł</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Shazeer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ku</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1802.05751</idno>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">Image transformer. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Variational inference with normalizing flows</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 32nd International Conference on Machine Learning</title>
+		<meeting>The 32nd International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1530" to="1538" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Imagenet large scale visual recognition challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">115</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="211" to="252" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Gradient checkpointing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bulatov</surname></persName>
+		</author>
+		<ptr target="https://github.com/openai/gradient-checkpointing" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Weight normalization: A simple reparameterization to accelerate training of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.07868</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.03499</idno>
+		<idno>arXiv:1601.06759</idno>
+		<title level="m">Wavenet: A generative model for raw audio</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+	<note>Pixel recurrent neural networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Oord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kalchbrenner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Espeholt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.05328</idno>
+		<title level="m">Conditional image generation with PixelCNN decoders</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Lsun: Construction of a large-scale image dataset using deep learning with humans in the loop</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Seff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiao</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.03365.(a)ClassconditionalCIFAR-10samples</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Class conditional 32 × 32 ImageNet samples Figure 10: Class conditional samples on 5-bit CIFAR-10 and 32 × 32 ImageNet respectively</title>
+		<idno>Tem- perature 0.75</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

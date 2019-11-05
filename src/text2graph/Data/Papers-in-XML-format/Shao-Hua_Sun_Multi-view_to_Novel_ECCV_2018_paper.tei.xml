@@ -1,0 +1,1283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T23:20+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Multi-view to Novel view: Synthesizing novel views with Self-Learned Confidence</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shao-Hua</forename><surname>Sun</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Southern California</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minyoung</forename><surname>Huh</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="institution">National Tsing Hua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan-Hong</forename><surname>Liao</surname></persName>
+							<affiliation key="aff3">
+								<orgName type="laboratory">Snap Inc. 4</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ning</forename><surname>Zhang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joseph</forename><forename type="middle">J</forename><surname>Lim</surname></persName>
+						</author>
+						<title level="a" type="main">Multi-view to Novel view: Synthesizing novel views with Self-Learned Confidence</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<textClass>
+				<keywords>Novel view synthesis, multi-view novel view synthesis</keywords>
+			</textClass>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Abstract. In this paper, we address the task of multi-view novel view synthesis, where we are interested in synthesizing a target image with an arbitrary camera pose from given source images. We propose an endto-end trainable framework that learns to exploit multiple viewpoints to synthesize a novel view without any 3D supervision. Specifically, our model consists of a flow prediction module and a pixel generation module to directly leverage information presented in source views as well as hallucinate missing pixels from statistical priors. To merge the predictions produced by the two modules given multi-view source images, we introduce a self-learned confidence aggregation mechanism. We evaluate our model on images rendered from 3D object models as well as real and synthesized scenes. We demonstrate that our model is able to achieve state-of-the-art results as well as progressively improve its predictions when more source images are available.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>With countless encounters of scenes and objects , humans learn to build a mental understanding of 3D objects and scenes just from 2D cross-sections, which in turn, allows us to imagine an unseen view with little effort. This is only possible because humans can integrate their statistical understanding of the world with the presented information. With more and more concrete prior information (e.g more viewpoints, shape understanding etc.), humans learn to consolidate all the information to predict with more confidence. This ability allows humans to make an amodal completion from just the presented data. In computer vision, these approaches are isolated and tackled separately, and the fusion of data is less well understood. Hence, we would like to develop an approach that not only learns to utilize what is given but also incorporate its 3D statistical understanding.</p><p>The task of synthesizing a novel view given an image or a set of images is known as novel view synthesis. The practical applications of it range from but not limited to: computer vision, computer graphics, and virtual reality. Systems that perform on cross-view image inputs, such as action recognition <ref type="bibr" target="#b0">[1]</ref><ref type="bibr" target="#b1">[2]</ref><ref type="bibr" target="#b2">[3]</ref> and 3D reconstruction <ref type="bibr" target="#b3">[4]</ref><ref type="bibr" target="#b4">[5]</ref><ref type="bibr" target="#b5">[6]</ref><ref type="bibr" target="#b6">[7]</ref>, can leverage synthesized scenes to boost existing performance when the number of available views is limited. Furthermore, novel view synthesis can be used jointly on 3D Editing of 2D Photos <ref type="bibr" target="#b7">[8]</ref><ref type="bibr" target="#b8">[9]</ref><ref type="bibr" target="#b9">[10]</ref> as well as rendering virtual reality environments using a history of frames <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b11">12]</ref>. In this paper, we are interested in the task of novel view synthesis when multiple source images are given. Given a target camera pose and an arbitrary number of source images and their camera poses, our goal is to develop a model that can synthesize a target image and progressively improve its predictions. To address this task, a great amount of effort have been expended in geometrybased methods <ref type="bibr" target="#b12">[13]</ref><ref type="bibr" target="#b13">[14]</ref><ref type="bibr" target="#b14">[15]</ref><ref type="bibr" target="#b15">[16]</ref><ref type="bibr" target="#b16">[17]</ref> aiming to directly estimate the underlying 3D structures by exploiting the knowledge of geometry. These methods, while successful with abundant source data, are unable to recover the desired target viewpoint with only a handful of images due to the inherent ambiguity of 3D structures.</p><p>With the emergence of neural networks, learning-based approaches have been applied to tackle this issue of data sparsity. A great part of this research was fueled by the introduction of a large-scale synthetic 3D model datasets such as <ref type="bibr" target="#b17">[18]</ref>. The previous line of work that uses learning can be vaguely divided into two categories: pixel generation <ref type="bibr" target="#b18">[19]</ref><ref type="bibr" target="#b19">[20]</ref><ref type="bibr" target="#b20">[21]</ref> and flow prediction <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b22">23]</ref>. While directly regressing pixels can generate structurally consistent results, it is susceptible to generating blurry results largely in part of the inherent multi-modality of this task. Flow prediction, on the other hand, can generate realistic texture but is unable to generate regions that are not present in the source image(s). Furthermore, most of novel view synthesis frameworks focuses on synthesizing views from a single source image due to the difficulty of aggregating the understanding from multiple source images.</p><p>To step towards developing a framework that is able to address the task of multi-view novel view synthesis, we propose an end-to-end trainable framework (shown in <ref type="figure" target="#fig_0">Fig. 1</ref>) composed of two modules. The flow predictor estimates flow fields to move the pixels from a source view to a target view; the recurrent pixel generator, augmented with an internal memory, iteratively synthesizes and refines a target view when a new source view is given. We propose a self-confidence aggregation mechanism to integrate multiple intermediate predictions produced by the two modules to yield results that are both realistic and structurally consistent.</p><p>We compare our model against state-of-the-art methods on a variety of datasets such as 3D-object models as well as real and synthetic scenes. Our main contributions are as follows: we propose a hybrid framework which combines the strengths of two main lines of novel view synthesis methods and achieves significant improvement compared to existing work. We then demonstrate the flexibility of our method; we show that our model is able to synthesize views from a single source image as well as improve its predictions when additional source views are available. Furthermore, our model can be adapted to scenes rather than synthetic object data as it does not require 3D supervision.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Works</head><p>Geometry-based View Synthesis. A great amount of efforts have been dedicated to explicitly modeling the underlying 3D structure of both scenes and objects <ref type="bibr" target="#b12">[13]</ref><ref type="bibr" target="#b13">[14]</ref><ref type="bibr" target="#b14">[15]</ref><ref type="bibr" target="#b15">[16]</ref>. While appealing and accurate results are guaranteed when multiple source images are available, this line of work is fundamentally not able to deal with sparse inputs. Aiming to address this issue, a deep learning approach is proposed in <ref type="bibr" target="#b23">[24]</ref> focusing on the multi-view stereo problem by regressing directly to output pixel values. On the other hand, <ref type="bibr" target="#b24">[25]</ref> explicitly utilizes learned dense correspondences to predict the image in the middle view of a pair of source images. The above-mentioned methods are limited to synthesizing a middle view among source images and the number of source images is fixed; in contrast, our proposed framework focuses on arbitrary target views and is able to learn from source images vary in length. Learning Dense Visual Correspondence. Discovering dense correspondences among images has been studied in <ref type="bibr" target="#b25">[26]</ref><ref type="bibr" target="#b26">[27]</ref><ref type="bibr" target="#b27">[28]</ref><ref type="bibr" target="#b28">[29]</ref> with a wide range of applications including depth estimation, optical flow prediction, image alignment, image retrieval, etc. Fundamentally differing from this task, novel view synthesis requires the ability to hallucinate pixels of the target image which are missing from source images. Image Generation. A tremendous success in conditional image generation has been made with deep generative models. Given the style, viewpoint, and color of an object, the method proposed in <ref type="bibr" target="#b29">[30]</ref> is able to render realistic results. However, their method is not able to generalize to novel objects or poses which are tackled in our proposed framework. Huang et al. <ref type="bibr" target="#b30">[31]</ref> addressed the problem of synthesizing a frontal view face from a single side-view face image. The proposed model is specifically designed for face images. In contrast, our proposed framework is able to synthesize both scenes and objects. Image-to-image Translation. The task of translating an image from a domain to another domain, known as image-to-image translation has recently received a significant amount of attention <ref type="bibr" target="#b31">[32]</ref><ref type="bibr" target="#b32">[33]</ref><ref type="bibr" target="#b33">[34]</ref><ref type="bibr" target="#b34">[35]</ref>. One can consider the task of novel view synthesis as an image-to-image translation problem where the target and source domains are defined by the camera poses. Not only are the view synthesis systems required to understand the representation of domain specifications e.g. camera poses, but also the numbers of source and target domains are possibly infinitely many due to the continuous representations of camera poses. Moreover, novel view synthesis requires the understanding of geometry while the task of image-to-image translation often only focuses on texture transfer. 3D Voxel/Point Cloud Prediction. Explicitly reconstructing 3D geometry has been intensively addressed in a multi-view setting, such as SfM and SLAM <ref type="bibr" target="#b12">[13]</ref><ref type="bibr" target="#b13">[14]</ref><ref type="bibr" target="#b14">[15]</ref><ref type="bibr" target="#b15">[16]</ref>, in which we are interested in the case where plenty of images captured from different viewing angles are available. Recently, empowered by large-scale repositories of 3D CAD models such as ShapeNet <ref type="bibr" target="#b17">[18]</ref>, predicting 3D representations such as voxels and 3D point clouds from 2D views has achieved encouraging results <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b6">7]</ref>. By contrast, we are interested in synthesizing views instead of 3D representations of objects. Our approach requires no 3D supervision nor explicit 3D model. Novel View Synthesis. <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref> propose to directly generate pixels of a target view, while <ref type="bibr" target="#b21">[22]</ref> re-casts the task of novel view synthesis as predicting dense flow fields that map the pixels in the source view to the target view, but it is not able to hallucinate the pixels which are missing from source view. <ref type="bibr" target="#b22">[23]</ref> predicts a flow to move the pixels from the source to the target view, followed by an image completion network. There are three key differences between our work and <ref type="bibr" target="#b22">[23]</ref>. First, <ref type="bibr" target="#b22">[23]</ref> requires 3D supervision which limits the method to only objects; on the other hand, our model requires no 3D supervision and therefore is able to synthesize scenes. Second, we address the task where the source images vary in length while <ref type="bibr" target="#b22">[23]</ref> focuses on a single source image. Third, we design our model to predict a flow and hallucinate pixels independently, which enables our framework to take advantage of both modules to produce structural consistent shape and sharper appearance. This design also makes our model end-to-end trainable. Instead, <ref type="bibr" target="#b22">[23]</ref> considers it as a sequential process where the pixel generation network is only considered as a refinement network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Approach</head><p>When synthesizing a novel view from multi-view input, we want our model to (1) directly reuse information from the source as well as hallucinate missing informa-tion; (2) progressively improve its prediction as more information is available. To put this idea into practice, we design a flexible neural network framework that progressively improves its prediction as more input information is presented. To put (1) into practice, we design our framework to be a two-stream model that consists of a flow predictor and a pixel generator (shown in <ref type="figure" target="#fig_0">Figure 1</ref>). The flow predictor learns to reuse the pixels presented in source images, while the pixel generator learns to hallucinate pixels. To take advantage of the strengths of both the modules as well as achieve <ref type="formula" target="#formula_2">(2)</ref>, we aggregate intermediate predictions using a self-learned confidence aggregation mechanism.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Overview and Notations</head><p>Our goal is to synthesize a target image I target given a target camera pose p target and N (image, camera-pose) pairs (I</p><formula xml:id="formula_0">1 s , p 1 s ), (I 2 s , p 2 s )..., (I N s , p N s )</formula><p>. We either use a one-hot vector to represent discrete camera-pose, or a 6DoF vector for continuous camera pose. We denote the flow predictor as F(·), and denote the pixel generator as P(·). We put a subscript f and p for predictions made by F(·) and P(·), respectively. Given t-th source image I </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Flow Predictor</head><p>Inspired by <ref type="bibr" target="#b21">[22]</ref>, we design a flow module that learns to predict dense flow fields. The output indicates the pixel displacement from the source image to the target image. Given t-th source image I</p><formula xml:id="formula_1">L F = 1 N N t=0 ||I target − I t f || 1 ,<label>(1)</label></formula><p>We use an encoder-decoder architecture with residual blocks and skip connections. The architecture details are left in the supplementary section. The encoder of this model takes a source image as well as its associated pose, where a pose vector is spatially tiled and concatenated to the source image channelwise. The decoder upsamples the features to match the dimension of the input image. We empirically find that this architecture outperforms the architecture originally proposed in <ref type="bibr" target="#b21">[22]</ref>. This comparisons can be found in Section 4.3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Pixel Generator</head><p>The flow predictor is able to yield a visually appealing result when the source pose and the target pose are close -i.e. when the target is well represented by the source. Yet, it is not capable of generating pixels beyond the source pixels. Therefore, it is only natural to rely on the prior understanding of the underlying 3D structure.</p><p>The architecture of this module is very similar to our flow module. It is an encoder-decoder style network with an internal memory using Convolutional Long-Short Term Memory (ConvLSTM) <ref type="bibr" target="#b36">[37]</ref>, which is able to progressively improve its prediction with varying input lengths. Note that the ConvLSTMs are used only in the bottleneck layers and the mathematical formulation is left in the supplementary section. The pixel generator is trained to minimize the following equation: . To enforce our model to generate sharp images, we also incorporate an adversarial loss into our objective. We utilize the formulation proposed in <ref type="bibr" target="#b37">[38]</ref>, where an additional discriminator is trained to optimize:</p><formula xml:id="formula_2">L P = 1 N N t=0 ||I target − I t p || 1 ,<label>(2)</label></formula><formula xml:id="formula_3">L D = E[(1 − D(I target )) 2 ] + E[ 1 N N t=0 (D(I t p )) 2 ].<label>(3)</label></formula><p>With the pixel generator minimizing the following additional loss:</p><formula xml:id="formula_4">L G = E[ 1 N N t=0 (1 − D(I t p )) 2 ].<label>(4)</label></formula><p>The final objective for the pixel module can be compactly represented as: L P + λL G , where λ denotes the weight of the adversarial loss. The details of the discriminator architecture and GAN training can be found in the supplementary section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Self-learned Confidence Aggregation</head><p>The flow module is able to produce visually realistic images by reusing the pixels from source images; however, synthesized images are often incomplete due to possible occlusions or pixels missing from source images. On the other hand, the pixel module is trained to directly hallucinate the target image and is able to produce structurally consistent results, their appearance is usually blurry due to the inherent ambiguity of minimizing a regression loss. Our key insight is to alleviate the disadvantages of the two modules by aggregating the advantages of both information. Inspired by the recent flourish of Bayesian deep learning <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b39">40]</ref>, where we are interested in modeling uncertainty of neural networks, we propose to train networks to predict confidence.</p><p>Specifically, we want an algorithm that is able to produce a per-pixel confidence map associated with its predictions. We formulate this confidence prediction objective as:</p><formula xml:id="formula_5">L C = 1 HW x,y ||I target −Î|| •2 • c x,y ||c|| 2 ,<label>(5)</label></formula><p>whereÎ is the predicted target image (either from flow or pixel module), and c is the estimated confidence map with a size of H by W . || · || •2 is an element-wise square operator, • is the Hadamard product. To minimize this objective, the models have to learn to put more weight on pixels where they are confident and less on regions it is not. Each module is augmented with an additional output layer to predict the confidence map. The confidence maps are optimized via the objective described in Equation <ref type="bibr" target="#b4">5</ref>.</p><p>We normalize the predicted confidences maps by applying a Softmax across N + 1 confidence maps. The normalized confidence maps, denoted asĉ, can then be used to aggregate the predictions:Î target = I </p><formula xml:id="formula_6">min βL A + Flow Prediction L F + α f L C + Pixel Prediction L P + λL G + α p L C<label>(6)</label></formula><p>where α f , α p , are weights for confidence map predictions and β is the weight for the global confidence scale. The effectiveness and the gradual improvement of using confidence maps are demonstrated in Section 4. The architecture and training details can be found in Supplemental Material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We evaluate our model in multi-view and single-view settings on ShapeNet <ref type="bibr" target="#b17">[18]</ref> objects, real-world scenes (KITTI Visual Odometry Dataset <ref type="bibr" target="#b40">[41]</ref>), and synthesized scenes (Synthia dataset <ref type="bibr" target="#b41">[42]</ref>). We benchmark against a pixel generation method <ref type="bibr" target="#b18">[19]</ref>, a flow prediction approach <ref type="bibr" target="#b21">[22]</ref>, and a state-of-the-art novel view synthesis framework <ref type="bibr" target="#b22">[23]</ref>. We use L 1 , and structural similarity measure (SSIM) as quantitative reconstruction metrics. Furthermore, to investigate whether our</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Source 1 Source 2 Source 3 Source 4 Target</head><p>Synthesized results using <ref type="bibr" target="#b0">(1)</ref> (2)</p><p>[23]</p><p>Synthesized results using</p><formula xml:id="formula_8">(1) (1), (2) (1) -(3) (1) -(4) [19]</formula><p>[22]</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Ours Source 1 Source 2 Source 3 Source 4 Target</head><p>Synthesized results using <ref type="bibr" target="#b0">(1)</ref> (2)</p><p>[23]</p><p>Synthesized results using</p><formula xml:id="formula_10">(1) (1), (2) (1) -(3) (1) -(4) [19]</formula><p>[22]</p><p>Ours <ref type="bibr" target="#b22">[23]</ref> Ours Synthesized results using</p><formula xml:id="formula_11">(1) (2) (3)<label>(4)</label></formula><p>[22]</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Source 1 Source 2 Source 3 Source 4 Target</head><p>Synthesized results using <ref type="bibr" target="#b0">(1)</ref> (1), <ref type="formula" target="#formula_1">(2) (1)</ref> - <ref type="formula" target="#formula_1">(3) (1)</ref> - <ref type="formula" target="#formula_4">(4)</ref> [19]</p><p>[23]</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Ours</head><p>Synthesized results using</p><formula xml:id="formula_12">(1) (2) (3)<label>(4)</label></formula><p>[22]</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Source 1 Source 2 Source 3 Source 4 Target</head><p>Synthesized results using <ref type="bibr" target="#b0">(1)</ref> (1), <ref type="formula" target="#formula_1">(2) (1)</ref> - <ref type="formula" target="#formula_1">(3) (1)</ref> - <ref type="formula" target="#formula_4">(4)</ref> [19] <ref type="figure">Fig. 2</ref>: Results on ShapeNet <ref type="bibr" target="#b17">[18]</ref>. The proposed framework typically synthesized cars and chairs with correct shapes and realistic appearance. <ref type="bibr" target="#b18">[19]</ref> generates structurally coherent but blurry images. <ref type="bibr" target="#b21">[22]</ref> produces realistic results but suffers from distortions and missing pixels. <ref type="bibr" target="#b22">[23]</ref> outperforms both <ref type="bibr" target="#b18">[19]</ref> and <ref type="bibr" target="#b21">[22]</ref> while sometimes produces unrealistic results.  model can synthesize semantically realistic images, we quantify our results using a segmentation score predicted by FCN <ref type="bibr" target="#b42">[43]</ref> trained on Synthia dataset <ref type="bibr" target="#b41">[42]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Novel view synthesis for objects</head><p>We train and test the proposed model on ShapeNet <ref type="bibr" target="#b17">[18]</ref>, where ground truth views of arbitrary camera poses are available.</p><p>Data setup We render images of 3D models from the car category and the chair category. For each model, we render images with the dimension of 256 × 256 for a total of 54 viewpoints, which corresponds to 18 azimuth angles (sampled in the range [0, 340] with 20-degree increments) and the elevations of 0, 10, and 20. The pose of each image is represented as a concatenation of two one-hot vectors: an 18 element vector indicating the azimuth angle and a 3 element vector indicating the elevation. We use the same training and testing splits used in <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b22">23]</ref> (80% of models for training and the rest 20% for testing). Each training/testing tuple is constructed by sampling a target pose as well as N source poses and their corresponding images I target , p t , I </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Results</head><p>The quantitative results are shown in <ref type="table">Table 1</ref> while the qualitative results can be found in <ref type="figure">Figure 2</ref>. The results demonstrate that our proposed model is able to reliably synthesize target images when single or multiple source images are available. Our model outperforms the three methods on both L 1 distance and SSIM. The pixel generation method <ref type="bibr" target="#b18">[19]</ref> is capable of producing well-structured shapes but not appealing texture, while the flow prediction method <ref type="bibr" target="#b21">[22]</ref> preserves realistic texture but is not able to hallucinate pixels missing from source. While the results produced by <ref type="bibr" target="#b22">[23]</ref> are mostly satisfactory, when the flow module fails, the synthesized images generated by the refinement network usually either do not stay true to the source image -likely due to the adversarial loss -and is hugely distorted. Typically, our proposed framework is able to synthesize structurally consistent and realistic results by aggregating intermediate predictions with confidence maps.</p><p>We observe that the quality of the synthesized images of both cars and chairs improve as the number of source images increases. However, the marginal gain</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Views Methods</head><p>Car Chair L1 SSIM L1 SSIM <ref type="bibr" target="#b18">[19]</ref> .  <ref type="table">Table 1</ref>: ShapeNet objects: we compare our framework to <ref type="bibr" target="#b18">[19]</ref>, <ref type="bibr" target="#b21">[22]</ref>, and <ref type="bibr" target="#b22">[23]</ref>.  decreases as the number of source images increases. This aligns with our intuition that each additional view contributes less new information since two random views are very likely to overlap with each other. Confidence maps and intermediate predictions shown in <ref type="figure" target="#fig_4">Figure 3</ref> demonstrate that our model learns to adaptively exploit predictions produced by both of the two modules from multiple source images.</p><p>Learn to predict visibility maps without 3D supervision <ref type="bibr" target="#b22">[23]</ref> trains the model to predict visibility maps, indicating which parts in a target image are visible from the source view. This requires prior 3D knowledge as it needs 3D coordinate and surface normal to produce ground truth visibility maps as supervision. With the predicted visibility maps, one is able to re-cast the remaining synthesis problem as image completion problem. On the other hand, as demonstrated in <ref type="figure" target="#fig_5">Figure 4</ref>, our model learns to predict confidence maps which share a similar concept of visibility maps without any 3D supervision. Specifically, our model is implicitly forced to comprehend which target pixels are presented in source images by learning to optimize the losses introduced in the proposed selflearned confidence aggregation mechanism. This is especially important in real life application where 3D supervision is most likely not available -allowing our model to be trained on not only objects but also scenes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Novel view synthesis for scenes</head><p>While most of the existing novel view synthesis approaches only focus on ShapeNet, we are also interested in generalizing our proposed model to scenes, where 3D supervision is not available and training category-dependent models is not trivial. To this end, we train and test our framework on both real (KITTI Visual Odometry Dataset <ref type="bibr" target="#b40">[41]</ref>) and synthetic (Synthia Dataset <ref type="bibr" target="#b41">[42]</ref>) scenes.   <ref type="bibr" target="#b40">[41]</ref> and Synthia <ref type="bibr" target="#b41">[42]</ref> datasets. Our framework typically produces structurally consistent and realistic results. Note that <ref type="bibr" target="#b21">[22]</ref> struggles with distortions and missing pixels, and <ref type="bibr" target="#b18">[19]</ref> is unable to generate sharp results.</p><p>KITTI The dataset <ref type="bibr" target="#b40">[41]</ref> was originally proposed for SLAM evaluation. It contains frame sequences captured by a car traveling through urban city scenes with their camera poses. We use 11 sequences extracted from the dataset, whose ground truth camera poses are available, On average each sequence contains around two thousand frames. We use 80% frames for training and the rest of 20% for testing. We center-crop each frame to form an image with a dimension of 256 × 256. We convert each transformation matrix to its 6DoF representation (a translation vector and Euler angles) as a pose representation. We follow <ref type="bibr" target="#b21">[22]</ref> to construct the training and testing set. We restrict the source frame and the target frame to be separated by at most 10 frames. To create the testing split, we randomly sample 20, 000 tuples. N is set to 2 for scene experiments.</p><p>Synthia The data was originally proposed for semantic segmentation in urban scenarios. Similar to <ref type="bibr" target="#b40">[41]</ref>, it contains realistic synthetic frame sequences captured by a driving car in a virtual world with their camera poses. We use sequences from all four seasons to train our model. We follow the same preprocessing procedures as KITTI to create the training and testing tuples.</p><p>Results As shown in <ref type="table" target="#tab_6">Table 3</ref>, our proposed framework outperforms the two methods. Qualitative comparisons are shown in <ref type="figure" target="#fig_7">Fig. 5</ref>. Both <ref type="bibr" target="#b18">[19]</ref> and <ref type="bibr" target="#b21">[22]</ref> learn to infer the relative camera movements and synthesized scene accordingly. However, <ref type="bibr" target="#b18">[19]</ref> hugely suffers from blurriness due to the uncertainty, while <ref type="bibr" target="#b21">[22]</ref> is not able to produce satisfactory results when a camera pose changes drastically. Typically, our proposed framework is able to synthesize structurally consistent and realistic results. Also, the proposed framework does not suffer from the missing pixels by utilizing the scenes rendered by our proposed pixel generator. The two modules learn to leverage each others strength, as shown in <ref type="figure" target="#fig_4">Figure 3</ref>. We observed that none of the models perform well when some uncertainties are not able to be   resolved purely based on source images and their pose. For instance, they include the speed of other driving cars, the lighting condition change, etc.</p><p>Semantic evaluation metrics Although the L 1 distance and SSIM are good metrics to measure the distance between a pair of images in the pixel domain, they often fail to capture the semantics of the generated images. Isola et al. <ref type="bibr" target="#b31">[32]</ref> proposed to utilize a metric, similar to inception score <ref type="bibr" target="#b43">[44]</ref>, to measure the semantic quality of the synthesized images. Inspired by this, we evaluate our synthesized results using semantic segmentation score produced by a FCN <ref type="bibr" target="#b42">[43]</ref> model trained on image semantic segmentation. We obtained the pretrained segmentation model trained on PASCAL VOC dataset <ref type="bibr" target="#b44">[45]</ref> and then fine-tuned it on the sequences extracted from Synthia dataset <ref type="bibr" target="#b41">[42]</ref> with the same training and testing split used in our view synthesis task. The FCN scores are shown in <ref type="table">Table.</ref> 5 and the qualitative results are shown in <ref type="figure">Fig. 6</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Ablation Study</head><p>To investigate how different blocks of the framework affect the final outcomes, we conduct ablation studies on all the datasets. The qualitative results including intermediate predictions by the two modules can be found in <ref type="figure" target="#fig_4">Figure 3</ref>. The quantitative results can be found in <ref type="table" target="#tab_3">Table 2 and Table 4</ref>, where Flow denotes aggregated predictions made by the flow predictor with its predicted confidence maps e.g. We observed that our full model outperforms each module and the oracle. Also, our flow module with a fully convolutional architecture and residual blocks Target <ref type="bibr" target="#b18">[19]</ref> [22] Ours <ref type="figure">Fig. 6</ref>: Synthia FCN-results for the scenes synthesized by <ref type="bibr" target="#b18">[19]</ref>, <ref type="bibr" target="#b21">[22]</ref>, and our framework. The results produced by our framework yield better segmentation maps.  <ref type="table">Table 5</ref>: FCN-scores for different methods. The scores are evaluated by FCN-32 pretrained on PASCAL VOC and finetuned on Synthia dataset. The scores are estimated on synthesized scenes produced by <ref type="bibr" target="#b18">[19]</ref>, <ref type="bibr" target="#b21">[22]</ref>, and our proposed framework with one input view.</p><p>outperforms <ref type="bibr" target="#b21">[22]</ref>. Our method is able to alleviate the issue of severe distortions reported in <ref type="bibr" target="#b21">[22]</ref>. Our proposed recurrent pixel generator not only outperforms <ref type="bibr" target="#b18">[19]</ref> but also show greater improvement (car: 26%, chair: 36%, KITTI: 10%, Synthia: 8%) when more source images are available compared to <ref type="bibr" target="#b18">[19]</ref> (car: 19%, chair: 14%, KITTI: 4%, Synthia: 2%), which demonstrates the effectiveness of the recurrent pixel generator.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>In this paper, we present an end-to-end trainable framework that is capable of synthesizing a novel view from multiple source views without utilizing 3D supervision. Specifically, we propose a two-stream model that integrates the strengths of the two main lines of existing view synthesis techniques: pixel generation and flow prediction. To adaptively merge the predictions produced by the two modules given multiple source images, we introduce a self-learned confidence aggregation mechanism. We evaluate our model on images rendered from 3D object models as well as real and synthesized scenes. We demonstrate that our model is able to achieve state-of-the-art results as well as progressively improve its predictions when more source images are available.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Fig. 1 :</head><label>1</label><figDesc>Fig. 1: Overview of our proposed network architecture. Given a set of N source images with different viewpoints and a target pose (on the left), Flow Predictor learns to predict a dense flow field to move the pixels presented in a source image to produce a target image for each source image. Recurrent Pixel Generator is trained to directly synthesize a target image given a set of source images. The two modules are trained to predict per-pixel confidence maps associated to their predictions. The final prediction is obtained by aggregating the N + 1 predictions with self-learned confidence maps.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>the corresponding confidence map. The final predictionÎ target is generated by aggregating the N +1 predictions (N from the flow module and 1 from the pixel module).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>To iterate,Î target denotes the final aggregated image, I N p denotes the last output of the recurrent pixel generator, and I i f denotes the output of the flow predictor given the i-th source image. The reconstruction loss on the aggregated prediction is L A = ||I target −Î target || 1 . The final objective of the full model is:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig. 3 :</head><label>3</label><figDesc>Fig. 3: Results and confidence maps generated from our proposed model. The first N intermediate predictions are produced by the flow predictor, and the last one is obtained by the pixel generator. Confidence maps are plotted with Jet colormap, where red means higher confidence and blue means lower confidence. This demonstrates that our model is able to adaptively exploit the information from different source poses with confidence maps.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Fig. 4 :</head><label>4</label><figDesc>Fig. 4: Visualization of the predicted confidence maps for car and chair model. Each entry represents a predicted confidence map for a given source image and target pose. The confidence is represented using the jet-colormap, where red indicates highly confident, and blue indicating the otherwise.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>20,000 tuples to create the testing split. N is set to 4 for this experiment.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Fig. 5 :</head><label>5</label><figDesc>Fig. 5: Synthesized scenes on KITTI [41] and Synthia [42] datasets. Our framework typically produces structurally consistent and realistic results. Note that [22] struggles with distortions and missing pixels, and [19] is unable to generate sharp results.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head></head><label></label><figDesc>this does not use the image synthesized by the pixel generator. Pixel denotes the last results produced by the pixel generator, e.g. I N p . One could argue that our model just learns to pick the best intermediate prediction. Hence, to investigate whether our model actually learns a mean- ingful self-confidence aggregation by comparing against an oracle. We quan- tify the best intermediate result from all 2N intermediate predictions produced by both modules. We denote this as the Oracle intermediate performance, e.g. min ||I target −Î|| 1</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Ablation study. We compare the 
+performance of our full model to each 
+module. Flow denotes the flow predictor 
+and Pixel denotes the pixel generator. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Scenes: we compare our frame- work to [19] and [22] on KITTI and Syn- thia.</figDesc><table>Views Methods 
+KITTI 
+Synthia 
+L1 
+SSIM 
+L1 
+SSIM 
+Pixel 
+.259 
+.505 
+.183 
+.622 
+1 
+Flow 
+.397 
+.539 
+.211 
+.652 
+Ours 
+.203 
+.626 
+.141 
+.697 
+Pixel 
+.234 
+.525 
+.168 
+.628 
+2 
+Flow 
+.249 
+.656 
+.149 
+.720 
+Oracle 
+.199 
+.658 
+.140 
+.718 
+Ours 
+.163 
+.691 
+.118 
+.737 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Ablation study. We compare the performance of our full model to each module. Flow denotes the flow predictor and Pixel denotes the pixel generator.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_8" validated="false"><head></head><label></label><figDesc>Methods Per-pixel acc. Per-class acc. IOU</figDesc><table>[19] 
+0.630 
+0.469 
+0.211 
+[22] 
+0.789 
+0.69 
+0.427 
+Ours 
+0.803 
+0.695 
+0.441 
+Ground Truth 
+0.868 
+0.783 
+0.586 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">t s and its corresponding pose p t s , the flow predictor generates a prediction I t f , c t f = F(p target , I t s , p t s ), where I t f is a predicted target image and c t f is the corresponding confidence map. The flow predictor independently produces N predictions from N source images since it learns to estimate the relative pixel movements from source viewpoint to the target viewpoint. The pixel generator, on the other hand, is designed as a recurrent model, which outputs a prediction I t p , c t p = P(p target , I</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">t s , the model first predicts 2D dense flow fields from the original image in x and y-axis by (x t , y t ) = G(I t s , p t s , p target ). This flow field is then used to sample from the original image by I t f = T (x t , y t , I t s ), where I t f denotes the predicted target image given I t s . Here G(·) predicts the flow, and T (·) bilinearly samples from the source image. This differentiable bilinear sampling layer was originally proposed by [36]. We optimize the flow predictor by minimizing the following equation:</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This project was supported by the center for super intelligence, Kakao Brain, and SKT. This research of Shao-Hua Sun and Minyoung Huh were partially supported by Snap Inc. The authors are grateful to Youngwoon Lee and Hyeonwoo Noh for helpful discussions about this work.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">A survey on vision-based human action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Poppe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Image and vision computing</title>
+		<imprint>
+			<biblScope unit="page">2</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">3-d model-based tracking of humans in action: a multiview approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Gavrila</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Cross-view action recognition from temporal self-similarities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">N</forename><surname>Junejo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Dexter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="293" to="306" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A comparison and evaluation of multi-view stereo reconstruction algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer vision and pattern recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Accurate, dense, and robust multiview stereopsis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page" from="1362" to="1376" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">3d-r2n2: A unified approach for single and multi-view 3d object reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">B</forename><surname>Choy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A point set generation network for 3d object reconstruction from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Image-based 3d modelling: A review. The Photogrammetric</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Remondino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>El-Hakim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Record</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Pointshop 3d: An interactive system for point-based surface editing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zwicker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Knoll</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gross</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="page">2</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">View morphing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Dyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Special Interest Group on GRAPHics and Interactive Techniques (SIGGRAPH)</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Quicktime vr: An image-based approach to virtual environment navigation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Special Interest Group on GRAPHics and Interactive Techniques</title>
+		<meeting><address><addrLine>SIG-GRAPH</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Creating full view panoramic image mosaics and environment maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">Y</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Special Interest Group on GRAPHics and Interactive Techniques (SIGGRAPH)</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Computer vision: a modern approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>Pearson</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">A factorization based algorithm for multi-image projective structure and motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Fastslam: A factored solution to the simultaneous localization and mapping problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Montemerlo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wegbreit</surname></persName>
+		</author>
+		<editor>Aaai/iaai.</editor>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Simultaneous localization and mapping: part i</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Durrant-Whyte</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Bailey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE robotics &amp; automation magazine</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Modeling and rendering architecture from photographs: A hybrid geometry-and image-based approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">E</forename><surname>Debevec</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 23rd annual conference on Computer graphics and interactive techniques</title>
+		<meeting>the 23rd annual conference on Computer graphics and interactive techniques</meeting>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Shapenet: An information-rich 3d model repository</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanrahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.03012</idno>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="page">9</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">Technical Report</note>
+	<note>cs.GR] (2015) 2, 4, 7</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Single-view to multi-view: Reconstructing unseen views with a convolutional network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tatarchenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<idno>CoRR abs/1511.06702</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Weakly-supervised disentangling with recurrent transformations for 3d view synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">H</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Novel views of objects from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rematas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ritschel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE transactions</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">View synthesis by appearance flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tulsiani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Transformation-grounded image generation network for novel 3d view synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Yumer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ceylan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<editor>CVPR.</editor>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page">11</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Deepstereo: Learning to predict new views from the world&apos;s imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Flynn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Neulander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Deep view morphing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kwon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mcfarland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Learning dense correspondence via 3d-guided cycle consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krahenbuhl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aubry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Unsupervised monocular depth estimation with left-right consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Godard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Mac Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Unsupervised deep learning for optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zha</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<publisher>AAAI</publisher>
+			<biblScope unit="page" from="1495" to="1501" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Sift flow: Dense correspondence across different scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European conference on computer vision (ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Learning to generate chairs, tables and cars with convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tatarchenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Beyond face rotation: Global and local perception gan for photorealistic and identity preserving frontal view synthesis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>He</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.04086</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Image-to-image translation with conditional adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1611.07004</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Unpaired image-to-image translation using cycle-consistent adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.10593</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Unsupervised image-to-image translation networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Breuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kautz</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.00848</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Learning to discover cross-domain relations with generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.05192</idno>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+	<note>Spatial transformer networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Convolutional lstm network: A machine learning approach for precipitation nowcasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xingjian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">Y</forename><surname>Yeung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">K</forename><surname>Wong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">C</forename><surname>Woo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="802" to="810" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Least squares generative adversarial networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">Y</forename><surname>Lau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename><surname>Smolley</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Dropout as a bayesian approximation: Representing model uncertainty in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">international conference on machine learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">What uncertainties do we need in bayesian deep learning for computer vision?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? the kitti vision benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page">12</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">The synthia dataset: A large collection of synthetic images for semantic segmentation of urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sellart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Materzynska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vazquez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Lopez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">13</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Improved techniques for training gans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cheung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2234" to="2242" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">The pascal visual object classes challenge: A retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="page">13</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

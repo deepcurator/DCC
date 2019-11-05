@@ -1,0 +1,778 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Adversarial Logit Pairing</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+				<date type="published" when="2018-03-16">16 Mar 2018</date>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Harini</forename><surname>Kannan</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+						</author>
+						<title level="a" type="main">Adversarial Logit Pairing</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date type="published" when="2018-03-16">16 Mar 2018</date>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>In this paper, we develop improved techniques for defending against adversarial examples at scale. First, we implement the state of the art version of adversarial training at unprecedented scale on ImageNet and investigate whether it remains effective in this setting-an important open scientific question <ref type="bibr" target="#b2">(Athalye et al., 2018)</ref>. Next, we introduce enhanced defenses using a technique we call logit pairing, a method that encourages logits for pairs of examples to be similar. When applied to clean examples and their adversarial counterparts, logit pairing improves accuracy on adversarial examples over vanilla adversarial training; we also find that logit pairing on clean examples only is competitive with adversarial training in terms of accuracy on two datasets. Finally, we show that adversarial logit pairing achieves the state of the art defense on Imagenet against PGD white box attacks, with an accuracy improvement from 1.5% to 27.9%. Adversarial logit pairing also successfully damages the current state of the art defense against black box attacks on Imagenet <ref type="bibr" target="#b21">(Tramèr et al., 2018)</ref>, dropping its accuracy from 66.6% to 47.1%. With this new accuracy drop, adversarial logit pairing ties with <ref type="bibr" target="#b21">Tramèr et al. (2018)</ref> for the state of the art on black box attacks on ImageNet.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Many deep learning models today are vulnerable to adversarial examples, or inputs that have been intentionally optimized to cause misclassification. In the context of computer vision, object recognition classifiers incorrectly recognize images that have been modified with small, often imperceptible perturbations. It is important to develop models that are robust to adversarial perturbations for a variety of reasons:</p><p>• so that machine learning can be used in situations where an attacker may attempt to interfere with the operation of the deployed system,</p><p>• so that machine learning is more useful for modelbased optimization,</p><p>• to gain a better understanding of how to provide performance guarantees for models under distribution shift,</p><p>• to gain a better understanding of how to enforce smoothness assumptions, etc.</p><p>In this paper, we investigate defenses against such adversarial attacks. The contributions of this paper are the following:</p><p>• We implement the state of the art version of adversarial training at unprecedented scale and investigate its effectiveness on the ImageNet dataset.</p><p>• We propose logit pairing, a method that encourages the logits for two pairs of examples to be similar. We propose two flavors of logit pairing: clean and adversarial.</p><p>• We show that clean logit pairing is a method with minimal computational cost that defends against PGD black box attacks almost as well as adversarial training for two datasets.</p><p>• We show that adversarial logit pairing is a method that leads to higher accuracy when subjected to white box and black box attacks. We achieve the current state of the art on black-box and white-box accuracies with our model trained with adversarial logit pairing.</p><p>• We show that attacks constructed with our adversarially trained models substantially damage the current state of the art for black box defenses on ImageNet <ref type="bibr" target="#b21">(Tramèr et al., 2018)</ref>. We then show that our models are resistant to these attacks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Definitions and threat models</head><p>Defense mechanisms are intended to provide security under particular threat models. The threat model specifies the capabilities of the adversary. In this paper, we always assume the adversary is capable of forming attacks that consist of perturbations of limited L ∞ norm. This is a simplified task chosen because it is more amenable to benchmark evaluations. Realistic attackers against computer vision systems would likely use different attacks that are difficult to characterize with norm balls, such as <ref type="bibr" target="#b3">Brown et al. (2017)</ref>. We consider two different threat models characterizing amounts of information the adversary can have:</p><p>1. White box: the attacker has full information about the model (i.e. knows the architecture, parameters, etc.).</p><p>2. Black box: the attacker has no information about the model's architecture or parameters, and no ability to send queries to the model to gather more information.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">The challenges of defending ImageNet classifiers</head><p>Multiple methods to defend against adversarial examples have been proposed <ref type="bibr" target="#b4">(Buckman et al., 2018;</ref><ref type="bibr" target="#b8">Goodfellow et al., 2014;</ref><ref type="bibr" target="#b11">Kolter &amp; Wong, 2017;</ref><ref type="bibr">Madry et al., 2017;</ref><ref type="bibr" target="#b17">Papernot et al., 2016;</ref><ref type="bibr" target="#b19">Szegedy et al., 2013;</ref><ref type="bibr" target="#b21">Tramèr et al., 2018;</ref><ref type="bibr" target="#b23">Xu et al., 2017)</ref>. Recently, <ref type="bibr" target="#b2">Athalye et al. (2018)</ref> broke several defenses proposed for the white box setting that relied on empirical testing to establish their level of robustness. In our work we choose to focus on <ref type="bibr">Madry et al. (2017)</ref> because it is a method that has withstood intense scrutiny even in the white box setting. <ref type="bibr" target="#b2">Athalye et al. (2018)</ref> endorsed <ref type="bibr">Madry et al. (2017)</ref> as the only such method that they were not able to break. However, they observe that the defense from <ref type="bibr">Madry et al. (2017)</ref> has not been shown to scale to ImageNet. There are also certified defenses <ref type="bibr" target="#b0">(Aditi Raghunathan, 2018;</ref><ref type="bibr" target="#b1">Aman Sinha, 2018;</ref><ref type="bibr" target="#b11">Kolter &amp; Wong, 2017</ref>) that provide guaranteed robustness, but the total amount of robustness they guarantee is small compared to the amount empirically claimed by <ref type="bibr">Madry et al. (2017)</ref>. This leaves <ref type="bibr">Madry et al. (2017)</ref> as a compelling defense to study because it provides a large benefit that has withstood intensive scrutiny.</p><p>In this paper, we implement the <ref type="bibr">Madry et al. (2017)</ref> defense at ImageNet scale for the first time and evaluate it using the same attack methodology as has been used at smaller scale. Our results provide an important conclusive answer to an open question <ref type="bibr" target="#b2">(Athalye et al., 2018)</ref> about whether this defense strategy scales.</p><p>The defense used by <ref type="bibr">Madry et al. (2017)</ref> consists of using adversarial training <ref type="bibr" target="#b8">(Goodfellow et al., 2014;</ref><ref type="bibr" target="#b19">Szegedy et al., 2013)</ref> with an attack called "projected gradient descent" (PGD). Their PGD attack consists of initializing the search for an adversarial example at a random point within the allowed norm ball, then running several iterations of the basic iterative method <ref type="bibr" target="#b13">(Kurakin et al., 2017b)</ref> to find an adversarial example. The noisy initial point creates a stronger attack than other previous iterative methods such as BIM <ref type="bibr" target="#b12">(Kurakin et al., 2017a)</ref>, and performing adversarial training with this stronger attack makes their defense more successful <ref type="bibr">(Madry et al., 2017)</ref>. <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref> earlier reported that adversarial training with (non-noisy) BIM adversarial examples did not result in general robustness to a wide variety of attacks.</p><p>All previous attempted defenses on ImageNet <ref type="bibr" target="#b12">(Kurakin et al., 2017a;</ref><ref type="bibr" target="#b21">Tramèr et al., 2018)</ref> report error rates of 99 percent on strong, multi-step white box attacks. We, for the first time, scale the <ref type="bibr">Madry et al. (2017)</ref> defense to this setting and successfully apply it. Furthermore, we also introduce an enhanced defense that greatly improves over this baseline and improves the amount of robustness achieved. <ref type="bibr">et al. (2017)</ref> suggests that PGD is a universal first order adversary -in other words, developing robustness against PGD attacks also implies resistance against many other first order attacks. We use adversarial training with PGD as the underlying basis for our methods:</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Methods</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Adversarial training</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Madry</head><formula xml:id="formula_0">arg min θ E (x,y)∈p data max δ∈S L(θ, x + δ, y)<label>(1)</label></formula><p>wherep data is the underlying training data distribution, L(θ, x, y) is a loss function at data point x which has true class y for a model with parameters θ, and the maximization with respect to δ is approximated using noisy BIM.</p><p>We find that we achieve better performance not by literally solving the min-max problem described by <ref type="bibr">Madry et al. (2017)</ref>. Instead, we train on a mixture of clean and adversarial examples, as recommended by <ref type="bibr" target="#b8">Goodfellow et al. (2014)</ref>; <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref>:</p><formula xml:id="formula_1">arg min θ E (x,y)∈p data max δ∈S L(θ, x + δ, y) + E (x,y)∈p data L(θ, x, y)<label>(2)</label></formula><p>This formulation helps to maintain good accuracy on clean examples. We call this defense formulation mixedminibatch PGD (M-PGD). We note that though we have varied the defense slightly from the one used in <ref type="bibr">Madry et al. (2017)</ref>, we still use the attack from <ref type="bibr">Madry et al. (2017)</ref>, which is also endorsed by <ref type="bibr" target="#b2">Athalye et al. (2018)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Logit pairing</head><p>We propose logit pairing, a method to encourage the logits from two images to be similar to each other. For a model that takes inputs x and computes a vector of logits z = f (x), logit pairing adds a loss</p><formula xml:id="formula_2">λL (f (x), f (x ′ ))</formula><p>for pairs of training examples x and x ′ , where λ is a coefficient determining the strength of the logit pairing penalty and L is a loss function encouraging the logits to be similar. In this paper we use L 2 loss for L, but other losses such as L 1 or Huber could also be suitable choices.</p><p>We explored two logit pairing techniques which are described below. We found each of them to be useful: adversarial logit pairing obtains the best-yet defense against the Madry attack, while clean logit pairing, and a related idea we call logit squeezing, provide competitive defenses at significantly reduced cost.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1.">ADVERSARIAL LOGIT PAIRING</head><p>Adversarial logit pairing (ALP) matches the logits from a clean image x and its corresponding adversarial image x ′ . In traditional adversarial training, the model is trained to assign both x and x ′ to the same output class label, but the model does not receive any information indicating that x ′ is more similar to x than to another example of the same class. ALP provides an extra regularization term encouraging similar embeddings of the clean and adversarial versions of the same example, helping guide the model towards better internal representations of the data.</p><p>Consider a model with parameters θ trained on a minibatch M of clean examples {x (1) , . . . , x (m) } and corresponding adversarial examples {x</p><p>(1) , . . . ,x (m) }. Let f (x; θ) be the function mapping from inputs to logits of the model. Let J(M, θ) be the cost function used for adversarial training (the cross-entropy loss applied to train the classifier on each example in the minibatch, plus any weight decay, etc.). Adversarial logit pairing consists of minimizing the loss</p><formula xml:id="formula_3">J(M, θ) + λ 1 m m i=1 L f (x (i) ; θ), f (x (i) ; θ) .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2.">CLEAN LOGIT PAIRING</head><p>In clean logit pairing (CLP), x and x ′ are two randomly selected clean training examples, and thus are typically not even from the same class. Let J (clean) (M, θ) be the loss function used to train a classifier on a minibatch M, such as a cross-entropy loss and any other loss terms such as weight decay. Clean logit pairing consists of minimizing the loss</p><formula xml:id="formula_4">J (clean) (M, θ) + λ 2 m m 2 i=1 L f (x (i) ; θ), f (x (i+ m 2 ) ; θ) .</formula><p>We included experiments with clean logit pairing in order to perform an ablation study, understanding the contribution of the pairing loss itself relative to the formation of clean and adversarial pairs. To our surprise, inducing similarity between random pairs of logits led to high levels of robustness on MNIST and SVHN. This leads us to suggest clean logit pairing as a method worthy of study in its own right rather than just as a baseline. CLP is surprisingly effective and has significantly lower computation cost than adversarial training or ALP.</p><p>We note that our best results with CLP relied on adding Gaussian noise to the input during training, a standard neural network regularization technique <ref type="bibr" target="#b18">(Sietsma &amp; Dow, 1991)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.3.">CLEAN LOGIT SQUEEZING</head><p>Since clean logit pairing led to high accuracies, we hypothesized that the model was learning to predict logits of smaller magnitude and therefore being penalized for becoming overconfident.</p><p>To this end, we tested penalizing the norm of the logits, which we refer to as "logit squeezing" for the rest of the paper. For MNIST, it turned out that logit squeezing gave us better results than logit pairing.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Adversarial logit pairing results and discussion</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Results on MNIST</head><p>Here, we first present results with adversarial logit pairing on MNIST. We found that the exact value of the logit pairing weight did not matter too much on MNIST as long as it was roughly between 0.2 and 1. As long as some logit pairing was added, the accuracy on adversarial examples improved compared to vanilla adversarial training. We used a final logit pairing weight of 1 in the values reported in <ref type="table">Table  1</ref>. A weight of 1 corresponds to weighting both the adversarial logit pairing loss and the cross-entropy loss equally.</p><p>We used the LeNet model as in <ref type="bibr">Madry et al. (2017)</ref>. We also used the same attack parameters they used: total adversarial perturbation of 76. Our PGD attack parameters for SVHN were as follows: a total epsilon perturbation of 12/255, a per-step epsilon of 3/255, and 10 attack iterations.</p><p>For SVHN, we used the RevNet-9 model <ref type="bibr" target="#b7">(Gomez et al., 2017)</ref>. RevNets are similar to ResNets in that they both use residual connections, have similar architectures, and get similar accuracies on multiple datasets. However, RevNets have large memory savings compared to ResNets, as their memory usage is constant and does not scale with the number of layers. Because of this, we used RevNets in order to take advantage of larger batch sizes and quicker convergence times.</p><p>Similar to MNIST, most logit pairing values from 0.5 to 1 worked, and as long as some logit pairing was added, it greatly improved accuracies. However, making the logit pairing values too large (e.g. anything larger than 2) did not lead to any benefit and was roughly the same as vanilla adversarial training. The final adversarial logit pairing weight used in <ref type="table">Table 2</ref> was 0.5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Results on ImageNet</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.1.">MOTIVATION</head><p>Prior to this work, the standard baseline of PGD adversarial training had not yet been scaled to ImageNet. <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref> showed that adversarial training with one-step attacks confers robustness to other one-step attacks, but is unable to make a difference with multi-step attacks. Training on multi-step attacks did not help either. <ref type="bibr">Madry et al. (2017)</ref> demonstrated successful defenses based on multistep noisy PGD adversarial training on MNIST and CIFAR-10, but did not scale the process to ImageNet.</p><p>Here, we implement and scale the state of the art adversarial training method from CIFAR-10 and MNIST to ImageNet for the first time. We then implement our adversarial logit pairing method for comparison.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.2.">IMPLEMENTATION DETAILS</head><p>The cost of adversarial training scales with the number of attack steps because a full round of backpropagation is performed with each step. This means that a rough estimate of the total adversarial training time of a model can be found by multiplying the total clean training time by the number of attack steps. With ImageNet, this can be especially costly without any optimizations.</p><p>To effectively scale up adversarial training with PGD to ImageNet, we implemented synchronous distributed training in Tensorflow with 53 workers: 50 were used for gradient aggregation, and 3 were left as backup replicas. Each worker had one p100 card. We experimented with asynchronous gradient updates, but we found that it led to stale gradients and poor convergence. Additionally, we used 17 parameter servers that ran on CPUs. Large batch training helped to scale up adversarial training as well: each replica had a batch size of 32, for an effective batch size of 1600 images. We found that the total time to convergence was approximately 6 days.</p><p>Similar to <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref>, we use the InceptionV3 model to implement adversarial training on ImageNet in order to better compare results.</p><p>Like <ref type="bibr" target="#b20">Szegedy et al. (2016)</ref>, we used RMSProp for our optimizer, a starting learning rate of 0.045, a learning rate decay every two epochs at an exponential rate of 0.94, and momentum of 0.9.</p><p>Finally, we used the Cleverhans library (Nicolas Papernot, 2017) to implement our adversarial attacks. <ref type="bibr" target="#b2">Athalye et al. (2018)</ref> state that on ImageNet, accuracy on targeted attacks is a much more meaningful metric to use than accuracy on untargeted attacks. They state that this is because untargeted attacks can cause misclassification of very similar classes (e.g. images of two very similar dog breeds), which is not meaningful. This is consistent with observations by <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.3.">TARGETED VS. UNTARGETED ATTACKS</head><p>To that end, as <ref type="bibr" target="#b2">Athalye et al. (2018)</ref> recommends, all accuracies we report on ImageNet are for targeted attacks, and all adversarial training was done with targeted attacks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.4.">RESULTS AND DISCUSSION</head><p>Results with adversarial logit pairing. We present our main ImageNet results in <ref type="table" target="#tab_2">Tables 3 and 4</ref>. All accuracies reported refer to the worst case accuracies among all attacks we tried in each of the two threat models we consider (white box and black box). We used the following attacks in our attack suite, which are all from <ref type="bibr">Madry et al. (2017)</ref>, <ref type="bibr" target="#b12">Kurakin et al. (2017a)</ref>, and <ref type="bibr" target="#b21">Tramèr et al. (2018)</ref>:</p><p>Step-LL,</p><p>Step-Rand, R+Step-LL, R+Step-Rand, Iter-Rand, Iter-LL, PGD-Rand, and PGD-LL. The suffixes "Rand" and "LL" denote targeting a random class and targeting the least likely class, respectively. For the multi-step attacks in our suite, we varied the size of the total adversarial perturbation, the size of the perturbation per step, and the number of attack steps. Below are the maximum values of each of these sizes that we tried:</p><p>• Size of total adversarial perturbation: 16/255 on a scale of 0 to 1</p><p>• Size of total adversarial perturbation per step: 2/255 on a scale of 0 to 1</p><p>• Number of attack steps: 10</p><p>All accuracies reported are on the ImageNet validation set.   We construct a black box attack by taking an ALP-trained ImageNet model and constructing a transfer attack with that model. Out of all of the attacks we tried, we found that the Iter-Rand attack <ref type="bibr" target="#b12">(Kurakin et al., 2017a)</ref> was the strongest against Ensemble Adversarial Training. This attack reduces the accuracy of Ensemble Adversarial Training from 66.6% Top-1 black box accuracy to 47.1%.</p><p>We hypothesize that the reason this attack was so strong is because it came from a model that had used multi-step adversarial training. The attacks used in <ref type="bibr" target="#b21">Tramèr et al. (2018)</ref> all came from models that had been trained with one or two steps of adversarial training. Black box results from <ref type="bibr">Madry et al. (2017)</ref> generally show that examples from adversarially trained models are more likely to transfer to other models.</p><p>Thus, we recommend adversarial training with full iterative attacks to provide a minimal level of white box and black box robustness on ImageNet. When testing black box accuracy on ImageNet, we recommend using attacks from models that have been adversarially trained with multiple steps to get a sense of the strongest possible black box attack. Adversarial training with one step attacks (even with ensemble training) on ImageNet can be broken in both the white box and black box case.</p><p>Discussion. Firstly, our results show that PGD adversarial training can lead to convergence on ImageNet when combined with synchronous gradient updates and large batch sizes. Scaling adversarial training to ImageNet had not been previously shown before and had been an open question <ref type="bibr" target="#b2">(Athalye et al., 2018)</ref>. Multi-step adversarial training does show an improvement on white box accuracies from the previous state-of-the-art, from 1.5% to 3.9%.</p><p>Secondly, we see that ALP further improves white box accuracy from the adversarial training baseline -showing an improvement from 3.9% to 27.9%. Adversarial logit pairing also improves black box accuracy from the M-PGD baseline, going from 36.5% to 47.1%.</p><p>Finally, these results show that adversarial logit pairing achieves state of the art on ImageNet on white box attacks -with a drastic 20x improvement over the previous state of the art <ref type="bibr" target="#b12">(Kurakin et al., 2017a;</ref><ref type="bibr" target="#b21">Tramèr et al., 2018)</ref>. We do this while still matching the black box results of Ensemble Adversarial Training, the current state-of-the-art black box defense <ref type="bibr" target="#b21">(Tramèr et al., 2018)</ref>.</p><p>We hypothesize that adversarial logit pairing works well because it provides an additional prior that regularizes the model toward a more accurate understanding of the classes.</p><p>If we train the model with only the cross-entropy loss, it is prone to learning spurious functions that fit the training distribution but have undefined behavior off the training manifold. Adversarial training adds additional information about the structure of the space. By adding an assumption that small perturbations should not change the class, regardless of direction, adversarial training introduces another prior that forces the model to select functions that have sensible behavior over a much larger region. However, adversarial training does not include any information about the relationship between a clean adversarial example and the adversarial version of the same example. In adversarial training, we might take an image of a cat, perturb it so the model thinks it is a dog, and then ask the model to still recognize the image as a cat. There is no signal to tell the model that the adversarial example is similar specifically to the individual cat image that started the process. Adversarial logit pairing forces the explanations of a clean example and the corresponding adversarial example to be similar. This is essentially a prior encouraging the model to learn logits that are a function of the truly meaningful features in the image (position of cat ears, etc.) and ignore the features that are spurious (off-manifold directions introduced by adversarial perturbations). We can also think of the process as distilling <ref type="bibr" target="#b9">(Hinton et al., 2015)</ref> the knowledge from the clean domain into the adversarial domain and vice versa.</p><p>Similar to the dip in clean accuracy on CIFAR-10 reported by <ref type="bibr">Madry et al. (2017)</ref>, we found that our models have a slight dip in clean accuracy to 72%. However, we believe this is outweighed by the large gains in adversarial accuracies.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.5.">COMPARISON OF DIFFERENT ARCHITECTURES</head><p>Model architecture plays a role in adversarial robustness <ref type="bibr">(Cubuk et al., 2017)</ref>, and models with higher capacities tend to be more robust <ref type="bibr" target="#b12">(Kurakin et al., 2017a;</ref><ref type="bibr">Madry et al., 2017)</ref>. Since ImageNet is a particularly challenging dataset, we think that studying different model architectures in conjunction with adversarial training would be valuable. In this work, we primarily studied InceptionV3 to offer better comparisons to previous literature. With the rest of our available computational resources, we were able to study an additional model (ResNet-101) to see if residual connections impacted adversarial robustness. We used ALP to train the models, and results are reported in <ref type="table">Tables 5 and 6</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Clean logit pairing results</head><p>We experimented with clean logit pairing on MNIST, and we found that it gave surprisingly high results on white box and black box accuracies. As mentioned in our meth- ods section, we augmented images with Gaussian noise first and then applied clean logit pairing or logit squeezing. Logit squeezing resulted in slightly higher PGD accuracies than CLP (detailed in <ref type="figure">Figure 1</ref>).  <ref type="table">Table 7</ref>. Comparison of clean logit squeezing and vanilla adversarial training on MNIST. All accuracies reported are for the PGD attack.</p><p>As <ref type="table">Table 7</ref> shows, clean logit squeezing is competitive with adversarial training, despite the large reduction in computational cost.</p><p>We also experimented with changing the weight of logit pairing and logit squeezing to see if it acts as a controllable parameter, and results are in <ref type="figure">Figure 1</ref>.</p><p>One thing to note about <ref type="figure">Figure 1</ref> is that simply augmenting images with Gaussian noise is enough to bring up PGD accuracy to around 25 % -about 2.5 times better than guessing at random. We would like to emphasize that the noise was added during training time, not test time. Noise and other randomized test time defenses have been shown to be broken by <ref type="bibr" target="#b2">Athalye et al. (2018)</ref>. Going from nearly 0 percent PGD accuracy to 25 percent with just Gaussian noise suggests that there could be other simple changes to training procedures that result in better robustness against attacks.</p><p>The below table reports results on SVHN with the PGD attack. Below are the attack parameters used:  As the above tables show, clean logit pairing is competitive with adversarial training for black box results, despite the large reduction in computational cost. Adversarial training with multi-step attacks scales with the number of steps per attack because full backpropagation is completed with each attack step. In other words, if the normal training time of a model is N, adversarial training with k steps per attack will roughly cause the full training time of the model to be kN.</p><p>In contrast, the cost of CLP in terms of floating point operations and memory consumption is O(1) in the sense that it does not scale with the number or size of hidden layers in the model, input image size, or number of attack steps. It does scale with the number of logits, but this is negligible compared to the other factors. Typically the number of logits is determined by the task (10 for CIFAR-10, 100 for ImageNet) and remains fixed, while other factors like model size are desirable to increase. For example, binary classification is a common task in many real world applications like spam and fraud detection.</p><p>We hope that CLP points the way to further effective defenses that are essentially free. Defenses with low computational cost are more likely to be adopted since they require fewer resources. The future of machine learning security is much brighter if security can be accomplished without a major tradeoff against training efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Comparison to other possible approaches</head><p>Logit pairing is similar to two other approaches that have been previously shown to improve adversarial robustness: label smoothing and mixup.</p><p>Label smoothing <ref type="bibr" target="#b20">(Szegedy et al., 2016)</ref> consists of training a classifier using soft targets for the cross-entropy loss rather than hard targets. The correct class is given a target probability of 1 − δ and the remaining δ probability mass is divided uniformly between the incorrect classes. This technique is somewhat related to our work because smaller logits will generally cause smoother output distributions, but note that label smoothing would be satisfied to have very large logits so long as the probabilities after normalization are smooth. <ref type="bibr" target="#b22">Warde-Farley &amp; Goodfellow (2016)</ref> showed that label smoothing offers a small amount of robustness to adversarial examples, and it is included by default in the CleverHans tutorial on adversarial examples (Nicolas Papernot, 2017).</p><p>Mixup <ref type="bibr">(Zhang et al., 2017)</ref> trains the model on input points that are interpolated between training examples. At these interpolated input points, the output target is formed by similarly interpolating between the target distributions for each of the training examples. <ref type="bibr">Zhang et al. (2017)</ref> reports that mixup increases robustness to adversarial examples.</p><p>We present our results comparing adversarial logit pairing to label smoothing and mixup in <ref type="table">Table 9</ref>. Here, we use ResNet-101 on ImageNet, and all evaluations are with PGD. We find that adversarial logit pairing provides a much stronger defense than either of these two approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method Top 1 Top 5</head><p>Mixup 0.1% 1.5% Label smoothing 1.6% 10.0% ALP 30.2% 55.8% <ref type="table">Table 9</ref>. White box accuracies under <ref type="bibr">Madry et al. (2017)</ref> attack on ImageNet for label smoothing, mixup, and adversarial logit pairing.</p><p>Besides these related methods of defense against adversarial examples, ALP is also similar to a method of semi-supervised learning: virtual adversarial training <ref type="bibr" target="#b15">(Miyato et al., 2017</ref> ALP does not include (1) or (2) but does resemble (3). Both ALP and VAT encourage the full distribution of predictions on clean and adversarial examples to be similar. VAT does so using a non-symmetric loss applied to the output probabilities; ALP does so using a symmetric loss applied to the logits. During the design of our defense, we found that VAT offered an improvement over the baseline Madry model on MNIST, but ALP consistently performed better than VAT on MNIST across several hyperparameter values. ALP also performed better than VAT with the direction of the KL flipped. We therefore focused on further developing ALP. The better performance of ALP than VAT may be due to the fact that the KL divergence can suffer from saturating gradients or it may be due to the fact that the KL divergence is invariant to a shift of all the logits for an individual example while the logit pairing loss is not. Logit pairing encourages the logits for the clean and adversarial example to be centered on the same mean logit value, which doesn't change the information in the output probabilities but may affect the learning dynamics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion and Future Work</head><p>In conclusion, we implement adversarial training at unprecendented scale and present logit pairing as a defense. The experiments in this paper were run on NVIDIA p100s, but with the recent availability of much more powerful hardware (NVIDIA v100s, Cloud TPUs, etc.), we believe that defenses for adversarial examples on ImageNet will become even more scalable. Specifically our contributions are:</p><p>• We answer the open question as to whether adversarial training scales to ImageNet.</p><p>• We introduce adversarial logit pairing (ALP), an extension to adversarial training that greatly increases its effectiveness.</p><p>• We introduce clean logit pairing and logit squeezing, low-cost alternatives to adversarial training that can increase the adoption of robust machine learning due to their requirement of very few resources.</p><p>• We demonstrate that ALP-trained models can generate attacks strong enough to significantly damage the previously state of the art Ensemble Adversarial Training defense, which was used by all 10 of the top defense teams in the NIPS 2017 competition on adversarial examples.</p><p>• We show that adversarial logit pairing achieves the state of the art defense for white box and black box attacks on ImageNet.</p><p>Our results suggest that feature pairing (matching adversarial and clean intermediate features instead of logits) may also prove useful in the future.</p><p>One limitation to our defenses is that they are not currently certified or verified (there is no proof that the true robustness of the system is similar to the robustness that we measured empirically). Research into certification and verification methods <ref type="bibr" target="#b0">(Aditi Raghunathan, 2018;</ref><ref type="bibr" target="#b1">Aman Sinha, 2018;</ref><ref type="bibr" target="#b10">Katz et al., 2017;</ref><ref type="bibr" target="#b11">Kolter &amp; Wong, 2017)</ref> could make it possible to certify or verify these same networks in future work. Current certification methods do not scale to the size of models we trained here or are only able to provide tight certification bounds for models that were trained to be easy to certify using a specific certification method.</p><p>We would like to note that these defense mechanisms are not yet sufficient to secure machine learning in a real system (see many of the concerns raised by <ref type="bibr" target="#b3">(Brown et al., 2017)</ref> and <ref type="bibr" target="#b6">Gilmer et al. (2018)</ref>), and that attacks could be developed against our work in the future. Here, we use ALP in conjunction with the PGD attack since it is the strongest attack presented so far, but since ALP is independent of the actual attack it is used with, it is conceivable that ALP could be used in conjunction with future attacks to develop stronger defenses. In conclusion, we present our defense as the current state of the art of research into defenses, and we believe it will serve as one step along the path to a complete defense in the future.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 . 1 •</head><label>11</label><figDesc>Figure 1. Varying the logit pairing weight for MNIST</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Similar to Madry et al. (2017), we generated black box examples for MNIST by independently initializing and adversarially training a copy of the LeNet model. We then used the PGD attack on this model to generate the black box examples.Table 1. Comparison of adversarial logit pairing and vanilla adver- sarial training on MNIST. All accuracies reported are for the PGD attack. As shown in Table 1, adversarial logit pairing achieves state of the art on MNIST for the PGD attack. It improves white box accuracy from 93.2% to 96.4%, and it improves black box accuracy from 96.0% to 97.5%.Table 2. Comparison of adversarial logit pairing and vanilla adver- sarial training on SVHN. All accuracies reported are for the PGD attack.</figDesc><table>5/255 (0.3), perturbation per step 
+of 2.55/255 (0.01), and 40 total attack steps with 1 random 
+restart. Method White Box Black Box Clean 
+
+M-PGD 
+93.2% 
+96.0% 
+98.5% 
+ALP 
+96.4% 
+97.5% 
+98.8% 
+
+5.2. Results on SVHN 
+
+Method White Box Black Box Clean 
+
+M-PGD 
+44.4% 
+55.4% 
+96.9% 
+ALP 
+46.9% 
+56.2% 
+96.2% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 .</head><label>3</label><figDesc>Comparison of adversarial logit pairing and vanilla adver- sarial training on ImageNet. All accuracies reported are for white box accuracy on the ImageNet validation set.</figDesc><table>Black Box Black Box 
+Method 
+Top 1 
+Top 5 
+
+M-PGD 
+36.5% 
+62.3% 
+ALP 
+46.7% 
+74.0% 
+Tramèr et al. (2018) 
+47.1% 
+74.3% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 4 .</head><label>4</label><figDesc>Comparison of adversarial logit pairing and vanilla adver- sarial training on ImageNet. All accuracies reported are for black box accuracy on the ImageNet validation set.</figDesc><table>Damaging Ensemble Adversarial Training. Ensemble 
+adversarial training (Tramèr et al., 2018) reported the state 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head></head><label></label><figDesc>). Virtual adversarial training (VAT) is a method designed to learn from unlabeled data by training the model to resist adversarial perturbations of unlabeled data. The goal of VAT is to reduce test error when training with a small set of labeled examples, not to cause robust- ness to adversarial examples. VAT consists of: 1. Construct adversarial examples by perturbing unla- beled examples 2. Specifically, make the adversarial examples by maxi- mizing the KL divergence between the predictions on the clean examples and the predictions on the adver- sarial examples. 3. During model training, add a loss term that minimizes KL divergence between predictions on clean and ad- versarial examples.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Google Brain, Mountain View, CA, USA. Correspondence to: Harini Kannan &lt;hkannan@google.com&gt;, Alexey Kurakin &lt;kurakin@google.com&gt;, Ian Goodfellow &lt;goodfel-low@google.com&gt;. *Work done as a member of the Google Brain Residency program (g.co/brainresidency)</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>We thank Tom Brown for helpful feedback on drafts of this article.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Certified defenses against adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aditi</forename><surname>Raghunathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jacob</forename><surname>Steinhardt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Percy</forename><surname>Liang</surname></persName>
+		</author>
+		<ptr target="https://openreview.net/forum?id=Bys4ob-Rb" />
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Certifiable distributional robustness with principled adversarial training. International Conference on Learning Representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aman</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hongseok</forename><surname>Namkoong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Duchi</surname></persName>
+		</author>
+		<ptr target="https://openreview.net/forum?id=Hk6kPgZA-" />
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Obfuscated gradients give a false sense of security: Circumventing defenses to adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anish</forename><surname>Athalye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Wagner</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1802.00420" />
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><forename type="middle">B</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mané</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dandelion</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Aurko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gilmer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.09665</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">Justin. Adversarial patch. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Thermometer encoding: One hot way to resist adversarial examples. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jacob</forename><surname>Buckman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Aurko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Colin</forename><surname>Raffel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<ptr target="https://openreview.net/forum" />
+		<imprint>
+			<date type="published" when="2018" />
+			<biblScope unit="page">18</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Intriguing properties of adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">D</forename><surname>Cubuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Schoenholz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Le</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename></persName>
+		</author>
+		<ptr target="https://arxiv.org/pdf/1711.02846.pdf" />
+		<imprint/>
+	</monogr>
+<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Adversarial spheres</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Justin</forename><surname>Gilmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Luke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Faghri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fartash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samuel</forename><forename type="middle">S</forename><surname>Schoenholz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Raghu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Maithra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1801.02774" />
+	</analytic>
+	<monogr>
+		<title level="m">ICLR 2018 workshop</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">The reversible residual network: Backpropagation without storing activations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aidan</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mengye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Roger</forename><surname>Grosse</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1707.04585" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Szegedy</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6572</idno>
+		<title level="m">Christian. Explaining and harnessing adversarial examples</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Dean</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.02531</idno>
+		<title level="m">Distilling the knowledge in a neural network</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Reluplex: An efficient smt solver for verifying deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guy</forename><surname>Katz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barrett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Clark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">L</forename><surname>Dill</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyle</forename><surname>Julian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kochenderfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mykel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Aided Verification</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="97" to="117" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kolter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zico</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><surname>Wong</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.00851</idno>
+		<title level="m">Provable defenses against adversarial examples via the convex outer adversarial polytope</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Adversarial machine learning at scale</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1611.01236" />
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Adversarial examples in the physical world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Samy</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1607.02533" />
+	</analytic>
+	<monogr>
+		<title level="m">ICLR&apos;2017 Workshop</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Towards deep learning models resistant to adversarial attacks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Madry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Makelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tsipras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vladu</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/pdf/1706.06083.pdf" />
+		<imprint/>
+	</monogr>
+<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Virtual adversarial training: a regularization method for supervised and semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Miyato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Takeru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Maeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Shin-Ichi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Masanori</forename><surname>Koyama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shin</forename><surname>Ishii</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.03976</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<idno type="arXiv">arXiv:1610.00768</idno>
+		<title level="m">an adversarial machine learning library</title>
+		<editor>Nicolas Papernot, Nicholas Carlini, Ian Goodfellow Reuben Feinman Fartash Faghri Alexander Matyasko Karen Hambardzumyan Yi-Lin Juang Alexey Kurakin Ryan Sheatsley Abhibhav Garg Yen-Chen Lin</editor>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Distillation as a defense to adversarial perturbations against deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mcdaniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Patrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Xi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Somesh</forename><surname>Jha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ananthram</forename><surname>Swami</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Security and Privacy (SP), 2016 IEEE Symposium on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="582" to="597" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Creating artificial neural networks that generalize</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sietsma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Dow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Networks</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="67" to="79" />
+			<date type="published" when="1991" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wojciech</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ilya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joan</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dumitru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fergus</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6199</idno>
+		<title level="m">Rob. Intriguing properties of neural networks</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Rethinking the inception architecture for computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sergey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zbigniew</forename><surname>Wojna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2818" to="2826" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Ensemble adversarial training: Attacks and defenses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tramèr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Boneh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mcdaniel</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/abs/1705.07204" />
+	</analytic>
+	<monogr>
+		<title level="m">ICLR 2018</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Adversarial perturbation of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Perturbation, Optimization, and Statistics</title>
+		<editor>Hazan, Tamir, Papandreou, George, and Tarlow, Daniel</editor>
+		<imprint>
+			<publisher>MIT Press</publisher>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Weilin</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Evans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qi</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.01155</idno>
+		<title level="m">Yanjun. Feature squeezing: Detecting adversarial examples in deep neural networks</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Mixup: Beyond empirical risk minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cisse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lopezpaz</surname></persName>
+		</author>
+		<ptr target="https://arxiv.org/pdf/1710.09412.pdf" />
+		<imprint/>
+	</monogr>
+<note type="report_type">Technical report</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

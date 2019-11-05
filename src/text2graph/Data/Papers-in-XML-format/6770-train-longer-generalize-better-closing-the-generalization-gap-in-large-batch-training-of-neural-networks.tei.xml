@@ -1,0 +1,1106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Train longer, generalize better: closing the generalization gap in large batch training of neural networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Elad</forename><surname>Hoffer</surname></persName>
+							<email>elad.hoffer@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Technion -Israel Institute of Technology</orgName>
+								<address>
+									<settlement>Haifa</settlement>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Itay</forename><surname>Hubara</surname></persName>
+							<email>itayhubara@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Technion -Israel Institute of Technology</orgName>
+								<address>
+									<settlement>Haifa</settlement>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Soudry</surname></persName>
+							<email>daniel.soudry@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Technion -Israel Institute of Technology</orgName>
+								<address>
+									<settlement>Haifa</settlement>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Train longer, generalize better: closing the generalization gap in large batch training of neural networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Background: Deep learning models are typically trained using stochastic gradient descent or one of its variants. These methods update the weights using their gradient, estimated from a small fraction of the training data. It has been observed that when using large batch sizes there is a persistent degradation in generalization performance -known as the "generalization gap" phenomenon. Identifying the origin of this gap and closing it had remained an open problem. Contributions: We examine the initial high learning rate training phase. We find that the weight distance from its initialization grows logarithmically with the number of weight updates. We therefore propose a "random walk on a random landscape" statistical model which is known to exhibit similar "ultra-slow" diffusion behavior. Following this hypothesis we conducted experiments to show empirically that the "generalization gap" stems from the relatively small number of updates rather than the batch size, and can be completely eliminated by adapting the training regime used. We further investigate different techniques to train models in the large-batch regime and present a novel algorithm named "Ghost Batch Normalization" which enables significant decrease in the generalization gap without increasing the number of updates. To validate our findings we conduct several additional experiments on MNIST, CIFAR-10, CIFAR-100 and ImageNet. Finally, we reassess common practices and beliefs concerning training of deep models and suggest they may not be optimal to achieve good generalization.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>For quite a few years, deep neural networks (DNNs) have persistently enabled significant improvements in many application domains, such as object recognition from images <ref type="bibr" target="#b18">(He et al., 2016)</ref>; speech recognition <ref type="bibr" target="#b0">(Amodei et al., 2015)</ref>; natural language processing <ref type="bibr" target="#b26">(Luong et al., 2015)</ref> and computer games control using reinforcement learning <ref type="bibr" target="#b30">(Silver et al., 2016;</ref><ref type="bibr" target="#b28">Mnih et al., 2015)</ref>.</p><p>The optimization method of choice for training highly complex and non-convex DNNs, is typically stochastic gradient decent (SGD) or some variant of it. Since SGD, at best, finds a local minimum of the non-convex objective function, substantial research efforts are invested to explain DNNs ground breaking results. It has been argued that saddle-points can be avoided <ref type="bibr" target="#b14">(Ge et al., 2015)</ref> and that "bad" local minima in the training error vanish exponentially <ref type="bibr" target="#b8">(Dauphin et al., 2014;</ref><ref type="bibr" target="#b5">Choromanska et al., 2015;</ref>. However, it is still unclear why these complex models tend to generalize well to unseen data despite being heavily over-parameterized <ref type="bibr" target="#b41">(Zhang et al., 2017)</ref>.</p><p>A specific aspect of generalization has recently attracted much interest. <ref type="bibr" target="#b20">Keskar et al. (2017)</ref> focused on a long observed phenomenon <ref type="bibr" target="#b23">(LeCun et al., 1998a</ref>) -that when a large batch size is used while training DNNs, the trained models appear to generalize less well. This remained true even when the models were trained "without any budget or limits, until the loss function ceased to improve" <ref type="bibr" target="#b20">(Keskar et al., 2017)</ref>. This decrease in performance has been named the "generalization gap".</p><p>Understanding the origin of the generalization gap, and moreover, finding ways to decrease it, may have a significant practical importance. Training with large batch size immediately increases parallelization, thus has the potential to decrease learning time. Many efforts have been made to parallelize SGD for Deep Learning <ref type="bibr" target="#b9">(Dean et al., 2012;</ref><ref type="bibr" target="#b6">Das et al., 2016;</ref><ref type="bibr" target="#b42">Zhang et al., 2015)</ref>, yet the speed-ups and scale-out are still limited by the batch size.</p><p>In this study we suggest a first attempt to tackle this issue. First,</p><p>• We propose that the initial learning phase can be described using a high-dimensional "random walk on a random potential" process, with an "ultra-slow" logarithmic increase in the distance of the weights from their initialization, as we observe empirically.</p><p>Inspired by this hypothesis, we find that</p><p>• By simply adjusting the learning rate and batch normalization the generalization gap can be significantly decreased (for example, from 5% to 1% − 2%).</p><p>• In contrast to common practices <ref type="bibr" target="#b29">(Montavon et al., 2012)</ref> and theoretical recommendations <ref type="bibr" target="#b17">(Hardt et al., 2016)</ref>, generalization keeps improving for a long time at the initial high learning rate, even without any observable changes in training or validation errors. However, this improvement seems to be related to the distance of the weights from their initialization.</p><p>• There is no inherent "generalization gap": large-batch training can generalize as well as small batch training by adapting the number of iterations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Training with a large batch</head><p>Training method. A common practice of training deep neural networks is to follow an optimization "regime" in which the objective is minimized using gradient steps with a fixed learning rate and a momentum term <ref type="bibr" target="#b35">(Sutskever et al., 2013)</ref>. The learning rate is annealed over time, usually with an exponential decrease every few epochs of training data. An alternative to this regime is to use an adaptive per-parameter learning method such as Adam <ref type="bibr" target="#b21">(Kingma &amp; Ba, 2014)</ref>, Rmsprop <ref type="bibr">(Dauphin et al.)</ref> or Adagrad <ref type="bibr" target="#b12">(Duchi et al., 2011)</ref>. These methods are known to benefit the convergence rate of SGD based optimization. Yet, many current studies still use simple variants of SGD <ref type="bibr" target="#b30">(Ruder, 2016)</ref> for all or part of the optimization process <ref type="bibr" target="#b38">(Wu et al., 2016)</ref>, due to the tendency of these methods to converge to a lower test error and better generalization.</p><p>Thus, we focused on momentum SGD, with a fixed learning rate that decreases exponentially every few epochs, similarly to the regime employed by <ref type="bibr" target="#b18">He et al. (2016)</ref>. The convergence of SGD is also known to be affected by the batch size <ref type="bibr" target="#b25">(Li et al., 2014)</ref>, but in this work we will focus on generalization. Most of our results were conducted on the Resnet44 topology, introduced by <ref type="bibr" target="#b18">He et al. (2016)</ref>. We strengthen our findings with additional empirical results in section 6.</p><p>Empirical observations of previous work. Previous work by <ref type="bibr" target="#b20">Keskar et al. (2017)</ref> studied the performance and properties of models which were trained with relatively large batches and reported the following observations:</p><p>• Training models with large batch size increase the generalization error (see <ref type="figure" target="#fig_0">Figure 1</ref>).</p><p>• This "generalization gap" seemed to remain even when the models were trained without limits, until the loss function ceased to improve.</p><p>• Low generalization was correlated with "sharp" minima 2 (strong positive curvature), while good generalization was correlated with "flat" minima (weak positive curvature).</p><p>• Small-batch regimes were briefly noted to produce weights that are farther away from the initial point, in comparison with the weights produced in a large-batch regime.</p><p>Their hypothesis was that a large estimation noise (originated by the use of mini-batch rather than full batch) in small mini-batches encourages the weights to exit out of the basins of attraction of sharp minima, and towards flatter minima which have better generalization.In the next section we provide an analysis that suggest a somewhat different explanation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Theoretical analysis</head><p>Notation. In this paper we examine Stochastic Gradient Descent (SGD) based training of a Deep Neural Network (DNN). The DNN is trained on a finite training set of N samples. We define w as the vector of the neural network parameters, and L n (w) as loss function on sample n. We find w by minimizing the training loss.</p><formula xml:id="formula_0">L (w) 1 N N n=1 L n (w) ,</formula><p>using SGD. Minimizing L (w) requires an estimate of the gradient of the negative loss.</p><formula xml:id="formula_1">g 1 N N n=1 g n − 1 N N n=1 ∇L n (w)</formula><p>where g is the true gradient, and g n is the per-sample gradient. During training we increment the parameter vector w using only the mean gradientĝ computed on some mini-batch B -a set of M randomly selected sample indices.ĝ 1 M n∈B g n .</p><p>In order to gain a better insight into the optimization process and the empirical results, we first examine simple SGD training, in which the weights at update step t are incremented according to the mini-batch gradient ∆w t = ηĝ t . With respect to the randomness of SGD,</p><formula xml:id="formula_2">Eĝ t = g = −∇L (w t ) ,</formula><p>and the increments are uncorrelated between different mini-batches 3 . For physical intuition, one can think of the weight vector w t as a particle performing a random walk on the loss ("potential") landscape L (w t ). Thus, for example, adding momentum term to the increment is similar to adding inertia to the particle.</p><p>Motivation. In complex systems (such as DNNs) where we do not know the exact shape of the loss, statistical physics models commonly assume a simpler description of the potential as a random process. For example, <ref type="bibr" target="#b8">Dauphin et al. (2014)</ref> explained the observation that local minima tend to have low error using an analogy between L (w), the DNN loss surface, and the high-dimensional Gaussian random field analyzed in <ref type="bibr" target="#b4">Bray &amp; Dean (2007)</ref>, which has zero mean and auto-covariance</p><formula xml:id="formula_3">E (L (w 1 ) L (w 2 )) = f w 1 − w 2 2 (1)</formula><p>for some function f , where the expectation now is over the randomness of the loss. This analogy resulted with the hypothesis that in DNNs, local minima with high loss are indeed exponentially vanishing, as in <ref type="bibr" target="#b4">Bray &amp; Dean (2007)</ref>. Only recently, similar results are starting to be proved for realistic neural network models . Thus, a similar statistical model of the loss might also give useful insights for our empirical observations. Model: Random walk on a random potential. Fortunately, the high dimensional case of a particle doing a "random walk on a random potential" was extensively investigated already decades ago <ref type="bibr" target="#b2">(Bouchaud &amp; Georges, 1990)</ref>. The main result of that investigation was that the asymptotic behavior of the auto-covariance of a random potential 4 ,</p><formula xml:id="formula_4">E (L (w 1 ) L (w 2 )) ∼ w 1 − w 2 α , α &gt; 0<label>(2)</label></formula><p>in a certain range, determines the asymptotic behavior of the random walker in that range:</p><formula xml:id="formula_5">E w t − w 0 2 ∼ (log t) 4 α .<label>(3)</label></formula><p>This is called an "ultra-slow diffusion" in which, typically w t − w 0 ∼ (log t) 2/α , in contrast to standard diffusion (on a flat potential), in which we have w t − w 0 ∼ √ t . The informal reason for this behavior (for any α &gt; 0), is that for a particle to move a distance d, it has to pass potential barriers of height ∼ d α/2 , from eq. (2). Then, to climb (or go around) each barrier takes exponentially long time in the height of the barrier: t ∼ exp(d α/2 ). Inverting this relation, we get eq. d ∼ (log(t)) 2/α . In the high-dimensional case, this type of behavior was first shown numerically and explained heuristically by <ref type="bibr" target="#b27">Marinari et al. (1983)</ref>, then rigorously proven for the case of a discrete lattice by <ref type="bibr" target="#b13">Durrett (1986)</ref>, and explained in the continuous case by <ref type="bibr" target="#b3">Bouchaud &amp; Comtet (1987)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Comparison with empirical results and implications</head><p>To examine this prediction of ultra slow diffusion and find the value of α, in <ref type="figure" target="#fig_1">Figure 2a</ref>, we examine w t − w 0 during the initial training phase over the experiment shown in <ref type="figure" target="#fig_0">Figure 1</ref>. We found that the weight distance from initialization point increases logarithmically with the number of training iterations (weight updates), which matches our model with α = 2:</p><formula xml:id="formula_6">w t − w 0 ∼ log t .<label>(4)</label></formula><p>Interestingly, the value of α = 2 matches the statistics of the loss estimated in appendix section B.</p><p>Moreover, in <ref type="figure" target="#fig_1">Figure 2a</ref>, we find that a very similar logarithmic graph is observed for all batch sizes. Yet, there are two main differences. First, each graph seems to have a somewhat different slope (i.e., it is multiplied by different positive constant), which peaks at M = 128 and then decreases with the mini-batch size. This indicates a somewhat different diffusion rate for different batch sizes. Second, since we trained all models for a constant number of epochs, smaller batch sizes entail more training iterations in total. Thus, there is a significant difference in the number of iterations and the corresponding weight distance reached at the end of the initial learning phase.</p><p>This leads to the following informal argument (which assumes flat minima are indeed important for generalization). During the initial training phase, to reach a minima of "width" d the weight vector w t has to travel at least a distance d, and this takes a long time -about exp(d) iterations. Thus, to reach wide ("flat") minima we need to have the highest possible diffusion rates (which do not result in numerical instability) and a large number of training iterations. In the next sections we will implement these conclusions in practice.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Matching weight increment statistics for different mini-batch sizes</head><p>First, to correct the different diffusion rates observed for different batch sizes, we will aim to match the statistics of the weights increments to that of a small batch size. Learning rate. Recall that in this paper we investigate SGD, possibly with momentum, where the weight updates are proportional to the estimated gradient.</p><formula xml:id="formula_7">∆w ∝ ηĝ ,<label>(5)</label></formula><p>where η is the learning rate, and we ignore for now the effect of batch normalization.</p><p>In appendix section A, we show that the covariance matrix of the parameters update step ∆w is,</p><formula xml:id="formula_8">cov (∆w, ∆w) ≈ η 2 M 1 N N n=1 g n g n<label>(6)</label></formula><p>in the case of uniform sampling of the mini-batch indices (with or without replacement), when M N . Therefore, a simple way to make sure that the covariance matrix stays the same for all mini-batch sizes is to choose</p><formula xml:id="formula_9">η ∝ √ M ,<label>(7)</label></formula><p>i.e., we should increase the learning rate by the square root of the mini-batch size.</p><p>We note that <ref type="bibr" target="#b22">Krizhevsky (2014)</ref> suggested a similar learning rate scaling in order to keep the variance in the gradient expectation constant, but chose to use a linear scaling heuristics as it reached better empirical result in his setting. Later on, <ref type="bibr">Li (2017)</ref> suggested the same.</p><p>Naturally, such an increase in the learning rate also increases the mean steps E [∆w]. However, we found that this effect is negligible since E [∆w] is typically orders of magnitude lower than the standard deviation.</p><p>Furthermore, we can match both the first and second order statistics by adding multiplicative noise to the gradient estimate as follows:ĝ</p><formula xml:id="formula_10">= 1 M N n∈B g n z n ,</formula><p>where z n ∼ N 1, σ 2 are independent random Gaussian variables for which σ 2 ∝ M . This can be verified by using similar calculation as in appendix section A. This method keeps the covariance constant when we change the batch size, yet does not change the mean steps E [∆w].</p><p>In both cases, for the first few iterations, we had to clip or normalize the gradients to prevent divergence. Since both methods yielded similar performance 5 (due the negligible effect of the first order statistics), we preferred to use the simpler learning rate method.</p><p>It is important to note that other types of noise (e.g., dropout <ref type="bibr" target="#b34">(Srivastava et al., 2014)</ref>, dropconnect <ref type="bibr" target="#b37">(Wan et al., 2013)</ref>, label noise <ref type="bibr" target="#b36">(Szegedy et al., 2016)</ref>) change the structure of the covariance matrix and not just its scale, thus the second order statistics of the small batch increment cannot be accurately matched. Accordingly, we did not find that these types of noise helped to reduce the generalization gap for large batch sizes.</p><p>Lastly, note that in our discussion above (and the derivations provided in appendix section A) we assumed each per-sample gradient g n does not depend on the selected mini-batch. However, this ignores the influence of batch normalization. We take this into consideration in the next subsection. 5 a simple comparison can be seen in appendix (figure 3) Ghost Batch Normalization. Batch Normalization (BN) <ref type="bibr" target="#b19">(Ioffe &amp; Szegedy, 2015)</ref>, is known to accelerate the training, increase the robustness of neural network to different initialization schemes and improve generalization. Nonetheless, since BN uses the batch statistics it is bounded to depend on the choosen batch size. We study this dependency and observe that by acquiring the statistics on small virtual ("ghost") batches instead of the real large batch we can reduce the generalization error. In our experiments we found out that it is important to use the full batch statistic as suggested by <ref type="bibr" target="#b19">(Ioffe &amp; Szegedy, 2015)</ref> for the inference phase. Full details are given in Algorithm 1. This modification by itself reduce the generalization error substantially.</p><p>Algorithm 1: Ghost Batch Normalization (GBN), applied to activation x over a large batch B L with virtual mini-batch B S . Where B S &lt; B L . Require: Values of x over a large-batch: B L = {x 1...m } size of virtual batch |B S |; Parameters to be learned: γ, β, momentum η Training Phase:</p><formula xml:id="formula_11">Scatter B L to {X 1 , X 2 , ...X |B L |/|B S | } = {x 1...|B S | , x |B S |+1...2|B S | ...x |B L |−|B S |...m } µ l B ← 1 |B S | |B S | i=1 X l i</formula><p>for l = 1, 2, 3 . . . {calculate ghost mini-batches means}</p><formula xml:id="formula_12">σ l B ← 1 |B S | |B S | i=1 (X l i − µ B ) 2 + for l = 1, 2, 3 . . . {calculate ghost mini-batches std} µ run = (1 − η) |B S | µ run + |B L |/|B S | i=1 (1 − η) i · η · µ l B σ run = (1 − η) |B S | σ run + |B L |/|B S | i=1 (1 − η) i · η · σ l B return γ X l −µ l B σ l B + β Test Phase: return γ X−µ l run σrun</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>+ β {scale and shift}</head><p>We note that in a multi-device distributed setting, some of the benefits of "Ghost BN" may already occur, since batch-normalization is often preformed on each device separately to avoid additional communication cost. Thus, each device computes the batch norm statistics using only its samples (i.e., part of the whole mini-batch). It is a known fact, yet unpublished, to the best of the authors knowledge, that this form of batch norm update helps generalization and yields better results than computing the batch-norm statistics over the entire batch. Note that GBN enables flexibility in the small (virtual) batch size which is not provided by the commercial frameworks (e.g., TensorFlow, PyTorch) in which the batch statistics is calculated on the entire, per-device, batch. Moreover, in those commercial frameworks, the running statistics are usually computed differently from "Ghost BN", by weighting each update part equally. In our experiments we found it to worsen the generalization performance.</p><p>Implementing both the learning rate and GBN adjustments seem to improve generalization performance, as we shall see in section 6. Additionally, as can be seen in <ref type="figure">Figure 6</ref>, the slopes of the logarithmic weight distance graphs seem to better matched, indicating similar diffusion rates. We also observe some constant shift, which we believe is related to the gradient clipping. Since this shift only increased the weight distances, we assume it does not harm the performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Adapting number of weight updates eliminates generalization gap</head><p>According to our conclusions in section 3, the initial high-learning rate training phase enables the model to reach farther locations in the parameter space, which may be necessary to find wider local minima and better generalization. Examining figure 2b, the next obvious step to match the graphs for different batch sizes is to increase the number of training iterations in the initial high learning rate regime. And indeed we noticed that the distance between the current weight and the initialization point can be a good measure to decide upon when to decrease the learning rate.</p><p>Note that this is different from common practices. Usually, practitioners decrease the learning rate after validation error appears to reach a plateau. This practice is due to the long-held belief that the optimization process should not be allowed to decrease the training error when validation error "flatlines", for fear of overfitting <ref type="bibr" target="#b15">(Girosi et al., 1995)</ref>. However, we observed that substantial improvement to the final accuracy can be obtained by continuing the optimization using the same learning rate even if the training error decreases while the validation plateaus. Subsequent learning rate drops resulted with a sharp validation error decrease, and better generalization for the final model.</p><p>These observations led us to believe that "generalization gap" phenomenon stems from the relatively small number of updates rather than the batch size. Specifically, using the insights from <ref type="figure" target="#fig_1">Figure 2</ref> and our model, we adapted the training regime to better suit the usage of large mini-batch. We "stretched" the time-frame of the optimization process, where each time period of e epochs in the original regime, will be transformed to |B L | |B S | e epochs according to the mini-batch size used. This modification ensures that the number of optimization steps taken is identical to those performed in the small batch regime. As can be seen in <ref type="figure" target="#fig_2">Figure 3</ref>, combining this modification with learning rate adjustment completely eliminates the generalization gap observed earlier 6 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Experiments</head><p>Experimental setting. We experimented with a set of popular image classification tasks:</p><p>• MNIST (LeCun et al., 1998b) -Consists of a training set of 60K and a test set of 10K 28 × 28 gray-scale images representing digits ranging from 0 to 9.</p><p>• CIFAR-10 and CIFAR-100 <ref type="bibr">(Krizhevsky, 2009)</ref>  samples and test set of size 50K. Each instance is labeled with one of 1000 categories.</p><p>To validate our findings, we used a representative choice of neural network models. We used the fully-connected model, F1, as well as shallow convolutional models C1 and C3 suggested by <ref type="bibr" target="#b20">Keskar et al. (2017)</ref>. As a demonstration of more current architectures, we used the models: VGG <ref type="bibr" target="#b31">(Simonyan, 2014)</ref> and Resnet44 <ref type="bibr" target="#b18">(He et al., 2016</ref><ref type="bibr">) for CIFAR10 dataset, Wide-Resnet16-4 (Zagoruyko, 2016</ref> for CIFAR100 dataset and Alexnet <ref type="bibr" target="#b22">(Krizhevsky, 2014)</ref> for ImageNet dataset.</p><p>In each of the experiments, we used the training regime suggested by the original work, together with a momentum SGD optimizer. We use a batch of 4096 samples as "large batch" (LB) and a small batch (SB) of either 128 (F1,C1,VGG,Resnet44,C3,Alexnet) or 256 (WResnet). We compare the original training baseline for small and large batch, as well as the following methods 7 :</p><p>• Learning rate tuning (LB+LR): Using a large batch, while adapting the learning rate to be larger so that η L = |B L | |B S | η S where η S is the original learning rate used for small batch, η L is the adapted learning rate and |B L |, |B S | are the large and small batch sizes, respectively.</p><p>• Ghost batch norm (LB+LR+GBN): Additionally using the "Ghost batch normalization" method in our training procedure. The "ghost batch size" used is 128.</p><p>• Regime adaptation: Using the tuned learning rate as well as ghost batch-norm, but with an adapted training regime. The training regime is modified to have the same number of iterations for each batch size used -effectively multiplying the number of epochs by the relative size of the large batch.</p><p>Results. Following our experiments, we can establish an empirical basis to our claims. Observing the final validation accuracy displayed in <ref type="table" target="#tab_0">Table 1</ref>, we can see that in accordance with previous works the move from a small-batch (SB) to a large-batch (LB) indeed incurs a substantial generalization gap. However, modifying the learning-rate used for large-batch (+LR) causes much of this gap to diminish, following with an additional improvement by using the Ghost-BN method (+GBN). Finally, we can see that the generalization gap completely disappears when the training regime is adapted (+RA), yielding validation accuracy that is good-as or better than the one obtained using a small batch. We additionally display results obtained on the more challenging ImageNet dataset in <ref type="table" target="#tab_1">Table 2</ref> which shows similar impact for our methods.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7">Discussion</head><p>There are two important issues regarding the use of large batch sizes. First, why do we get worse generalization with a larger batch, and how do we avoid this behaviour? Second, can we decrease the training wall clock time by using a larger batch (exploiting parallelization), while retaining the same generalization performance as in small batch?</p><p>This work tackles the first issue by investigating the random walk behaviour of SGD and the relationship of its diffusion rate to the size of a batch. Based on this and empirical observations, we propose simple set of remedies to close down the generalization gap between the small and large batch training strategies: (1) Use SGD with momentum, gradient clipping, and a decreasing learning rate schedule; (2) adapt the learning rate with batch size (we used a square root scaling); (3) compute batch-norm statistics over several partitions ("ghost batch-norm"); and (4) use a sufficient number of high learning rate training iterations.</p><p>Thus, the main point arising from our results is that, in contrast to previous conception, there is no inherent generalization problem with training using large mini batches. That is, model training using large mini-batches can generalize as well as models trained using small mini-batches. Though this answers the first issues, the second issue remained open: can we speed up training by using large batch sizes?</p><p>Not long after our paper first appeared, this issue was also answered. Using a Resnet model on Imagenet <ref type="bibr" target="#b16">Goyal et al. (2017)</ref> showed that, indeed, significant speedups in training could be achieved using a large batch size. This further highlights the ideas brought in this work and their importance to future scale-up, especially since <ref type="bibr" target="#b16">Goyal et al. (2017)</ref> used similar training practices to those we described above. The main difference between our works is the use of a linear scaling of the learning rate 9 , similarly to <ref type="bibr" target="#b22">Krizhevsky (2014)</ref>, and as suggested by <ref type="bibr" target="#b1">Bottou (2010)</ref>. However, we found that linear scaling works less well on CIFAR10, and later work found that linear scaling rules work less well for other architectures on ImageNet <ref type="bibr" target="#b39">(You et al., 2017)</ref>.</p><p>We also note that current "rules of thumb" regarding optimization regime and explicitly learning rate annealing schedule may be misguided. We showed that good generalization can result from extensive amount of gradient updates in which there is no apparent validation error change and training error continues to drop, in contrast to common practice. After our work appeared,  suggested an explanation to this, and to the logarithmic increase in the weight distance observed in <ref type="figure" target="#fig_1">Figure 2</ref>. We show this behavior happens even in simple logistic regression problems with separable data. In this case, we exactly solve the asymptotic dynamics and prove that w(t) = log(t)ŵ + O(1) whereŵ is to the L 2 maximum margin separator. Therefore, the margin (affecting generalization) improves slowly (as O(1/ log(t)), even while the training error is very low. Future work, based on this, may be focused on finding when and how the learning rate should be decreased while training.</p><p>Conclusion. In this work we make a first attempt to tackle the "generalization gap" phenomenon. We argue that the initial learning phase can be described using a high-dimensional "random walk on a random potential" process, with a an "ultra-slow" logarithmic increase in the distance of the weights from their initialization, as we observe empirically. Following this observation we suggest several techniques which enable training with large batch without suffering from performance degradation. This implies that the problem is not related to the batch size but rather to the amount of updates. Moreover we introduce a simple yet efficient algorithm "Ghost-BN" which improves the generalization performance significantly while keeping the training time intact.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Impact of batch size on classification error</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Euclidean distance of weight vector from initialization</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Comparing generalization of large-batch regimes, adapted to match performance of smallbatch training.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>-Each consists of a training set of size 50K and a test set of size 10K. Instance are 32 × 32 color images representing 10 or 100 classes. • ImageNet classification task Deng et al. (2009) -Consists of a training set of size 1.2M</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Zagoruyko, 2016) Cifar100 73.70% 68.15% 69.05% 71.20% 73.57%</figDesc><table>Validation accuracy results, SB/LB represent small and large batch respectively. GBN stands 
+for Ghost-BN, and RA stands for regime adaptation 
+Network 
+Dataset 
+SB 
+LB 
++LR 
++GBN 
++RA 
+
+F1 (Keskar et al., 2017) 
+MNIST 
+98.27% 97.05% 97.55% 97.60% 98.53% 
+C1 (Keskar et al., 2017) 
+Cifar10 
+87.80% 83.95% 86.15% 86.4% 
+88.20% 
+Resnet44 (He et al., 2016) 
+Cifar10 
+92.83% 86.10% 89.30% 90.50% 93.07% 
+VGG (Simonyan, 2014) 
+Cifar10 
+92.30% 84.1% 
+88.6% 
+91.50% 93.03% 
+C3 (Keskar et al., 2017) 
+Cifar100 61.25% 51.50% 57.38% 57.5% 
+63.20% 
+WResnet16-4 (</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>ImageNet top-1 results using Alexnet topology (Krizhevsky, 2014), notation as in Table 1.</figDesc><table>Network LB size Dataset 
+SB 
+LB 
+
+8 
+
++LR 
+
+8 
+
++GBN 
++RA 
+
+Alexnet 
+4096 
+ImageNet 57.10% 41.23% 53.25% 54.92% 59.5% 
+Alexnet 
+8192 
+ImageNet 57.10% 41.23% 53.25% 53.93% 59.5% 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">It was later pointed out (Dinh et al., 2017) that certain "degenerate" directions, in which the parameters can be changed without affecting the loss, must be excluded from this explanation. For example, for any c &gt; 0 and any neuron, we can multiply all input weights by c and divide the output weights by c: this does not affect the loss, but can generate arbitrarily strong positive curvature. 3 Either exactly (with replacement) or approximately (without replacement): see appendix section A.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Note that this form is consistent with eq. (1), if f (x) = x α/2 .</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="6">Additional graphs, including comparison to non-adapted regime, are available in appendix (figure 2). 7 Code is available at https://github.com/eladhoffer/bigBatch.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="8">Due to memory limitation those experiments were conducted with batch of 2048.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="9">e.g., Goyal et al. (2017) also used an initial warm-phase for the learning rate, however, this has a similar effect to the gradient clipping we used, since this clipping was mostly active during the initial steps of training.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>We wish to thank Nir Ailon, Dar Gilboa, Kfir Levy and Igor Berman for their feedback on the initial manuscript. The research was partially supported by the Taub Foundation, and the Intelligence Advanced Research Projects Activity (IARPA) via Department of Interior/ Interior Business Center (DoI/IBC) contract number D16PC00003. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright annotation thereon. Disclaimer: The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the official policies or endorsements, either expressed or implied, of IARPA, DoI/IBC, or the U.S. Government.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Deep speech 2: End-to-end speech recognition in english and mandarin</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Amodei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Anubhai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Battenberg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.02595</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Large-scale machine learning with stochastic gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of COMPSTAT&apos;2010</title>
+		<meeting>COMPSTAT&apos;2010</meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="177" to="186" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Anomalous diffusion in disordered media: statistical mechanisms, models and physical applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Bouchaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Georges</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physics reports</title>
+		<imprint>
+			<biblScope unit="volume">195</biblScope>
+			<biblScope unit="page" from="127" to="293" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Anomalous diffusion in random media of any dimensionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Bouchaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Comtet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Physique</title>
+		<imprint>
+			<biblScope unit="volume">48</biblScope>
+			<biblScope unit="page" from="1445" to="1450" />
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Statistics of critical points of Gaussian fields on large-dimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Bray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">S</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physical Review Letters</title>
+		<imprint>
+			<biblScope unit="volume">98</biblScope>
+			<biblScope unit="issue">15</biblScope>
+			<biblScope unit="page" from="1" to="5" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Choromanska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Henaff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">B</forename><surname>Arous</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<title level="m">The Loss Surfaces of Multilayer Networks. AISTATS15</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">38</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Distributed deep learning using synchronous stochastic gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Das</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Avancha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mudigere</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.06709</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Rmsprop and equilibrated adaptive learning rates for non-convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>De Vries</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno>abs/1502.04390</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Identifying and attacking the saddle point problem in highdimensional non-convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Large scale distributed deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1223" to="1231" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">ImageNet: A Large-Scale Hierarchical Image Database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">09</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Sharp minima can generalize for deep nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Dinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.04933</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="page" from="2121" to="2159" />
+			<date type="published" when="2011-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multidimensional random walks in random environments with subclassical limiting behavior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Durrett</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications in Mathematical Physics</title>
+		<imprint>
+			<biblScope unit="volume">104</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="87" to="102" />
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Escaping from saddle points-online stochastic gradient for tensor decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">COLT</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="797" to="842" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Regularization theory and neural networks architectures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Girosi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jones</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Poggio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="219" to="269" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Goyal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1706.02677</idno>
+		<title level="m">large minibatch sgd: Training imagenet in 1 hour</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Train faster, generalize better: Stability of stochastic gradient descent. ICML</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hardt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Recht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1" to="24" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="770" to="778" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">On large-batch training for deep learning: Generalization gap and sharp minima</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">S</forename><surname>Keskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mudigere</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Smelyanskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">T P</forename><surname>Tang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Krizhevsky, A. Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+	</analytic>
+	<monogr>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1404.5997</idno>
+		<title level="m">One weird trick for parallelizing convolutional neural networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Efficient backprop in neural networks: Tricks of the trade (orr, g. and müller, k</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Orr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Lecture Notes in Computer Science</title>
+		<imprint>
+			<biblScope unit="page">1524</biblScope>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Gradient-based learning applied to document recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the IEEE</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Scaling Distributed Machine Learning with System and Algorithm Co-design</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 20th ACM SIGKDD international conference on Knowledge discovery and data mining</title>
+		<meeting>the 20th ACM SIGKDD international conference on Knowledge discovery and data mining</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="661" to="670" />
+		</imprint>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+	<note>Efficient mini-batch training for stochastic optimization</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Effective approaches to attention-based neural machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-T</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1508.04025</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Random Walk in a Random Environment and 1f Noise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Marinari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Parisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ruelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Windey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physical Review Letters</title>
+		<imprint>
+			<biblScope unit="volume">50</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1223" to="1225" />
+			<date type="published" when="1983" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Human-level control through deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">518</biblScope>
+			<biblScope unit="issue">7540</biblScope>
+			<biblScope unit="page" from="529" to="533" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Montavon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Orr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-R</forename><surname>Müller</surname></persName>
+		</author>
+		<idno>978-3-642-35288-1</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+	<note>Neural Networks: Tricks of the Trade. 2 edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">An overview of gradient descent optimization algorithms. CoRR, abs/1609.04747</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ruder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Silver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Maddison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">529</biblScope>
+			<biblScope unit="issue">7587</biblScope>
+			<biblScope unit="page" from="484" to="489" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+	<note>Mastering the game of go with deep neural networks and tree search</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">The Implicit Bias of Gradient Descent on Separable Data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Soudry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hoffer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srebro</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017-10" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Exponentially vanishing sub-optimal local minima in multilayer neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Soudry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hoffer</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.05777</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Dropout: a simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">On the importance of initialization and momentum in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Martens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on machine learning</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1139" to="1147" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Rethinking the inception architecture for computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wojna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="2818" to="2826" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fergus</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename></persName>
+		</author>
+		<title level="m">Regularization of neural networks using dropconnect. ICML&apos;13</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+	<note>III-1058-III-1066. JMLR.org</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Google&apos;s neural machine translation system: Bridging the gap between human and machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<idno>abs/1609.08144</idno>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Scaling sgd batch size to 32k for imagenet training</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>You</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Gitman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ginsburg</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.03888</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Wide residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zagoruyko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Understanding deep learning requires rethinking generalization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hardt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Recht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Deep learning with elastic averaging sgd</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">E</forename><surname>Choromanska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="685" to="693" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

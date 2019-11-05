@@ -1,0 +1,682 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Generative Neural Machine Translation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Harshil</forename><surname>Shah</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">University College London</orgName>
+								<orgName type="institution" key="instit2">University College London &amp; Alan Turing Institute</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Barber</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">University College London</orgName>
+								<orgName type="institution" key="instit2">University College London &amp; Alan Turing Institute</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Generative Neural Machine Translation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We introduce Generative Neural Machine Translation (GNMT), a latent variable architecture which is designed to model the semantics of the source and target sentences. We modify an encoder-decoder translation model by adding a latent variable as a language agnostic representation which is encouraged to learn the meaning of the sentence. GNMT achieves competitive BLEU scores on pure translation tasks, and is superior when there are missing words in the source sentence. We augment the model to facilitate multilingual translation and semisupervised learning without adding parameters. This framework significantly reduces overfitting when there is limited paired data available, and is effective for translating between pairs of languages not seen during training.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Data from multiple modalities (e.g. an image and a caption) can be used to learn representations with more understanding about their environment compared to when only a single modality (an image or a caption alone) is available. Such representations can then be included as components in larger models which may be responsible for several tasks. However, it can often be expensive to acquire multi-modal data even when large amounts of unsupervised data may be available.</p><p>In the machine translation context, the same sentence expressed in different languages offers the potential to learn a representation of the sentence's meaning. Variational Neural Machine Translation (VNMT)  attempts to achieve this by augmenting a baseline model with a latent variable intended to represent the underlying semantics of the source sentence, achieving higher BLEU scores than the baseline. However, because the latent representation is dependent on the source sentence, it can be argued that it doesn't serve a different purpose to the encoder hidden states of the baseline model. As we demonstrate empirically, this model tends to ignore the latent variable therefore it is not clear that it learns a useful representation of the sentence's meaning.</p><p>In this paper, we introduce Generative Neural Machine Translation (GNMT), whose latent variable is more explicitly designed to learn the sentence's semantic meaning. Unlike the majority of neural machine translation models (which model the conditional distribution of the target sentence given the source sentence), GNMT models the joint distribution of the target sentence and the source sentence. To do this, it uses the latent variable as a language agnostic representation of the sentence, which generates text in both the source and target languages. By giving the latent representation responsibility for generating the same sentence in multiple languages, it is encouraged to learn the semantic meaning of the sentence. We show that GNMT achieves competitive BLEU scores on translation tasks, relies heavily on the latent variable and is particularly effective at translating long sentences. When there are missing words in the source sentence, GNMT is able to use its learned representation to infer what those words may be and produce good translations accordingly.</p><p>We then extend GNMT to facilitate multilingual translation whilst sharing parameters across languages. This is achieved by adding two categorical variables to the model in order to indicate the source and target languages respectively. We show that this parameter sharing helps to reduce the impact of overfitting when the amount of available paired data is limited, and proves to be effective for translating between pairs of languages which were not seen during training. We also show that by setting the source and target languages to the same value, monolingual data can be leveraged to further reduce the impact of overfitting in the limited paired data context, and to provide significant improvements for translating between previously unseen language pairs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Model</head><p>Notation x denotes the source sentence (with number of words T x ) and y denotes the target sentence (with number of words T y ). e(v) is embedding of word v.</p><p>GNMT models the joint probability of the target sentence and the source sentence i.e. p(x, y) by using a latent variable z as a language agnostic representation of the sentence. The factorization of the joint distribution is shown in equation <ref type="formula" target="#formula_0">(1)</ref> and graphically in figure 1.</p><formula xml:id="formula_0">p θ (x, y, z) = p(z)p θ (x|z)p θ (y|z, x)<label>(1)</label></formula><p>This architecture means that z models the commonality between the source and target sentences, which is the semantic meaning. We use a Gaussian prior: p(z) = N (0, I). θ represents the set of weights of the neural networks that govern the conditional distributions of x and y. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Generative process</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.1">Source sentence</head><p>To compute p θ (x|z), we use a model similar to that presented by <ref type="bibr" target="#b1">Bowman et al. [2016]</ref>. The conditional probabilities, for t = 1, . . . , T x , are:</p><formula xml:id="formula_1">p(x t = v x |x 1 , . . . , x t−1 , z) ∝ exp((W x h x t ) · e(v x ))<label>(2)</label></formula><p>where h x t is computed as:</p><formula xml:id="formula_2">h x t = LSTM(h x t−1 , z, e(x t−1 ))<label>(3)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.2">Target sentence</head><p>To compute p θ (y|x, z), we modify RNNSearch <ref type="bibr" target="#b0">[Bahdanau et al., 2015]</ref> to accommodate the latent variable z. Firstly, the source sentence is encoded using a bidirectional LSTM. The encoder hidden states for t = 1, . . . , T x are computed as:</p><formula xml:id="formula_3">h enc t = ←−−→ LSTM(h enc t±1 , z, e(x t ))<label>(4)</label></formula><p>Then, the conditional probabilities, for t = 1, . . . , T y , are:</p><formula xml:id="formula_4">p(y t = v y |y 1 , . . . , y t−1 , x, z) ∝ exp((W y h dec t ) · e(v y ))<label>(5)</label></formula><p>where h dec t is computed as: To learn the parameters θ of the model, we use stochastic gradient variational Bayes (SGVB) to perform approximate maximum likelihood estimation <ref type="bibr" target="#b5">[Kingma and</ref><ref type="bibr">Welling, 2014, Rezende et al., 2014]</ref>. To do this, we parameterize a Gaussian inference distribution q φ (z|x, y) = N (µ φ (x, y), Σ φ (x, y)). This allows us to maximize the following lower bound on the log likelihood:</p><formula xml:id="formula_5">h dec t = LSTM(h dec t−1 , z, e(y t−1 ), c t )<label>(6)</label></formula><formula xml:id="formula_6">c t = Tx s=1 α s,t h enc s (7) α s,t = exp(W α [h dec t−1 , h enc s ]) Tx r=1 exp(W α [h dec t−1 , h enc r ])<label>(8)</label></formula><formula xml:id="formula_7">log p(x, y) ≥ E q φ (z|x,y) log p θ (x, y, z) q φ (z|x, y) ≡ L(x, y)<label>(9)</label></formula><p>As per VNMT, for the functions µ φ (x, y) and Σ φ (x, y), we first encode the source and target sentences using a bidirectional LSTM. For i ∈ {x, y} and t = 1, . . . , T i :</p><formula xml:id="formula_8">h inf,i t = ←−−→ LSTM(h inf,i</formula><p>t±1 , e(i t )) where i t =</p><formula xml:id="formula_9">x t if i = x y t if i = y<label>(10)</label></formula><p>We then concatenate the averages of the two sets of hidden states, and use this vector to compute the mean and variance of the Gaussian distribution:</p><formula xml:id="formula_10">h inf =   1 T x Tx t=1 h inf,x t , 1 T y Ty t=1 h inf,y t   (11) q φ (z|x, y) = N (W µ h inf , diag(exp(W Σ h inf )))<label>(12)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Generating translations</head><p>Once the model has been trained (i.e. θ and φ are fixed), given a source sentence x, we want to find the target sentence y which maximizes p(y|x) = p θ (y|z, x)p(z|x) dz. However, this integral is intractable and so p(y|x) cannot be easily computed. Instead, because arg max y p(y|x) = arg max y p(x, y), we can perform approximate maximization by using a procedure inspired by the EM algorithm <ref type="bibr" target="#b6">[Neal and Hinton, 1998</ref>]. We increase a lower bound on log p(x, y) by iterating between an E-like step and an M-like step, as described in algorithm 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4">Translating with missing words</head><p>Unlike architectures which model the conditional probability of the target sentence given the source sentence, p(y|x), GNMT is naturally suited to performing translation when there are missing words in the source sentence, because it can use the latent representation to infer what those missing words may be.</p><p>Given a source sentence with visible words x vis and missing words x miss , we want to find the settings of x miss and y which maximize p(x miss , y|x vis ). However, this quantity is intractable as it suffers from a similar issue to that described in section 2.3. Therefore, we use a procedure similar to algorithm 1, increasing a lower bound on log p(x vis , x miss , y), as described in algorithm 2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5">Multilingual translation</head><p>We extend GNMT to facilitate multilingual translation, referring to this version of the model as GNMT-MULTI. We add two categorical variables to GNMT, l x and l y (encoded as one-hot vectors), Algorithm 2 Translating when there are missing words Make an initial 'guess' for the target sentence y and the missing words in the source sentence x miss . while not converged do E-like step: Sample {z (s) } S s=1 from the variational distribution q φ (z|x, y), where x is the latest setting of the source sentence and y is the latest setting of the target sentence. M-like step (1): Choose the missing words in the source sentence x miss to maximize</p><formula xml:id="formula_11">1 S S s=1 log p(z (s) ) + log p θ (x vis , x miss |z (s) ) using beam search.</formula><p>M-like step (2): Choose the words in y to maximize</p><formula xml:id="formula_12">1 S S s=1 log p(z (s) ) + log p(x|z (s) ) + log p θ (y|z (s) , x)</formula><p>using beam search, where x is the latest setting of the source sentence. end while which indicate what the source and target languages are respectively. The joint distribution is:</p><formula xml:id="formula_13">p θ (x, y, z|l x , l y ) = p(z)p θ (x|z, l x )p θ (y|z, x, l x , l y )<label>(13)</label></formula><p>This structure allows for parameters to be shared regardless of the input and output languages, and when the amount of available paired translation data is limited, this parameter sharing can significantly mitigate the risk of overfitting. The forms of the neural networks in GNMT-MULTI are identical to those in GNMT (as described in sections 2.1 and 2.2), except that l x and l y are now concatenated with the embeddings e(x t ) and e(y t ) respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.6">Semi-supervised learning</head><p>Monolingual data can be used within the GNMT-MULTI framework to perform semi-supervised learning. This is simply done by setting the source and target language variables l x and l y to the same value, in which case the model must attempt to reconstruct the input sentence, rather than translate it. In section 4, we show that when the amount of available paired translation data is limited, using monolingual data in this way further reduces overfitting compared to cross-language parameter sharing alone. Note that we are not concerned about the encoder simply copying the sentence across to the decoder, because the cross-language parameter sharing prevents this.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Related work</head><p>Whilst there have been many attempts at designing generative models of text <ref type="bibr" target="#b1">[Bowman et al., 2016</ref><ref type="bibr" target="#b3">, Dieng et al., 2017</ref><ref type="bibr" target="#b14">, Yang et al., 2017</ref>, their usage for translation has been limited. Most closely related to our work is Variational Neural Machine Translation (VNMT) , which introduces a latent variable z with the aim of capturing the source sentence's semantics. It models the conditional probability of the target sentence given the source sentence as</p><formula xml:id="formula_14">p(y|x) = p θ (y|z, x)p θ (z|x) dz.</formula><p>The authors find that VNMT achieves improvements over modeling p(y|x) directly (i.e. without a latent variable). The primary difference compared to our work is that VNMT does not model the probability distribution of the source sentence. We believe that learning the joint distribution is a more difficult task than learning the conditional, however this is not without benefit because when learning the joint distribution, the latent variable is more explicitly encouraged to learn the semantic meaning, as shown in the examples in section 4. In addition, because the latent representation is dependent on the source sentence, it is not clear that it serves a different purpose to the encoder hidden states.</p><p>Also related is the work of <ref type="bibr" target="#b9">Shu et al. [2017]</ref>, which presents an approach for using unlabeled data for conditional density estimation. The authors propose a hybrid framework that regularizes the conditionally trained parameters towards the jointly trained parameters. Experiments on image modeling tasks show improvements over conditional training alone.</p><p>In work similar to GNMT-MULTI, <ref type="bibr" target="#b4">Johnson et al. [2017]</ref> perform multilingual translation whilst sharing parameters by prepending, to the source sentence, a string indicating the target language. Unlike GNMT-MULTI, this approach does not indicate the source language.</p><p>There have also been various attempts to leverage monolingual data to improve translation models. <ref type="bibr" target="#b16">Zhang and Zong [2016]</ref> use source language monolingual data and <ref type="bibr" target="#b8">Sennrich et al. [2016]</ref> use target language monolingual data to create a synthetic dataset with which to augment the original paired dataset. This is done by passing the monolingual data through a pre-trained translation model (trained using the original paired data), thus creating a new synthetic dataset of paired data. This is combined with the original paired data to create a new, larger dataset which is used to train a new model. In both papers, the authors find that their methods obtain improvements over using paired data alone. However, these procedures do not directly integrate monolingual data into a single, unified model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>In this section we evaluate the effectiveness of GNMT and GNMT-MULTI on the 6 permutations of language pairs between English (EN), Spanish (ES) and French (FR) i.e. EN → ES, ES → EN, EN → FR, etc. We also train GNMT-MULTI in a semi-supervised manner, as described in section 2.6, and refer to this as GNMT-MULTI-SSL. We compare the performance of GNMT, GNMT-MULTI, and GNMT-MULTI-SSL against that of VNMT, which we believe to be the most closely related model to our work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Dataset</head><p>We use paired data provided by the Multi UN corpus <ref type="bibr" target="#b12">[Tiedemann, 2012]</ref>. We train each model with a small, medium and large amount of paired data, corresponding to 40K, 400K and 4M paired sentences respectively. For each language pair, we create validation sets of size 5K and test sets of size 10K paired sentences respectively. For the monolingual data used to train GNMT-MULTI-SSL, we use the News Crawl articles from 2009 to 2012, provided for the WMT'13 translation task. There are 20.9M, 2.7M and 4.5M monolingual sentences for EN, ES and FR respectively.</p><p>Preprocessing For each language, we convert all characters into lowercase and use a vocabulary of the 20,000 most common words from the paired data, replacing words outside of this vocabulary with an unknown word token. We exclude sentences which have a proportion of unknown words greater than 10% and which are longer than 50 words.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Training</head><p>We optimize the ELBO, shown in equation (9), using stochastic gradient ascent. For all models, The latent representation z has 100 units, each of the RNN hidden states has 1,000 units, and the word embeddings are 300-dimensional. To ensure training is fast, we use only a single sample z per data point from the variational distribution at each iteration. We perform early stopping by evaluating the ELBO on the validation set every 1,000 iterations. We implement both models in Python, using the Theano [Theano Development <ref type="bibr" target="#b11">Team, 2016]</ref> and Lasagne <ref type="bibr" target="#b2">[Dieleman et al., 2015]</ref> libraries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Optimization challenges</head><p>The ELBO from equation <ref type="formula" target="#formula_7">(9)</ref> can be expressed as:</p><formula xml:id="formula_15">L(x, y) = E q φ (z|x,y) [log p(x, y|z)] − D KL [q φ (z|x, y) || p(z)]<label>(14)</label></formula><p>As pointed out by <ref type="bibr" target="#b1">Bowman et al. [2016]</ref>, when training latent variable language models such as the one described in section 2.1.1, the objective function encourages the model to set q φ (z|x, y) equal to the prior p(z). As a result, the KL divergence term in equation <ref type="formula" target="#formula_0">(14)</ref> collapses to 0 and the model ignores the latent variable altogether. To address this, we use the following two techniques:</p><p>KL divergence annealing We multiply the KL divergence term by a constant weight, which we linearly anneal from 0 to 1 over the first 50,000 iterations of training <ref type="bibr" target="#b1">[Bowman et al., 2016</ref><ref type="bibr" target="#b10">, Sønderby et al., 2016</ref>.</p><p>Word dropout In equation <ref type="formula" target="#formula_2">(3)</ref>, the dependence of the hidden state on the previous word means that the RNN can often afford to ignore the latent variable whilst still maintaining syntactic consistency between words. To prevent this from happening, during training we randomly replace the word being passed to the next RNN hidden state with the unknown word token, as suggested by <ref type="bibr" target="#b1">Bowman et al. [2016]</ref>. This is parameterized by a drop rate, which we set to 30%.  Word dropout significantly weakens translation performance for VNMT, therefore we use KL divergence annealing when training both models, but only use word dropout when training GNMT.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.1">Translation</head><p>The procedure for generating translations using GNMT is described in algorithm 1. For VNMT, the conditional likelihood is p(y|x) = p θ (y|z, x)p θ (z|x) dz. This can be maximized by drawing a set of samples {z (s) } S s=1 from p θ (z|x) and then maximizing</p><formula xml:id="formula_16">1 S S s=1 p θ (y|z (s) , x)</formula><p>. This is done approximately, using beam search.</p><p>We report results on translation tasks in table 1. When trained with 40K and 400K paired sentences, GNMT has a small advantage over VNMT in terms of BLEU scores across all language pairs. However, both models tend to overfit on these relatively small amounts of paired data. As a result, GNMT-MULTI achieves much higher BLEU scores with both 40K and 400K paired sentences, due to the parameter sharing between languages. Adding monolingual data produces yet another significant increase in BLEU scores. In fact, GNMT-MULTI-SSL trained with only 400K paired sentences achieves performance comparable with GNMT trained with 4M paired sentences. Even with 4M paired sentences, adding monolingual data is helpful, with GNMT-MULTI-SSL outperforming the other models.</p><p>In table 2, we report the values of the KL divergence term D KL [q φ (z|x, y) || p(z)] for the model trained with 4M paired sentences. The higher values for GNMT, GNMT-MULTI and GNMT-MULTI-SSL clearly indicate that these models are placing higher reliance on the latent variable than is VNMT.</p><p>BLEU by sentence length It is argued by <ref type="bibr" target="#b13">Tu et al. [2016]</ref> that attention based translation models suffer 'coverage' issues, particularly on long sentences, because they do not keep track of the number of times each source word is translated to a target word. However, because the latent variable in GNMT is explicitly encouraged to model the sentence's semantics, it helps to alleviate these issues. This is demonstrated in <ref type="figure" target="#fig_1">figure 2</ref> and in the example in table 3, which show that GNMT tends to perform better than VNMT on long sentences, reducing the problems of translating the same phrase multiple times and neglecting to translate others at all.   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.2">Missing word translation</head><p>In order to demonstrate that GNMT does indeed learn a useful representation of the sentence's semantic meaning, we perform missing word translation (i.e. where the source sentence has missing words). The model is forced to rely on its learned representation in order to infer what the missing words could be, and then to produce a good translation accordingly. The results are reported in table 4. The procedure for generating translations using GNMT is described in algorithm 2. To generate translations using VNMT, we replace the missing words in the source sentence with the unknown word token and then conduct the same conditional likelihood maximization described in section 4.3.1.</p><p>From the BLEU scores, it is evident that GNMT has a significant advantage over VNMT in this scenario, thanks to the quality of its learned representations. We show an example missing word translation in table 5, where the difference in quality between GNMT and VNMT is clear.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.3">Unseen language pair translation</head><p>Because GNMT-MULTI shares parameters across languages, it should be naturally suited to performing translations between pairs of languages that it never saw during training. For both VNMT and GNMT, to translate, say, from English to Spanish, we first translate from English to French then from French to Spanish (because we assume the English to Spanish parameters are not available). For GNMT-MULTI and GNMT-MULTI-SSL, we train new models where the respective language pairs  In table 6, we report results on translation between previously unseen language pairs. In this context, VNMT and GNMT perform similarly in terms of BLEU scores. However, both models are consistently outperformed by GNMT-MULTI (albeit only by a small amount). Using monolingual data is very effective in this context, with GNMT-MULTI-SSL outperforming all other models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Discussion and future work</head><p>In this paper, we have introduced Generative Neural Machine Translation (GNMT), a latent variable architecture which aims to model the semantic meaning of the source and target sentences. For pure translation tasks, GNMT performs competitively with a comparable conditional model, places higher reliance on the latent variable and achieves higher BLEU scores when translating long sentences. When there are missing words in the source sentence, GNMT has superior performance.</p><p>We extend GNMT to facilitate multilingual translation without adding parameters to the model. This parameter sharing reduces the impact of overfitting when the amount of available paired data is limited, and proves to be effective for translating between pairs of languages which were not seen during training. We also show that this architecture can be used to leverage monolingual data, which further reduces the impact of overfitting in the limited paired data context, and provides significant improvements for translating between previously unseen language pairs.</p><p>Whilst we chose to factorize the joint distribution as per equation <ref type="formula" target="#formula_0">(1)</ref>, this was not the only option we considered. The primary alternative was to use the factorization p θ (x, y, z) = p(z)p θ (x|z)p θ (y|z); one could argue that this is in fact more natural for learning sentence semantics, since z wouldn't be able to rely on knowing x explicitly to help generate y through p θ (y|x, z). However, experimentally we found that the model struggled to generate grammatically coherent translations which also retained the source sentence's meaning.</p><p>We have shown that the idea of using the same sentence in different languages allows for a useful latent representation to be learned. Using these sentence representations could be very promising for use in downstream tasks where 'understanding' of the environment would be helpful, e.g. question answering, dialog generation, etc.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: The GNMT graphical model.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Test set BLEU scores on pure translation, by sentence length, evaluated using the model parameters trained with 4M paired sentences.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Test set BLEU scores on pure translation for models trained with varying amounts of paired sentences.</figDesc><table>PAIRED 
+
+DATA 
+
+SYSTEM 
+EN→ES ES→EN EN→FR FR→EN ES→FR FR→ES 
+
+40K 
+
+VNMT 
+12.45 
+12.30 
+12.20 
+12.98 
+12.19 
+13.44 
+GNMT 
+13.55 
+12.84 
+12.47 
+13.84 
+13.26 
+14.95 
+GNMT-MULTI 
+16.32 
+15.36 
+15.99 
+16.92 
+16.80 
+18.21 
+GNMT-MULTI-SSL 
+23.44 
+22.25 
+20.88 
+20.99 
+22.65 
+24.51 
+
+400K 
+
+VNMT 
+33.27 
+31.96 
+27.71 
+27.69 
+28.76 
+31.22 
+GNMT 
+33.87 
+32.75 
+28.55 
+28.98 
+29.41 
+31.33 
+GNMT-MULTI 
+40.08 
+38.56 
+35.55 
+37.28 
+36.31 
+38.68 
+GNMT-MULTI-SSL 
+43.96 
+41.63 
+37.37 
+39.66 
+38.09 
+40.79 
+
+4M 
+
+VNMT 
+44.10 
+43.03 
+38.06 
+38.56 
+35.28 
+40.27 
+GNMT 
+44.52 
+43.83 
+37.97 
+38.44 
+35.96 
+40.55 
+GNMT-MULTI 
+44.43 
+43.91 
+38.02 
+38.67 
+35.57 
+40.79 
+GNMT-MULTI-SSL 
+45.94 
+45.08 
+39.41 
+40.69 
+38.97 
+42.05 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Test set KL divergence values (D KL [q φ (z|x, y) || p(z)]) for the model trained with 4M 
+paired sentences, averaged across languages. 
+
+SYSTEM VNMT GNMT GNMT-MULTI GNMT-MULTI-SSL 
+
+DKL 
+1.104 
+5.581 
+9.661 
+10.915 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 :</head><label>3</label><figDesc>An example of a long sentence translation, showing the ability of GNMT to capture long range semantics. SOURCE DANS CE DÉCRET, IL MET EN LUMIÈRE LES PRINCIPALES RÉALISATIONS DE LA RÉPUBLIQUE D'OUZBÉKISTAN DANS LE DOMAINE DE LA PROTECTION ET DE LA PROMOTION DES DROITS DE L'HOMME ET APPROUVE LE PROGRAMME D'ACTIVITÉS MARQUANT LE SOIXANTIÈME ANNIVERSAIRE DE LA DÉCLARATION UNIVERSELLE DES DROITS DE L'HOMME. TARGET THE DECREE HIGHLIGHTS MAJOR ACHIEVEMENTS BY THE REPUBLIC OF UZBEKISTAN IN THE FIELD OF PROTECTION AND PROMOTION OF HUMAN RIGHTS AND APPROVES THE PROGRAMME OF ACTIVITIES DEVOTED TO THE SIXTIETH ANNIVERSARY OF THE UNIVERSAL DECLARATION OF HUMAN RIGHTS. VNMT IN THIS REGARD, THE DECREE HIGHLIGHTS THE MAIN ACHIEVEMENTS OF THE UZBEK REPUBLIC IN THE PROMOTION AND PROMOTION AND PROTECTION OF HUMAN RIGHTS AND SUPPORTS THE ACTIVITIES OF THE SIXTIETH ANNIVERSARY OF THE HUMAN RIGHTS OF HUMAN RIGHTS. GNMT IN THIS DECREE, IT HIGHLIGHTS THE MAIN ACHIEVEMENTS OF THE REPUBLIC OF UZBEK- ISTAN ON THE PROTECTION AND PROMOTION OF HUMAN RIGHTS AND APPROVES THE ACTIVITIES OF THE SIXTIETH ANNIVERSARY OF THE UNIVERSAL DECLARATION OF HUMAN RIGHTS.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Test set BLEU scores for missing word translation. We use the model parameters trained with 4M paired sentences. SYSTEM EN → ES ES → EN EN → FR FR → EN ES → FR FR → ES</figDesc><table>VNMT 
+26.99 
+27.39 
+23.79 
+23.51 
+22.46 
+25.75 
+GNMT 
+33.23 
+33.46 
+29.84 
+28.27 
+29.83 
+33.09 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head>Table 5 :</head><label>5</label><figDesc>A randomly sampled test set missing word translation from English to Spanish. The struck-through words in the source sentence are considered missing. SOURCE WE LOOK FORWARD AT THIS SESSION TO FURTHER MEASURES TO STRENGTHEN THE BEI- JING DECLARATION AND PLATFORM FOR ACTION. TARGET ESPERAMOS QUE EN ESTE PERÍODO DE SESIONES SE ADOPTEN NUEVAS MEDIDAS PARA CONSOLIDAR LA DECLARACIÓN Y LA PLATAFORMA DE ACCIÓN DE BEIJING. VNMT CONSIDERAMOS QUE EL PERÍODO SE REFIERE A LAS MEDIDAS DE FORTALECIMIENTO DE LA PLATAFORMA DE ACCIÓN DE BEIJING. GNMT ESPERAMOS CON INTERÉS EN ESTE PERÍODO DE SESIONES UN EXAMEN DE MEDIDAS PARA FORTALECER LA DECLARACIÓN Y LA PLATAFORMA DE ACCIÓN DE BEIJING.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 6 :</head><label>6</label><figDesc>Test set BLEU scores for unseen pair translation. We use the VNMT and GNMT parameters trained with 4M paired sentences. For GNMT-MULTI and GNMT-MULTI-SSL, we train new models with 4M paired sentences, but with the respective language pairs excluded during training.ES ES → EN EN → FR FR → EN ES → FR FR → ESare excluded during training. Once trained, we can directly translate from the source to the target language without having to translate to an intermediate language first.</figDesc><table>(EN, ES) UNSEEN 
+(EN, FR) UNSEEN 
+(ES, FR) UNSEEN 
+SYSTEM 
+EN → VNMT 
+35.58 
+33.59 
+31.34 
+31.95 
+32.31 
+35.86 
+GNMT 
+35.35 
+33.76 
+31.55 
+31.38 
+32.39 
+35.85 
+GNMT-MULTI 
+36.72 
+35.05 
+32.81 
+32.62 
+32.94 
+36.77 
+GNMT-MULTI-SSL 
+38.80 
+37.43 
+34.79 
+34.98 
+33.57 
+38.11 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Neural Machine Translation by Jointly Learning to Align and Translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Generating Sentences from a Continuous Space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">R</forename><surname>Bowman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Vilnis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computational Natural Language Learning (CoNLL)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schlüter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Raffel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Olson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Sønderby</surname></persName>
+		</author>
+		<title level="m">First release</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">TopicRNN: A Recurrent Neural Network with Long-Range Semantic Dependency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Dieng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Paisley</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Google&apos;s Multilingual Neural Machine Translation System: Enabling Zero-Shot Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Krikun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Thorat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Viégas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hughes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page" from="339" to="351" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Auto-Encoding Variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A View of the EM Algorithm that Justifies Incremental, Sparse, and other Variants</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Learning in Graphical Models</title>
+		<meeting><address><addrLine>Netherlands</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="355" to="368" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Stochastic Backpropagation and Approximate Inference in Deep Generative Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 31st International Conference on Machine Learning</title>
+		<meeting>the 31st International Conference on Machine Learning</meeting>
+		<imprint>
+			<publisher>PMLR</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page" from="1278" to="1286" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Improving Neural Machine Translation Models with Monolingual Data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sennrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Haddow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Birch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics</title>
+		<meeting>the 54th Annual Meeting of the Association for Computational Linguistics</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="86" to="96" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Bottleneck Conditional Density Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Shu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">H</forename><surname>Bui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ghavamzadeh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 34th International Conference on Machine Learning</title>
+		<meeting>the 34th International Conference on Machine Learning</meeting>
+		<imprint>
+			<publisher>PMLR</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">70</biblScope>
+			<biblScope unit="page" from="3164" to="3172" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Ladder Variational Autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Raiko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Maaløe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Sønderby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Winther</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="page" from="3738" to="3746" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Theano: A Python framework for fast computation of mathematical expressions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Theano</forename><surname>Development Team</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1605.02688</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Parallel Data, Tools and Interfaces in OPUS</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tiedemann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Eight International Conference on Language Resources and Evaluation. European Language Resources Association (ELRA)</title>
+		<meeting>the Eight International Conference on Language Resources and Evaluation. European Language Resources Association (ELRA)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Modeling Coverage for Neural Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics</title>
+		<meeting>the 54th Annual Meeting of the Association for Computational Linguistics</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="76" to="85" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Improved Variational Autoencoders for Text Modeling using Dilated Convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg-Kirkpatrick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 34th International Conference on Machine Learning</title>
+		<meeting>the 34th International Conference on Machine Learning</meeting>
+		<imprint>
+			<publisher>PMLR</publisher>
+			<date type="published" when="2017" />
+			<biblScope unit="volume">70</biblScope>
+			<biblScope unit="page" from="3881" to="3890" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Variational Neural Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing</title>
+		<meeting>the 2016 Conference on Empirical Methods in Natural Language Processing</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="521" to="530" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Exploiting Source-side Monolingual Data in Neural Machine Translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing</title>
+		<meeting>the 2016 Conference on Empirical Methods in Natural Language Processing</meeting>
+		<imprint>
+			<publisher>Association for Computational Linguistics</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="1535" to="1545" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

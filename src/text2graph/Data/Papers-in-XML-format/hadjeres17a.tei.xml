@@ -1,0 +1,937 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:19+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">DeepBach: a Steerable Model for Bach Chorales Generation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Gaëtan</forename><surname>Hadjeres</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">François</forename><surname>Pachet</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><surname>Nielsen</surname></persName>
+						</author>
+						<title level="a" type="main">DeepBach: a Steerable Model for Bach Chorales Generation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>This paper introduces DeepBach, a graphical model aimed at modeling polyphonic music and specifically hymn-like pieces. We claim that, after being trained on the chorale harmonizations by Johann Sebastian Bach, our model is capable of generating highly convincing chorales in the style of Bach. DeepBach's strength comes from the use of pseudo-Gibbs sampling coupled with an adapted representation of musical data. This is in contrast with many automatic music composition approaches which tend to compose music sequentially. Our model is also steerable in the sense that a user can constrain the generation by imposing positional constraints such as notes, rhythms or cadences in the generated score. We also provide a plugin on top of the MuseScore music editor making the interaction with DeepBach easy to use.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The composition of polyphonic chorale music in the style of J.S. Bach has represented a major challenge in automatic music composition over the last decades. The corpus of the chorale harmonizations by Johann Sebastian Bach is remarkable by its homogeneity and its size (389 chorales in <ref type="bibr" target="#b2">(Bach, 1985)</ref>). All these short pieces (approximately one minute long) are written for a four-part chorus (soprano, alto, tenor and bass) using similar compositional principles: the composer takes a well-known (at that time) melody from a Lutheran hymn and harmonizes it i.e. the three lower parts (alto, tenor and bass) accompanying the soprano (the highest part) are composed, see <ref type="figure" target="#fig_1">Fig.1</ref> for an example.</p><p>Moreover, since the aim of reharmonizing a melody is to give more power or new insights to its text, the lyrics have to be understood clearly. We say that voices are in homophony, i.e. they articulate syllables simultaneously. This implies characteristic rhythms, variety of harmonic ideas as well as characteristic melodic movements which make the style of these chorale compositions easily distinguishable, even for non experts.</p><p>The difficulty, from a compositional point of view comes from the intricate interplay between harmony (notes sounding at the same time) and voice movements (how a single voice evolves through time). Furthermore, each voice has its own "style" and its own coherence. Finding a chorale-like reharmonization which combines Bach-like harmonic progressions with musically interesting melodic movements is a problem which often takes years of practice for musicians.</p><p>From the point of view of automatic music generation, the first solution to this apparently highly combinatorial problem was proposed by <ref type="bibr" target="#b9">(Ebcioglu, 1988)</ref> in 1988. This problem is seen as a constraint satisfaction problem, where the system must fulfill numerous hand-crafted constraints characterizing the style of Bach. It is a rule-based expert system which contains no less than 300 rules and tries to reharmonize a given melody with a generate-and-test method and intelligent backtracking. Among the short examples presented at the end of the paper, some are flawless. The drawbacks of this method are, as stated by the author, the considerable effort to generate the rule base and the fact that the harmonizations produced "do not sound like Bach, except for occasional Bachian patterns and cadence formulas." In our opinion, the requirement of an expert knowledge implies a lot of subjective choices.</p><p>A neural-network-based solution was later developed by <ref type="bibr" target="#b13">(Hild et al., 1992)</ref>. This method relies on several neural networks, each one trained for solving a specific task: a harmonic skeleton is first computed then refined and ornamented. A similar approach is adopted in <ref type="bibr" target="#b1">(Allan &amp; Williams, 2005)</ref>, but uses Hidden Markov Models (HMMs) instead of neural networks. Chords are represented as lists of intervals and form the states of the Markov mod-  els. These approaches produce interesting results even if they both use expert knowledge and bias the generation by imposing their compositional process. In <ref type="bibr" target="#b28">(Whorley et al., 2013;</ref><ref type="bibr" target="#b27">Whorley &amp; Conklin, 2016)</ref>, authors elaborate on those methods by introducing multiple viewpoints and variations on the sampling method (generated sequences which violate "rules of harmony" are put aside for instance). However, this approach does not produce a convincing chorale-like texture, rhythmically as well as harmonically and the resort to hand-crafted criteria to assess the quality of the generated sequences might rule out many musically-interesting solutions.</p><p>Recently, agnostic approaches (requiring no knowledge about harmony, Bach's style or music) using neural networks have been investigated with promising results. In <ref type="bibr" target="#b3">(Boulanger-Lewandowski et al., 2012)</ref>, chords are modeled with Restricted Boltzmann Machines (RBMs). Their temporal dependencies are learned using Recurrent Neural Networks (RNNs). Variations of these architectures based on Long Short-Term Memory (LSTM) units ( <ref type="bibr" target="#b14">(Hochreiter &amp; Schmidhuber, 1997;</ref><ref type="bibr" target="#b20">Mikolov et al., 2014)</ref>) or GRUs (Gated Recurrent Units) have been developed by <ref type="bibr" target="#b19">(Lyu et al., 2015)</ref> and <ref type="bibr" target="#b6">(Chung et al., 2014)</ref> respectively. However, these models which work on piano roll representations of the music are too general to capture the specificity of Bach chorales. Also, a major drawback is their lack of flexibility. Generation is performed from left to right. A user cannot interact with the system: it is impossible to do reharmonization for instance which is the essentially how the corpus of Bach chorales was composed. Moreover, their invention capacity and non-plagiarism abilities are not demonstrated.</p><p>A method that addresses the rigidity of sequential generation in music was first proposed in <ref type="bibr" target="#b24">(Sakellariou et al., 2015;</ref><ref type="bibr" target="#b25">Sakellariou et al., 2016)</ref> for monophonic music and later generalized to polyphony in <ref type="bibr" target="#b11">(Hadjeres et al., 2016)</ref>. These approaches advocate for the use of Gibbs sampling as a generation process in automatic music composition.</p><p>The most recent advances in chorale harmonization is arguably the BachBot model <ref type="bibr" target="#b18">(Liang, 2016)</ref>, a LSTMbased approach specifically designed to deal with Bach chorales. This approach relies on little musical knowledge (all chorales are transposed in a common key) and is able to produce high-quality chorale harmonizations. However, compared to our approach, this model is less general (produced chorales are all in the C key for instance) and less flexible (only the soprano can be fixed). Similarly to our work, the authors evaluate their model with an online Turing test to assess the efficiency of their model. They also take into account the fermata symbols ( <ref type="figure" target="#fig_2">Fig. 2</ref>) which are indicators of the structure of the chorales.</p><p>In this paper we introduce DeepBach, a dependency network <ref type="bibr" target="#b12">(Heckerman et al., 2000)</ref> capable of producing musically convincing four-part chorales in the style of Bach by using a Gibbs-like sampling procedure. Contrary to models based on RNNs, we do not sample from left to right which allows us to enforce positional, unary user-defined constraints such as rhythm, notes, parts, chords and cadences. DeepBach is able to generate coherent musical phrases and provides, for instance, varied reharmonizations of melodies without plagiarism. Its core features are its speed, the possible interaction with users and the richness of harmonic ideas it proposes. Its efficiency opens up new ways of composing Bach-like chorales for non experts in an interactive manner similarly to what is proposed in <ref type="bibr" target="#b22">(Papadopoulos et al., 2016)</ref> for leadsheets.</p><p>In Sect. 2 we present the DeepBach model for four-part chorale generation. We discuss in Sect. 3 the results of an experimental study we conducted to assess the quality of our model. Finally, we provide generated examples in Sect. 4.3 and elaborate on the possibilities offered by our interactive music composition editor in Sect. 4. All examples can be heard on the accompanying web page 3 and the code of our implementation is available on GitHub 4 . Even if our presentation focuses on Bach chorales, this model has been successfully applied to other styles and composers including Monteverdi five-voice madrigals to Palestrina masses.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">DeepBach</head><p>In this paper we introduce a generative model which takes into account the distinction between voices. Sect. 2.1 presents the data representation we used. This representation is both fitted for our sampling procedure and more accurate than many data representation commonly used in automatic music composition. Sect. 2.2 presents the model's architecture and Sect. 2.3 our generation method. Finally, Sect. 2.4 provides implementation details and indicates how we preprocessed the corpus of Bach chorale harmonizations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Data Representation</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.1.">NOTES AND VOICES</head><p>We use MIDI pitches to encode notes and choose to model voices separately. We consider that only one note can be sung at a given time and discard chorales with voice divisions.</p><p>Since Bach chorales only contain simple time signatures, we discretize time with sixteenth notes, which means that each beat is subdivided into four equal parts. Since there is no smaller subdivision in Bach chorales, there is no loss of information in this process.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>In this setting, a voice</head><formula xml:id="formula_0">V i = {V t i } t</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>is a list of notes indexed by t ∈ [T ]</head><p>5 , where T is the duration piece (in sixteenth notes).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.2.">RHYTHM</head><p>We choose to model rhythm by simply adding a hold symbol " " coding whether or not the preceding note is held to the list of existing notes. This representation is thus unambiguous, compact and well-suited to our sampling method (see Sect. 2.3.4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.3.">METADATA</head><p>The music sheet <ref type="figure" target="#fig_1">(Fig. 1b)</ref> conveys more information than only the notes played. We can cite:</p><p>• the lyrics,</p><p>• the key signature,</p><p>• the time signature,</p><p>• the beat index,</p><p>• an implicit metronome (on which subdivision of the beat the note is played),</p><p>• the fermata symbols (see <ref type="figure" target="#fig_2">Fig. 2</ref>),</p><p>• current key,</p><p>• current key signature,</p><p>• current mode (major/minor/dorian). In the following, we will only take into account the fermata symbols, the subdivision indexes and the current key signature. To this end, we introduce:</p><p>• The fermata list F that indicates if there is a fermata symbol, see <ref type="figure" target="#fig_2">Fig. 2</ref>, over the current note, it is a Boolean value. If a fermata is placed over a note on the music sheet, we consider that it is active for all time indexes within the duration of the note.</p><p>• The subdivision list S that contains the subdivision indexes of the beat. It is an integer between 1 and 4: there is no distinction between beats in a bar so that our model is able to deal with chorales with three and four beats per measure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.4.">CHORALE</head><p>We represent a chorale as a couple</p><formula xml:id="formula_1">(V, M)<label>(1)</label></formula><p>composed of voices and metadata. For Bach chorales, V is a list of 4 voices V i for i ∈ [4] (soprano, alto, tenor and bass) and M a collection of metadata lists (F and S).</p><p>Our choices are very general and do not involve expert knowledge about harmony or scales but are only mere observations of the corpus. The list S acts as a metronome. The list F is added since fermatas in Bach chorales indicate the end of each musical phrase. The use of fermata to this end is a specificity of Bach chorales that we want to take advantage of.</p><p>(a) (b) <ref type="figure">Figure 3</ref>. Extract from a Bach chorale and its representation as four voice lists and two metadata lists (S and F). The hold symbol is displayed as " " and considered as a note.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Model Architecture</head><p>We choose to consider the metadata sequences in M as given. For clarity, we suppose in this section that our dataset is composed of only one chorale written as in Eq. 1 of size T . We define a dependency network on the finite set of variables V = {V t i } by specifying a set of conditional probability distributions (parametrized by parameter θ i,t )</p><formula xml:id="formula_2">p i,t (V t i |V \i,t , M, θ i,t ) i∈[4],t∈[T ] ,<label>(2)</label></formula><p>where V t i indicates the note of voice i at time index t and V \i,t all variables in V except from the variable V t i . As we want our model to be time invariant so that we can apply it to sequences of any size, we share the parameters between all conditional probability distributions on variables lying in the same voice, i.e.</p><formula xml:id="formula_3">θ i := θ i,t , p i := p i,t ∀t ∈ [T ].</formula><p>Finally, we fit each of these conditional probability distributions on the data by maximizing the log-likelihood. Due to weight sharing, this amounts to solving four classification problems of the form:</p><formula xml:id="formula_4">max θi t log p i (V t i |V \i,t , M, θ i ), for i ∈ [4],<label>(3)</label></formula><p>where the aim is to predict a note knowing the value of its neighboring notes, the subdivision of the beat it is on and the presence of fermatas. The advantage with this formulation is that each classifier has to make predictions within a small range of notes whose ranges correspond to the notes within the usual voice ranges (see 2.4).</p><p>For accurate predictions and in order to take into account the sequential aspect of the data, each classifier is modeled using four neural networks: two Deep Recurrent Neural Networks <ref type="bibr" target="#b23">(Pascanu et al., 2013)</ref>, one summing up past information and another summing up information coming from the future together with a non-recurrent neural network for notes occurring at the same time. Only the last output from the uppermost RNN layer is kept. These three outputs are then merged and passed as the input of a fourth neural network whose output is</p><formula xml:id="formula_5">p i (V t i |V \i,t , M, θ)</formula><p>. <ref type="figure" target="#fig_4">Figure 4</ref> shows a graphical representation for one of these models. Details are provided in Sect. 2.4. These choices of architecture somehow match real compositional practice on Bach chorales. Indeed, when reharmonizing a given melody, it is often simpler to start from the cadence and write music "backwards."  Monte Carlo (MCMC) algorithm is described in Alg.1. It is similar to the classical Gibbs sampling procedure <ref type="bibr" target="#b10">(Geman &amp; Geman, 1984)</ref> on the difference that the conditional distributions are potentially incompatible <ref type="bibr" target="#b4">(Chen &amp; Ip, 2015)</ref>. This means that the conditional distributions of Eq. (2) do not necessarily comes from a joint distribution p(V) and that the theoretical guarantees that the MCMC converges to this stationary joint distribution vanish. We experimentally verified that it was indeed the case by checking that the Markov Chain of Alg.1 violates Kolmogorov's criterion <ref type="bibr" target="#b15">(Kelly, 2011)</ref>: it is thus not reversible and cannot converge to a joint distribution whose conditional distributions match the ones used for sampling.</p><p>However, this Markov chain converges to another stationary distribution and applications on real data demonstrated that this method yielded accurate joint probabilities, especially when the inconsistent probability distributions are learned from data <ref type="bibr" target="#b12">(Heckerman et al., 2000)</ref>. Furthermore, nonreversible MCMC algorithms can in particular cases be better at sampling that reversible Markov Chains <ref type="bibr" target="#b26">(Vucelja, 2014)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.2.">FLEXIBILITY OF THE SAMPLING PROCEDURE</head><p>The advantage of this method is that we can enforce userdefined constraints by tweaking Alg. 1:</p><p>• instead of choosing voice i from 1 to 4 we can choose to fix the soprano and only resample voices from 2, 3 </p><formula xml:id="formula_6">Re-sample V t i from p i (V t i |V \i,t , M, θ i ) 8: end for 9: Output: V = (V 1 , V 2 , V 3 , V 4 )</formula><p>and 4 in step (3) in order to provide reharmonizations of the fixed melody</p><p>• we can choose the fermata list F in order to impose end of musical phrases at some places</p><p>• more generally, we can impose any metadata</p><p>• for any t and any i, we can fix specific subsets R t i</p><p>of notes within the range of voice i. We then restrict ourselves to some specific chorales by re-sampling</p><formula xml:id="formula_7">V t i from p i (V t i |V \i,t , M, θ i , V t i ∈ R t i )</formula><p>at step (5). This allows us for instance to fix rhythm (since the hold symbol is considered as a note), impose some chords in a soft manner or restrict the vocal ranges.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.3.">PERFORMANCE</head><p>Note that it is possible to make generation faster by making parallel Gibbs updates on GPU. Steps (3) to (5) from Alg. 1 can be run simultaneously to provide significant speedups. Even if it is known that this approach is biased (De Sa et al., 2016) (since we can update simultaneously variables which are not conditionally independent), we experimentally observed that for small batch sizes (16 or 32), DeepBach still generates samples of great musicality while running ten times faster than the sequential version. This allows DeepBach to generate chorales in a few seconds.</p><p>It is also possible to use the hard-disk-configurations generation algorithm (Alg.2.9 in <ref type="bibr" target="#b16">(Krauth, 2006)</ref>) to appropriately choose all the time indexes at which we parallelly resample so that:</p><p>• every time index is at distance at least δ from the other time indexes</p><p>• configurations of time indexes satisfying the relation above are equally sampled.</p><p>This trick allows to assert that we do not update simultaneously a variable and its local context.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.4.">IMPORTANCE OF THE DATA REPRESENTATION</head><p>We emphasize on this section the importance of our particular choice of data representation with respect to our sampling procedure. The fact that we obtain great results using pseudo-Gibbs sampling relies exclusively on our choice to integrate the hold symbol into the list of notes.</p><p>Indeed, Gibbs sampling fails to sample the true joint distribution p(V|M, θ) when variables are highly correlated, creating isolated regions of high probability states in which the MCMC chain can be trapped. However, many data representations used in music modeling such as</p><p>• the piano-roll representation,</p><p>• the couple (pitch, articulation) representation where articulation is a Boolean value indicating whether or not the note is played or held, tend to make the musical data suffer from this drawback.</p><p>As an example, in the piano-roll representation, a long note is represented as the repetition of the same value over many variables. In order to only change its pitch, one needs to change simultaneously a large number of variables (which is exponentially rare) while this is achievable with only one variable change with our representation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Implementation Details</head><p>We implemented DeepBach using Keras <ref type="bibr" target="#b5">(Chollet, 2015)</ref> with the Tensorflow <ref type="bibr" target="#b0">(Abadi et al., 2015)</ref> backend. We used the database of chorale harmonizations by J.S. Bach included in the music21 toolkit <ref type="bibr" target="#b7">(Cuthbert &amp; Ariza, 2010)</ref>. After removing chorales with instrumental parts and chorales containing parts with two simultaneous notes (bass parts sometimes divide for the last chord), we ended up with 352 pieces. Contrary to other approaches which transpose all chorales to the same key (usually in C major or A minor), we choose to augment our dataset by adding all chorale transpositions which fit within the vocal ranges defined by the initial corpus. This gives us a corpus of 2503 chorales and split it between a training set (80%) and a validation set (20%). The vocal ranges contains less than 30 different pitches for each voice <ref type="bibr">(21,</ref><ref type="bibr">21,</ref><ref type="bibr">21,</ref><ref type="bibr">28)</ref> for the soprano, alto, tenor and bass parts respectively.</p><p>As shown in <ref type="figure" target="#fig_4">Fig. 4</ref>, we model only local interactions between a note V t i and its context (V \i,t , M) i.e. only elements with time index t between t − ∆t and t + ∆t are taken as inputs of our model for some scope ∆t. This approximation appears to be accurate since musical analysis reveals that Bach chorales do not exhibit clear long-term dependencies.</p><p>The reported results in Sect. 3 and examples in Sect. 4.3 were obtained with ∆t = 16. We chose as the "neural network brick" in <ref type="figure" target="#fig_4">Fig. 4</ref> a neural network with one hidden layer of size 200 and ReLU <ref type="bibr" target="#b21">(Nair &amp; Hinton, 2010)</ref> nonlinearity and as the "Deep RNN brick" two stacked LSTMs <ref type="bibr" target="#b14">(Hochreiter &amp; Schmidhuber, 1997;</ref><ref type="bibr" target="#b20">Mikolov et al., 2014)</ref>, each one being of size 200 (see <ref type="figure" target="#fig_2">Fig. 2</ref> (f) in <ref type="bibr" target="#b17">(Li &amp; Wu, 2015)</ref>). The "embedding brick" applies the same neural network to each time slice (V t , M t ). There are 20% dropout on input and 50% dropout after each layer.</p><p>We experimentally found that sharing weights between the left and right embedding layers improved neither validation accuracy nor the musical quality of our generated chorales.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experimental Results</head><p>We evaluated the quality of our model with an online test conducted on human listeners.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Setup</head><p>For the parameters used in our experiment, see Sect 2.4. We compared our model with two other models: a Maximum Entropy model (MaxEnt) as in <ref type="bibr" target="#b11">(Hadjeres et al., 2016</ref>) and a Multilayer Perceptron (MLP) model. The Maximum Entropy model is a neural network with no hidden layer. It is given by:</p><formula xml:id="formula_8">p i (V t i |V \i,t , M, A i , b i ) = Softmax(AX + b)<label>(4)</label></formula><p>where X is a vector containing the elements in V \i,t ∪ M t , A i a (n i , m i ) matrix and b i a vector of size m i with m i being the size of X, n i the number of notes in the voice range i and Softmax the softmax function given by</p><formula xml:id="formula_9">Softmax(z) j = e zj K k=1 e z k for j ∈ [K], for a vector z = (z 1 , . . . , z K ).</formula><p>The Multilayer Perceptron model we chose takes as input elements in V \i,t ∪ M, is a neural network with one hidden layer of size 500 and uses a ReLU <ref type="bibr" target="#b21">(Nair &amp; Hinton, 2010)</ref> nonlinearity.</p><p>All models are local and have the same scope ∆t, see Sect. 2.4.</p><p>Subjects were asked to give information about their musical expertise.  The musical extracts have been obtained by reharmonizing 50 chorales from the validation set by each of the three models (MaxEnt, MLP, DeepBach). We rendered the MIDI files using the Leeds Town Hall Organ soundfont 6 and cut two extracts of 12 seconds from each chorale, which gives us 400 musical extracts for our test: 4 versions for each of the 100 melody chunks. We chose our rendering so that the generated parts (alto, tenor and bass) can be distinctly heard and differentiated from the soprano part (which is fixed and identical for all models): in our mix, dissonances are easily heard, the velocity is the same for all notes as in a real organ performance and the sound does not decay, which is important when evaluating the reharmonization of long notes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Discrimination Test: "Bach or Computer" experiment</head><p>Subjects were presented series of only one musical extract together with the binary choice "Bach" or "Computer". The results are quite clear: the percentage of "Bach" votes augment as the model's complexity increase. Furthermore, the distinction between computer-generated extracts and Bach's extracts is more accurate when the level of musical expertise is higher. When presented a DeepBach-generated extract, around 50% of the voters would judge it as composed by Bach. We consider this to be a good score knowing the complexity of Bach's compositions and the facility to detect badly-sounding chords even for non musicians.</p><p>We also plotted specific results for each of the 400 extracts. <ref type="figure" target="#fig_7">Fig. 6</ref> shows for each reharmonization extract the percentage of Bach votes it collected: more than half of the DeepBach's automatically-composed extracts has a majority of votes considering them as being composed by J.S. Bach while it is only a third for the MLP model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Interactive composition</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Description</head><p>We developed a plugin on top of the MuseScore music editor allowing a user to call DeepBach on any rectangular region. Even if the interface is minimal (see <ref type="figure">Fig.7</ref>), the possibilities are numerous: we can generate a chorale from scratch, reharmonize a melody and regenerate a given chord, bar or part. We believe that this interplay between a user and the system can boost creativity and can interest a wide range of audience.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Adapting the model</head><p>We made two major changes between the model we described for the online test and the interactive composition tool.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1.">NOTE ENCODING</head><p>We changed the MIDI encoding of the notes to a full name encoding of the notes. Indeed, some information is lost when reducing a music sheet to its MIDI representation since we cannot differentiate between two enharmonic notes (notes that sound the same but that are written differently e.g. F# and Gb). This difference in Bach chorales is unambiguous and it is thus natural to consider the full name of the notes, like C#3, Db3 or E#4. From a machine learning point of view, these notes would appear in totally different contexts. This improvement enables the model to generate notes with the correct spelling, which is important when we focus on the music sheet rather than on its audio rendering.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2.">STEERING MODULATIONS</head><p>We added the current key signature list K to the metadata M. This allows users to impose modulations and key changes. Each element K t of this list contains the number of sharps of the estimated key for the current bar. It is a integer between -7 and 7. The current key is computed using the key analyzer algorithm from music21.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Generation examples</head><p>We now provide and comment on examples of chorales generated using the DeepBach plugin. Our aim is to show the quality of the solutions produced by DeepBach. For these examples, no note was set by hand and we asked DeepBach to generate regions longer than one bar and covering all four voices.</p><p>Despite some compositional errors like parallel octaves, the musical analysis reveals that the DeepBach compositions reproduce typical Bach-like patterns, from characteristic cadences to the expressive use of nonchord tones. As discussed in Sect. 4.2, DeepBach also learned the correct spelling of the notes. Among examples in <ref type="figure">Fig. 8</ref>, examples (a) and (b) share the same metadata (S, F and K). This demonstrates that even with fixed metadata it is possible to generate contrasting chorales.</p><p>Since we aimed at producing music that could not be distinguished from actual Bach compositions, we had all provided extracts sung by the Wishful Singing choir. These audio files can be heard on the accompanying website.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussion and future work</head><p>We described DeepBach, a probabilistic model together with a sampling method which is flexible, efficient and provides musically convincing results even to the ears of professionals. The strength of our method is the possibility to let users impose unary constraints, which is a feature often neglected in probabilistic models of music. Through our graphical interface, the composition of polyphonic music becomes accessible to non-specialists. The playful interaction between the user and this system can boost creativity and help explore new ideas quickly. We believe that this approach could form a starting point for a novel com- positional process that could be described as a constructive dialogue between a human operator and the computer. This method is general and its implementation simple. It is not only applicable to Bach chorales but embraces a wider range of polyphonic music.</p><p>Future work aims at refining our interface, speeding up generation and handling datasets with small corpora.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>text and melody by Georg Neumark (1641), (b) Four-voice harmonization by Bach: voices are determined by the staff they are written on and the directions of the stems.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Two versions of "Wer nur den lieben Gott läßt walten". The original melody (a) and its reharmonization (b) by Johann Sebastian Bach (BWV 434) 2 .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Fermata symbol.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>in dependency networks is performed using the pseudo-Gibbs sampling procedure. This Markov Chain</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Graphical representations of DeepBach's neural network architecture for the soprano prediction p1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Results of the "Bach or Computer" experiment. The figure shows the distribution of the votes between "Computer" (blue bars) and "Bach" (red bars) for each model and each level of expertise of the voters (from 1 to 3), see Sect. 3.2 for details.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Fig. 5</head><label>5</label><figDesc>shows how the votes are distributed depending on the level of musical expertise of the subjects for each model. For this experiment, 1272 people took this test, 261 with musical expertise 1, 646 with musical expertise 2 and 365 with musical expertise 3.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 .</head><label>6</label><figDesc>Figure 6. Results of the "Bach or Computer" experiment. The figure shows the percentage of votes for Bach for each of the 100 extracts for each model. For each model, a specific order for the x-axis is chosen so that the percentage of Bach votes is an increasing function of the x variable, see Sect. 3.2 for details.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 7 .Figure 8 .</head><label>78</label><figDesc>Figure 7. DeepBach's plugin minimal interface for the MuseScore music editor</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Create four lists V = (V 1 , V 2 , V 3 , V 4 ) of length L 3: {The lists are initialized with random notes drawn from the ranges of the corresponding voices (sampled uni- formly or from the marginal distributions of the notes)} 4: for m from 1 to M do</figDesc><table>Algorithm 1 Pseudo-Gibbs sampling 
+1: Input: Chorale length L, metadata M containing lists 
+of length L, probability distributions (p 1 , p 2 , p 3 , p 4 ), 
+maximum number of iterations M 
+2: 5: 
+
+Choose voice i uniformly between 1 and 4 
+
+6: 
+
+Choose time t uniformly between 1 and L 
+
+7: 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">https://www.youtube.com/watch?v= 73WF0M99vlg</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">https://sites.google.com/site/ deepbachexamples/ 4 https://github.com/Ghadjeres/DeepBach</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">We adopt the standard notation [N ] to denote the set of integers {1, . . . , N } for any integer N .</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="6">https://www.samplephonics.com/products/ free/sampler-instruments/the-leeds-townhall-organ</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">TensorFlow: Large-scale machine learning on heterogeneous systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martín</forename><surname>Abadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ashish</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Barham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Brevdo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Eugene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhifeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Citro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Craig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Greg</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andy</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Matthieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ghemawat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sanjay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Harp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Andrew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><surname>Irving</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yangqing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Jozefowicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lukasz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Kudlur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Manjunath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Josh</forename><surname>Levenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mané</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rajat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sherry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Derek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Olah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Schuster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Mike</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Steiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Benoit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ilya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Talwar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Paul</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vijay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Viégas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fernanda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Oriol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Warden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Pete</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wattenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wicke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoqiang</forename><surname>Zheng</surname></persName>
+		</author>
+		<ptr target="http://tensorflow.org/.Softwareavailablefromtensorflow.org" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Harmonising chorales by probabilistic inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moray</forename><surname>Allan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">I</forename><surname>Christopher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="page" from="25" to="32" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">389 Chorales (Choral-Gesange): SATB (German Language Edition)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Bach</surname></persName>
+		</author>
+		<ptr target="https://books.google.fr/books?id=U1-cAAAACAAJ" />
+		<imprint>
+			<date type="published" when="1985" />
+			<publisher>Alfred Publishing Company</publisher>
+		</imprint>
+	</monogr>
+	<note>Kalmus Classic Edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Modeling temporal dependencies in high-dimensional sequences: Application to polyphonic music generation and transcription</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Boulanger-Lewandowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Vincent</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 29th International Conference on Machine Learning (ICML-12)</title>
+		<meeting>the 29th International Conference on Machine Learning (ICML-12)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1159" to="1166" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Behaviour of the gibbs sampler when conditional distributions are potentially incompatible</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shyh-Huei</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><forename type="middle">H</forename><surname>Ip</surname></persName>
+		</author>
+		<idno type="doi">10.1080/00949655.2014.968159</idno>
+		<ptr target="http://dx.doi.org/10.1080/00949655.2014.968159" />
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Statistical Computation and Simulation</title>
+		<imprint>
+			<biblScope unit="volume">85</biblScope>
+			<biblScope unit="issue">16</biblScope>
+			<biblScope unit="page" from="3266" to="3275" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">François</forename><surname>Chollet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Keras</surname></persName>
+		</author>
+		<ptr target="https://github.com/fchollet/keras" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Empirical evaluation of gated recurrent neural networks on sequence modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junyoung</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Caglar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kyunghyun</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.3555</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">music21: A toolkit for computer-aided musicology and symbolic music data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Cuthbert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Scott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Ariza</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Ensuring rapid mixing and low bias for asynchronous gibbs sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">De</forename><surname>Sa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kunle</forename><surname>Olukotun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Ré</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1602.07415</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">An expert system for harmonizing fourpart chorales</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kemal</forename><surname>Ebcioglu</surname></persName>
+		</author>
+		<idno>01489267, 15315169</idno>
+		<ptr target="http://www.jstor.org/stable/3680335" />
+	</analytic>
+	<monogr>
+		<title level="j">Computer Music Journal</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="43" to="51" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Stochastic relaxation, gibbs distributions, and the bayesian restoration of images. IEEE Transactions on pattern analysis and machine intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stuart</forename><surname>Geman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Donald</forename><surname>Geman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1984" />
+			<biblScope unit="page" from="721" to="741" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Style imitation and chord invention in polyphonic music with exponential families</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hadjeres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Gaëtan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><surname>Sakellariou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">François</forename><surname>Pachet</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1609.05152</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Dependency networks for inference, collaborative filtering, and data visualization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Heckerman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Chickering</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Maxwell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Meek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Christopher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Rounthwaite</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><surname>Kadie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="49" to="75" />
+			<date type="published" when="2000-10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Harmonet: A neural net for harmonizing chorales in the style of js bach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hermann</forename><surname>Hild</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Johannes</forename><surname>Feulner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wolfram</forename><surname>Menzel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="1992" />
+			<biblScope unit="page" from="267" to="274" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Long shortterm memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sepp</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Reversibility and stochastic networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Frank</forename><forename type="middle">P</forename><surname>Kelly</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>Cambridge University Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Krauth</surname></persName>
+		</author>
+		<ptr target="https://books.google.fr/books?id=EnabPPmmS4sC" />
+		<title level="m">Statistical Mechanics: Algorithms and Computations. Oxford Master Series in Physics</title>
+		<meeting><address><addrLine>UK</addrLine></address></meeting>
+		<imprint>
+			<publisher>Oxford University Press</publisher>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Constructing long shortterm memory based deep recurrent neural networks for large vocabulary speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangang</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xihong</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2015 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="4520" to="4524" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Feynman</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Bachbot</surname></persName>
+		</author>
+		<ptr target="https://github.com/feynmanliang/bachbot" />
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Modelling high-dimensional sequences with lstm-rtrbm: application to polyphonic music generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qi</forename><surname>Lyu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Zhiyong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Helen</forename><surname>Meng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 24th International Conference on Artificial Intelligence</title>
+		<meeting>the 24th International Conference on Artificial Intelligence</meeting>
+		<imprint>
+			<publisher>AAAI Press</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="4138" to="4139" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Armand</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sumit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Marc&amp;apos;aurelio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.7753</idno>
+		<title level="m">Learning longer memory in recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vinod</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 27th International Conference on Machine Learning (ICML-10)</title>
+		<meeting>the 27th International Conference on Machine Learning (ICML-10)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="807" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Assisted Lead Sheet Composition Using FlowComposer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandre</forename><surname>Papadopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pierre</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">François</forename><surname>Pachet</surname></persName>
+		</author>
+		<idno type="doi">10.1007/978-3-319-44953-148</idno>
+		<ptr target="http://dx.doi.org/10.1007/978-3-319-44953-1_48" />
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>Springer International Publishing</publisher>
+			<biblScope unit="page" from="769" to="785" />
+			<pubPlace>Cham</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">How to Construct Deep Recurrent Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013-12" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Maximum entropy model for melodic patterns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sakellariou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tria</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Loreto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pachet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML Workshop on Constructive Machine Learning</title>
+		<meeting><address><addrLine>Paris (France</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Maximum entropy models capture melodic styles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sakellariou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tria</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Loreto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pachet</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016-10" />
+		</imprint>
+	</monogr>
+	<note>ArXiv eprints</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Lifting -A nonreversible Markov chain Monte Carlo Algorithm. ArXiv e-prints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vucelja</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Music generation from statistical models of harmony</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raymond</forename><forename type="middle">P</forename><surname>Whorley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Darrell</forename><surname>Conklin</surname></persName>
+		</author>
+		<idno type="doi">10.1080/09298215.2016.1173708</idno>
+		<ptr target="http://dx.doi.org/10.1080/09298215.2016.1173708" />
+	</analytic>
+	<monogr>
+		<title level="j">Journal of New Music Research</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="160" to="183" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Multiple viewpoint systems: Time complexity and the construction of domains for complex musical viewpoints in the harmonization problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raymond</forename><forename type="middle">P</forename><surname>Whorley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wiggins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geraint</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christophe</forename><surname>Rhodes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pearce</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marcus</forename><forename type="middle">T</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of New Music Research</title>
+		<imprint>
+			<biblScope unit="volume">42</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="237" to="266" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

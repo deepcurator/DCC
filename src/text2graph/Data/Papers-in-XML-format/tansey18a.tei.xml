@@ -1,0 +1,839 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:32+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Black Box FDR</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wesley</forename><surname>Tansey</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yixin</forename><surname>Wang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raul</forename><surname>Rabadan</surname></persName>
+						</author>
+						<title level="a" type="main">Black Box FDR</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Analyzing large-scale, multi-experiment studies requires scientists to test each experimental outcome for statistical significance and then assess the results as a whole. We present Black Box FDR (BB-FDR), an empirical-Bayes method for analyzing multi-experiment studies when many covariates are gathered per experiment. BB-FDR learns a series of black box predictive models to boost power and control the false discovery rate (FDR) at two stages of study analysis. In Stage 1, it uses a deep neural network prior to report which experiments yielded significant outcomes. In Stage 2, a separate black box model of each covariate is used to select features that have significant predictive power across all experiments. In benchmarks, BB-FDR outperforms competing state-of-the-art methods in both stages of analysis. We apply BB-FDR to two real studies on cancer drug efficacy. For both studies, BB-FDR increases the proportion of significant outcomes discovered and selects variables that reveal key genomic drivers of drug sensitivity and resistance in cancer.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>High-throughput screening (HTS) techniques have fundamentally changed the landscape of modern biological experimentation. Rather than conducting just one experiment at a time, HTS enables scientists to perform hundreds of parallel experiments, each with different biological samples and different interventions. At the same time, HTS also enables scientists to gather rich contextual information about each experiment by profiling the samples under study using techniques like DNA sequencing. Thus, each HTS study produces a dataset of many experiments, where each experiment contains both an outcome variable and a high-dimensional feature set describing the context. <ref type="figure">Figure 1</ref> shows a slice of the Genomics of Drug Sensitivity in Cancer (GDSC) dataset <ref type="bibr" target="#b25">(Yang et al., 2012)</ref>, an HTS study investigating how cancer cell lines respond to different cancer therapeutics. The left panel shows the relative response of 30 different cancer cell lines (C 1 , C 2 , . . . , C 30 ) treated with the drug Nutlin-3. For each cell line, the treatment response (black triangles) is overlayed on top of the untreated control replicate distribution (gray box plots). Even when no drug is applied, each cell line still exhibits natural variation. The first goal in analyzing this data is therefore to address the question of whether a given cell line responded to the treatment. Concretely, we need to perform a hypothesis test for each cell line, where the null hypothesis is that the drug had no effect. Absent other information, this would be a classic multiple hypothesis testing (MHT) problem.</p><p>But HTS studies such as GDSC differ from the classical setup by also producing a rich set of side information for each experiment. The right panel of <ref type="figure">Figure 1</ref> shows a subset of the genomic profile for each cell line, with a black dot indicating the cell line has a mutation in that gene. Biologically, a mutated gene can lead to different phenotypic behavior that may cause sensitivity or resistance to a drug.</p><p>Statistically, this means the likelihood of a cell line responding to treatment is a latent function of that cell line's genomic profile. Identifying which mutations are associated with treatment response could guide future experiments and development of new targeted therapies. Deriving scientific insight from patterns across experiments represents a second phase of hypothesis testing, where the null hypothesis is that a given gene is not associated with drug response.</p><p>We term these two phases Stage 1 and Stage 2 and ask two scientifically-motivated statistical inference questions:</p><p>• Stage 1: How do we leverage the available side information in a HTS study to increase how many significant outcomes we can detect?</p><p>• Stage 2: Can we discover which variables are associated with significant outcomes, even when the underlying function is high-dimensional and nonlinear?  <ref type="table" target="#tab_1">C29  C28  C27  C26  C25  C24  C23  C22  C21  C20  C19  C18  C17  C16  C15  C14  C13  C12  C11  C10  C9  C8  C7  C6  C5  C4  C3  C2  C1   Cell line experiments   MS-HL  APC  BRCA1  BRCA2  CCND1  CDK4  CDK6  CDKN2A  CDKN2C  CDKN2a  CTNNB1  EGFR  ERBB2  FBXW7  FGFR3  KRAS  MDM2  MET  MLLT3  MSH2  MYC  NOTCH1  NRAS  PDGFRA  PIK3CA  PTEN  RB1  SMAD4  STK11  TET2  TP53  VHL  EWS-FLI1   C30  C29  C28  C27  C26  C25  C24  C23  C22  C21  C20  C19  C18  C17  C16  C15  C14  C13  C12  C11  C10  C9  C8  C7  C6  C5  C4  C3</ref> C2 C1 <ref type="figure">Figure 1</ref>. Left: a subset of 30 cell line experiments from the Nutlin-3 case study in Section 5. Control replicates (gray box plots) and cell line responses (black triangles) are measured as z-scores relative to mean control values. Right: a subset of the corresponding genomic features for each experiment; black dots indicate a cell line has a recurrent mutation in the gene labeled on the x-axis. The goal in Stage 1 analysis is to select cell lines that showed a significant response (circled in blue). In Stage 2, the genomic features are analyzed to understand the mutations driving drug response (circled in orange).</p><p>We answer both of these questions and propose Black Box FDR (BB-FDR), a method for analyzing multi-experiment studies with many covariates gathered per experiment. BB-FDR uses the covariates to build a deep probabilistic model that predicts how likely a given experiment is to generate significant outcomes a priori. It uses this prior model to adaptively select significant outcomes in a manner that controls the overall false discovery rate (FDR) at a specified Stage 1 level. BB-FDR then builds a predictive model of each covariate to perform variable selection on the Stage 1 model while conserving a specified Stage 2 FDR threshold.</p><p>We validate BB-FDR on both synthetic and real data. BB-FDR outperforms other state-of-the-art Stage 1 methods in a series of benchmarks, including the recently-proposed NeuralFDR <ref type="bibr" target="#b24">(Xia et al., 2017)</ref>. BB-FDR is also a more pragmatic choice compared to a fully-Bayesian approach: it scales trivially to thousands of covariates, can learn arbitrarily complex functions, and runs easily on a laptop. We apply BB-FDR to a real-world case study of two cancer drug screenings. BB-FDR finds more significant discoveries on the data and recovers an informative set of biologicallyplausible genes that may convey drug sensitivity and resistance in cancer.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Multiple testing and FDR control</head><p>In the classical MHT setup, z = (z 1 , . . . , z n ) are a set of independent observations of the outcomes of n experiments. For each experiment, a treatment is applied to a target and the treatment has either no effect (h i = 0) or some effect (h i = 1). If the treatment has no effect, the distribution of the test statistic is the null distribution f 0 (z); otherwise it follows an unknown alternative distribution f 1 (z). The null hypothesis for every experiment is that the test statistic was drawn from the null distribution: H 0 : h i = 0.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">False discovery rate control</head><p>In most experiments of interest, it is impossible to determine h i with no error. For a given predictionĥ i , we say it is a true positive or a true discovery ifĥ i = 1 = h i and a false positive or false discovery ifĥ i = 1 = h i . Let S = {i : h i = 1} be the set of observations for which the treatment had an effect andŜ = {i :ĥ i = 1} be the set of predicted discoveries. We seek procedures that maximize the true positive rate (TPR) also known as power, while controlling the false discovery rate-the expected proportion of the predicted discoveries that are actually false positives,</p><formula xml:id="formula_0">FDR := E[FDP] , FDP = #{i : i ∈Ŝ\S} #{i : i ∈Ŝ} .<label>(1)</label></formula><p>FDP in (1) is the false discovery proportion: the actual proportion of false positives in the predicted discovery set for a specific experiment. While ideally we would like to control the FDP, the randomness of the outcome variables makes this impossible in practice. Thus FDR is the typical error measure targeted in modern scientific analyses. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Related work</head><p>Controlling FDR in multiple hypothesis testing has a long history in statistics and machine learning. The BenjaminiHochberg (BH) procedure <ref type="bibr" target="#b1">(Benjamini &amp; Hochberg, 1995)</ref> is the classic technique and still the most widely used in science. Many other methods have since been developed to take advantage of study-specific information to increase power. Recent examples include accumulation tests for ordering information <ref type="bibr" target="#b10">(Li &amp; Barber, 2017)</ref>, the p-filter for grouping and test statistic dependency <ref type="bibr" target="#b15">(Ramdas et al., 2017)</ref>, FDR smoothing for spatial testing <ref type="bibr" target="#b20">(Tansey et al., 2017)</ref>, FDR-regression for low-dimensional covariates <ref type="bibr" target="#b17">(Scott et al., 2015)</ref>, and, most recently, NeuralFDR for high-dimensional covariates <ref type="bibr" target="#b24">(Xia et al., 2017)</ref>. We consider high-dimensional covariates and compare against NeuralFDR in Section 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Black Box FDR</head><p>Consider a study with n independent experiments that produces a set of independent test statistics z = (z 1 , . . . , z n ) corresponding to the outcome measurements, as in Section 2. However, now each experiment also has a vector of m covariates X i· = (X i1 , . . . , X im ) containing side information that may influence the outcome of that experiment. Specifically, whether the experiment comes from the null distribution h i = 0 or the alternative h i = 1 is allowed to depend arbitrarily on X i· .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>BB-FDR extends the empirical-Bayes two-groups model of</head><p>Efron <ref type="formula" target="#formula_1">(2008)</ref> by building a hierarchical probabilistic model with experiment-specific priors modeled through a deep neural network. We first estimate the alternative distribution offline using predictive recursion <ref type="bibr" target="#b11">(Newton, 2002)</ref> to estimate f 1 . This follows other recent extensions to the two-groups model <ref type="bibr" target="#b17">(Scott et al., 2015;</ref><ref type="bibr" target="#b20">Tansey et al., 2017)</ref> and enjoys strong empirical performance and consistency guarantees <ref type="bibr" target="#b22">(Tokdar et al., 2009)</ref>. BB-FDR then focuses on modeling the experiment-specific prior, assuming the null and alternative distributions are fixed.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Stage 1: determining significant outcomes</head><p>We model the test statistic as arising from a mixture model of two components, the null (f 0 ) and the alternative (f 1 ). An experiment-specific weight c i then models the prior probability of the test statistic coming from the alternative (i.e. the probability of the treatment having an effect a priori).</p><p>We place a beta prior on each experiment-specific prior c i and model the parameters of the hyperprior with a black box function G parameterized by θ; in our implementation, G is a deep neural network. The complete model for BB-FDR is:</p><formula xml:id="formula_1">z i ∼ h i f 1 (z i ) + (1 − h i )f 0 (z i ) h i ∼ Bernoulli(c i ) c i ∼ Beta(a i , b i ) a i , b i = G θ,i (X) .<label>(2)</label></formula><p>We optimize θ by integrating out h i and maximizing the complete data log-likelihood,</p><formula xml:id="formula_2">p θ (z i ) = 1 0 (c i f 1 (z i )+(1−c i )f 0 (z i ))Beta(c i |G θ,i (X))dc i .</formula><p>(3) <ref type="figure" target="#fig_1">Figure 2</ref> shows the BB-FDR graphical model.</p><p>The beta prior is a departure from other two-groups extensions, which use a flatter hierarchy and learn a predictive model for c i <ref type="bibr" target="#b17">(Scott et al., 2015;</ref><ref type="bibr" target="#b20">Tansey et al., 2017)</ref>. We found the flat approach to be difficult to train, leading to a degenerate G that always predicts the global mean prior.</p><p>A hierarchical prior improves training for two reasons. First, optimization is easier and more stable because the output of the function is two soft-plus activations. Compared to a sigmoid, this form leads to less saturated gradients. Second, the additional hierarchy allows the model to assign different degrees of confidence to each experiment, changing the model from homoskedastic to heteroskedastic. Finally, we found it important to enforce concavity of the beta distribution; we thus add 1 to both a i and b i . We fit the model in (2) with stochastic gradient descent (SGD) on an L 2 -regularized loss function,</p><formula xml:id="formula_3">minimize θ∈R |θ| − i log p θ (z i ) + λ ||G θ (X)|| 2 F ,<label>(4)</label></formula><p>where ||·|| F is the Frobenius norm. In pilot studies, we found adding a small amount of L 2 -regularization prevented over-fitting at virtually no cost to statistical power. For computational purposes, we approximate the integral in (3) by a fine-grained numerical grid.</p><p>Once the optimized parametersθ are chosen, we calculate the posterior probability of each test statistic coming from the alternative,</p><formula xml:id="formula_4">w i = pθ(h i = 1|z i ) (5) = 1 0 c i f 1 (z i )Beta(c i |Gθ ,i (X)) c i f 1 (z i ) + (1 − c i )f 0 (z i ) dc i .</formula><p>Assuming the posteriors are accurate, rejecting the i th hypothesis will produce 1 −ŵ i false positives in expectation. Therefore we can maximize the total number of discoveries by a simple step down procedure. First, we sort the posteriors in descending order by the likelihood of the test statistics being drawn from the alternative. We then reject the first q hypotheses, where 0 ≤ q ≤ n is the largest possible index such that the expected proportion of false discoveries is below the FDR threshold. Formally, this procedure solves the optimization problem,</p><formula xml:id="formula_5">maximize q q subject to q i=1 (1 −ŵ i ) q ≤ α ,<label>(6)</label></formula><p>for a given FDR threshold α. By convention <ref type="formula" target="#formula_1">(2)</ref>- <ref type="formula" target="#formula_5">(6)</ref> handles Stage 1 of the analysis. The black box model G uses the entire feature vector X i· of every experiment to predict the prior parameters over c i . The observations z i are then used to calculate the posterior probabilityŵ i that the treatment had an effect. The selection procedure in (6) uses these posteriors to reject a maximum number of null hypotheses while conserving the FDR.</p><formula xml:id="formula_6">0 0 = 0. The model in</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Stage 2: identifying important variables</head><p>Using a flexible black box model for G in (2) provides a trade-off. On one hand, it enables BB-FDR to learn a rich class of functions for the relationship between the covariates and the test statistic. As we show in Section 4, this increases power in Stage 1 compared to a standard linear model. However, variable selection (Stage 2) is straightforward in linear models whereas black box models are by definition opaque. Understanding which variables deep learning models use to make predictions is an ongoing area of research in both machine learning (e.g. <ref type="bibr" target="#b6">Elenberg et al., 2017)</ref> and specific scientific disciplines (e.g. <ref type="bibr" target="#b12">Olden &amp; Jackson, 2002;</ref><ref type="bibr">Giam &amp; Olden, 2015, in ecology)</ref>. As far as we are aware, there are currently no methods that provide variable selection with FDR control when the covariates may have arbitrary dependency structure.</p><p>To overcome this challenge, BB-FDR uses conditional randomization tests (CRTs) <ref type="bibr" target="#b2">(Candes et al., 2018)</ref>. The idea of a CRT is to model each coordinate of the feature matrix X ·j using only the other coordinates X ·−j . The conditional distribution P(X ·j |X ·−j ) then represents a valid null distribution for testing the hypothesis X ·j ⊥ ⊥ Z|X ·−j , where Z is the test statistic. The corresponding p-value can be calculated by sampling from the conditional to approximate the true p-value,</p><formula xml:id="formula_7">p j = E X·j ∼P(X·j |X·−j ) I t(z, X) ≤ t(z, ( X ·j , X ·−j )) ,</formula><p>where t is the test statistic of interest. Once the p-values have been estimated for all features, we can apply standard BH correction and report significant features.</p><p>BB-FDR tests which features are associated with a change in the posterior probability of z i coming from the alternative. It uses the negative entropy of the posteriors as the test statistic,</p><formula xml:id="formula_8">t(z, X) = iŵ i logŵ i + i (1 −ŵ i ) log(1 −ŵ i ) . (7)</formula><p>Intuitively, if a feature is useful in predicting treatment efficacy, it should reduce the overall entropy of the posterior. By definition, a feature sampled from the null adds no new information to the model; it cannot systematically reduce the entropy.</p><p>For this procedure to retain frequentist consistency guarantees, both the conditional null distribution and the model of the prior must be the true distributions. In practice, one never has access to these and thus we estimate both; for the conditional null, we use gradient boosting trees <ref type="bibr" target="#b4">(Chen &amp; Guestrin, 2016)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Benchmarks</head><p>We perform a series of benchmark studies to assess the performance of BB-FDR in both stages of inference. For each benchmark, we compare the power of BB-FDR to other state-of-the-art approaches. In all studies, we consider binary covariates and real-valued z-scores as test statistics.</p><p>Across experiments, we found BB-FDR is particularly suitable for large samples: it outperforms competing methods in both stages while being more computationally efficient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Setup</head><p>We consider three different ground truth models for P (X), the joint distribution over the covariates, and P (h = 1|X), the prior probability of coming from the alternative distribution given the covariates:</p><p>• Constant: All covariates are sampled IID normal; the prior is independent of the covariates, with P (h i = 1|X) = 0.5.</p><p>• Linear: Covariates are sampled from a multivariate normal with full covariance matrix (i.e. conditionally linear); the prior is a linear function with IID standard normal coefficients for each covariate. • Nonlinear: Covariates and prior coefficients are generated similarly. We first drawing 20 IID uniform Bern(0.5) latent variables. For each covariate, 5 pairs of latent variables (u i , u j ) are chosen and with equal probability are either ANDed or XORed together and multiplied by a draw from a standard normal; the latent weights are summed to get the final logit value for the covariate or coefficient.</p><p>For each of the three ground truth models, we consider two different alternative distributions:</p><p>• Well-Separated (WS): A 3-component Gaussian mixture model, f 1 (z) = 0.48N (−2, 1) + 0.04N (0, 16) + 0.48N (2, 1)</p><p>• Poorly-Separated (PS): A single normal with high overlap with the null, f 1 (z) = N (0, 9). <ref type="figure" target="#fig_2">Figure 3</ref> shows the densities used in our benchmarks.</p><p>For each of the 6 combinations of the above scenarios, we run 100 independent trials. Each trial uses 50 covariates; for all trials with a non-constant prior, 25 of the variables are used in the true data generating distribution and the other 25 are null variables with no association with the outcome.</p><p>To measure sample efficiency, we also vary the sample size from n = 100 to n = 50K. The target FDR threshold is set to 10% for both stages of inference.</p><p>We compare BB-FDR to the classic Benjamini-Hochberg (BH) method <ref type="bibr" target="#b1">(Benjamini &amp; Hochberg, 1995)</ref>, the recentlyproposed NeuralFDR <ref type="bibr" target="#b24">(Xia et al., 2017)</ref>, and a fullyBayesian logistic regression model for c i in place of the black box prior in (2). For NeuralFDR, we use the default recommended settings, including five random restarts and a ten-layer deep neural network. The fully-Bayesian method uses a standard normal prior on the weights and an inverse-Wishart prior on the variance, with weak hyperpriors. In the nonlinear scenario, we specify all possible pairwise interactions as the covariate set for the fully-Bayesian model to ensure it is well-specified. We fit the model using Polya-gamma sampling <ref type="bibr" target="#b14">(Polson et al., 2013)</ref> with 5000 burn-in iterations and 1000 samples. For BB-FDR, we use a 50 × 200 × 200 × 2 network with ReLU activation; for training we use RMS-prop <ref type="bibr" target="#b21">(Tieleman &amp; Hinton, 2012)</ref> with dropout, learning rate 3 × 10 −4 , and batch size 100, and run for 50 epochs, with 3 folds to create 3 separate models as in NeuralFDR; we set the λ regularization term to 10 −4 . <ref type="figure">Figure 4</ref> shows the results for the Stage 1 benchmarks, where the goal is to determine for which experiments the treatment had an effect. The four methods generally conserve FDR at the specified 10% threshold, though NeuralFDR seems to systematically violate FDR in the lowsample regime.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Stage 1 performance</head><p>Across all experiments, we see that both BH and NeuralFDR under-perform the two Bayesian methods. In the case of BH, this is straight-forward as it uses only the p-value from each experiment and has no notion of side information. NeuralFDR, on the other hand, uses a deep neural network and several random restarts. There are a few possible reasons for its poor performance. First, the NeuralFDR method was reported to be very difficult to train by the original authors, so it is possible that it is simply not finding good fits of the model. Second, BB-FDR assumes that the alternative distribution is conditionally independent of the prior; NeuralFDR makes no such assumption and may lose some power as a result. Finally, NeuralFDR was originally tested on 1-and 2-dimensional problems against relatively weak baselines. Our benchmarks examine its performance in a higher-dimensional setting and with several uninformative features that may make fitting NeuralFDR difficult.</p><p>Since the fully-Bayesian method is well-specified in every benchmark, it serves as an oracle model to establish a reasonable upper bound on Stage 1 performance. However, the oracle power depends on the MCMC approximation of the posterior being well-mixed. As the sample size grows, the empirical-Bayes model used by BB-FDR gains an increasingly precise approximation to the true posterior. In the large-sample regime with a well-separated alternative, BB-FDR outperforms even the oracle. Furthermore, the fully-Bayesian method takes several hours to fit in the nonlinear scenarios; BB-FDR fits within a few minutes and can easily be run on a laptop.  <ref type="figure">Figure 4</ref>. Hypothesis testing results on the synthetic datasets averaged over 100 trials at varying sample sizes on the two different alternative distributions. Solid lines show power; dashed lines show estimated FDR; the red horizontal line denotes the specified 10% FDR threshold. In general, the Benjamini-Hochberg and NeuralFDR methods have lower power since they do not model the alternative. The fully-Bayesian method has high power in the low-to-moderate sample regime, but as the sample size grows the empirical-Bayes approach of BB-FDR becomes more effective. Variable selection results at a 10% FDR threshold. In low sample regimes, the conditional null distribution used in the CRT procedure is poorly fit and results in violated FDR thresholds. At moderate-to-large samples, BB-FDR has higher power than the fully-Bayesian model and conserves FDR.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Stage 2 performance</head><p>Neither BH nor NeuralFDR provide support for detecting important features (Stage 2), so we could not compare against them. For the Bayesian linear regression, we take the 90% posterior credible interval over the coefficient value for each covariate. If the interval does not contain zero, we reject the null hypothesis and report it as a discovered feature; this approach is standard in the Bayesian literature <ref type="bibr" target="#b7">(Gelman et al., 2014)</ref>. <ref type="figure" target="#fig_4">Figure 5</ref> presents the results of the variable selection benchmarks for the poorly-separated alternative distribution; results for the well-separated are similar. We omit the constant scenario, since there are no features to discover. In the small sample regime, the conditional distributions are poor estimators of the conditional null distribution for each feature. This leads to BB-FDR overestimating the number of signal features and violating the FDR threshold. As the sample size grows, the conditional null and black box prior become more accurate, leading to FDR control and higher power, respectively; in the large-sample regime, BB-FDR outperforms the fully-Bayesian approach.</p><p>We conclude by noting that BB-FDR is competitive with the fully-Bayesian approach even when the latter is wellspecified. In practical data analysis scenarios, such as the cancer study we discuss next, we do not know the true prior function. It may easily contain many higher-order interaction terms that are prohibitive to consider explicitly in a fully-Bayesian model, making BB-FDR a pragmatic choice for real-world scientific datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Cancer drug screening</head><p>As a case study of how BB-FDR is useful in practice, we apply it to two high-throughput cancer drug screening studies (Lapatinib and Nutlin-3) from the Genomics of Drug Sensitivity in Cancer (GDSC) <ref type="bibr" target="#b25">(Yang et al., 2012)</ref>. For both drug studies, BB-FDR increases the number of Stage 1 discoveries over classical BH correction; results on NeuralFDR were similar to BH and are omitted. In Stage 2, BB-FDR discovers biologically-plausible genes that may have a causal link to drug sensitivity and resistance. Experimental details are available in the supplement.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Analysis overview</head><p>Analysis of the two drug studies broadly follows the two stages outlined in the motivating example in Section 1. The Stage 1 task is to determine, for a specific drug being tested on a specific cell line, whether the drug had any effect. As with any biological process, natural variation injects randomness at many levels of the experiment: how fast the cells grow, how each cell responds, etc. Thus Stage 1 requires performing statistical hypothesis testing to determine if the cell population after treatment is truly smaller than would be expected from a control (null) population.  <ref type="figure" target="#fig_5">Figure 6</ref> shows the aggregate number of treatment effects discovered by both BH and BB-FDR. For both drugs, BB-FDR provides approximately a 50% increase in Stage 1 discoveries compared to BH. The genomic profiles of the cell lines provide enough prior information that even some outcomes with a z-score above zero are still found to be significant. This flexibility is impossible with classical Stage 1 testing methods like BH that do not consider covariate information.  . Discoveries found by BB-FDR on the two drugs, compared to the discoveries found by a naive BH approach. BB-FDR leverages the genomic profiling information of the cell lines to identify ≈ 50% more discoveries at the same 10% FDR threshold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Results</head><p>Lapatinib has been approved for the treatment of HER2-positive breast cancers. BB-FDR indicates that BRCA1 and BRCA2 are associated with responses to Lapatinib. Both are tumor suppressor genes that are seen mutated in more than 10% of breast cancers (BRCA stands for "breast cancer") and thus cancer type may represent a latent confounder for drug efficacy that induces a conditional dependence. Lapatinib targets over-expression of the gene ERBB2 which can be caused by a mutant CDK4 gene. FGFR2 and KIT are also commonly associated with breast cancers <ref type="bibr" target="#b18">(Slattery et al., 2013;</ref><ref type="bibr" target="#b26">Zhu et al., 2014)</ref> and BRCA1 is known to induce inactivation of the tumor suppressor MSH2 <ref type="bibr" target="#b0">(Atalay et al., 2002)</ref>. Given Lapatinib's success as a breast cancer drug, the connection between all of the selected genes and breast cancer is a reassuring sign that BB-FDR selected biologically plausible features.</p><p>Nutlin-3 is an inhibitor of the oncogene MDM2, which negatively-regulates TP53. When highly over-expressed, MDM2 can functionally inactivate TP53. By targeting MDM2, Nutlin-3 enables a non-mutated ("wild type") TP53 to trigger apoptosis in cancer cells. However, if TP53 is mutated, Nutlin-3 will be ineffective and hence its mutation state is an important driver of Nutlin-3 sensitivity. When wild type TP53 is present, MET controls the fate of the cell <ref type="bibr" target="#b19">(Sullivan et al., 2012)</ref>, SETD2 functionality is required to activate TP53 <ref type="bibr" target="#b3">(Carvalho et al., 2014)</ref>, P300 mediates TP53 acetylation <ref type="bibr" target="#b16">(Reed &amp; Quelle, 2014)</ref>, and BCR-ABL is a gene fusion that induces loss of TP53 <ref type="bibr" target="#b13">(Pierce et al., 2000)</ref>. These genes interact in complex, non-linear ways, yet BB-FDR is still able to identify them as important. Finally, FLCN is a tumor suppressor gene that can delay cell cycle like TP53 <ref type="bibr" target="#b9">(Laviolette et al., 2013)</ref>. The mechanism by which FLCN and TP53 are interrelated is currently unclear, representing a potential target for future experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We presented Black Box FDR (BB-FDR), an empiricalBayes method that increases statistical power in multiexperiment scientific studies when side information is available for each experiment. BB-FDR combines deep probabilistic modeling with recent multiple testing techniques to boost testing power without sacrificing interpretability. Benchmarks show that BB-FDR outperforms state-of-theart techniques, often substantially and under a wide array of experimental conditions. BB-FDR also finds more experimental discoveries two cancer drug screening datasets and provides scientific insight into the mechanisms associated with differential treatment response in cancer.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. The graphical model for BB-FDR.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Figure 3. The two alternative densities used in our benchmarks. The well-separated (WS) density has little overlap with the null, making for a stronger signal.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Variable selection results at a 10% FDR threshold. In low sample regimes, the conditional null distribution used in the CRT procedure is poorly fit and results in violated FDR thresholds. At moderate-to-large samples, BB-FDR has higher power than the fully-Bayesian model and conserves FDR.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6</head><label>6</label><figDesc>Figure 6. Discoveries found by BB-FDR on the two drugs, compared to the discoveries found by a naive BH approach. BB-FDR leverages the genomic profiling information of the cell lines to identify ≈ 50% more discoveries at the same 10% FDR threshold.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>The inferential goal in Stage 2 is to gain scientific insight about which genes may be driving drug response. This involves building a statistical model of the relationship be- tween the genomic profile of a cell line and its corresponding treatment response, then performing variable selection on the model. The selected genes form the basis for potential mechanisms of action and future experiments can be de- signed to test for a causal link or to investigate new drugs that better-target the proteins encoded by the genes.Table 1. Significant gene mutations identified by BB-FDR that are associated with sensitivity and resistance to each drug. Both lists align well with known genomic targets of Lapatinib and Nutlin-3.</figDesc><table>Lapatinib 
+Nutlin-3 
+
+BRCA1, BRCA2, CDK4 P300, FLCN, FLT3 
+FGFR2, KIT, MSH2 
+MET, KIT, MSH6 
+SETD2, TP53, BCR-ABL 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1</head><label>1</label><figDesc>lists the genes reported by BB-FDR in Stage 2. Interpreting the quality of the results requires familiarity with genomics and cancer biology. Below, we briefly detail the scientific rational behind the biological plausibility of the Stage 2 results and refer the reader to Weinberg (2013) for a full review.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>This work was supported by a pilot grant from Columbia University, NIH U54 CA193313, ONR N00014-15-1-2209, ONR 133691-5102004, NIH 5100481-5500001084, NSF CCF-1740833, the Alfred P. Sloan Foundation, the John Simon Guggenheim Foundation, Facebook, Amazon, and IBM.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Identification of genes induced by brca1 in breast cancer cells</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Atalay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Crook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ozturk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">G</forename><surname>Yulug</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biochemical and biophysical research communications</title>
+		<imprint>
+			<biblScope unit="volume">299</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="839" to="846" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Controlling the false discovery rate: a practical and powerful approach to multiple testing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Benjamini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Hochberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the royal statistical society. Series B (Methodological)</title>
+		<imprint>
+			<biblScope unit="page" from="289" to="300" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Panning for gold:model-xknockoffs for high dimensional controlled variable selection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Candes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Janson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lv</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the Royal Statistical Society: Series B (Statistical Methodology)</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Setd2 is required for dna double-strand break repair and activation of the p53-mediated checkpoint</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carvalho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Vítor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Sridhara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">B</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Raposo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Desterro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ferreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">F</forename><surname>De Almeida</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Elife</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Xgboost: A scalable tree boosting system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guestrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22nd acm sigkdd international conference on knowledge discovery and data mining</title>
+		<meeting>the 22nd acm sigkdd international conference on knowledge discovery and data mining</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2016" />
+			<biblScope unit="page" from="785" to="794" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Microarrays, empirical bayes and the two-groups model. Statistical science</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Efron</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1" to="22" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Streaming weak submodularity: Interpreting neural networks on the fly</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Elenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Dimakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Feldman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karbasi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="4047" to="4057" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Bayesian data analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gelman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">B</forename><surname>Carlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Stern</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Dunson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vehtari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Rubin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CRC press</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<pubPlace>Boca Raton, FL</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A new r2-based metric to shed greater insight on variable importance in artificial neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Giam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Olden</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Ecological Modelling</title>
+		<imprint>
+			<biblScope unit="volume">313</biblScope>
+			<biblScope unit="page" from="307" to="313" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Human folliculin delays cell cycle progression through late s and g2/m-phases: effect of phosphorylation and tumor associated mutations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Laviolette</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wilson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Koller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Neil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hulick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Rejtar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Karger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">T</forename><surname>Teh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Iliopoulos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PloS one</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page">66775</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Accumulation tests for fdr control in ordered hypothesis testing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Barber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Statistical Association</title>
+		<imprint>
+			<biblScope unit="volume">112</biblScope>
+			<biblScope unit="issue">518</biblScope>
+			<biblScope unit="page" from="837" to="849" />
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A nonparametric recursive estimator of the mixing distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Newton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Sankhya, Series A</title>
+		<imprint>
+			<biblScope unit="volume">64</biblScope>
+			<biblScope unit="page" from="306" to="328" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Illuminating the black box: a randomization approach for understanding variable contributions in artificial neural networks. Ecological modelling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Olden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Jackson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">154</biblScope>
+			<biblScope unit="page" from="135" to="150" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Bcr-abl protein tyrosine kinase activity induces a loss of p53 protein that mediates a delay in myeloid differentiation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pierce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Spooncer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wooley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dive</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Francis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Miyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Owen-Lynch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">M</forename><surname>Dexter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Whetton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Oncogene</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">48</biblScope>
+			<biblScope unit="page">5487</biblScope>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Bayesian inference for logistic models using pólya-gamma latent variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">G</forename><surname>Polson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">G</forename><surname>Scott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Windle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American statistical Association</title>
+		<imprint>
+			<biblScope unit="volume">108</biblScope>
+			<biblScope unit="issue">504</biblScope>
+			<biblScope unit="page" from="1339" to="1349" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">A unified treatment of multiple testing with prior knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ramdas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Barber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1703.06222</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">p53 acetylation: regulation and consequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">E</forename><surname>Quelle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cancers</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="30" to="69" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">False discovery rate regression: an application to neural synchrony detection in primary visual cortex</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">G</forename><surname>Scott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Kelly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kass</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Statistical Association</title>
+		<imprint>
+			<biblScope unit="volume">110</biblScope>
+			<biblScope unit="issue">510</biblScope>
+			<biblScope unit="page" from="459" to="471" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Associations with growth factor genes (fgf1, fgf2, pdgfb, fgfr2, nrg2, egf, erbb2) with breast cancer risk and survival: the breast cancer health disparities study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">L</forename><surname>Slattery</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">M</forename><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">C</forename><surname>Stern</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Herrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lundgreen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Giuliano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hines</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">B</forename><surname>Baumgartner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Torres-Mejia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Wolff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Breast cancer research and treatment</title>
+		<imprint>
+			<biblScope unit="volume">140</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="587" to="601" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Atm and met kinases are synthetic lethal with nongenotoxic activation of p53</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">D</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Padilla-Just</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Porter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Tentler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">G</forename><surname>Eckhardt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Tan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Degregori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Espinosa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature chemical biology</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page">646</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">False discovery rate smoothing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Tansey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Koyejo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Poldrack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">G</forename><surname>Scott</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Statistical Association</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+	<note>just-accepted</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude. COURSERA: Neural networks for machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="26" to="31" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Consistency of a recursive estimate of mixing distributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tokdar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ghosh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Annals of Statistics</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">5A</biblScope>
+			<biblScope unit="page" from="2502" to="2524" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">The biology of cancer. Garland science</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Weinberg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>Black Box FDR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Learning discovery thresholds from hypothesis features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Neuralfdr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2017" />
+			<biblScope unit="page" from="1540" to="1549" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Genomics of drug sensitivity in cancer (gdsc): a resource for therapeutic biomarker discovery in cancer cells</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Soares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Greninger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">J</forename><surname>Edelman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lightfoot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Forbes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bindal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Beare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">R</forename><surname>Thompson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nucleic acids research</title>
+		<imprint>
+			<biblScope unit="volume">41</biblScope>
+			<biblScope unit="issue">D1</biblScope>
+			<biblScope unit="page" from="955" to="961" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">C-kit and pdgfra gene mutations in triple negative breast cancer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Rao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of clinical and experimental pathology</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page">4280</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

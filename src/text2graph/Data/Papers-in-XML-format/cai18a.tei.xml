@@ -1,0 +1,1051 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:21+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Path-Level Network Transformation for Efficient Architecture Search</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Han</forename><surname>Cai</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiacheng</forename><surname>Yang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Weinan</forename><surname>Zhang</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Song</forename><surname>Han</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yong</forename><surname>Yu</surname></persName>
+						</author>
+						<title level="a" type="main">Path-Level Network Transformation for Efficient Architecture Search</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We introduce a new function-preserving transformation for efficient neural architecture search. This network transformation allows reusing previously trained networks and existing successful architectures that improves sample efficiency. We aim to address the limitation of current network transformation operations that can only perform layer-level architecture modifications, such as adding (pruning) filters or inserting (removing) a layer, which fails to change the topology of connection paths. Our proposed path-level transformation operations enable the meta-controller to modify the path topology of the given network while keeping the merits of reusing weights, and thus allow efficiently designing effective structures with complex path topologies like Inception models. We further propose a bidirectional treestructured reinforcement learning meta-controller to explore a simple yet highly expressive treestructured architecture space that can be viewed as a generalization of multi-branch architectures. We experimented on the image classification datasets with limited computational resources (about 200 GPU-hours), where we observed improved parameter efficiency and better test results (97.70% test accuracy on CIFAR-10 with 14.3M parameters and 74.6% top-1 accuracy on ImageNet in the mobile setting), demonstrating the effectiveness and transferability of our designed architectures.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Designing effective neural network architectures is crucial for the performance of deep learning. While many impressive results have been achieved through significant manual architecture engineering <ref type="bibr" target="#b30">(Simonyan &amp; Zisserman, 2014;</ref><ref type="bibr" target="#b19">Szegedy et al., 2015;</ref><ref type="bibr" target="#b13">He et al., 2016;</ref><ref type="bibr" target="#b18">Huang et al., 2017b)</ref>, this process typically requires years of extensive investigation by human experts, which is not only expensive but also likely to be suboptimal. Therefore, automatic architecture design has recently drawn much attention <ref type="bibr" target="#b22">Liu et al., 2017;</ref><ref type="bibr" target="#b3">Cai et al., 2018;</ref><ref type="bibr" target="#b29">Real et al., 2018;</ref><ref type="bibr" target="#b27">Pham et al., 2018;</ref><ref type="bibr" target="#b9">Elsken et al., 2017)</ref>.</p><p>Most of the current techniques focus on finding the optimal architecture in a designated search space starting from scratch while training each designed architecture on the real data (from random initialization) to get a validation performance to guide exploration. Though such methods have shown the ability to discover network structures that outperform human-designed architectures when vast computational resources are used, such as  that employed 500 P100 GPUs across 4 days, they are also likely to fail to beat best human-designed architectures <ref type="bibr" target="#b28">Real et al., 2017;</ref><ref type="bibr" target="#b23">Liu et al., 2018)</ref>, especially when the computational resources are restricted. Furthermore, insufficient training epochs during the architecture search process (much fewer epochs than normal to save time) may cause models to underperform <ref type="bibr" target="#b1">(Baker et al., 2017)</ref>, which would harm the efficiency of the architecture search process.</p><p>Alternatively, some efforts have been made to explore the architecture space by network transformation, starting from an existing network trained on the target task and reusing its weights. For example, <ref type="bibr" target="#b3">Cai et al. (2018)</ref> utilized Net2Net <ref type="bibr" target="#b4">(Chen et al., 2016)</ref> operations, a class of function-preserving transformation operations, to further find high-performance architectures based on a given network, while <ref type="bibr" target="#b0">Ashok et al. (2018)</ref> used network compression operations to compress well-trained networks. These methods allow transferring knowledge from previously trained networks and taking advantage of existing successful architectures in the target task, thus have shown improved efficiency and require significantly fewer computational resources (e.g., 5 GPUs in <ref type="bibr" target="#b3">Cai et al. (2018)</ref>) to achieve competitive results.</p><p>However, the network transformation operations in <ref type="bibr" target="#b3">Cai et al. (2018)</ref> and <ref type="bibr" target="#b0">Ashok et al. (2018)</ref> are still limited to only performing layer-level architecture modifications such as adding (pruning) filters or inserting (removing) a layer, which does not change the topology of connection paths in a neural network. Hence, they restrict the search space to having the same path topology as the start network, i.e. they would always lead to chain-structured networks when given a chain-structured start point. As the state-of-the-art convolutional neural network (CNN) architectures have gone beyond simple chain-structured layout and demonstrated the effectiveness of multi-path structures such as Inception models <ref type="bibr" target="#b19">(Szegedy et al., 2015)</ref>, ResNets <ref type="bibr" target="#b13">(He et al., 2016)</ref> and DenseNets <ref type="bibr" target="#b18">(Huang et al., 2017b)</ref>, we would hope such methods to have the ability to explore a search space with different and complex path topologies while keeping the benefits of reusing weights.</p><p>In this paper, we present a new kind of transformation operations for neural networks, phrased as path-level network transformation operations, which allows modifying the path topologies in a given network while allowing weight reusing to preserve the functionality like Net2Net operations <ref type="bibr" target="#b4">(Chen et al., 2016)</ref>. Based on the proposed path-level operations, we introduce a simple yet highly expressive tree-structured architecture space that can be viewed as a generalized version of multi-branch structures. To efficiently explore the introduced tree-structured architecture space, we further propose a bidirectional tree-structured <ref type="bibr" target="#b34">(Tai et al., 2015)</ref> reinforcement learning meta-controller that can naturally encode the input tree, instead of simply using the chain-structured recurrent neural network .</p><p>Our experiments of learning CNN cells on CIFAR-10 show that our method using restricted computational resources (about 200 GPU-hours) can design highly effective cell structures. When combined with state-of-the-art humandesigned architectures such as DenseNets <ref type="bibr" target="#b18">(Huang et al., 2017b)</ref> and PyramidNets <ref type="bibr" target="#b11">(Han et al., 2017)</ref>, the best discovered cell shows significantly improved parameter efficiency and better results compared to the original ones. Specifically, without any additional regularization techniques, it achieves 3.14% test error with 5.7M parameters, while DensNets give a best test error rate of 3.46% with 25.6M parameters and PyramidNets give 3.31% with 26.0M parameters. And with additional regularization techniques (DropPath  and Cutout (DeVries &amp; Taylor, 2017)), it reaches 2.30% test error with 14.3M parameters, surpassing 2.40% given by NASNet-A  with 27.6M parameters and a similar training scheme. More importantly, NASNet-A is achieved using 48,000 GPU-hours while we only use 200 GPU-hours. We further apply the best learned cells on CIFAR-10 to the ImageNet dataset by combining it with CondenseNet <ref type="bibr" target="#b17">(Huang et al., 2017a)</ref> for the M obile setting and also observe improved results when compared to models in the mobile setting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work and Background</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Architecture Search</head><p>Architecture search that aims to automatically find effective model architectures in a given architecture space has been studied using various approaches which can be categorized as neuro-evolution <ref type="bibr" target="#b28">(Real et al., 2017;</ref><ref type="bibr" target="#b23">Liu et al., 2018)</ref>, Bayesian optimization <ref type="bibr" target="#b8">(Domhan et al., 2015;</ref><ref type="bibr" target="#b25">Mendoza et al., 2016)</ref>, Monte Carlo Tree Search <ref type="bibr" target="#b26">(Negrinho &amp; Gordon, 2017)</ref> and reinforcement learning (RL) <ref type="bibr" target="#b1">Baker et al., 2017;</ref><ref type="bibr" target="#b39">Zhong et al., 2017;</ref>.</p><p>Since getting an evaluation of each designed architecture requires training on the real data, which makes directly applying architecture search methods on large datasets (e.g., ImageNet <ref type="bibr" target="#b6">(Deng et al., 2009</ref>)) computationally expensive,  proposed to search for CNN cells that can be stacked later, rather than search for the entire architectures. Specifically, learning of the cell structures is conducted on small datasets (e.g., CIFAR-10) while learned cell structures are then transferred to large datasets (e.g., <ref type="bibr">ImageNet)</ref>. This scheme has also been incorporated in <ref type="bibr" target="#b39">Zhong et al. (2017)</ref> and <ref type="bibr" target="#b23">Liu et al. (2018)</ref>.</p><p>On the other hand, instead of constructing and evaluating architectures from scratch, there are some recent works that proposed to take network transformation operations to explore the architecture space given a trained network in the target task and reuse the weights. <ref type="bibr" target="#b3">Cai et al. (2018)</ref> presented a recurrent neural network to iteratively generate transformation operations to be performed based on the current network architecture, and trained the recurrent network with REINFORCE algorithm <ref type="bibr" target="#b36">(Williams, 1992)</ref>. A similar framework has also been incorporated in <ref type="bibr" target="#b0">Ashok et al. (2018)</ref> where the transformation operations change from Net2Net operations in <ref type="bibr" target="#b3">Cai et al. (2018)</ref> to compression operations.</p><p>Compared to above work, in this paper, we extend current network transformation operations from layer-level to pathlevel. Similar to  and <ref type="bibr" target="#b39">Zhong et al. (2017)</ref>, we focus on learning CNN cells, while our approach can be easily combined with any existing well-designed architectures to take advantage of their success and allow reusing weights to preserve the functionality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Multi-Branch Neural Networks</head><p>Multi-branch structure (or motif) is an essential component in many modern state-of-the-art CNN architectures. The family of Inception models <ref type="bibr" target="#b19">(Szegedy et al., 2015;</ref><ref type="bibr" target="#b10">2017;</ref><ref type="bibr" target="#b5">2016)</ref> are successful multi-branch architectures with carefully customized branches. ResNets <ref type="bibr" target="#b13">(He et al., 2016)</ref> and DenseNets <ref type="bibr" target="#b18">(Huang et al., 2017b)</ref> can be viewed as twobranch architectures where one branch is the identity mapping. A common strategy within these multi-branch architectures is that the input feature map x is first distributed to each branch based on a specific allocation scheme (either split in Inception models or replication in ResNets and DenseNets), then transformed by primitive operations (e.g., convolution, pooling, etc.) on each branch, and fi- nally aggregated to produce an output based on a specific merge scheme (either add in ResNets or concatenation in Inception models and DenseNets).</p><p>According to the research of <ref type="bibr" target="#b35">Veit et al. (2016)</ref>, ResNets can be considered to behave as ensembles of a collection of many paths of differing length. Similar interpretations can also be applied to Inception models and DenseNets.</p><p>As the Inception models have demonstrated the merits of carefully customized branches where different primitive operations are used in each branch, it is thus of great interest to investigate whether we can benefit from more complex and well-designed path topologies within a CNN cell that make the collection of paths from the ensemble view more abundant and diverse.</p><p>In this work, we explore a tree-structured architecture space where at each node the input feature map is allocated to each branch, going through some primitive operations and the corresponding child node, and is later merged to produce an output for the node. It can be viewed as a generalization of current multi-branch architectures (tree with a depth of 1) and is able to embed plentiful paths within a CNN cell.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Function-Preserving Network Transformation</head><p>Function-preserving network transformation refers to the class of network transformation operations that initialize a student network to preserve the functionality of a given teacher network. Net2Net technique <ref type="bibr" target="#b4">(Chen et al., 2016)</ref> introduces two specific function-preserving transformation operations, namely Net2WiderNet operation which replaces a layer with an equivalent layer that is wider (e.g., more filters for convolution layer) and Net2DeeperNet operation which replaces an identity mapping with a layer that can be initialized to be identity, including normal convolution layers with various filters (e.g., 3 × 3, 7 × 1, 1 × 7, etc.), depthwise-separable convolution layers <ref type="bibr" target="#b5">(Chollet, 2016)</ref> and so on. Additionally, network compression operations <ref type="bibr" target="#b12">(Han et al., 2015)</ref> that prune less important connections (e.g., low weight connections) to shrink the size of a given model without reducing the performance can also be viewed as one kind of function-preserving transformation operations. Our approach builds on existing function-preserving transformation operations and further extends to path-level architecture modifications.</p><p>3. Method</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Path-Level Network Transformation</head><p>We introduce operations that allow replacing a single layer with a multi-branch motif whose merge scheme is either add or concatenation. To illustrate the operations, we use two specific types of layers, i.e. identity layer and normal convolution layer, as examples, while they can also be applied to other similar types of layers, such as depthwiseseparable convolution layers, analogously.</p><p>For a convolution layer, denoted as C(·), to construct an equivalent multi-branch motif with N branches, we need to set the branches so as to mimic the output of the original layer for any input feature map x. When these branches are merged by add, the allocation scheme is set to be replication and we set each branch to be a replication of the original layer C(·), which makes each branch produce the same output (i.e. C(x)), and finally results in an output N × C(x) after being merged by add. To eliminate the factor, we further divide the output of each branch by N . As such the output of the multi-branch motif keeps the same as the output of the original convolution layer, as illustrated in <ref type="figure" target="#fig_0">Figure 1</ref> (middle). When these branches are merged by concatenation, the allocation scheme is also set to be replication. Then we split the filters of the original convolution layer into N parts along the output channel dimension and assign each part to the corresponding branch, which is later merged to produce an output C(x), as shown in <ref type="figure" target="#fig_0">Figure 1</ref> (right).</p><p>For an identity layer, when the branches are merged by add, the transformation is the same except that the convolution layer in each branch changes to the identity mapping in this case <ref type="figure" target="#fig_1">(Figure 2 (middle)</ref>). When the branches are merged by concatenation, the allocation scheme is set to be split and each branch is set to be the identity mapping, as is illustrated in <ref type="figure" target="#fig_1">Figure 2</ref> (right).</p><formula xml:id="formula_0">x C(x) C(·) C(·) x Replication x x 0.5 Add C(·) C(·) C(·) C(·) 0.5 x Replication x x Add Split Iden tity Concat C(·) C(·) C(·) C(·) Iden tity Concat x Replication x x Add Split Sep 3x3 Concat C(·) C(·) C(·) C(·) Iden tity Split x Replication Add Split Concat C(·) C(·) Sep 3x3</formula><p>Iden tity <ref type="figure">Figure 3</ref>. An illustration of transforming a single layer to a tree-structured motif via path-level transformation operations, where we apply Net2DeeperNet operation to replace an identity mapping with a 3 × 3 depthwise-separable convolution in (c).</p><formula xml:id="formula_1">Leaf ) ) ) ) C(x) C(x) C(x) (a) (b) (c) (d)</formula><p>Note that simply applying the above transformations does not lead to non-trivial path topology modifications. However, when combined with Net2Net operations, we are able to dramatically change the path topology, as shown in <ref type="figure">Figure</ref> 3. For example, we can insert different numbers and types of layers into each branch by applying Net2DeeperNet operation, which makes each branch become substantially different, like Inception Models. Furthermore, since such transformations can be repetitively applied on any applicable layers in the neural network, such as a layer in the branch, we can thus arbitrarily increase the complexity of the path topology.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Tree-Structured Architecture Space</head><p>In this section, we describe the tree-structured architecture space that can be explored with path-level network transformation operations as illustrated in <ref type="figure">Figure 3</ref>.</p><p>A tree-structured architecture consists of edges and nodes, where at each node (except leaf nodes) we have a specific combination of the allocation scheme and the merge scheme, and the node is connected to each of its child nodes via an edge that is defined as a primitive operation such as convolution, pooling, etc. Given the input feature map x, the output of node N (·), with m child nodes denoted as {N c i (·)} and m corresponding edges denoted as {E i (·)}, is defined recursively based on the outputs of its child nodes:</p><formula xml:id="formula_2">zi = allocation(x, i), y i = N c i (Ei(zi)), 1 ≤ i ≤ m,<label>(1)</label></formula><formula xml:id="formula_3">N (x) = merge(y 1 , · · · , y m ),</formula><p>where allocation(x, i) denotes the allocated feature map for i th child node based on the allocation scheme, and merge(·) denotes the merge scheme that takes the outputs of child nodes as input and outputs an aggregated result which is also the output of the node. For a leaf node that has no child node, it simply returns the input feature map as its output. As defined in Eq. (1), for a tree-structured architecture, the feature map is first fed to its root node, then spread to all subsequent nodes through allocation schemes at the nodes and edges in a top-down manner until reaching leaf nodes, and finally aggregated in mirror from the leaf nodes to the root node in a bottom-up manner to produce a final output feature map.</p><p>Notice that the tree-structured architecture space is not the full architecture space that can be achieved with the proposed path-level transformation operations. We choose to explore the tree-structure architecture space for the ease of implementation and further applying architecture search methods such as RL based approaches <ref type="bibr" target="#b3">(Cai et al., 2018</ref>) that would need to encode the architecture. Another reason for choosing the tree-structured architecture space is that it has a strong connection to existing multi-branch architectures, which can be viewed as tree-structured architectures with a depth of 1, i.e. all of the root node's child nodes are leaf.</p><p>To apply architecture search methods on the tree-structured architecture space, we need to further specify it by defining the set of possible allocation schemes, merge schemes and primitive operations. As discussed in Sections 2.2 and 3.1, the allocation scheme is either replication or split and the merge scheme is either add or concatenation. For the primitive operations, similar to previous work <ref type="bibr" target="#b23">Liu et al., 2018)</ref>, we consider the following 7 types of layers:</p><formula xml:id="formula_4">• 1 × 1 convolution • Identity • 3 × 3 depthwise-separable convolution • 5 × 5 depthwise-separable convolution • 7 × 7 depthwise-separable convolution • 3 × 3 average pooling • 3 × 3 max pooling</formula><p>Here, we include pooling layers that cannot be initialized as identity mapping. To preserve the functionality when pooling layers are chosen, we further reconstruct the weights in the student network (i.e. the network after transformations) to mimic the output logits of the given teacher network, using the idea of knowledge distillation <ref type="bibr" target="#b14">(Hinton et al., 2015)</ref>. As pooling layers do not dramatically destroy the functionality for multi-path neural networks, we find that the reconstruction process can be done with negligible cost. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Architecture Search with Path-Level Operations</head><p>In this section, we present an RL agent as the meta-controller to explore the tree-structured architecture space. The overall framework is similar to the one proposed in <ref type="bibr" target="#b3">Cai et al. (2018)</ref> where the meta-controller iteratively samples network transformation actions to generate new architectures that are later trained to get the validation performances as reward signals to update the meta-controller via policy gradient algorithms. To map the input architecture to transformation actions, the meta-controller has an encoder network that learns a low-dimensional representation of the given architecture, and distinct softmax classifiers that generate corresponding network transformation actions.</p><p>In this work, as the input architecture now has a treestructured topology that cannot be easily specified with a sequence of tokens, instead of using the chain-structure Long Short-Term Memory (LSTM) network <ref type="bibr" target="#b15">(Hochreiter &amp; Schmidhuber, 1997)</ref> to encode the architecture , we propose to use a tree-structured LSTM. <ref type="bibr" target="#b34">Tai et al. (2015)</ref> introduced two kinds of tree-structured LSTM units, i.e. Child-Sum Tree-LSTM unit for tree structures whose child nodes are unordered and N-ary Tree-LSTM unit for tree structures whose child nodes are ordered. For further details, we refer to the original paper <ref type="bibr" target="#b34">(Tai et al., 2015)</ref>.</p><p>In our case, for the node whose merge scheme is add, its child nodes are unordered and thereby the Child-Sum Tree-LSTM unit is applied, while for the node whose merge scheme is concatenation, the N-ary Tree-LSTM unit is used since its child nodes are ordered. Additionally, as we have edges between nodes, we incorporate another normal LSTM unit for performing hidden state transitions on edges. We denote these three LSTM units as ChildSumLST M ↑ , N aryLST M ↑ and LST M ↑ , respectively. As such, the hidden state of the node that has m child nodes is given as</p><formula xml:id="formula_5">h , c = ChildSumLST M ↑ (s, [h c 1 , c c 1 ], · · ·, [h c m , c c m ]) if add N aryLST M ↑ (s, [h c 1 , c c 1 ], · · ·, [h c m , c c m ]) if concat , h, c = LST M ↑ (e, [h , c ]),<label>(2)</label></formula><p>where [h represents the allocation and merge scheme of the node, e is the edge that connects the node to its parent node, and [h, c] is the hidden state of the node. Such calculation is done in a bottom-up manner as is shown in <ref type="figure" target="#fig_2">Figure 4a</ref>.</p><p>Note that the hidden state calculated via Eq. (2) only contains information below the node. Analogous to bidirectional LSTM, we further consider a top-down procedure, using two new LSTM units (N aryLST M ↓ and LST M ↓ ), to calculate another hidden state for each node. We refer to these two hidden states of a node as bottom-up hidden state and top-down hidden state respectively. For a node, with m child nodes, whose top-down hidden state is [h p ,c p ], the top-down hidden state of its i th child node is given as</p><formula xml:id="formula_6">h i ,c i = N aryLST M ↓ (s, [h p ,c p ], [h1, c1], · · · , i th child node [0, 0] , · · · ), hi,ci = LST M ↓ (ei, [h i ,c i ]),<label>(3)</label></formula><p>where [h j , c j ] is the bottom-up hidden state of j th child node, s is the allocation and merge scheme of the node, e i is the edge that connect the node to its i th child node, and [h i ,c i ] is the top-down hidden state of i th child node. As shown in <ref type="figure" target="#fig_2">Figure 4b</ref> and Eq. (3), a combination of the bottomup hidden state and top-down hidden state now forms a comprehensive hidden state for each node, containing all information of the architecture.</p><p>Given the hidden state at each node, we have various softmax classifiers for making different transformation decisions on applicable nodes as follows:</p><p>1. For a node that has only one leaf child node, the meta-controller chooses a merge scheme from {add, concatenation, none}. When add or concatenation is chosen, the meta-controller further chooses the number of branches and then the network is transformed accordingly, which makes the node have multiple child nodes now <ref type="figure" target="#fig_3">(Figure 5a</ref>). When none is chosen, nothing is done and the meta-controller will not make such decision on that node again. Leaf <ref type="figure">Figure 6</ref>. Detailed structure of the best discovered cell on CIFAR-10 (TreeCell-A). "GroupConv" denotes the group convolution; "Conv" denotes the normal convolution; "Sep" denotes the depthwise-separable convolution; "Max" denotes the max pooling; "Avg" denotes the average pooling.</p><p>2. For a node that is a leaf node, the meta-controller determines whether to expand the node, i.e. insert a new leaf node to be the child node of this node and connect them with identity mapping, which increases the depth of the architecture <ref type="figure" target="#fig_3">(Figure 5b</ref>).</p><p>3. For an identity edge, the meta-controller chooses a new edge (can be identity) from the set of possible primitive operations (Section 3.2) to replace the identity edge ( <ref type="figure" target="#fig_3">Figure 5c</ref>). Also this decision will only be made once for each edge.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments and Results</head><p>Our experimental setting 1 resembles , <ref type="bibr" target="#b39">Zhong et al. (2017)</ref> and <ref type="bibr" target="#b23">Liu et al. (2018)</ref>. Specifically, we apply the proposed method described above to learn CNN cells on CIFAR-10 ( <ref type="bibr" target="#b21">Krizhevsky &amp; Hinton, 2009</ref>) for the image classification task and transfer the learned cell structures to ImageNet dataset <ref type="bibr" target="#b6">(Deng et al., 2009</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Experimental Details</head><p>CIFAR-10 contains 50,000 training images and 10,000 test images, where we randomly sample 5,000 images from the training set to form a validation set for the architecture search process, similar to previous work <ref type="bibr" target="#b3">Cai et al., 2018)</ref>. We use a standard data augmentation scheme (mirroring/shifting) that is widely used for this dataset <ref type="bibr" target="#b18">(Huang et al., 2017b;</ref><ref type="bibr" target="#b11">Han et al., 2017;</ref><ref type="bibr" target="#b3">Cai et al., 2018)</ref> and normalize the images using channel means and standard deviations for preprocessing.</p><p>For the meta-controller, described in Section 3.3, the hidden 1 Experiment code: https://github.com/han-cai/PathLevel-EAS state size of all LSTM units is 100 and we train it with the ADAM optimizer <ref type="bibr" target="#b20">(Kingma &amp; Ba, 2014)</ref> using the REIN-FORCE algorithm <ref type="bibr" target="#b36">(Williams, 1992)</ref>. To reduce variance, we adopt a baseline function which is an exponential moving average of previous rewards with a decay of 0.95, as done in <ref type="bibr" target="#b3">Cai et al. (2018)</ref>. We also use an entropy penalty with a weight of 0.01 to ensure exploration.</p><p>At each step in the architecture search process, the metacontroller samples a tree-structured cell by taking transformation actions starting with a single layer in the base network. For example, when using a DenseNet as the base network, after the transformations, all 3 × 3 convolution layers in the dense blocks are replaced with the sampled tree-structured cell while all the others remain unchanged. The obtained network, along with weights transferred from the base network, is then trained for 20 epochs on CIFAR-10 with an initial learning rate of 0.035 that is further annealed with a cosine learning rate decay <ref type="bibr" target="#b24">(Loshchilov &amp; Hutter, 2016)</ref>, a batch size of 64, a weight decay of 0.0001, using the SGD optimizer with a Nesterov momentum of 0.9. The validation accuracy acc v of the obtained network is used to compute a reward signal. We follow <ref type="bibr" target="#b3">Cai et al. (2018)</ref> and use the transformed value, i.e. tan(acc v × π/2), as the reward since improving the accuracy from 90% to 91% should gain much more than from 60% to 61%. Additionally, we update the meta-controller with mini-batches of 10 architectures.</p><p>After the architecture search process is done, the learned cell structures can be embedded into various kinds of base networks (e.g., ResNets, DenseNets, etc.) with different depth and width. In this stage, we train networks for 300 epochs with an initial learning rate of 0.1, while all other settings keep the same.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Architecture Search on CIFAR-10</head><p>In our experiments, we use a small DenseNet-BC (N = 2, L = 16, k = 48, G = 4) 2 , which achieves an accuracy of <ref type="table">Table 1</ref>. Test error rate (%) results of our best discovered architectures as well as state-of-the-art human-designed and automatically designed architectures on CIFAR-10. If "Reg" is checked, additional regularization techniques (e.g., Shake-Shake <ref type="bibr" target="#b10">(Gastaldi, 2017)</ref>, DropPath  and Cutout (DeVries &amp; Taylor, 2017)), along with a longer training schedule (600 epochs or 1800 epochs) are utilized when training the networks. ResNeXt + Shake-Shake (1800 epochs) <ref type="bibr" target="#b10">(Gastaldi, 2017)</ref> ResNeXt + Shake-Shake + Cutout <ref type="formula" target="#formula_2">(1800 epochs</ref> Auto designed EAS (plain CNN) <ref type="bibr" target="#b3">(Cai et al., 2018)</ref> Hierarchical (c 0 = 128) <ref type="bibr" target="#b23">(Liu et al., 2018)</ref> Block-QNN-A (N = 4) <ref type="bibr" target="#b39">(Zhong et al., 2017)</ref> NAS v3  NASNet-A (6, 32) + DropPath (600 epochs)  NASNet-A (6, 32) + DropPath + Cutout (600 epochs)  NASNet-A (7, 96) + DropPath + Cutout (600 epochs)     93.12% on the held-out validation set, as the base network to learn cell structures. We set the maximum depth of the cell structures to be 3, i.e. the length of the path from the root node to each leaf node is no larger than 3 <ref type="figure">(Figure 6</ref>). For nodes whose merge scheme is add, the number of branches is chosen from {2, 3} while for nodes whose merge scheme is concatenation, the number of branches is set to be 2. Additionally, we use very restricted computational resources for this experiment (about 200 GPU-hours 48,000 GPUhours in ) with in total 500 networks trained.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Model</head><p>The progress of the architecture search process is reported in <ref type="figure" target="#fig_5">Figure 7</ref>, where the results of random search (a very strong baseline for black-box optimization <ref type="bibr" target="#b2">(Bergstra &amp; Bengio, 2012)</ref>) under the same condition is also provided. We can find that the average validation accuracy of the designed architectures by the RL meta-controller gradually increases as the number of sampled architectures increases, as expected, while the curve of random search keeps fluctuating, which indicates that the RL meta-controller effectively focuses on the right search direction while random search fails. Therefore, with only 500 networks trained, the best model identified by RL, after 20 epochs training, achieves 0.16% better validation accuracy than the best model identified by the growth rate, i.e. the number of filters of each 3 × 3 convolution layer. And we use the group convolution with G = 4 groups here. For DenseNet-BC, L = 6 × N + 4, so we omit L in the following discussions for simplicity. random search.</p><p>We take top 10 candidate cells discovered in this experiment, and embed them into a relatively larger base network, i.e. DenseNet-BC (N = 6, k = 48, G) where G is chosen from {1, 2, 4} to make different cells have a similar number of parameters as the normal 3 × 3 convolution layer (more details in the supplementary material). After 300 epochs training on CIFAR-10, the top 2 cells achieve 3.64% test error (TreeCell-A) and 3.71% test error (TreeCell-B), respectively. The detailed structure of TreeCell-A is given in <ref type="figure">Figure 6</ref>, while TreeCell-B's detailed structure is provided in the supplementary material. Under the same condition, the best cell given by random search reaches a test error rate of 3.98%, which is 0.34% worse than TreeCell-A.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Results on CIFAR-10</head><p>We further embed the top discovered cells, i.e. TreeCell-A and TreeCell-B, into larger base networks. Beside DenseNets, to justify whether the discovered cells starting with DenseNet can be transferred to other types of architectures such as ResNets, we also embed the cells into PyramidNets <ref type="bibr" target="#b11">(Han et al., 2017)</ref>, a variant of ResNets.</p><p>The summarized results are reported in <ref type="table">Table 1</ref>. When combined with DenseNets, the best discovered tree cell (i.e. TreeCell-A) achieves a test error rate of 3.64% with only 3.2M parameters, which is comparable to the best result, i.e. 3.46% in the original DenseNet paper, given by a much larger DenseNet-BC with 25.6M parameters. Furthermore, the test error rate drops to 3.35% as the number of parameters increases to 13.1M. We attribute the improved parameter efficiency and better test error rate results to the improved representation power from the increased path topology complexity introduced by the learned tree cells. When combined with PyramidNets, TreeCell-A reaches 3.14% test error with only 5.7M parameters while the best PyramidNet achieves 3.31% test error with 26.0M parameters, which also indicates significantly improved parameter efficiency by incorporating the learned tree cells for PyramidNets. Since the cells are learned using a DenseNet as the start point rather than a PyramidNet, it thereby justifies the transferability of the learned cells to other types of architectures.</p><p>We notice that there are some strong regularization techniques that have shown to effectively improve the performances on CIFAR-10, such as Shake-Shake <ref type="bibr" target="#b10">(Gastaldi, 2017)</ref>, DropPath  and Cutout <ref type="bibr" target="#b7">(DeVries &amp; Taylor, 2017)</ref>. In our experiments, when using DropPath that stochastically drops out each path (i.e. edge in the tree cell) and training the network for 600 epochs, as done in  and <ref type="bibr" target="#b22">Liu et al. (2017)</ref>, TreeCell-A reaches 2.99% test error with 5.7M parameters. Moreover, with Cutout, TreeCell-A further achieves 2.49% test error with 5.7M parameters and 2.30% test error with 14.3M parameters, outperforming all compared human-designed and automatically designed architectures on CIFAR-10 while having much fewer parameters <ref type="table">(Table 1)</ref>.</p><p>We would like to emphasize that these results are achieved with only 500 networks trained using about 200 GPU-hours while the compared architecture search methods utilize much more computational resources to achieve their best results, such as  that used 48,000 GPUhours.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Results on ImageNet</head><p>Following  and <ref type="bibr" target="#b39">Zhong et al. (2017)</ref>, we further test the best cell structures learned on CIFAR-10, i.e. TreeCell-A and TreeCell-B, on ImageNet dataset. Due to resource and time constraints, we focus on the M obile setting in our experiments, where the input image size is 224 × 224 and we train relatively small models that require less than 600M multiply-add operations to perform inference on a single image. To do so, we combine the learned cell structures with CondenseNet <ref type="bibr" target="#b17">(Huang et al., 2017a)</ref>, a recently proposed efficient network architecture that is designed for the M obile setting.</p><p>The result is reported in <ref type="table">Table 2</ref>. By embedding TreeCell-A into CondenseNet (G 1 = 4, G 3 = 8) where each block comprises a learned 1 × 1 group convolution layer with G 1 = 4 groups and a standard 3 × 3 group convolution layer with G 3 = 8 groups, we achieve 25.5% top-1 error <ref type="table">Table 2</ref>. Top-1 (%) and Top-5 (%) classification error rate results on ImageNet in the M obile Setting (≤ 600M multiply-add operations). "×+" denotes the number of multiply-add operations.</p><p>Model ×+ Top-1 Top-5 1.0 MobileNet-224 <ref type="bibr" target="#b16">(Howard et al., 2017)</ref> 569M 29.4 10.5 ShuffleNet 2x <ref type="bibr" target="#b38">(Zhang et al., 2017)</ref> 524M 29.1 10.2 CondenseNet (G 1 = G 3 = 8) <ref type="bibr" target="#b17">(Huang et al., 2017a</ref> and 8.0% top-5 error with 588M multiply-add operations, which significantly outperforms MobileNet and ShuffleNet, and is also better than CondenseNet (G 1 = G 3 = 4) with a similar number of multiply-add operations. Meanwhile, we find that TreeCell-B with CondenseNet (G 1 = 4, G 3 = 8) reaches a slightly better top-1 error result, i.e. 25.4%, than TreeCell-A.</p><p>When compared to NASNet-A, we also achieve slightly better results with similar multiply-add operations despite the fact that they used 48,000 GPU-hours to achieve these results while we only use 200 GPU-hours. By taking advantage of existing successful human-designed architectures, we can easily achieve similar (or even better) results with much fewer computational resources, compared to exploring the architecture space from scratch.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this work, we presented path-level network transformation operations as an extension to current functionpreserving network transformation operations to enable the architecture search methods to perform not only layerlevel architecture modifications but also path-level topology modifications in a neural network. Based on the proposed path-level transformation operations, we further explored a tree-structured architecture space, a generalized version of current multi-branch architectures, that can embed plentiful paths within each CNN cell, with a bidirectional treestructured RL meta-controller. The best designed cell structure by our method using only 200 GPU-hours has shown both improved parameter efficiency and better test accuracy on CIFAR-10, when combined with state-of-the-art human designed architectures including DenseNets and PyramidNets. And it has also demonstrated its transferability on ImageNet dataset in the M obile setting. For future work, we would like to combine the proposed method with network compression operations to explore the architecture space with the model size and the number of multiply-add operations taken into consideration and conduct experiments on other tasks such as object detection.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Figure 1. Convolution layer and its equivalent multi-branch motifs.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Identity layer and its equivalent multi-branch motifs.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Calculation procedure of bottom-up and top-down hidden states.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .</head><label>5</label><figDesc>Figure 5. Illustration of transformation decisions on nodes and edges. (a) The meta-controller transforms a node with only one leaf child node to have multiple child nodes. Both merge scheme and branch number are predicted. (b) The meta-controller inserts a new leaf node to be the child node of a previous leaf node and they are connected with an identity mapping. (c) The meta-controller replaces an identity mapping with a layer (can be identity) chosen from the set of possible primitive operations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 .</head><label>7</label><figDesc>Figure 7. Progress of the architecture search process and comparison between RL and random search (RS) on CIFAR-10.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>16 × 64d) (Xie et al., 2017) DenseNet-BC (N = 31, k = 40) (Huang et al., 2017b) PyramidNet-Bottleneck (N = 18, α = 270) (Han et al., 2017) PyramidNet-Bottleneck (N = 30, α = 200) (Han et al., 2017)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head></head><label></label><figDesc>Ours TreeCell-B with DenseNet (N = 6, k = 48, G = 2) TreeCell-A with DenseNet (N = 6, k = 48, G = 2) TreeCell-A with DenseNet (N = 16, k = 48, G = 2) TreeCell-B with PyramidNet (N = 18, α = 84, G = 2) TreeCell-A with PyramidNet (N = 18, α = 84, G = 2) TreeCell-A with PyramidNet (N = 18, α = 84, G = 2) + DropPath (600 epochs) TreeCell-A with PyramidNet (N = 18, α = 84, G = 2) + DropPath + Cutout (600 epochs) TreeCell-A with PyramidNet (N = 18, α = 150, G = 2) + DropPath + Cutout (600 epochs)</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Shanghai Jiao Tong University, Shanghai, China 2 Massachusetts Institute of Technology, Cambridge, USA. Correspondence to: Han Cai &lt;hcai@apex.sjtu.edu.cn&gt;.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">N , L and k respectively indicate the number of 3 × 3 convolution layers within each dense block, the depth of the network, and</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">N2n learning: Network to network compression via policy gradient reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ashok</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Rhinehart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Beainy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>ICLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Designing neural network architectures using reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Naik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Raskar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Random search for hyperparameter optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Efficient architecture search by network transformation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wang</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Net2net</surname></persName>
+		</author>
+		<title level="m">Accelerating learning via knowledge transfer. ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Xception: Deep learning with depthwise separable convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chollet</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Improved regularization of convolutional neural networks with cutout</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Devries</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">W</forename><surname>Taylor</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.04552</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Speeding up automatic hyperparameter optimization of deep neural networks by extrapolation of learning curves</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Domhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hutter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Simple and efficient architecture search for convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Elsken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-H</forename><surname>Metzen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hutter</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.04528</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Shake-shake regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Gastaldi</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1705.07485</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Deep pyramidal residual networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kim</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learning both weights and connections for efficient neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Distilling the knowledge in a neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.02531</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalenichenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weyand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andreetto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adam</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mobilenets</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.04861</idno>
+		<title level="m">Efficient convolutional neural networks for mobile vision applications</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Condensenet</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1711.09224</idno>
+		<title level="m">An efficient densenet using learned group convolutions</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">Q</forename><surname>Weinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Van Der Maaten</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">L. Densely connected convolutional networks. CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<title level="m">A method for stochastic optimization</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Murphy</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename></persName>
+		</author>
+		<idno type="arXiv">arXiv:1712.00559</idno>
+		<title level="m">Progressive neural architecture search</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Hierarchical representations for efficient architecture search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<publisher>ICLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Loshchilov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hutter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Sgdr</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1608.03983</idno>
+		<title level="m">stochastic gradient descent with restarts</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Towards automatically-tuned neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mendoza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Feurer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hutter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Workshop on Automatic Machine Learning</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Negrinho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gordon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Deeparchitect</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.08792</idno>
+		<title level="m">Automatically designing and training deep architectures</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Efficient neural architecture search via parameter sharing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">Y</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1802.03268</idno>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Large-scale evolution of image classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Real</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Selle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">L</forename><surname>Suematsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kurakin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Regularized evolution for image classifier architecture search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Real</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Aggarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1802.01548</idno>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<title level="m">Very deep convolutional networks for large-scale image recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Path-Level Network Transformation for Efficient Architecture Search Szegedy</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>CVPR</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Rethinking the inception architecture for computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wojna</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Inception-v4, inception-resnet and the impact of residual connections on learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alemi</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Improved semantic representations from tree-structured long short-term memory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">S</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ACL</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Residual networks behave like ensembles of relatively shallow networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Veit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wilber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Reinforcement Learning</title>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Aggregated residual transformations for deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Shufflenet: An extremely efficient convolutional neural network for mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.01083</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-L</forename><surname>Liu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1708.05552</idno>
+		<title level="m">Practical network blocks design with q-learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Neural architecture search with reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zoph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vasudevan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.07012</idno>
+		<title level="m">Learning transferable architectures for scalable image recognition</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

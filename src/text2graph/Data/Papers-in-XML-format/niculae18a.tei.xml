@@ -1,0 +1,1514 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:22+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">SparseMAP: Differentiable Sparse Structured Inference</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vlad</forename><surname>Niculae</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">André</forename><forename type="middle">F T</forename><surname>Martins</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mathieu</forename><surname>Blondel</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Claire</forename><surname>Cardie</surname></persName>
+						</author>
+						<title level="a" type="main">SparseMAP: Differentiable Sparse Structured Inference</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Structured prediction requires searching over a combinatorial number of structures. To tackle it, we introduce SparseMAP: a new method for sparse structured inference, and its natural loss function. SparseMAP automatically selects only a few global structures: it is situated between MAP inference, which picks a single structure, and marginal inference, which assigns nonzero probability to all structures, including implausible ones. SparseMAP can be computed using only calls to a MAP oracle, making it applicable to problems with intractable marginal inference, e.g., linear assignment. Sparsity makes gradient backpropagation efficient regardless of the structure, enabling us to augment deep neural networks with generic and sparse structured hidden layers. Experiments in dependency parsing and natural language inference reveal competitive accuracy, improved interpretability, and the ability to capture natural language ambiguities, which is attractive for pipeline systems.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Structured prediction involves the manipulation of discrete, combinatorial structures, e.g., trees and alignments <ref type="bibr" target="#b2">(Bakır et al., 2007;</ref><ref type="bibr" target="#b54">Smith, 2011;</ref><ref type="bibr" target="#b49">Nowozin et al., 2014)</ref>. Such structures arise naturally as machine learning outputs, and as intermediate representations in deep pipelines. However, the set of possible structures is typically prohibitively large. As such, inference is a core challenge, often sidestepped by greedy search, factorization assumptions, or continuous relaxations <ref type="bibr" target="#b3">(Belanger &amp; McCallum, 2016)</ref>. <ref type="figure">Figure 1</ref>. Left: in the unstructured case, softmax and sparsemax can be interpreted as regularized, differentiable arg max approximations; softmax returns dense solutions while sparsemax favors sparse ones. Right: in this work, we extend this view to structured inference, which consists of optimizing over a polytope M, the convex hull of all possible structures (depicted: the arborescence polytope, whose vertices are trees). We introduce SparseMAP as a structured extension of sparsemax: it is situated in between MAP inference, which yields a single structure, and marginal inference, which returns a dense combination of structures.</p><p>In this paper, we propose an appealing alternative: a new inference strategy, dubbed SparseMAP, which encourages sparsity in the structured representations. Namely, we seek solutions explicitly expressed as a combination of a small, enumerable set of global structures. Our framework departs from the two most common inference strategies in structured prediction: maximum a posteriori (MAP) inference, which returns the highest-scoring structure, and marginal inference, which yields a dense probability distribution over structures. Neither of these strategies is fully satisfactory: for latent structure models, marginal inference is appealing, since it can represent uncertainty and, unlike MAP inference, it is continuous and differentiable, hence amenable for use in structured hidden layers in neural networks <ref type="bibr" target="#b26">(Kim et al., 2017)</ref>. It has, however, several limitations. First, there are useful problems for which MAP is tractable, but marginal inference is not, e.g., linear assignment <ref type="bibr" target="#b60">(Valiant, 1979;</ref><ref type="bibr" target="#b57">Taskar, 2004)</ref>. Even when marginal inference is available, case-bycase derivation of the backward pass is needed, sometimes producing fairly complicated algorithms, e.g., second-order expectation semirings <ref type="bibr" target="#b36">(Li &amp; Eisner, 2009</ref>). Finally, marginal inference is dense: it assigns nonzero probabilities to all structures and cannot completely rule out irrelevant ones. This can be statistically and computationally wasteful, as well as qualitatively harder to interpret.</p><p>In this work, we make the following contributions:</p><p>1. We propose SparseMAP: a new framework for sparse structured inference ( §3.1). The main idea is illustrated in <ref type="figure">Figure 1</ref>. SparseMAP is a twofold generalization: first, as a structured extension of the sparsemax transformation <ref type="bibr" target="#b38">(Martins &amp; Astudillo, 2016)</ref>; second, as a continuous yet sparse relaxation of MAP inference. MAP yields a single structure and marginal inference yields a dense distribution over all structures. In contrast, the SparseMAP solutions are sparse combinations of a small number of often-overlapping structures.</p><p>2. We show how to compute SparseMAP effectively, requiring only a MAP solver as a subroutine ( §3.2), by exploiting the problem's sparsity and quadratic curvature. Noticeably, the MAP oracle can be any arbitrary solver, e.g., the Hungarian algorithm for linear assignment, which permits tackling problems for which marginal inference is intractable.</p><p>3. We derive expressions for gradient backpropagation through SparseMAP inference, which, unlike MAP, is differentiable almost everywhere ( §3.3). The backward pass is fully general (applicable to any type of structure), and it is efficient, thanks to the sparsity of the solutions and to reusing quantities computed in the forward pass.</p><p>4. We introduce a novel SparseMAP loss for structured prediction, placing it into a family of loss functions which generalizes the CRF and structured SVM losses ( §4).</p><p>Inheriting the desirable properties of SparseMAP inference, the SparseMAP loss and its gradients can be computed efficiently, provided access to MAP inference.</p><p>Our experiments demonstrate that SparseMAP is useful both for predicting structured outputs, as well as for learning latent structured representations. On dependency parsing ( §5.1), structured output networks trained with the SparseMAP loss yield more accurate models with sparse, interpretable predictions, adapting to the ambiguity (or lack thereof) of test examples. On natural language inference ( §5.2), we learn latent structured alignments, obtaining good predictive performance, as well as useful natural visualizations concentrated on a small number of structures.</p><formula xml:id="formula_0">1 Notation. Given vectors a ∈ R m , b ∈ R n , [a; b] ∈ R</formula><p>m+n denotes their concatenation; given matrices A ∈ R m×k , B ∈ R n×k , we denote their row-wise stacking as [A; B] ∈ R (m+n)×k . We denote the columns of a matrix A by a j ; by extension, a slice of columns of A is denoted A I for a set of indices I. We denote the canonical simplex by</p><formula xml:id="formula_1">△ d := {y ∈ R d : y 0, d i=1 y i = 1}</formula><p>, and the indicator function of a predicate p as I[p] = {1 if p, 0 otherwise }.</p><p>1 General-purpose dynet and pytorch implementations available at https://github.com/vene/sparsemap.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Preliminaries</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Regularized Max Operators: Softmax, Sparsemax</head><p>As a basis for the more complex structured case, we first consider the simple problem of selecting the largest value in a vector θ ∈ R d . We denote the vector mapping arg max(θ) := arg max</p><formula xml:id="formula_2">y∈△ d θ ⊤ y.</formula><p>When there are no ties, arg max has a unique solution e i peaking at the index i of the highest value of θ. When there are ties, arg max is set-valued. Even assuming no ties, arg max is piecewise constant, and thus is ill-suited for direct use within neural networks, e.g., in an attention mechanism. Instead, it is common to use softmax, a continuous and differentiable approximation to arg max, which can be seen as an entropy-regularized arg max softmax(θ) := arg max</p><formula xml:id="formula_3">y∈△ d θ ⊤ y + H(y) = exp θ d i=1 exp θ i<label>(1)</label></formula><p>where H(y) = − i y i ln y i , i.e. the negative Shannon entropy. Since exp · &gt; 0 strictly, softmax outputs are dense.</p><p>By replacing the entropic penalty with a squared ℓ 2 norm, <ref type="bibr" target="#b38">Martins &amp; Astudillo (2016)</ref> introduced a sparse alternative to softmax, called sparsemax, given by</p><formula xml:id="formula_4">sparsemax(θ) := arg max y∈△ d θ ⊤ y − 1 2 y 2 2 = arg min y∈△ d y − θ 2 2 .<label>(2)</label></formula><p>Both softmax and sparsemax are continuous and differentiable almost everywhere; however, sparsemax encourages sparsity in its outputs. This is because it corresponds to an Euclidean projection onto the simplex, which is likely to hit its boundary as the magnitude of θ increases. Both mechanisms, as well as variants with different penalties <ref type="bibr" target="#b46">(Niculae &amp; Blondel, 2017)</ref>, have been successfully used in attention mechanisms, for mapping a score vector θ to a d-dimensional normalized discrete probability distribution over a small set of choices. The relationship between arg max, softmax, and sparsemax, illustrated in <ref type="figure">Figure 1</ref>, sits at the foundation of SparseMAP.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Structured Inference</head><p>In structured prediction, the space of possible outputs is typically very large: for instance, all possible labelings of a length-n sequence, spanning trees over n nodes, or oneto-one alignments between two sets. We may still write optimization problems such as max D s=1 θ s , but it is impractical to enumerate all of the D possible structures and, in turn, to specify the scores for each structure in θ.</p><p>Instead, structured problems are often parametrized through structured log-potentials (scores) θ := A ⊤ η, where A ∈ R k×D is a matrix that specifies the structure of the problem, and η ∈ R k is lower-dimensional parameter vector, i.e., k ≪ D. For example, in a factor graph <ref type="bibr" target="#b32">(Kschischang et al., 2001</ref>) with variables U and factors F , θ is given by</p><formula xml:id="formula_5">θ s := i∈U η U,i (s i ) + f ∈F η F,f (s f ),</formula><p>where η U and η F are unary and higher-order log-potentials, and s i and s f are local configurations at variable and factor nodes. This can be written in matrix notation as</p><formula xml:id="formula_6">θ = M ⊤ η U +N ⊤ η F for suitable matrices {M , N }, fitting the assumption above with A = [M ; N ] and η = [η U ; η F ].</formula><p>We can then rewrite the MAP inference problem, which seeks the highest-scoring structure, as a k-dimensional problem, by introducing variables [u; v] ∈ R k to denote configurations at variable and factor nodes:</p><formula xml:id="formula_7">2 MAP A (η) := arg max u:=M y y∈△ D θ ⊤ y = arg max u: [u;v]∈M A η ⊤ U u + η ⊤ F v,<label>(3)</label></formula><p>where <ref type="bibr" target="#b62">(Wainwright &amp; Jordan, 2008)</ref>, with one vertex for each possible structure ( <ref type="figure">Figure 1</ref>). However, as previously said, since it is equivalent to a D-dimensional arg max, MAP is piecewise constant and discontinuous.</p><formula xml:id="formula_8">M A := {[u; v] : u = M y, v = N y, y ∈ △ D } is the marginal polytope</formula><p>Negative entropy regularization over y, on the other hand, yields marginal inference,</p><formula xml:id="formula_9">Marginal A (η) := arg max u:=M y y∈△ D θ ⊤ y + H(y) = arg max u: [u;v]∈M A η ⊤ U u + η ⊤ F v + H A (u, v).</formula><p>(4) Marginal inference is differentiable, but may be more difficult to compute; the entropy H A (u, v) = H(y) itself lacks a closed form <ref type="bibr">(Wainwright &amp; Jordan, 2008, §4.1.2)</ref>. Gradient backpropagation is available only to specialized problem instances, e.g. those solvable by dynamic programming <ref type="bibr" target="#b36">(Li &amp; Eisner, 2009</ref>). The entropic term regularizes y toward more uniform distributions, resulting in strictly dense solutions, just like in the case of softmax (Equation 1).</p><p>Interesting types of structures, which we use in the experiments described in Section 5, include the following.</p><p>Sequence tagging. Consider a sequence of n items, each assigned one out of a possible m tags. In this case, a global structure s is a joint assignment of tags (t 1 , · · · , t n ). The matrix M is nm-by-m n -dimensional, with columns m s ∈ {0, 1} nm := [e t1 , ..., e tn ] indicating which tag is assigned to each variable in the global structure s. N is nm 2 -bym n -dimensional, with n s encoding the transitions between consecutive tags, i.e., n s (i, a, b) :</p><formula xml:id="formula_10">= I[t i−1 = a &amp; t i = b].</formula><p>The Viterbi algorithm provides MAP inference and forwardbackward provides marginal inference <ref type="bibr" target="#b50">(Rabiner, 1989)</ref>.</p><p>Non-projective dependency parsing. Consider a sentence of length n. Here, a structure s is a dependency tree: a rooted spanning tree over the n 2 possible arcs (for example, the arcs above the sentences in <ref type="figure">Figure 3</ref>). Each column m s ∈ {0, 1} n 2 encodes a tree by assigning a 1 to its arcs.</p><p>N is empty, M A is known as the arborescence polytope <ref type="bibr" target="#b39">(Martins et al., 2009)</ref>. MAP inference may be performed by maximal arborescence algorithms <ref type="bibr" target="#b13">(Chu &amp; Liu, 1965;</ref><ref type="bibr" target="#b17">Edmonds, 1967;</ref><ref type="bibr" target="#b41">McDonald et al., 2005)</ref>, and the MatrixTree theorem <ref type="bibr" target="#b29">(Kirchhoff, 1847)</ref> provides a way to perform marginal inference <ref type="bibr" target="#b30">(Koo et al., 2007;</ref><ref type="bibr" target="#b53">Smith &amp; Smith, 2007)</ref>.</p><p>Linear assignment. Consider a one-to-one matching (linear assignment) between two sets of n nodes. A global structure s is a n-permutation, and a column m s ∈ {0, 1} n 2 can be seen as a flattening of the corresponding permutation matrix. Again, N is empty. M A is the Birkhoff polytope <ref type="bibr" target="#b6">(Birkhoff, 1946)</ref>, and MAP inference can be performed by, e.g., the Hungarian algorithm <ref type="bibr">(Kuhn, 1955)</ref> or the Jonker-Volgenant algorithm <ref type="bibr" target="#b23">(Jonker &amp; Volgenant, 1987)</ref>. Noticeably, marginal inference is known to be #P-complete <ref type="bibr" target="#b60">(Valiant, 1979;</ref><ref type="bibr">Taskar, 2004, Section 3.5)</ref>. This makes it an open problem how to use matchings as latent variables.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">SparseMAP</head><p>Armed with the parallel between structured inference and regularized max operators described in §2, we are now ready to introduce SparseMAP, a novel inference optimization problem which returns sparse solutions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Definition</head><p>We introduce SparseMAP by regularizing the MAP inference problem in Equation 3 with a squared ℓ 2 penalty on the returned posteriors, i.e., 1 2 u 2 2 . Denoting, as above, θ := A ⊤ η, the result is a quadratic optimization problem, The quadratic penalty replaces the entropic penalty from marginal inference (Equation 4), which pushes the solutions to the strict interior of the marginal polytope. In consequence, SparseMAP favors sparse solutions from the faces of the marginal polytope M A , as illustrated in <ref type="figure">Figure 1</ref>. For the structured prediction problems mentioned in Section 2.2, SparseMAP would be able to return, for example, a sparse combination of sequence labelings, parse trees, or matchings. Moreover, the strongly convex regularization on u ensures that SparseMAP has a unique solution and is differentiable almost everywhere, as we will see.</p><formula xml:id="formula_11">SparseMAP A (η) := arg max u:=M y y∈△ D θ ⊤ y − 1 2 M y 2 2 = arg max u: [u,v]∈M A η ⊤ U u + η ⊤ F v − 1 2 u 2 2 .<label>(5)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Solving SparseMAP</head><p>We now tackle the optimization problem in Equation 5. Although SparseMAP is a QP over a polytope, even describing it in standard form is infeasible, since enumerating the exponentially-large set of vertices is infeasible. This prevents direct application of, e.g., the generic differentiable QP solver of <ref type="bibr" target="#b1">Amos &amp; Kolter (2017)</ref>. We instead focus on SparseMAP solvers that involve a sequence of MAP problems as a subroutine-this makes SparseMAP widely applicable, given the availability of MAP implementations for various structures. We discuss two such methods, one based on the conditional gradient algorithm and another based on the active set method for quadratic programming. We provide a full description of both methods in Appendix A. Conditional gradient. One family of such solvers is based on the conditional gradient (CG) algorithm <ref type="bibr" target="#b19">(Frank &amp; Wolfe, 1956;</ref><ref type="bibr" target="#b34">Lacoste-Julien &amp; Jaggi, 2015)</ref>, considered in prior work for solving approximations of the marginal inference problem <ref type="bibr" target="#b4">(Belanger et al., 2013;</ref><ref type="bibr" target="#b31">Krishnan et al., 2015)</ref>. Each step must solve a linearized subproblem. Denote by f the SparseMAP objective from Equation 5,</p><formula xml:id="formula_12">f (u, v) := η ⊤ U u + η ⊤ F v − 1 2 u 2 2 .</formula><p>The gradients of f with respect to the two variables are</p><formula xml:id="formula_13">∇ u f (u ′ , v ′ ) = η U − u ′ , ∇ v f (u ′ , v ′ ) = η V .</formula><p>A linear approximation to f around a point [u</p><formula xml:id="formula_14">′ ; v ′ ] iŝ f (u, v) := (∇ u f ) ⊤ u+(∇ v f ) ⊤ v = (η U −u ′ ) ⊤ u+η ⊤ F v.</formula><p>Minimizingf over M is exactly MAP inference with adjusted variable scores η U − u ′ . Intuitively, at each step we seek a high-scoring structure while penalizing sharing variables with already-selected structures Vanilla CG simply adds the new structure to the active set at every iteration. The pairwise and away-step variants trade off between the direction toward the new structure, and away from one of the already-selected structures. More sophisticated variants have been proposed <ref type="bibr" target="#b21">(Garber &amp; Meshi, 2016)</ref> which can provide sparse solutions when optimizing over a polytope. Active set method. Importantly, the SparseMAP problem in Equation 5 has quadratic curvature, which the general CG algorithms may not optimally leverage. For this reason, we consider the active set method for constrained QPs: a generalization of Wolfe's min-norm point algorithm <ref type="bibr" target="#b64">(Wolfe, 1976)</ref>, also used in structured prediction for the quadratic subproblems by <ref type="bibr" target="#b40">Martins et al. (2015)</ref>. The active set algorithm, at each iteration, updates an estimate of the solution support by adding or removing one constraint to/from the active set; then it solves the Karush-Kuhn-Tucker (KKT) system of a relaxed QP restricted to the current support.</p><p>Comparison. Both algorithms enjoy global linear convergence with similar rates (Lacoste-Julien &amp; Jaggi, 2015), but the active set algorithm also exhibits exact finite convergence-this allows it, for instance, to capture the optimal sparsity pattern <ref type="bibr">(Nocedal &amp; Wright, 1999, Ch. 16.4 &amp; 16.5)</ref>. <ref type="bibr" target="#b61">Vinyes &amp; Obozinski (2017)</ref> provide a more in-depth discussion of the connections between the two algorithms. We perform an empirical comparison on a dependency parsing instance with random potentials. <ref type="figure" target="#fig_0">Figure 2</ref> shows that active set substantially outperforms all CG variants, both in terms of objective value as well as in the solution sparsity, suggesting that the quadratic curvature makes SparseMAP solvable in very few iterations to high accuracy. We therefore use the active set solver in the remainder of the paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Backpropagating Gradients through SparseMAP</head><p>In order to use SparseMAP as a neural network layer trained with backpropagation, one must compute products of the SparseMAP Jacobian with a vector p. Computing the Jacobian of an optimization problem is an active research topic known as argmin differentiation, and is generally difficult. Fortunately, as we show next, argmin differentiation is always easy and efficient in the case of SparseMAP.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proposition 1</head><p>Denote a SparseMAP solution by y </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Z11</head><p>T z s , s ∈ I 0 s / ∈ I ,</p><formula xml:id="formula_15">Z := (M I ⊤ M I ) −1 .</formula><p>The proof, given in Appendix B, relies on the KKT conditions of the SparseMAP QP. Importantly, because D(I) is zero outside of the support of the solution, computing the Jacobian only requires the columns of M and A corresponding to the structures in the active set. Moreover, when using the active set algorithm discussed in §3.2, the matrix Z is readily available as a byproduct of the forward pass. The backward pass can, therefore, be computed in O(k|I|).</p><p>Our approach for gradient computation draws its efficiency from the solution sparsity and does not depend on the type of structure considered. This is contrasted with two related lines of research. The first is "unrolling" iterative inference algorithms, for instance belief propagation <ref type="bibr" target="#b55">(Stoyanov et al., 2011;</ref><ref type="bibr" target="#b16">Domke, 2013)</ref> and gradient descent <ref type="bibr" target="#b5">(Belanger et al., 2017)</ref>, where the backward pass complexity scales with the number of iterations. In the second, employed by <ref type="bibr" target="#b26">Kim et al. (2017)</ref>, when inference can be performed via dynamic programming, backpropagation can be performed using secondorder expectation semirings <ref type="bibr" target="#b36">(Li &amp; Eisner, 2009</ref>) or more general smoothing <ref type="bibr" target="#b43">(Mensch &amp; Blondel, 2018)</ref>, in the same time complexity as the forward pass. Moreover, in our approach, neither the forward nor the backward passes involve logarithms, exponentiations or log-domain classes, avoiding the slowdown and stability issues normally incurred.</p><p>In the unstructured case, since M = I, Z is also an identity matrix, uncovering the sparsemax Jacobian <ref type="bibr" target="#b38">(Martins &amp; Astudillo, 2016)</ref>. In general, structures are not necessarily orthogonal, but may have degrees of overlap.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Structured Fenchel-Young Losses and the SparseMAP Loss</head><p>With the efficient algorithms derived above in hand, we switch gears to defining a SparseMAP loss function. Structured output prediction models are typically trained by minimizing a structured loss measuring the discrepancy between the desired structure (encoded, for instance, as an indicator vector y = e s ) and the prediction induced by the log-potentials η. We provide here a general family of structured prediction losses that will make the newly proposed SparseMAP loss arise as a very natural case. Below, we let Ω : R D → R denote a convex penalty function and denote</p><formula xml:id="formula_16">by Ω △ its restriction to △ D ⊂ R D , i.e., Ω △ (y) := Ω(y), y ∈ △ D ; ∞, y / ∈ △ D . The Fenchel convex conjugate of Ω △ is Ω ⋆ △ (θ) := sup y∈R D θ ⊤ y − Ω △ (y) = sup y∈△ D θ ⊤ y − Ω(y).</formula><p>We next introduce a family of structured prediction losses, named after the corresponding Fenchel-Young duality gap.</p><p>Definition 1 (Fenchel-Young losses) Given a convex penalty function Ω : R D → R, and a (k × D)-dimensional matrix A = [M ; N ] encoding the structure of the problem, we define the following family of structured losses:</p><formula xml:id="formula_17">ℓ Ω,A (η, y) := Ω ⋆ △ (A ⊤ η) + Ω △ (y) − η ⊤ Ay.<label>(6)</label></formula><p>This family, studied in more detail in , includes the commonly-used structured losses:</p><p>• Structured perceptron <ref type="bibr" target="#b15">(Collins, 2002)</ref>: Ω ≡ 0;</p><p>• Structured SVM <ref type="bibr" target="#b58">(Taskar et al., 2003;</ref><ref type="bibr" target="#b59">Tsochantaridis et al., 2004)</ref>: Ω ≡ ρ(·,ȳ) for a cost function ρ, whereȳ is the true output;</p><p>• CRF <ref type="bibr" target="#b35">(Lafferty et al., 2001)</ref>: Ω ≡ −H;</p><p>• Margin CRF <ref type="bibr" target="#b22">(Gimpel &amp; Smith, 2010)</ref>:</p><formula xml:id="formula_18">Ω ≡ −H + ρ(·,ȳ).</formula><p>This leads to a natural way of defining SparseMAP losses, by plugging the following into Equation 6:</p><p>• SparseMAP loss: Ω(y) = f Ω (y). Then, the following properties hold:</p><formula xml:id="formula_19">1. ℓ Ω,A (η, y) ≥ 0, with equality when f Ω (y) = f Ω (y ⋆ ); 2. ℓ Ω,A (η, y) is convex, ∂ℓ Ω,A (η, y) ∋ A(y ⋆ − y);</formula><p>3. ℓ tΩ,A (η, y) = tℓ Ω (η/t, y) for any t ∈ R, t &gt; 0. <ref type="table">Table 1</ref>. Unlabeled attachment accuracy scores for dependency parsing, using a bi-LSTM model <ref type="bibr" target="#b28">(Kiperwasser &amp; Goldberg, 2016)</ref>. SparseMAP and its margin version, m-SparseMAP, produce the best parser on 4/5 datasets. For context, we include the scores of the CoNLL 2017 UDPipe baseline, which is trained under the same conditions <ref type="bibr" target="#b56">(Straka &amp; Straková, 2017</ref> Proof is given in Appendix C. Property 1 suggests that pminimizing ℓ Ω,A aligns models with the true label. Property 2 shows how to compute subgradients of ℓ Ω,A provided access to the inference output [u</p><formula xml:id="formula_20">⋆ ; v ⋆ ] = Ay ⋆ ∈ R k .</formula><p>Combined with our efficient procedure described in Section 3.2, it makes the SparseMAP losses promising for structured prediction. Property 3 suggests that the strength of the penalty Ω can be adjusted by simply scaling η. Finally, we remark that for a strongly-convex Ω, ℓ Ω,A can be seen as a smoothed perceptron loss; other smoothed losses have been explored by Shalev-Shwartz &amp; Zhang (2016).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental Results</head><p>In this section, we experimentally validate SparseMAP on two natural language processing applications, illustrating the two main use cases presented: structured output prediction with the SparseMAP loss ( §5.1) and structured hidden layers ( §5.2). All models are implemented using the dynet library v2.0.2 <ref type="bibr" target="#b45">(Neubig et al., 2017)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Dependency Parsing with the SparseMAP Loss</head><p>We evaluate the SparseMAP losses against the commonly used CRF and structured SVM losses. The task we focus on is non-projective dependency parsing: a structured output task consisting of predicting the directed tree of grammatical dependencies between words in a sentence <ref type="bibr">(Jurafsky &amp; Martin, 2018, Ch. 14)</ref>. We use annotated Universal Dependency data <ref type="bibr" target="#b47">(Nivre et al., 2016)</ref>, as used in the CoNLL 2017 shared task <ref type="bibr" target="#b67">(Zeman et al., 2017)</ref>. To isolate the effect of the loss, we use the provided gold tokenization and part-of-speech tags. We follow closely the bidirectional LSTM arc-factored parser of <ref type="bibr" target="#b28">Kiperwasser &amp; Goldberg (2016)</ref>, using the same model configuration; the only exception is not using externally pretrained embeddings. Parameters are trained using Adam <ref type="bibr" target="#b27">(Kingma &amp; Ba, 2015)</ref>, tuning the learning rate on the grid {.5, 1, 2, 4, 8} × 10 −3 , expanded by a factor of 2 if the best model is at either end.</p><p>We experiment with 5 languages, diverse both in terms of family and in terms of the amount of training data (ranging from 1,400 sentences for Vietnamese to 12,525 for English). Test set results <ref type="table">(Table 1)</ref> indicate that the SparseMAP losses outperform the SVM and CRF losses on 4 out of the 5 languages considered. This suggests that SparseMAP is a good middle ground between MAP-based and marginalbased losses in terms of smoothness and gradient sparsity.</p><p>Moreover, as illustrated in <ref type="figure" target="#fig_5">Figure 4</ref>, the SparseMAP loss encourages sparse predictions: models converge towards sparser solutions as they train, yielding very few ambiguous arcs. When confident, SparseMAP can predict a single tree. Otherwise, the small set of candidate parses returned can be easily visualized, often indicating genuine linguistic ambiguities <ref type="figure">(Figure 3)</ref>. Returning a small set of parses, also sought concomittantly by <ref type="bibr" target="#b25">Keith et al. (2018)</ref>, is valuable in pipeline systems, e.g., when the parse is an input to a downstream application: error propagation is diminished in cases where the highest-scoring tree is incorrect (which is the case for the sentences in <ref type="figure">Figure 3</ref>). Unlike K-best heuristics, SparseMAP dynamically adjusts its output sparsity, which is desirable on realistic data where most instances are easy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Latent Structured Alignment for Natural Language Inference</head><p>In this section, we demonstrate SparseMAP for inferring latent structure in large-scale deep neural networks. We focus on the task of natural language inference, defined as the classification problem of deciding, given two sentences (a premise and a hypothesis), whether the premise entails the hypothesis, contradicts it, or is neutral with respect to it.</p><p>We consider novel structured variants of the state-of-the-art ESIM model <ref type="bibr" target="#b12">(Chen et al., 2017)</ref>. Given a premise P of length m and a hypothesis H of length n, ESIM: 1. Encodes P and H with an LSTM.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Computes alignment scores G ∈ R</head><p>m×n ; with g ij the inner product between the P word i and H word j.</p><p>3. Computes P-to-H and H-to-P alignments using row-wise, respectively column-wise softmax on G.</p><p>4. Augments P words with the weighted average of its aligned H words, and vice-versa.</p><p>5. Passes the result through another LSTM, then predicts. .76</p><p>.24 <ref type="figure">Figure 3</ref>. Example of ambiguous parses from the UD English validation set. SparseMAP selects a small number of candidate parses (left: three, right: two), differing from each other in a small number of ambiguous dependency arcs. In both cases, the desired gold parse is among the selected trees (depicted by the arcs above the sentence), but it is not the highest-scoring one.  We consider the following structured replacements for the independent row-wise and column-wise softmaxes (step 3):</p><p>Sequential alignment. We model the alignment of p to h as a sequence tagging instance of length m, with n possible tags corresponding to the n words of the hypothesis. Through transition scores, we enable the model to capture continuity and monotonicity of alignments: we parametrize transitioning from word t 1 to t 2 by binning the distance t 2 − t 1 into 5 groups, {−2 or less, −1, 0, 1, 2 or more}. We similarly parametrize the initial alignment using bins {1, 2 or more} and the final alignment as {−2 or less, −1}, allowing the model to express whether an alignment starts at the beginning or ends on the final word of h; formally</p><formula xml:id="formula_21">η F (i, t 1 , t 2 ) :=      w bin(t2−t1) 0 &lt; i &lt; n, w start bin(t2) i = 0, w end bin(t1) i = n.</formula><p>We align p to h applying the same method in the other direction, with different transition scores w. Overall, sequential alignment requires learning 18 additional scalar parameters.</p><p>Matching alignment. We now seek a symmetrical alignment in both directions simultaneously. To this end, we cast the alignment problem as finding a maximal weight bipartite matching. We recall from §2.2 that a solution can be found via the Hungarian algorithm (in contrast to marginal inference, which is #P-complete). When n = m, maximal matchings can be represented as permutation matrices, and when n = m some words remain unaligned. SparseMAP returns a weighted average of a few maximal matchings. This method requires no additional learned parameters.</p><p>We evaluate the two models alongside the softmax baseline on the SNLI <ref type="bibr" target="#b8">(Bowman et al., 2015)</ref> and MultiNLI <ref type="bibr" target="#b63">(Williams et al., 2018)</ref> datasets.</p><p>3 All models are trained by SGD, with 0.9× learning rate decay at epochs when the validation accuracy is not the best seen. We tune the learning rate on the grid 2 k : k ∈ {−6, −5, −4, −3} , extending the range if the best model is at either end. The results in <ref type="table" target="#tab_1">Table 2</ref> show that structured alignments are competitive with softmax in terms of accuracy, but are orders of magnitude sparser. This sparsity allows them to produce global alignment structures that are interpretable, as illustrated in <ref type="figure">Figure 5</ref>.</p><p>Interestingly, we observe computational advantages of sparsity. Despite the overhead of GPU memory copying, both training and validation in our latent structure models take roughly the same time as with softmax and become faster as the models grow more certain. For the sake of comparison, <ref type="bibr" target="#b26">Kim et al. (2017)</ref> report a 5× slow-down in their structured attention networks, where they use marginal inference. (c) matching <ref type="figure">Figure 5</ref>. Latent alignments on an example from the SNLI validation set, correctly predicted as neutral by all compared models. The premise is on the y-axis, the hypothesis on the x-axis. Top: columns sum to 1; bottom: rows sum to 1. The matching alignment mechanism yields a symmetrical alignment, and is thus shown only once. Softmax yields a dense alignment (nonzero weights are marked with a border). The structures selected by sequential alignment are overlayed as paths; the selected matchings are displayed in the top right.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Related Work</head><p>Structured attention networks. <ref type="bibr" target="#b26">Kim et al. (2017)</ref> and <ref type="bibr" target="#b37">Liu &amp; Lapata (2018)</ref> take advantage of the tractability of marginal inference in certain structured models and derive specialized backward passes for structured attention. In contrast, our approach is modular and general: with SparseMAP, the forward pass only requires MAP inference, and the backward pass is efficiently computed based on the forward pass results. Moreover, unlike marginal inference, SparseMAP yields sparse solutions, which is an appealing property statistically, computationally, and visually.</p><p>K-best inference. As it returns a small set of structures, SparseMAP brings to mind K-best inference, often used in pipeline NLP systems for increasing recall and handling uncertainty <ref type="bibr" target="#b65">(Yang &amp; Cardie, 2013)</ref>. K-best inference can be approximated (or, in some cases, solved), roughly K times slower than MAP inference <ref type="bibr" target="#b66">(Yanover &amp; Weiss, 2004;</ref><ref type="bibr" target="#b10">Camerini et al., 1980;</ref><ref type="bibr" target="#b11">Chegireddy &amp; Hamacher, 1987;</ref><ref type="bibr" target="#b20">Fromer &amp; Globerson, 2009</ref>). The main advantages of SparseMAP are convexity, differentiablity, and modularity, as SparseMAP can be computed in terms of MAP subproblems. Moreover, it yields a distribution, unlike K-best, which does not reveal the gap between selected structures, Learning permutations. A popular approach for differentiable permutation learning involves mean-entropic optimal transport relaxations <ref type="bibr" target="#b0">(Adams &amp; Zemel, 2011;</ref><ref type="bibr" target="#b42">Mena et al., 2018)</ref>. Unlike SparseMAP, this does not apply to general structures, and solutions are not directly expressible as combinations of a few permutations.</p><p>Regularized inference. <ref type="bibr" target="#b51">Ravikumar et al. (2010)</ref>, <ref type="bibr" target="#b44">Meshi et al. (2015)</ref>, and <ref type="bibr" target="#b40">Martins et al. (2015)</ref> proposed ℓ 2 perturbations and penalties in various related ways, with the goal of solving LP-MAP approximate inference in graphical models. In contrast, the goal of our work is sparse structured prediction, which is not considered in the aforementioned work. Nevertheless, some of the formulations in their work share properties with SparseMAP; exploring the connections further is an interesting avenue for future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We introduced a new framework for sparse structured inference, SparseMAP, along with a corresponding loss function. We proposed efficient ways to compute the forward and backward passes of SparseMAP. Experimental results illustrate two use cases where sparse inference is well-suited. For structured prediction, the SparseMAP loss leads to strong models that make sparse, interpretable predictions, a good fit for tasks where local ambiguities are common, like many natural language processing tasks. For structured hidden layers, we demonstrated that SparseMAP leads to strong, interpretable networks trained end-to-end. Modular by design, SparseMAP can be applied readily to any structured problem for which MAP inference is available, including combinatorial problems such as linear assignment.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 .</head><label>2</label><figDesc>Figure 2. Comparison of solvers on the SparseMAP optimization problem for a tree factor with 20 nodes. The active set solver converges much faster and to a much sparser solution.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>and its support by I := {s : y s &gt; 0}. Then, SparseMAP is</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>It is well-known that the subgradients of structured percep- tron and SVM losses consist of MAP inference, while the CRF loss gradient requires marginal inference. Similarly, the subgradients of the SparseMAP loss can be computed via SparseMAP inference, which in turn only requires MAP. The next proposition states properties of structured Fenchel- Young losses, including a general connection between a loss and its corresponding inference method. Proposition 2 Consider a convex Ω and a structured model defined by the matrix A ∈ R k×D . Denote the inference objective f Ω (y) := η ⊤ Ay − Ω(y), and a solution y ⋆ := arg max y∈△ D</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>⋆</head><label></label><figDesc>the broccoli looks browned around the edges .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>Figure 4. Distribution of the tree sparsity (top) and arc sparsity (bottom) of SparseMAP solutions during training on the Chinese dataset. Shown are respectively the number of trees and the average number of parents per word with nonzero probability.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Test accuracy scores for natural language inference with structured and unstructured variants of ESIM. In parentheses: the percentage of pairs of words with nonzero alignment scores.</figDesc><table>ESIM variant 
+MultiNLI 
+SNLI 
+
+softmax 76.05 (100%) 86.52 (100%) 
+sequential 75.54 (13%) 86.62 (19%) 
+matching 76.13 (8%) 86.05 (15%) 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">We use the notation arg max u: [u;v]∈M to convey that the maximization is over both u and v, but only u is returned. Separating the variables as [u; v] loses no generality and allows us to isolate the unary posteriors u as the return value of interest.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">We split the MultiNLI matched validation set into equal validation and test sets; for SNLI we use the provided split.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>We thank Tim Vieira, David Belanger, Jack Hessel, Justine Zhang, Sydney Zink, the Unbabel AI Research team, and the three anonymous reviewers for their insightful comments. This work was supported by the European Research Council (ERC StG DeepSPIN 758969) and by the Fundação para a Ciência e Tecnologia through contracts UID/EEA/50008/2013, PTDC/EEI-SII/7092/2014 (LearnBig), and CMUPERI/TIC/0046/2014 (GoLocal).</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Ranking via sinkhorn propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+	<note>arXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Amos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Z</forename><surname>Kolter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Optnet</surname></persName>
+		</author>
+		<title level="m">Differentiable optimization as a layer in neural networks. In ICML</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Predicting Structured Data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bakır</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">V</forename><surname>Vishwanathan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<publisher>The MIT Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Structured prediction energy networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Marginal inference in MRFs using Frank-Wolfe</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sheldon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Workshop on Greedy Opt</title>
+		<imprint>
+			<publisher>FW and Friends</publisher>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">End-to-end learning for structured prediction energy networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Tres observaciones sobre el algebra lineal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Birkhoff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Univ. Nac. Tucumán Rev. Ser. A</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page" from="147" to="151" />
+			<date type="published" when="1946" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Learning classifiers with Fenchel-Young losses: Generalized entropies, margins, and algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blondel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Niculae</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+	<note>arXiv e-prints</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A large annotated corpus for learning natural language inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">R</forename><surname>Bowman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Angeli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Potts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Convex Optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Vandenberghe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>Cambridge University Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">The k best spanning arborescences of a network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Camerini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fratta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Maffioli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Networks</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="109" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Algorithms for finding K-best perfect matchings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Chegireddy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">W</forename><surname>Hamacher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Discrete Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="155" to="165" />
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Enhanced LSTM for natural language inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Inkpen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">On the shortest arborescence of a directed graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-J</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-H</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science Sinica</title>
+		<imprint>
+			<biblScope unit="volume">14</biblScope>
+			<biblScope unit="page" from="1396" to="1400" />
+			<date type="published" when="1965" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Optimization and Nonsmooth Analysis. SIAM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">H</forename><surname>Clarke</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Discriminative training methods for Hidden Markov Models: Theory and experiments with perceptron algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Collins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Learning graphical model parameters with approximate marginal inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Domke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE T. Pattern. Anal</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="2454" to="2467" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Optimum branchings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Edmonds</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Res. Nat. Bur. Stand</title>
+		<imprint>
+			<biblScope unit="volume">71</biblScope>
+			<biblScope unit="page" from="233" to="240" />
+			<date type="published" when="1967" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">On conjugate convex functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Fenchel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Canad. J. Math</title>
+		<imprint>
+			<biblScope unit="page">1949</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">An algorithm for quadratic programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Frank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wolfe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nav. Res. Log</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">1-2</biblScope>
+			<biblScope unit="page" from="95" to="110" />
+			<date type="published" when="1956" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">An LP view of the M -best MAP problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fromer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Globerson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Linear-memory and decomposition-invariant linearly convergent conditional gradient algorithm for structured polytopes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Garber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Meshi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Softmax-margin CRFs: Training log-linear models with cost functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gimpel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NAACL</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A shortest augmenting path algorithm for dense and sparse linear assignment problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jonker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Volgenant</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computing</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="325" to="340" />
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Speech and Language Processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jurafsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Martin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+	<note>3rd ed.). draft</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Monte Carlo syntax marginals for exploring and using dependency parses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Keith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L</forename><surname>Blodgett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Connor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NAACL</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Structured attention networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Denton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hoang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Rush</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Adam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Simple and accurate dependency parsing using bidirectional LSTM feature representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kiperwasser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TACL</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page" from="313" to="327" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Ueber die auflösung der gleichungen, auf welche man bei der untersuchung der linearen vertheilung galvanischer ströme geführt wird</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kirchhoff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Annalen der Physik</title>
+		<imprint>
+			<biblScope unit="volume">148</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="497" to="508" />
+			<date type="published" when="1847" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Structured prediction models via the matrix-tree theorem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Koo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Globerson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Carreras Pérez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Collins</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Barrier Frank-Wolfe for marginal inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">G</forename><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lacoste-Julien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sontag</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Factor graphs and the sum-product algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">R</forename><surname>Kschischang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">J</forename><surname>Frey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-A</forename><surname>Loeliger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE T. Inform. Theory</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="498" to="519" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">The Hungarian method for the assignment problem</title>
+	</analytic>
+	<monogr>
+		<title level="m">SparseMAP: Differentiable Sparse Structured Inference Kuhn, H. W</title>
+		<imprint>
+			<date type="published" when="1955" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="83" to="97" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">On the global linear convergence of Frank-Wolfe optimization variants</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lacoste-Julien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaggi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Conditional Random Fields: Probabilistic models for segmenting and labeling sequence data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Lafferty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">C</forename><surname>Pereira</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">First-and second-order expectation semirings with applications to minimum-risk training on translation forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Eisner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Learning structured text representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lapata</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2018" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="63" to="75" />
+		</imprint>
+		<respStmt>
+			<orgName>TACL</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">From softmax to sparsemax: A sparse model of attention and multi-label classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">F</forename><surname>Astudillo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Concise integer linear programming formulations for dependency parsing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL-IJCNLP</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">AD3: Alternating directions dual decomposition for MAP inference in graphical models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Figueiredo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Aguiar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="495" to="545" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Online largemargin training of dependency parsers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mcdonald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Crammer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pereira</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Learning latent permutations with Gumbel-Sinkhorn networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Belanger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Linderman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Differentiable dynamic programming for structured prediction and attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mensch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blondel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Smooth and strong: MAP inference with linear convergence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Meshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mahdavi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schwing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Neubig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Goldberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Matthews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ammar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Anastasopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ballesteros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Chiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Clothiaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Cohn</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1701.03980</idno>
+		<title level="m">The dynamic neural network toolkit</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+	<note>preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">A regularized framework for sparse and structured neural attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Niculae</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blondel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Universal Dependencies v1: A multilingual treebank collection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nivre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-C</forename><surname>De Marneffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Ginter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Goldberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hajic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Mcdonald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Petrov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pyysalo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silveira</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">LREC</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Numerical Optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wright</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1999" />
+			<publisher>Springer</publisher>
+			<pubPlace>New York</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<monogr>
+		<title level="m" type="main">Advanced Structured Prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">V</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jancsary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>MIT Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">A tutorial on Hidden Markov Models and selected applications in speech recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">R</forename><surname>Rabiner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">P. IEEE</title>
+		<imprint>
+			<biblScope unit="volume">77</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="257" to="286" />
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Messagepassing for graph-structured linear programs: Proximal methods and rounding schemes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ravikumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wainwright</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="1043" to="1080" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Accelerated proximal stochastic dual coordinate ascent for regularized loss minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Math. Program</title>
+		<imprint>
+			<biblScope unit="volume">155</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="105" to="145" />
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Probabilistic models of nonprojective dependency trees</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMNLP</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Linguistic Structure Prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">A</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Synthesis Lectures on Human Language Technologies. Morgan and Claypool</title>
+		<imprint>
+			<date type="published" when="2011-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Empirical risk minimization of graphical model parameters given approximate inference, decoding, and model structure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Stoyanov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ropson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Eisner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">POS tagging, lemmatizing and parsing UD 2.0 with UDPipe</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Straka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Straková</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tokenizing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CoNLL Shared Task</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<monogr>
+		<title level="m" type="main">Learning Structured Prediction Models: A Large Margin Approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+		<respStmt>
+			<orgName>Stanford University</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">Max-Margin Markov Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guestrin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">Support vector machine learning for interdependent and structured output spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Tsochantaridis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Altun</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">The complexity of computing the permanent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">G</forename><surname>Valiant</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Theor. Comput. Sci</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="189" to="201" />
+			<date type="published" when="1979" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<analytic>
+		<title level="a" type="main">Fast column generation for atomic norm regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vinyes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Obozinski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<analytic>
+		<title level="a" type="main">Graphical models, exponential families, and variational inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Jordan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Found. Trends Mach. Learn</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">1-2</biblScope>
+			<biblScope unit="page" from="1" to="305" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<analytic>
+		<title level="a" type="main">A broadcoverage challenge corpus for sentence understanding through inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Nangia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">R</forename><surname>Bowman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NAACL</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b64">
+	<analytic>
+		<title level="a" type="main">Finding the nearest point in a polytope</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wolfe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mathematical Programming</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="128" to="149" />
+			<date type="published" when="1976" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b65">
+	<analytic>
+		<title level="a" type="main">Joint inference for fine-grained opinion extraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cardie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACL</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b66">
+	<analytic>
+		<title level="a" type="main">Finding the M most probable configurations using loopy belief propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yanover</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b67">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Popel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Straka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hajic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nivre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Ginter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Luotolahti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pyysalo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Petrov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Potthast</surname></persName>
+		</author>
+		<title level="m">Multilingual parsing from raw text to universal dependencies. CoNLL</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

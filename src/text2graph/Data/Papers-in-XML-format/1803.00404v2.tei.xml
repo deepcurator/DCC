@@ -1,0 +1,1798 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Deep Defense: Training DNNs with Improved Adversarial Robustness</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziang</forename><surname>Yan</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Automation</orgName>
+								<orgName type="laboratory">Laboratory of Intelligent Technology and Systems Tsinghua National Laboratory for Information Science and Technology (TNList)</orgName>
+								<orgName type="institution">Tsinghua University State Key</orgName>
+								<address>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yiwen</forename><surname>Guo</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Intel Labs</orgName>
+								<address>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Changshui</forename><surname>Zhang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Automation</orgName>
+								<orgName type="laboratory">Laboratory of Intelligent Technology and Systems Tsinghua National Laboratory for Information Science and Technology (TNList)</orgName>
+								<orgName type="institution">Tsinghua University State Key</orgName>
+								<address>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Deep Defense: Training DNNs with Improved Adversarial Robustness</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Despite the efficacy on a variety of computer vision tasks, deep neural networks (DNNs) are vulnerable to adversarial attacks, limiting their applications in securitycritical systems. Recent works have shown the possibility of generating imperceptibly perturbed image inputs (a.k.a., adversarial examples) to fool well-trained DNN classifiers into making arbitrary predictions. To address this problem, we propose a training recipe named "deep defense". Our core idea is to integrate an adversarial perturbation-based regularizer into the classification objective, such that the obtained models learn to resist potential attacks, directly and precisely. The whole optimization problem is solved just like training a recursive network. Experimental results demonstrate that our method outperforms training with adversarial/Parseval regularizations by large margins on various datasets (including MNIST, CIFAR-10 and ImageNet) and different DNN architectures. Code and models for reproducing our results will be made publicly available.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Although deep neural networks (DNNs) have advanced the state-of-the-art of many challenging computer vision tasks, they are vulnerable to adversarial examples <ref type="bibr" target="#b33">[34]</ref> (i.e., generated images which seem perceptually similar to the real ones but are intentionally formed to fool learning models).</p><p>A general way of synthesizing the adversarial examples is to apply worst-case perturbations to real images <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr">3]</ref>. With proper strategies, the required perturbations for fooling a DNN model can be 1000× smaller in magnitude when compared with the real images, making them imperceptible to human beings. It has been reported that even the state-of-the-art DNN solutions have been fooled to misclassify such examples with high confidence <ref type="bibr" target="#b17">[18]</ref>. Worse, the adversarial perturbation can transfer across different images and network architectures <ref type="bibr" target="#b24">[25]</ref>. Such transferability also allows black-box attacks, which means the adversary may succeed without having any knowledge about the model architecture or parameters <ref type="bibr" target="#b27">[28]</ref>.</p><p>Though intriguing, such property of DNNs can lead to potential issues in real-world applications like self-driving cars and paying with your face systems. Unlike certain instability against random noise, which is theoretically and practically guaranteed to be less critical <ref type="bibr">[7,</ref><ref type="bibr" target="#b33">34]</ref>, the vulnerability to adversarial perturbations is still severe in deep learning. Multiple attempts have been made to analyze and explain it so far <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr">5,</ref><ref type="bibr" target="#b13">14]</ref>. For example, Goodfellow et al. <ref type="bibr">[8]</ref> argue that the main reason why DNNs are vulnerable is their linear nature instead of nonlinearity and overfitting. Based on the explanation, they design an efficient l ∞ induced perturbation and further propose to combine it with adversarial training <ref type="bibr" target="#b33">[34]</ref> for regularization. Recently, Cisse et al. <ref type="bibr">[5]</ref> investigate the Lipschitz constant of DNN-based classifiers and propose Parseval training. However, similar to some previous and contemporary methods, approximations to the theoretically optimal constraint are required in practice, making the method less effective to resist very strong attacks.</p><p>In this paper, we introduce "deep defense", an adversarial regularization method to train DNNs with improved robustness. Unlike many existing and contemporaneous methods which make approximations and optimize possibly untight bounds, we precisely integrate a perturbation-based regularizer into the classification objective. This endows DNN models with an ability of directly learning from attacks and further resisting them, in a principled way. Specifically, we penalize the norm of adversarial perturbations, by encouraging relatively large values for the correctly classified samples and possibly small values for those misclassified ones. As a regularizer, it is jointly optimized with the original learning objective and the whole problem is efficiently solved through being considered as training a recursive-flavoured network. Extensive experiments on MNIST, CIFAR-10 and ImageNet show that our method significantly improves the robustness of different DNNs under advanced adversarial attacks, in the meanwhile no accuracy degradation is observed.</p><p>The remainder of this paper is structured as follows. First, we briefly introduce and discuss representative methods for conducting adversarial attacks and defenses in Section 2. Then we elaborate on the motivation and basic ideas of our method in Section 3. Section 4 provides implementation details of our method and experimentally compares it with the state-of-the-arts, and finally, Section 5 draws the conclusions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Related Work</head><p>Adversarial Attacks. Starting from a common objective, many attack methods have been proposed. Szegedy et al. <ref type="bibr" target="#b33">[34]</ref> propose to generate adversarial perturbations by minimizing a vector norm using box-constrained L-BFGS optimization. For better efficiency, Goodfellow et al. <ref type="bibr">[8]</ref> develop the fast gradient sign (FGS) attack, by chooseing the sign of gradient as the direction of perturbation since it is approximately optimal under a ∞ constraint. Later, Kurakin et al. <ref type="bibr" target="#b17">[18]</ref> present an iterative version of the FGS attack by applying it multiple times with a small step size, and clipping pixel values on internal results. Similarly, Moosavi-Dezfooli et al. <ref type="bibr" target="#b25">[26]</ref> propose DeepFool as an iterative l p attack. At each iteration, it linearizes the network and seeks the smallest perturbation to transform current images towards the linearized decision boundary. Some more detailed explanations of DeepFool can be found in Section 3.1. More recently, Carlini and Wagner <ref type="bibr">[4]</ref> reformulate attacks as optimization instances that can be solved using stochastic gradient descent to generate more sophisticated adversarial examples. Based on the above methods, input-and network-agnostic adversarial examples can also be generated <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b27">28]</ref>.</p><p>Defenses. Resisting adversarial attacks is challenging. It has been empirically studied that conventional regularization strategies such as dropout, weight decay and distorting training data (with random noise) do not really solve the problem <ref type="bibr">[8]</ref>. Fine-tuning networks using adversarial examples, namely adversarial training <ref type="bibr" target="#b33">[34]</ref>, is a simple yet effective approach to perform defense and relieve the problem <ref type="bibr">[8,</ref><ref type="bibr" target="#b17">18]</ref>, for which the examples can be generated either online <ref type="bibr">[8]</ref> or offline <ref type="bibr" target="#b25">[26]</ref>. Adversarial training works well on small datasets such as MNIST and CIFAR. Nevertheless, as Kurakin et al. <ref type="bibr" target="#b17">[18]</ref> have reported, it may result in a decreased benign-set accuracy on large-scale datasets like ImageNet.</p><p>An alternative way of defending such attacks is to train a detector, to detect and reject adversarial examples. Metzen et al. <ref type="bibr" target="#b22">[23]</ref> utilize a binary classifier which takes intermediate representations as input for detection, and Lu et al. <ref type="bibr" target="#b20">[21]</ref> propose to invoke an RBF-SVM operating on discrete codes from late stage ReLUs. However, it is possible to perform attacks on the joint system if an adversary has access to the parameters of such a detector. Furthermore, it is still in doubt whether the adversarial examples are intrinsically different with the benign ones <ref type="bibr">[3]</ref>.</p><p>Another effective work is to exploit distillation <ref type="bibr" target="#b29">[30]</ref>, but it also slightly degrades the benign-set accuracy and may be broken by C&amp;W's attack <ref type="bibr">[4]</ref>. Alemi et al. <ref type="bibr">[1]</ref> present an information theoretic method which helps on improving the resistance to adversarial attacks too. Some recent and contemporaneous works also propose to utilize gradient masking <ref type="bibr" target="#b28">[29]</ref> as defenses <ref type="bibr">[6,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr">2]</ref>.</p><p>Several regularization-based methods have also been proposed. For example, Gu and Rigazio <ref type="bibr">[9]</ref> propose to penalize the Frobenius norm of the Jacobian matrix in a layer-wise fashion. Recently, <ref type="figure">Figure 1</ref>: Top left: The recursive-flavoured network which takes a reshaped image x k as input and sequentially compute each perturbation component by using a pre-designed attack module. Top right: an example for generating the first component, in which the three elbow double-arrow connectors indicate weight-sharing fully-connected layers and index-sharing between ReLU activation layers. Bottom: the attack module for n-class (n ≥ 2) scenarios.</p><p>Cisse et al. <ref type="bibr">[5]</ref> and Hein and Audriushchenko <ref type="bibr" target="#b13">[14]</ref> theoretically show that the sensitivity to adversarial examples can be controlled by the Lipschitz constant of DNNs and propose Parseval training and cross-Lipschitz regularization, respectively. However, these methods usually require approximations, making them less effective to defend very strong and advanced adversarial attacks.</p><p>As a regularization-based method, our Deep Defense is orthogonal to the adversarial training, defense distillation and detecting then rejecting methods. It also differs from previous and contemporaneous regularization-based methods (e.g. <ref type="bibr">[9,</ref><ref type="bibr">5,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b30">31]</ref>) in a way that it endows DNNs the ability of directly learning from adversarial examples and precisely resisting them.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Our Deep Defense Method</head><p>Many methods regularize the learning objective of DNNs approximately, which may lead to a degraded prediction accuracy on the benign test sets or unsatisfactory robustness to advanced adversarial examples. We reckon it can be more beneficial to incorporate advanced attack modules into the learning process and learn to maximize a margin. In this section, we first briefly analyze a representative gradient-based attack and then introduce our solution to learn from it.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1">Generate Adversarial Examples</head><p>As discussed, a lot of efforts have been devoted to generating adversarial examples. Let us take the l 2 DeepFool as an example here. It is able to conduct 100% successful attacks on advanced networks. Mathematically, starting from a binary classifier f : R m → R which makes predictions (to the class label) based on the sign of its outputs, DeepFool generates the adversarial perturbation ∆ x for an arbitrary input vector x ∈ R m in a heuristic way. Concretely,</p><formula xml:id="formula_0">∆ x = r (0) + ... + r (u−1)</formula><p>, in which the i-th (0 ≤ i &lt; u) addend r is obtained by taking advantage of the Taylor's theorem and solving:</p><formula xml:id="formula_1">min r r 2 s.t. f (x + ∆ (i) x ) + ∇f (x + ∆ (i) x ) T r = 0,<label>(1)</label></formula><p>in which ∆ (i)</p><formula xml:id="formula_2">x := i−1 j=0 r (j)</formula><p>, function ∇f denotes the gradient of f w.r.t. its input, and operator · 2 denotes the l 2 (i.e., Euclidean) norm. Obviously, Equation (1) has a closed-form solution as:</p><formula xml:id="formula_3">r (i) = − f (x + ∆ (i) x ) ∇f (x + ∆ (i) x ) 2 ∇f (x + ∆ (i) x ).<label>(2)</label></formula><p>By sequentially calculating all the r (i) s with (2), DeepFool employs a faithful approximation to the ∆ x of minimal l 2 norm. In general, the approximation algorithm converges in a reasonably small number of iterations even when f is a non-linear function represented by a very deep neural network, making it both effective and efficient in practical usage. The for-loop for calculating r x )) = sgn(f (x)) is already reached at any iteration i &lt; u − 1. Similarly, such strategy also works for the adversarial attacks to multi-class classifiers, which only additionally requires a specified target label in each iteration of the algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2">Perturbation-based Regularization</head><p>Our target is to improve the robustness of off-the-shell networks without modifying their architectures, hence giving a ∆ x p -based (p ∈ [1, ∞)) regularization to their original objective function seems to be a solution.</p><p>Considering the aforementioned attacks which utilize ∇f when generating the perturbation ∆ x <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b35">36]</ref>, their strategy can be technically regarded as a function parameterized by the same set of learnable parameters as that of f . Therefore, it is possible that we jointly optimize the original network objective and a scaled ∆ x p as a regularization for some chosen norm operator · p , provided ∆ x p is differentiable. Specifically, given a set of training samples {(x k , y k )} and a parameterized function f , we may want to optimize:</p><formula xml:id="formula_4">min W k L(y k , f (x k ; W)) + λ k R − ∆ x k p x k p ,<label>(3)</label></formula><p>in which the set W exhaustively collects learnable parameters of f , and x k p is a normalization factor for ∆ x k p , as adopted in Moosavi-Dezfooli et al.'s work <ref type="bibr" target="#b25">[26]</ref>. As will be further detailed in Section 3.4, function R should treat incorrectly and correctly classified samples differently, and it should be monotonically increasing on the latter such that it gives preference to those f s resisting small ∆ x k p / x k p anyway. Regarding the DNN representations, W may comprise the weight and bias of network connections, means and variances of batch normalization layers <ref type="bibr" target="#b15">[16]</ref>, and slops of the parameterized ReLU layers <ref type="bibr" target="#b11">[12]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3">Network-based Formulation</head><p>As previously discussed, we re-formulate the adversarial perturbation as ∆ x k = g(x k ; W), in which g need to be differentiable except for maybe certain points, so that problem (3) can be solved using stochastic gradient descent following the chain rule. In order to make the computation more efficient and easily parallelized, an explicit formulation of g or its gradient w.r.t W is required. Here we accomplish this task by representing g as a "reverse" network to the original one. Taking a two-class multi-layer perceptron (MLP) as an example, we have</p><formula xml:id="formula_5">W = {W 0 , b 0 , w 1 , b 1 } and f (x k ; W) = w T 1 h(W T 0 x k + b 0 ) + b 1 ,<label>(4)</label></formula><p>in which h denotes the non-linear activation function and we choose h(W</p><formula xml:id="formula_6">T 0 x k + b 0 ) := max(W T 0 x k + b 0 , 0) (i.e.</formula><p>as the ReLU activation function) in this paper since it is commonly used. Let us further denote</p><formula xml:id="formula_7">a k := h(W T 0 x k + b 0 ) andŷ k := f (x k ; W), then we have ∇f (x k ; W) = W 0 (1 &gt;0 (a k ) ⊗ w 1 ),<label>(5)</label></formula><p>in which ⊗ indicates the element-wise product of two matrices, and 1 &gt;0 is an element-wise indicator function that compares the entries of its input with zero.</p><p>We choose ∆ x k as the previously introduced DeepFool perturbation for simplicity of notation 1 . Based on Equation <ref type="formula" target="#formula_3">(2)</ref> and <ref type="formula" target="#formula_7">(5)</ref>, we construct a recursive-flavoured regularizer network (as illustrated in the top left of <ref type="figure">Figure 1</ref>) to calculate R(− ∆ x k p / x k p ). It takes image x k as input and calculate each addend for ∆ x k by utilizing an incorporated multi-layer attack module (as illustrated in the top right of <ref type="figure">Figure 1</ref>). Apparently, the original three-layer MLP followed by a multiplicative inverse operator makes up the first half of the attack module and its "reverse" followed by a norm-based rescaling operator makes up the second half. It can be easily proved that the designed network is differentiable w.r.t. each elements of W, except for certain points. As sketched in the bottom of <ref type="figure">Figure 1</ref>, such a network-based formulation can also be naturally generalized to regularize multi-class MLPs with more than one output neurons (i.e.,ŷ k ∈ R n , ∇f (x k ; W) ∈ R m×n and n &gt; 1). We 1 Note that our method also naturally applies to some other gradient-based adversarial attacks.</p><p>use I ∈ R n×n to indicate the identity matrix, andl k , l k to indicate the one-hot encoding of current prediction label and a chosen label to fool in the first iteration, respectively.</p><p>Seeing that current winning DNNs are constructed as a stack of convolution, non-linear activation (e.g., ReLU, parameterized ReLU and sigmoid), normalization (e.g., local response normalization <ref type="bibr" target="#b16">[17]</ref> and batch normalization), pooling and fully-connected layers, their ∇f functions, and thus the g functions, should be differentiable almost everywhere. Consequently, feasible "reverse" layers can always be made available to these popular layer types. In addition to the above explored ones (i.e., ReLU and fully-connected layers), we also have deconvolution layers <ref type="bibr" target="#b26">[27]</ref> which are reverse to the convolution layers, and unpooling layers <ref type="bibr" target="#b37">[38]</ref> which are reverse to the pooling layers, etc.. Just note that some learning parameters and variables like filter banks and pooling indices should be shared among them.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4">Robustness and Accuracy</head><p>Problem <ref type="formula" target="#formula_4">(3)</ref> integrates an adversarial perturbation-based regularization into the classification objective, which should endow parameterized models with the ability of learning from adversarial attacks and resisting them. Additionally, it is also crucial not to diminish the inference accuracy on benign sets. Goodfellow et al. <ref type="bibr">[8]</ref> have shown the possibility of fulfilling such expectation in a data augmentation manner. Here we explore more on our robust regularization to ensure it does not degrade benign-set accuracies either.</p><p>Most attacks treat all the input samples equally <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b17">18]</ref>, regardless of whether or not their predictions match the ground-truth labels. It makes sense when we aim to fool the networks, but not when we leverage the attack module to supervise training. Specifically, we might expect a decrease in ∆ x k p / x k p from any misclassified sample x k , especially when the network is to be "fooled" to classify it as its ground-truth. This seems different with the objective as formulated in <ref type="formula" target="#formula_4">(3)</ref>, which appears to enlarge the adversarial perturbations for all training samples.</p><p>Moreover, we found it difficult to seek reasonable trade-offs between robustness and accuracy, if R is a linear function (e.g., R(z) = z). In that case, the regularization term is dominated by some extremely "robust" samples, so the training samples with relatively small ∆ x k p / x k p are not fully optimized. This phenomenon can impose negative impact on the classification objective L and thus the inference accuracy. In fact, for those samples which are already "robust" enough, enlarging ∆ x k p / x k p is not really necessary. It is appropriate to penalize more on the currently correctly classified samples with abnormally small ∆ x k p / x k p values than those with relatively large ones (i.e., those already been considered "robust" in regard of f and ∆ x k ).</p><p>To this end, we rewrite the second term in the objective function of Problem (3) as</p><formula xml:id="formula_8">λ k∈T R −c ∆ x k p x k p + λ k∈F R d ∆ x k p x k p ,<label>(6)</label></formula><p>in which F is the index set of misclassified training samples, T is its complement, c, d &gt; 0 are two scaling factors that balance the importance of different samples, and R is chosen as the exponential function. With extremely small or large c, our method treats all the samples the same in T , otherwise those with abnormally small ∆ x k p / x k p will be penalized more than the others.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experimental Results</head><p>In this section, we evaluate the efficacy of our method on three different datasets: MNIST, CIFAR-10 and ImageNet <ref type="bibr" target="#b31">[32]</ref>. We compare our method with adversarial training and Parseval training (also known as Parseval networks). Similar to previous works <ref type="bibr" target="#b25">[26,</ref><ref type="bibr">1]</ref>, we choose to fine-tune from pretrained models instead of training from scratch. Fine-tuning hyper-parameters can be found in the supplementary materials. All our experiments are conducted on an NVIDIA GTX 1080 GPU. Our main results are summarized in <ref type="table" target="#tab_0">Table 1</ref>, where the fourth column demonstrates the inference accuracy of different models on benign test images, the fifth column compares the robustness of different models to DeepFool adversarial examples, and the subsequent columns compare the robustness to FGS adversarial examples. The evaluation metrics will be carefully explained in Section 4.1. Some implementation details of the compared methods are shown as follows. Deep Defense. There are three hyper-parameters in our method: λ, c and d. As previously explained in Section 3.4, they balance the importance of the model robustness and benign-set accuracy. We fix λ = 15, c = 25, d = 5 for MNIST and CIFAR-10 major experiments (except for NIN, c = 70), and uniformly set λ = 5, c = 500, d = 5 for all ImageNet experiments. Practical impact of varying these hyper-parameters will be discussed in Section 4.2. The Euclidean norm is simply chosen for · p .</p><p>Adversarial Training. There exists many different versions of adversarial training <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b21">22]</ref>, partly because it can be combined with different attacks. Here we choose two of them, in accordance with the adversarial attacks to be tested, and try out to reach their optimal performance. First we evaluate the one introduced in the DeepFool paper <ref type="bibr" target="#b25">[26]</ref>, which utilizes a fixed adversarial training set generated by DeepFool, and summarize its performance in <ref type="table" target="#tab_0">Table 1</ref> (see "Adv. Train I"). We also test Goodfellow et al.'s adversarial training objective <ref type="bibr">[8]</ref> (referred to as "Adv. Train II") and compare it with our method intensively (see supplementary materials), considering there exists trade-offs between accuracies on benign and adversarial examples. In particular, a combined method is also evaluated to testify our previous claim of orthogonality.</p><p>Parseval Training. Parseval training <ref type="bibr">[5]</ref> improves the robustness of a DNN by controlling its global Lipschitz constant. Practically, a projection update is performed after each stochastic gradient descent iteration to ensure all weight matrices' Parseval tightness. Following the original paper, we uniformly sample 30% of columns to perform this update. We set the hyper-parameter β = 0.0001 for MNIST, and β = 0.0003 for CIFAR-10 after doing grid search.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Evaluation Metrics</head><p>This subsection explains some evaluation metrics adopted in our experiments. Different l p (e.g., l 2 and l ∞ ) norms have been used to perform attacks. Here we conduct the famous FGS and DeepFool as representatives of l ∞ and l 2 attacks and compare the robustness of obtained models using different defense methods. As suggested in the paper <ref type="bibr" target="#b25">[26]</ref>, we evaluate model robustness by calculating</p><formula xml:id="formula_9">ρ 2 := 1 |D| k∈D ∆ x k 2 x k 2 ,<label>(7)</label></formula><p>in which D is the test set (for ImageNet we use its validation set), when DeepFool is used.</p><p>It is popular to evaluate the accuracy on a perturbed D as an metric for the FGS attack <ref type="bibr">[9,</ref><ref type="bibr">8,</ref><ref type="bibr">5]</ref>  <ref type="table" target="#tab_0">Table 1</ref>). Accuracies at lower levels of perturbations (a half and one fifth of ref ) are also reported.</p><p>Many other metrics will be introduced and used for further comparisons in supplementary materials.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Exploratory Experiments on MNIST</head><p>As a popular dataset for conducting adversarial attacks <ref type="bibr" target="#b33">[34,</ref><ref type="bibr">8,</ref><ref type="bibr" target="#b25">26]</ref>, MNIST is a reasonable choice for us to get started. It consists of 70,000 grayscale images, in which 60,000 of them are used for training and the remaining are used for test. We train a four-layer MLP and download a LeNet <ref type="bibr" target="#b18">[19]</ref> structured CNN model <ref type="bibr">2</ref> as references (see supplementary materials for more details). For fair comparisons, we use identical fine-tuning policies and hyper-parameters for different defense methods We cut the learning rate by 2× after four epochs of training because it can be beneficial for convergence.</p><p>Robustness and accuracy. The accuracy of different models (on the benign test sets) can be found in the fourth column of <ref type="table" target="#tab_0">Table 1</ref> and the robustness performance is compared in the last four columns. We see Deep Defense consistently and significantly outperforms competitive methods in the sense of both robustness and accuracy, even though our implementation of Adv. Train I achieves slightly better results than those reported in <ref type="bibr" target="#b25">[26]</ref>. Using our method, we obtain an MLP model with over 2× better robustness to DeepFool and an absolute error decrease of 46.69% under the FGS attack considering = 1.0 ref , while the inference accuracy also increases a lot (from 98.31% to 98.65% in comparison with the reference model. The second best is Adv. Train I, which achieves roughly 1.5× and an absolute 19.24% improvement under the DeepFool and FGS attacks, respectively. Parseval training also yields models with improved robustness to the FGS attack, but they are still vulnerable to the DeepFool. The superiority of our method holds on LeNet, and the benign-set accuracy increases from 99.02% to 99.34% with the help of our method. <ref type="figure">Figure 2</ref>, in which the "Clean" curve indicates fine-tuning on the benign training set with the original learning objective. Our method optimizes more sophisticated objective than the other methods so it takes longer to finally converge. However, both its robustness and accuracy performance surpasses that of the reference models in only three epochs and keeps growing in the last two. Consistent with results reported in <ref type="bibr" target="#b25">[26]</ref>, we also observe growing accuracy and decreasing ρ 2 on Adv. Train I. In fact, the benefit of our method to test-set accuracy for benign examples is unsurprising. From a geometrical point of view, an accurate estimation of the optimal perturbation like our ∆ x k represents the distance from an benign example x k to the decision boundary, so maximizing ∆ x k approximately maximizes the margin. According to some previous theoretical works <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b32">33]</ref>, such regularization to the margin should relieve the overfitting problem of complex learning models (including DNNs) and thus lead to better test-set performance on benign examples.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Convergence curves of different methods are provided in</head><p>Varying Hyper-parameters. <ref type="figure" target="#fig_2">Figure 3</ref> illustrates the impact of the hyper-parameters in our method. We fix d = 5 and try to vary c and λ in {5, <ref type="bibr">10, 15, 20, 25, 30, 35, 40, 45}</ref> and {5, 15, 25}, respectively. Note that d is fixed here because it has relatively minor effect on our fine-tuning process on MNIST. In the figure, different solid circles on the same curve indicate different values of c. From left to right, they are calculated with decreasing c, which means a larger c encourages achieving a better accuracy but lower robustness. Conversely, setting a very small c (e.g., c = 5) can yield models with high robustness but low accuracies. By adjusting λ, one changes the numerical range of the regularizer. A larger λ makes the regularizer contributes more to the whole objective function.  Layer-wise Regularization. We also investigate the importance of different layers to the robustness of LeNet with our Deep Defense method. Specifically, we mask the gradient (by setting its elements to zero) of our adversarial regularizer w.r.t. the learning parameters (e.g., weights and biases) of all layers except one. By fixing λ = 15, d = 5 and varying c in the set {5, 15, 25, 35, 45}, we obtain 20 different models. <ref type="figure" target="#fig_3">Figure 4</ref> demonstrates the ρ 2 values and benign-set accuracies of these models. Different points on the same curve correspond to fine-tuning with different values of c (decreasing from left to right). Legends indicate the gradient of which layer is not masked. Apparently, when only one layer is exploited to regularize the classification objective, optimizing "fc1" achieves the best performance. This is consistent with previous results that "fc1" is the most "redundant" layer of LeNet <ref type="bibr" target="#b10">[11,</ref><ref type="bibr">10]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Image Classification Experiments</head><p>For image classification experiments, we testify the effectiveness of our method on several different benchmark networks on the CIFAR-10 and ImageNet datasets.</p><p>CIFAR-10 results. We train two CNNs on CIFAR-10: one with the same architecture as in <ref type="bibr" target="#b14">[15]</ref>, and the other with a network-in-network architecture <ref type="bibr" target="#b19">[20]</ref>. Our training procedure is the same as in <ref type="bibr" target="#b25">[26]</ref>. We still compare our Deep Defense with adversarial and Parseval training by fine-tuning from the references. Fine-tuning hyper-parameters are summarized in the supplementary materials. Likewise, we cut the learning rate by 2× for the last 10 epochs.</p><p>Quantitative comparison results can be found in <ref type="table" target="#tab_0">Table 1</ref>, in which the two chosen CNNs are referred to as "ConvNet" and "NIN", respectively. Obviously, our Deep Defense outperforms the other defense methods considerably in all test cases. When compared with the reference models, our regularized models achieve higher test-set accuracies on benign examples and gain absolute error decreases of 26.15% and 16.44% under the FGS attack. For the DeepFool attack which might be stronger, our method gains 2.1× and 1.3× better robustness on the two networks.</p><p>ImageNet results. As a challenging classification dataset, ImageNet consists of millions of highresolution images <ref type="bibr" target="#b31">[32]</ref>. To verify the efficacy and scalability of our method, we collect well-trained AlexNet <ref type="bibr" target="#b16">[17]</ref> and ResNet-18 <ref type="bibr" target="#b12">[13]</ref> model from the Caffe and PyTorch model zoo respectively, fine-tune them on the ILSVRC-2012 training set using our Deep Defense and test it on the validation set. After only 10 epochs of fine-tuning for AlexNet and 1 epoch for ResNet, we achieve roughly 1.5× improved robustness to the DeepFool attack on both architectures, along with a slightly increased benign-set accuracy, highlighting the effectiveness of our method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Conclusion</head><p>In this paper, we investigate the vulnerability of DNNs to adversarial examples and propose a novel method to address it, by incorporating an adversarial perturbation-based regularization into the classification objective. This shall endow DNNs with an ability of directly learning from attacks and precisely resisting them. We consider the joint optimization problem as learning a recursive-flavoured network to solve it efficiently. Extensive experiments on MNIST, CIFAR-10 and ImageNet have shown the effectiveness of our method. In particular, when combined with the FGS-based adversarial learning, our method achieves even better results on various benchmarks. Future works shall include explorations on resisting black-box attacks and attacks in the physical world.  In this paper, we leave the optimal choice of evaluation metric an open question and simply choose some popular ones following previous works. Here in the supplementary material we try to test as many as possible to verify the effectiveness of our method extensively. In the main body of our paper, we utilize the normalized l 2 norm of required adversarial perturbations to evaluate the robustness of different models, as suggested in the DeepFool paper <ref type="bibr">[6]</ref>. We notice that in some papers, an unnormalized norm is used instead, which means</p><formula xml:id="formula_10">l 2 := 1 |D| k∈D ∆ x k 2<label>(1)</label></formula><p>can also be calculated as a metric (see the fourth column of <ref type="table" target="#tab_4">Table 2</ref>). In addition, we further evaluate the robustness of different models under the C&amp;W's l 2 attack <ref type="bibr">[1]</ref>, using the official CleverHans <ref type="bibr">[7]</ref> *The first two authors contributed equally to this work.</p><p>Preprint. Work in progress. implementation. The (unnormalized) l 2 values under the C&amp;W's l 2 attack are reported in the sixth column of <ref type="table" target="#tab_4">Table 2</ref>. Using different reference models trained with different initializations lead to very similar results in our experiments, so we simply omit such variance (e.g., for l 2 , it is less than 0.003).</p><formula xml:id="formula_11">)*6VXFFHVVUDWHRQWHVWVHW0/3 5HIHUHQFH 3DUV7UDLQ $GY7UDLQ, 2XUVF VXFFHVVUDWHRQ01,67WHVWVHW/H1HW 5HIHUHQFH 3DUV7UDLQ $GY7UDLQ, 2XUVF VXFFHVVUDWHRQ&amp;,)$5WHVWVHW&amp;RQY1HW 5HIHUHQFH 3DUV7UDLQ $GY7UDLQ, 2XUVF VXFFHVVUDWHRQ&amp;,)$5WHVWVHW1,1 5HIHUHQFH 3DUV7UDLQ $GY7UDLQ, 2XUVF</formula><p>Also, when the FGS attack is adopted, the robustness can be evaluated by replacing the l 2 norm with an l ∞ norm in the definition of ρ as the FGS attack is usually considered as an l ∞ norm-based (or max-norm based) perturbation method, and get</p><formula xml:id="formula_12">ρ ∞ := 1 |D| k∈D ∆ x k ∞ x k ∞ .<label>(2)</label></formula><p>in the fifth column of <ref type="table" target="#tab_4">Table 2</ref>. Higher l 2 and ρ ∞ indicate better robustness to the l 2 and l ∞ attacks, respectively. Recall that, to establish a benchmark, we adjust such that 50% of the image samples are misclassified by well-trained models, as introduced in the main body of our paper. Here we further compare the FGS success rates with respect to varying on different models in <ref type="figure" target="#fig_4">Figure 5</ref>.</p><p>As an additional l ∞ attack, the PGD-based method <ref type="bibr">[4]</ref> is also tested here. We set = 0.1 for MNIST, = 0.01 for CIFAR-10, and compare prediction accuracies on adversarial examples in the seventh column of <ref type="table" target="#tab_4">Table 2</ref>. It can be seen that the superiority of our method holds on various baseline networks. Recently, Rozsa et.al. <ref type="bibr">[8]</ref> propose a psychometric perceptual adversarial similarity score named PASS, which seems consistent with human perception. The lower such score is, the better defensive performance the model gets. We calculate it using an official implementation provided by the authors and report some results in the last column of <ref type="table" target="#tab_4">Table 2.</ref> 2 Comparison with Adv. Train II As introduced in the main body of our paper, various forms of adversarial training have been adopted in previous works <ref type="bibr">[10,</ref><ref type="bibr">2,</ref><ref type="bibr">6,</ref><ref type="bibr">3,</ref><ref type="bibr">5,</ref><ref type="bibr">4]</ref>. Here we test Goodfellow et al.'s adversarial training (abbreviated as "Adv. Train II"). In addition, we also try combining it with our Deep Defense by simply adding the cross entropy loss corresponding to FGS adversarial examples to the training objective of our method. The performance of Adv. Train II, our Deep Defense and our combined method is compared in <ref type="figure" target="#fig_5">Figure 6</ref>. For each network, we report the ρ 2 values under DeepFool in the left column and success rate of FGS with varying in right column.</p><p>For our Deep Defense, we fix λ and d and vary only c in the figure, while for the combined method, we further fix c and vary only , as for Adv. Train II. In the right column, we select winning Adv.</p><formula xml:id="formula_13">WHVWDFFXUDF\RI0/3 5HIHUHQFH $GY7UDLQ,, 2XUV 2XUV&amp;RPELQHGF 2XUV&amp;RPELQHGF (a) )*6VXFFHVVUDWHRQWHVWVHW0/3 5HIHUHQFH $GY7UDLQ,, 2XUVF 2XUVF 2XUV&amp;RPELQHGF (b) WHVW 2RI/H1HW WHVWDFFXUDF\RI/H1HW 5HIHUHQFH $GY7UDLQ,, 2XUV 2XUV&amp;RPELQHGF 2XUV&amp;RPELQHGF (c) VXFFHVVUDWHRQ01,67WHVWVHW/H1HW 5HIHUHQFH $GY7UDLQ,, 2XUVF 2XUVF 2XUV&amp;RPELQHGF (d) WHVW 2RI&amp;RQY1HW WHVWDFFXUDF\RI&amp;RQY1HW 5HIHUHQFH $GY7UDLQ,, 2XUV 2XUV&amp;RPELQHGF 2XUV&amp;RPELQHGF (e) VXFFHVVUDWHRQ&amp;,)$5WHVWVHW&amp;RQY1HW 5HIHUHQFH $GY7UDLQ,, 2XUVF 2XUVF 2XUV&amp;RPELQHGF (f) WHVW 2RI1,1 WHVWDFFXUDF\RI1,1 5HIHUHQFH $GY7UDLQ,, 2XUV 2XUV&amp;RPELQHGF 2XUV&amp;RPELQHGF (g) VXFFHVVUDWHRQ&amp;,)$5WHVWVHW1,1 5HIHUHQFH $GY7UDLQ,,<label>2XUVF 2XUVF 2XUV&amp;RPELQHGF</label></formula><p>(h) Train II models (under the FGS attack) from those tested in the left. Obviously, we see that our Deep Defense outperforms Adv. Train II as well in most cases. Moreover, by combining them, we gain even better robustness and benign-set accuracies, which verifies our previous claim of orthogonality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">MNIST Visualization Results</head><p>Quantitative results in our paper demonstrate that an adversary has to generate larger perturbations to successfully attack our regularized models. Intuitively, this implies that the required perturbations should be perceptually more obvious. Here we provide visualization results in <ref type="figure" target="#fig_6">Figure 7</ref>. Given a clean image from the test set (as illustrated in <ref type="figure" target="#fig_6">Figure 7a</ref>), the generated DeepFool adversarial examples for successfully fooling different models are shown in <ref type="figure" target="#fig_6">Figure 7b</ref>-7e. Obviously, our method yields more robust models in comparison with the others, by making the adversarial examples closely resembling real "8" and "6" images. More interestingly, our regularized LeNet model predicts all examples in <ref type="figure" target="#fig_6">Figure 7a</ref>-7d correctly as "0". For the lower adversarial example in <ref type="figure" target="#fig_6">Figure 7e</ref>, it makes the correct prediction "0" with a probability of 0.30 and the incorrect one (i.e., "6") with a probability of 0.69. Upper images are generated for MLP models and lower images are generated for LeNet models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">CIFAR-10 Convergence Curves</head><p>Convergence curves on CIFAR-10 of different methods are provided in <ref type="figure" target="#fig_7">Figure 8</ref>. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">ImageNet Results</head><p>Our method yields models with substantially improved robustness and no accuracy loss is observed on benign test sets, even on ImageNet. Though also enhance models, Parseval and adversarial training seems difficult to achieve good trade-offs between robustness and accuracy in our experiments on ImageNet. On AlexNet, we were unable to find a suitable β such that the fine-tuned model shows reasonably high accuracy (&gt; 56%) and significantly improved robustness simultaneously for Parseval training. This phenomenon can possibly be caused by insufficient hyper-parameter search. For Adv. Train I and II, we observed a decrease of inference accuracy on benign examples when the fine-tuning process starts, and after 10 epochs the accuracy is still unsatisfactory. However, Kurakin et.al. <ref type="bibr">[3]</ref> have produced an Inception v3 model <ref type="bibr">[9]</ref> using 50 machines after 150k iterations (i.e.roughly 187 epochs) of training and obtain only slightly degraded accuracy, so we guess more training epochs and sophisticated mixture of clean and adversarial examples are required.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Network Architectures and Hyper-parameters</head><p>Some hyper-parameters for our fine-tuning are summarized in <ref type="table" target="#tab_5">Table 3</ref>. Other hyper-parameters like momentum and weight decay are kept as the same as training the reference models (i.e., momentum: 0.9, and weight decay: 0.0005). <ref type="table" target="#tab_6">Table 4</ref> shows the architecture of networks used in our MNIST and CIFAR-10 experiments. For AlexNet and ResNet experiments, we directly use the reference models from the Caffe and PyTorch model zoos.   AvgPool-8</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: The performance of Deep Defense with varying hyper-parameters on LeNet. Best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: The performance of Deep Defense when only one layer is regularized for LeNet. Best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: Comparison of different defense methods under the FGS attack. For each network, we report the success rate of FGS with varying . Lower is better. Best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>Figure 6: Comparison with Adv. Train II on both MNIST and CIFAR-10 datasets. For each network, we report the ρ 2 values with DeepFool in the left column (upper right is better) and the success rate of FGS with varying in right column (lower is better). Best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 :</head><label>7</label><figDesc>Figure 7: An image (x k ) labelled "0" from the MNIST test set with DeepFool examples generated to fool different models including: (b) the references, (c)-(e): fine-tuned models with Adv. Train I, Parseval training and our Deep Defense method. Arrows above the pictures indicate which class the examples are "misclassified" to and the numbers below indicate values of ∆ x k 2 / x k 2 . Upper images are generated for MLP models and lower images are generated for LeNet models.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 :</head><label>8</label><figDesc>Figure 8: Convergence curves on CIFAR-10: (a)-(b) test accuracy and ρ 2 of ConvNet, and (c)-(d) test accuracy and ρ 2 of NIN. "Clean" indicates fine-tuning on benign examples. Best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc></figDesc><table>Test set performance of different defense methods. Column 4: prediction accuracies on 
+benign examples. Column 5: ρ 2 values under the DeepFool attack. Column 6-8: prediction accuracies 
+on the FGS adversarial examples. 
+
+Dataset 
+Network 
+Method 
+Acc. 
+ρ 2 
+Acc.@0.2 ref Acc.@0.5 ref Acc.@1.0 ref 
+
+MNIST 
+
+MLP 
+
+Reference 
+98.31% 1.11×10 
+
+−1 
+
+72.76% 
+29.08% 
+3.31% 
+Par. Train 
+98.32% 1.11×10 
+
+−1 
+
+77.44% 
+28.95% 
+2.96% 
+Adv. Train I 98.49% 1.62×10 
+
+−1 
+
+87.70% 
+59.69% 
+22.55% 
+Ours 
+98.65% 2.25×10 
+
+−1 
+
+95.04% 
+88.93% 
+50.00% 
+
+LeNet 
+
+Reference 
+99.02% 2.05×10 
+
+−1 
+
+90.95% 
+53.88% 
+19.75% 
+Par. Train 
+99.10% 2.03×10 
+
+−1 
+
+91.68% 
+66.48% 
+19.64% 
+Adv. Train I 99.18% 2.63×10 
+
+−1 
+
+95.20% 
+74.82% 
+41.40% 
+Ours 
+99.34% 2.84×10 
+
+−1 
+
+96.51% 
+88.93% 
+50.00% 
+
+CIFAR-10 
+
+ConvNet 
+
+Reference 
+79.74% 2.59×10 
+
+−2 
+
+61.62% 
+37.84% 
+23.85% 
+Par. Train 
+80.48% 3.42×10 
+
+−2 
+
+69.19% 
+50.43% 
+22.13% 
+Adv. Train I 80.65% 3.05×10 
+
+−2 
+
+65.16% 
+45.03% 
+35.53% 
+Ours 
+81.70% 5.32×10 
+
+−2 
+
+72.15% 
+59.02% 
+50.00% 
+
+NIN 
+
+Reference 
+89.64% 4.20×10 
+
+−2 
+
+75.61% 
+49.22% 
+33.56% 
+Par. Train 
+88.20% 4.33×10 
+
+−2 
+
+75.39% 
+49.75% 
+17.74% 
+Adv. Train I 89.87% 5.25×10 
+
+−2 
+
+78.87% 
+58.85% 
+45.90% 
+Ours 
+89.96% 5.58×10 
+
+−2 
+
+80.70% 
+70.73% 
+50.00% 
+
+ImageNet 
+AlexNet 
+Reference 
+56.91% 2.98×10 
+
+−3 
+
+54.62% 
+51.39% 
+46.05% 
+Ours 
+57.11% 4.54×10 
+
+−3 
+
+55.79% 
+53.50% 
+50.00% 
+
+ResNet 
+Reference 
+69.64% 1.63×10 
+
+−3 
+
+63.39% 
+54.45% 
+41.70% 
+Ours 
+69.66% 2.43×10 
+
+−3 
+
+65.53% 
+59.46% 
+50.00% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Figure 2: Convergence curves. From left to right: test accuracy and ρ 2 of MLP, and test accuracy and ρ 2 of LeNet. "Clean" indicates fine-tuning on benign examples. Best viewed in color. regularized models and denote it as ref , then test prediction accuracies of those models produced by adversarial and Parseval training at this level of perturbation (abbreviated as "Acc.@1.0 ref " in</figDesc><table>. 
+Likewise, we calculate the smallest such that 50% of the perturbed images are misclassified by our HSRFK 
+
+WHVWDFFXUDF\RI0/3 
+
+&amp;OHDQ 
+3DU7UDLQ 
+$GY7UDLQ, 
+2XUV 
+
+
+
+
+
+
+
+HSRFK 
+
+WHVW 
+
+2RI0/3 
+
+&amp;OHDQ 
+3DU7UDLQ 
+$GY7UDLQ, 
+2XUV 
+
+
+
+
+
+
+
+HSRFK 
+
+
+WHVWDFFXUDF\RI/H1HW 
+
+&amp;OHDQ 
+3DU7UDLQ 
+$GY7UDLQ, 
+2XUV 
+
+
+
+
+
+
+
+HSRFK 
+
+WHVW 
+
+2RI/H1HW 
+
+&amp;OHDQ 
+3DU7UDLQ 
+$GY7UDLQ, 
+2XUV 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>yza15@mails.tsinghua.edu.cn yiwen.guo@intel.com zcs@mail.tsinghua.edu.cn 1 More Evaluation Metrics and Attacks</figDesc><table>Supplementary Material for Deep Defense: Training 
+DNNs with Improved Adversarial Robustness 
+
+Ziang Yan 
+
+1* 
+
+Yiwen Guo 
+
+2* 
+
+Changshui Zhang 
+
+1 
+
+1 
+
+Department of Automation, Tsinghua University 
+State Key Laboratory of Intelligent Technology and Systems 
+Tsinghua National Laboratory for Information Science and Technology (TNList), Beijing, China 
+
+2 
+
+Intel Labs, China 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Test performance of different methods in the sense of: l 2 under DeepFool, ρ ∞ under FGS, l 2 under the C&amp;W attack, the prediction accuracy on PGD adversarial examples and the PASS score.</figDesc><table>Dataset 
+Network 
+Method 
+l 2 (DeepFool) 
+ρ ∞ (FGS) 
+l 2 (C&amp;W) Acc. (PGD) PASS 
+
+MNIST 
+
+MLP 
+
+Reference 
+0.81 
+5.40×10 
+
+−2 
+
+0.84 
+1.19% 
+0.8534 
+Par. Train 
+0.80 
+5.78×10 
+
+−2 
+
+0.83 
+1.18% 
+0.8542 
+Adv. Train I 
+1.17 
+9.46×10 
+
+−2 
+
+1.17 
+4.11% 
+0.8280 
+Deep Defense 
+1.64 
+1.53×10 
+
+−1 
+
+1.58 
+33.18% 
+0.8181 
+
+LeNet 
+
+Reference 
+1.48 
+1.29×10 
+
+−1 
+
+1.40 
+26.17% 
+0.9074 
+Par. Train 
+1.50 
+1.50×10 
+
+−1 
+
+1.58 
+23.06% 
+0.8981 
+Adv. Train I 
+1.90 
+2.05×10 
+
+−1 
+
+1.71 
+50.67% 
+0.8810 
+Deep Defense 
+2.05 
+2.36×10 
+
+−1 
+
+1.84 
+64.54% 
+0.8760 
+
+CIFAR-10 
+
+ConvNet 
+
+Reference 
+0.18 
+5.27×10 
+
+−3 
+
+0.29 
+21.34% 
+-
+Par. Train 
+0.24 
+8.02×10 
+
+−3 
+
+0.33 
+27.91% 
+-
+Adv. Train I 
+0.21 
+6.37×10 
+
+−3 
+
+0.31 
+27.08% 
+-
+Deep Defense 
+0.36 
+1.58×10 
+
+−2 
+
+0.47 
+45.05% 
+-
+
+NIN 
+
+Reference 
+0.30 
+1.05×10 
+
+−2 
+
+0.41 
+34.41% 
+-
+Par. Train 
+0.31 
+1.07×10 
+
+−2 
+
+0.41 
+36.59% 
+-
+Adv. Train I 
+0.37 
+1.76×10 
+
+−2 
+
+0.48 
+45.51% 
+-
+Deep Defense 
+0.40 
+2.15×10 
+
+−2 
+
+0.50 
+51.07% 
+-
+
+ImageNet 
+AlexNet 
+Reference 
+0.29 
+5.46×10 
+
+−4 
+
+-
+-
+-
+Deep Defense 
+0.45 
+8.70×10 
+
+−4 
+
+-
+-
+-
+
+ResNet 
+Reference 
+0.69 
+6.96×10 
+
+−4 
+
+-
+-
+-
+Deep Defense 
+1.03 
+1.08×10 
+
+−3 
+
+-
+-
+-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Some hyper-parameters in the fine-tuning process.</figDesc><table>Dataset 
+Batch Size #Epoch Base Learning Rate 
+
+MNIST 
+100 
+5 
+5×10 
+
+−4 
+
+CIFAR-10 100 
+50 
+5×10 
+
+−4 
+
+ImageNet 256 
+10 
+1×10 
+
+−4 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Network architectures adopted in MNIST and CIFAR-10 experiments. We use Conv-[kernel width]-[output channel number], FC-[output channel number], MaxPool-[kernel width], AvgPool- [kernel width] to denote parameters of convolutional layers, fully-connected layers, max pooling layers and average pooling layers, respectively.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">https://github.com/LTS4/DeepFool/blob/master/MATLAB/resources/net.mat</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Deep variational information bottleneck</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Alexander A Alemi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joshua</forename><forename type="middle">V</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Dillon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Murphy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Thermometer encoding: One hot way to resist adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jacob</forename><surname>Buckman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aurko</forename><surname>Roy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Colin</forename><surname>Raffel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Adversarial examples are not easily detected: Bypassing ten detection methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Wagner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Workshop on Artificial Intelligence and Security</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Towards evaluating the robustness of neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Wagner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Symposium on Security and Privacy (SP</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Parseval networks: Improving robustness to adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Moustapha</forename><surname>Cisse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Piotr</forename><surname>Bojanowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edouard</forename><surname>Grave</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Usunier</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Stochastic activation pruning for robust adversarial defense</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kamyar</forename><surname>Guneet S Dhillon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Azizzadenesheli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zachary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeremy</forename><surname>Lipton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jean</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aran</forename><surname>Kossaifi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anima</forename><surname>Khanna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Anandkumar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Robustness of classifiers: from adversarial to random noise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alhussein</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Seyed-Mohsen Moosavi-Dezfooli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Explaining and harnessing adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Towards deep neural network architectures robust to adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shixiang</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luca</forename><surname>Rigazio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Dynamic network surgery for efficient dnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yiwen</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anbang</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yurong</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Learning both weights and connections for efficient neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Song</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Pool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">William</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Delving deep into rectifiers: Surpassing human-level performance on imagenet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaiming</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyu</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shaoqing</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jian</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Formal guarantees on the robustness of a classifier against adversarial manipulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Hein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maksym</forename><surname>Andriushchenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Improving neural networks by preventing co-adaptation of feature detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nitish</forename><surname>Geoffrey E Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ruslan R</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1207.0580</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergey</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Adversarial machine learning at scale</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Object recognition with gradient-based learning. Shape, contour and grouping in computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Haffner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Léon</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="page" from="823" to="823" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Network in network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Min</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qiang</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuicheng</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Safetynet: Detecting and rejecting adversarial examples robustly</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jiajun</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Theerasit</forename><surname>Issaranon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Towards deep learning models resistant to adversarial attacks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksander</forename><surname>Madry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksandar</forename><surname>Makelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ludwig</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Tsipras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adrian</forename><surname>Vladu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">On detecting adversarial perturbations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Hendrik Metzen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tim</forename><surname>Genewein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Volker</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bastian</forename><surname>Bischoff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Virtual adversarial training: a regularization method for supervised and semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Takeru</forename><surname>Miyato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Masanori</forename><surname>Shin-Ichi Maeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shin</forename><surname>Koyama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ishii</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.03976</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Universal adversarial perturbations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alhussein</forename><surname>Seyed-Mohsen Moosavi-Dezfooli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Omar</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">DeepFool: a simple and accurate method to fool deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alhussein</forename><surname>Seyed-Mohsen Moosavi-Dezfooli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning deconvolution network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hyeonwoo</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Seunghoon</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bohyung</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Practical black-box attacks against machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Mcdaniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Somesh</forename><surname>Jha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ananthram</forename><surname>Berkay Celik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Swami</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Asia Conference on Computer and Communications Security</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Towards the science of security and privacy in machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Mcdaniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arunesh</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Wellman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE European Symposium on Security and Privacy</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Distillation as a defense to adversarial perturbations against deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Mcdaniel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Somesh</forename><surname>Jha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ananthram</forename><surname>Swami</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Symposium on Security and Privacy (SP)</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Improving the adversarial robustness and interpretability of deep neural networks by regularizing their input gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Slavin Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Finale</forename><surname>Doshi-Velez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Olga</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jia</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hao</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sanjeev</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sean</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhiheng</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrej</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aditya</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Imagenet large scale visual recognition challenge. IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Robust large margin deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jure</forename><surname>Sokolic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raja</forename><surname>Giryes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guillermo</forename><surname>Sapiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Rodrigues</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Signal Processing</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Intriguing properties of neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joan</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Mitigating adversarial effects through randomization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cihang</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianyu</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhishuai</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><surname>Zhou Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Adversarial examples for semantic segmentation and object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cihang</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianyu</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhishuai</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuyin</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lingxi</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alan</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Robustness and generalization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huan</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shie</forename><surname>Mannor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="391" to="423" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Matthew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>References</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Towards evaluating the robustness of neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><surname>Wagner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Symposium on Security and Privacy (SP</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Explaining and harnessing adversarial examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathon</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Adversarial machine learning at scale</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Samy</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Towards deep learning models resistant to adversarial attacks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksander</forename><surname>Madry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksandar</forename><surname>Makelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ludwig</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Tsipras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Adrian</forename><surname>Vladu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2018" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Virtual adversarial training: a regularization method for supervised and semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Takeru</forename><surname>Miyato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Masanori</forename><surname>Shin-Ichi Maeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shin</forename><surname>Koyama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ishii</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.03976</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">DeepFool: a simple and accurate method to fool deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alhussein</forename><surname>Seyed-Mohsen Moosavi-Dezfooli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Fawzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Frossard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Papernot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicholas</forename><surname>Carlini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Reuben</forename><surname>Feinman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fartash</forename><surname>Faghri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Matyasko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karen</forename><surname>Hambardzumyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi-Lin</forename><surname>Juang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexey</forename><surname>Kurakin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ryan</forename><surname>Sheatsley</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1610.00768</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+	<note>et al. cleverhans v2.0.0: an adversarial machine learning library</note>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Adversarial diversity and hard positive generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andras</forename><surname>Rozsa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ethan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Terrance</forename><forename type="middle">E</forename><surname>Rudd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Boult</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshop</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wei</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yangqing</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pierre</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dragomir</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Intriguing properties of neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ilya</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joan</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dumitru</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

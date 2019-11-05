@@ -662,6 +662,7 @@ class TFTokenExplorer:
         for root in self.rdf_graphs:
             self.pyvis_draw(self.rdf_graphs[root], str(
                 self.code_repo_path/root.split('/')[-1].replace('.', '')))
+        self.dump_rdf()
 
     def dump_tfsequences(self):
         pprint.pprint(self.tfsequences)
@@ -706,7 +707,7 @@ class TFTokenExplorer:
         cnames = ['blue', 'green', 'red', 'cyan', 'orange',
                   'black', 'purple', 'purple', 'purple']
 
-        G = Network(height="800px", width="70%", directed=True)
+        G = Network(height="800px", width="100%", directed=True)
 
         for src, edge, dst in graph:
 
@@ -744,5 +745,5 @@ class TFTokenExplorer:
                      spring_strength=0.01,
                      damping=0.09)
 
-        G.show_buttons(filter_=['physics'])
+        # G.show_buttons(filter_=['physics'])
         G.save_graph("%s.html" % name)

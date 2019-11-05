@@ -8,6 +8,7 @@ from skimage.morphology import watershed
 import os
 from Rectangle import Rectangle
 from RectangleMerger import RectangleMerger as Merger
+from scipy.signal import find_peaks
 
 # Detects components from diagram image
 
@@ -43,6 +44,52 @@ class ShapeDetect:
                 index.append(i)
                 
         return index
+        
+    # Sort Contours on the basis of their x-axis coordinates in ascending order
+    def sortContours(self, cnts, method="horizontal"):
+
+        if len(cnts) > 0:
+    
+            # initialize the reverse flag and sort index
+            reverse = False
+            i = 0
+            if method == "vertical":
+                i = 1
+            # construct the list of bounding boxes and sort them from top to bottom
+            boundingBoxes = [cv2.boundingRect(c) for c in cnts]
+            # print(len(cnts))
+            # print(len(boundingBoxes))
+            (cnts_new, boundingBoxes_new) = zip(*sorted(zip(cnts, boundingBoxes),
+                                                key=lambda b: b[1][i], reverse=reverse))
+            # return the list of sorted contours
+            return cnts_new
+            
+        else:
+            return []
+
+
+    def smooth(self, x,window_len=11,window='hanning'):
+  
+        if x.ndim != 1:
+            raise(ValueError, "smooth only accepts 1 dimension arrays.")
+
+        if x.size < window_len:
+            raise(ValueError, "Input vector needs to be bigger than window size.")
+  
+        if window_len<3:
+            return x
+            
+        if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+            raise(ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+  
+        s = np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+        if window == 'flat': #moving average
+            w = np.ones(window_len,'d')
+        else:
+            w = eval('np.'+window+'(window_len)')
+  
+        y = np.convolve(w/w.sum(),s,mode='valid')
+        return y    
     
     def mergeOrAppend(self, c, shape, component, conf, imcpy, merge = 0):
         hull = cv2.convexHull(c)                 
@@ -141,6 +188,20 @@ class ShapeDetect:
         
         return keep_contour
         
+    def findFlowDir(self, img):
+         
+        height, width = img.shape[:2]
+        sumX = np.sum(255-cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1) 
+        sumX = self.smooth(sumX, window_len = 15, window = 'hanning')
+        peakX, props = find_peaks(sumX, distance = 20, prominence = 2000)# threshold = 5000)
+        cntPeakX = len(peakX)
+        #calculate horizontal projection
+        sumY = np.sum(255-cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 0)
+        sumY = self.smooth(sumY, window_len = 15, window = 'hanning')
+        peakY, props = find_peaks(sumY, distance = 20, prominence = 2000)# threshold = 5000)
+        cntPeakY = len(peakY)
+        return "vertical" if cntPeakX>cntPeakY else "horizontal"
+        
     def whichShape(self,c,img):
         shape = 'unknown'
         
@@ -186,7 +247,8 @@ class ShapeDetect:
         gray_imcvcpy = gray_imcv.copy()
         
         ################################################ Find components from line drawing ##########################################
-        (cnts, _) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
+        # (_, cnts, h) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
+        (cnts, h) = cv2.findContours(thresh_imcpy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #
         final_component = []
         final_conf = []
         line_component = []
@@ -235,6 +297,8 @@ class ShapeDetect:
 
         ############################### Apply non-max supression to get rid of redundant components ###################################
         nmcomponent = self.localNonMaxSupp(final_component, self.overlapTh, final_conf)
+        flow_dir = self.findFlowDir(imcpy)
+        sorted_contours = self.sortContours(nmcomponent, flow_dir)
 #        im_nmcomponent = im.copy()
 #        for c in nmcomponent:
 #            cv2.drawContours(im_nmcomponent, [c], 0, (0, 0, 100), 4)
@@ -243,4 +307,4 @@ class ShapeDetect:
                     
 #        cv2.imshow("shape_detect", imcpy)
 #        cv2.waitKey(0) 
-        return nmcomponent
+        return sorted_contours, flow_dir

@@ -1,0 +1,603 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-04T22:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Dilated Residual Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fisher</forename><surname>Yu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Princeton University</orgName>
+								<orgName type="institution" key="instit2">Intel Labs</orgName>
+								<orgName type="institution" key="instit3">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vladlen</forename><surname>Koltun</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Princeton University</orgName>
+								<orgName type="institution" key="instit2">Intel Labs</orgName>
+								<orgName type="institution" key="instit3">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Funkhouser</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Princeton University</orgName>
+								<orgName type="institution" key="instit2">Intel Labs</orgName>
+								<orgName type="institution" key="instit3">Princeton University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Dilated Residual Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Convolutional networks were originally developed for classifying hand-written digits <ref type="bibr" target="#b8">[9]</ref>. More recently, convolutional network architectures have evolved to classify much more complex images <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b5">6</ref>]. Yet a central aspect of network architecture has remained largely in place. Convolutional networks for image classification progressively reduce resolution until the image is represented by tiny feature maps that retain little spatial information (7×7 is typical).</p><p>While convolutional networks have done well, the almost complete elimination of spatial acuity may be preventing these models from achieving even higher accuracy, for example by preserving the contribution of small and thin objects that may be important for correctly understanding the image. Such preservation may not have been important in the context of hand-written digit classification, in which a single object dominated the image, but may help in the analysis of complex natural scenes where multiple objects and their relative configurations must be taken into account.</p><p>Furthermore, image classification is rarely a convolutional network's raison d'être. Image classification is most often a proxy task that is used to pretrain a model before it is transferred to other applications that involve more detailed scene understanding <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b9">10]</ref>. In such tasks, severe loss of spatial acuity is a significant handicap. Existing techniques compensate for the lost resolution by introducing up-convolutions <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11]</ref>, skip connections <ref type="bibr" target="#b4">[5]</ref>, and other post-hoc measures.</p><p>Must convolutional networks crush the image in order to classify it? In this paper, we show that this is not necessary, or even desirable. Starting with the residual network architecture, the current state of the art for image classification <ref type="bibr" target="#b5">[6]</ref>, we increase the resolution of the network's output by replacing a subset of interior subsampling layers by dilation <ref type="bibr" target="#b17">[18]</ref>. We show that dilated residual networks (DRNs) yield improved image classification performance. Specifically, DRNs yield higher accuracy in ImageNet classification than their non-dilated counterparts, with no increase in depth or model complexity.</p><p>The output resolution of a DRN on typical ImageNet input is 28×28, comparable to small thumbnails that convey the structure of the image when examined by a human <ref type="bibr" target="#b14">[15]</ref>. While it may not be clear a priori that average pooling can properly handle such high-resolution output, we show that it can, yielding a notable accuracy gain. We then study gridding artifacts introduced by dilation, propose a scheme for removing these artifacts, and show that such 'degridding' further improves the accuracy of DRNs.</p><p>We also show that DRNs yield improved accuracy on downstream applications such as weakly-supervised object localization and semantic segmentation. With a remarkably simple approach, involving no fine-tuning at all, we obtain state-of-the-art top-1 accuracy in weakly-supervised localization on ImageNet. We also study the performance of DRNs on semantic segmentation and show, for example, that a 42-layer DRN outperforms a ResNet-101 baseline on the Cityscapes dataset by more than 4 percentage points, despite lower depth by a factor of 2.4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Dilated Residual Networks</head><p>Our key idea is to preserve spatial resolution in convolutional networks for image classification. Although progressive downsampling has been very successful in classifying digits or iconic views of objects, the loss of spatial information may be harmful for classifying natural images and can significantly hamper transfer to other tasks that involve spatially detailed image understanding. Natural images often feature many objects whose identities and relative configurations are important for understanding the scene. The classification task becomes difficult when a key object is not spatially dominant -for example, when the labeled object is thin (e.g., a tripod) or when there is a big background object such as a mountain. In these cases, the background response may suppress the signal from the object of interest. What's worse, if the object's signal is lost due to downsampling, there is little hope to recover it during training. However, if we retain high spatial resolution throughout the model and provide output signals that densely cover the input field, backpropagation can learn to preserve important information about smaller and less salient objects.</p><p>The starting point of our construction is the set of network architectures presented by He et al. <ref type="bibr" target="#b5">[6]</ref>. Each of these architectures consists of five groups of convolutional layers. The first layer in each group performs downsampling by striding: that is, the convolutional filter is only evaluated at even rows and columns. Let each group of layers be denoted by G ℓ , for ℓ = 1, . . . , 5. Denote the i th layer in group ℓ by G </p><formula xml:id="formula_0">ℓ i is (G ℓ i * f ℓ i )(p) = a+b=p G ℓ i (a) f ℓ i (b),<label>(1)</label></formula><p>where the domain of p is the feature map in G ℓ i . This is followed by a nonlinearity, which does not affect the presented construction.</p><p>A naive approach to increasing resolution in higher layers of the network would be to simply remove subsampling (striding) from some of the interior layers. This does increase downstream resolution, but has a detrimental side effect that negates the benefits: removing subsampling correspondingly reduces the receptive field in subsequent layers. Thus removing striding such that the resolution of the output layer is increased by a factor of 4 also reduces the receptive field of each output unit by a factor of 4. This severely reduces the amount of context that can inform the prediction produced by each unit. Since contextual information is important in disambiguating local cues <ref type="bibr" target="#b2">[3]</ref>, such reduction in receptive field is an unacceptable price to pay for higher resolution. For this reason, we use dilated convolutions <ref type="bibr" target="#b17">[18]</ref> to increase the receptive field of the higher layers, compensating for the reduction in receptive field induced by removing subsampling. The effect is that units in the dilated layers have the same receptive field as corresponding units in the original model.</p><p>We focus on the two final groups of convolutional layers: G 4 and G 5 . In the original ResNet, the first layer in each group (G 4 1 and G 5 1 ) is strided: the convolution is evaluated at even rows and columns, which reduces the output resolution of these layers by a factor of 2 in each dimension. The first step in the conversion to DRN is to remove the striding in both G  1 without affecting the receptive field of its units. However, subsequent layers are all affected: their receptive fields have been reduced by a factor of 2 in each dimension. We therefore replace the convolution operators in those layers by 2-dilated convolutions <ref type="bibr" target="#b17">[18]</ref>:</p><formula xml:id="formula_1">(G 4 i * 2 f 4 i )(p) = a+2b=p G 4 i (a) f 4 i (b)<label>(2)</label></formula><p>for all i ≥ 2. The same transformation is applied to G </p><formula xml:id="formula_2">(G 5 1 * 2 f 5 1 )(p) = a+2b=p G 5 1 (a) f 5 1 (b).<label>(3)</label></formula><p>Subsequent layers in G 5 follow two striding layers that have been eliminated. The elimination of striding has reduced their receptive fields by a factor of 4 in each dimension. Their convolutions need to be dilated by a factor of 4 to compensate for the loss:</p><formula xml:id="formula_3">(G 5 i * 4 f 5 i )(p) = a+4b=p G 5 i (a) f 5 i (b)<label>(4)</label></formula><p>for all i ≥ 2. Finally, as in the original architecture, G 5 is followed by global average pooling, which reduces the output feature maps to a vector, and a 1×1 convolution that maps this vector to a vector that comprises the prediction scores for all classes. The transformation of a ResNet into a DRN is illustrated in <ref type="figure" target="#fig_4">Figure 1</ref>. The converted DRN has the same number of layers and parameters as the original ResNet. The key difference is that the original ResNet downsamples the input image by a factor of 32 in each dimension (a thousand-fold reduction in area), while the DRN downsamples the input by a factor of 8. For example, when the input resolution is 224×224, the output resolution of G 5 in the original ResNet is 7×7, which is not sufficient for the spatial structure of the input to be discernable. The output of G 5 in a DRN is 28×28. Global average pooling therefore takes in 2 <ref type="bibr" target="#b3">4</ref> times more values, which can help the classifier recognize objects that cover a smaller number of pixels in the input image and take such objects into account in its prediction.   The presented construction could also be applied to earlier groups of layers (G 1 , G 2 , or G 3 ), in the limit retaining the full resolution of the input. We chose not to do this because a downsampling factor of 8 is known to preserve most of the information necessary to correctly parse the original image at pixel level <ref type="bibr" target="#b9">[10]</ref>. Furthermore, a 28×28 thumbnail, while small, is sufficiently resolved for humans to discern the structure of the scene <ref type="bibr" target="#b14">[15]</ref>. Additional increase in resolution has costs and should not be pursued without commensurate gains: when feature map resolution is increased by a factor of 2 in each dimension, the memory consumption of that feature map increases by a factor of 4. Operating at full resolution throughout, with no downsampling at all, is beyond the capabilities of current hardware.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Localization</head><p>Given a DRN trained for image classification, we can directly produce dense pixel-level class activation maps without any additional training or parameter tuning. This allows a DRN trained for image classification to be immediately used for object localization and segmentation.</p><p>To obtain high-resolution class activation maps, we remove the global average pooling operator. We then connect the final 1×1 convolution directly to G 5 . A softmax is applied to each column in the resulting volume to convert the pixelwise prediction scores to proper probability distributions. This procedure is illustrated in <ref type="figure" target="#fig_7">Figure 2</ref>. The output of the resulting network is a set of activation maps that have the same spatial resolution as G 5 (28 × 28). Each classification category y has a corresponding activation map. For each pixel in this map, the map contains the probability that the object observed at this pixel is of category y.</p><p>The activation maps produced by our construction serve the same purpose as the results of the procedure of Zhou et al. <ref type="bibr" target="#b18">[19]</ref>. However, the procedures are fundamentally different. Zhou et al. worked with convolutional networks that produce drastically downsampled output that is not sufficiently resolved for object localization. For this reason, Zhou et al. had to remove layers from the classification network, introduce parameters that compensate for the ablated layers, and then fine-tune the modified models to train the new parameters. Even then, the output resolution obtained by Zhou et al. was quite small (14×14) and the classification performance of the modified networks was impaired.</p><p>In contrast, the DRN was designed to produce highresolution output maps and is trained in this configuration from the start. Thus the model trained for image classification already produces high-resolution activation maps. As our experiments will show, DRNs are more accurate than the original ResNets in image classification. Since DRNs produce high-resolution output maps from the start, there is no need to remove layers, add parameters, and retrain the model for localization. The original accurate classification model can be used for localization directly. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Degridding</head><p>The use of dilated convolutions can cause gridding artifacts. Such artifacts are shown in <ref type="figure" target="#fig_8">Figure 3</ref>(c) and have also been observed in concurrent work on semantic segmentation <ref type="bibr" target="#b16">[17]</ref>. Gridding artifacts occur when a feature map has higher-frequency content than the sampling rate of the dilated convolution. <ref type="figure" target="#fig_9">Figure 4</ref> shows a didactic example. In <ref type="figure" target="#fig_9">Figure 4</ref>(a), the input feature map has a single active pixel. A 2-dilated convolution <ref type="figure" target="#fig_9">(Figure 4(b)</ref>) induces a corresponding grid pattern in the output <ref type="figure" target="#fig_9">(Figure 4(c)</ref>).</p><p>In this section, we develop a scheme for removing gridding artifacts from output activation maps produced by DRNs. The scheme is illustrated in <ref type="figure" target="#fig_6">Figure 5</ref>. A DRN con- structed as described in Section 2 is referred to as DRN-A and is illustrated in <ref type="figure" target="#fig_6">Figure 5</ref>(a). An intermediate stage of the construction described in the present section is referred to as DRN-B and is illustrated in <ref type="figure" target="#fig_6">Figure 5</ref>(b). The final construction is referred to as DRN-C, illustrated in <ref type="figure" target="#fig_6">Figure 5</ref>(c). Removing max pooling. As shown in <ref type="figure" target="#fig_6">Figure 5</ref>(a), DRN-A inherits from the ResNet architecture a max pooling operation after the initial 7×7 convolution. We found that this max pooling operation leads to high-amplitude high-frequency activations, as shown in <ref type="figure" target="#fig_11">Figure 6</ref>(b). Such high-frequency activations can be propagated to later layers and ultimately exacerbate gridding artifacts. We thus replace max pooling by convolutional filters, as shown in <ref type="figure" target="#fig_6">Figure 5</ref>(b). The effect of this transformation is shown in <ref type="figure" target="#fig_11">Figure 6</ref>(c). Adding layers. To remove gridding artifacts, we add convolutional layers at the end of the network, with progressively lower dilation. Specifically, after the last 4-dilated layer in DRN-A ( <ref type="figure" target="#fig_6">Figure 5(a)</ref>), we add a 2-dilated residual block followed by a 1-dilated block. These become levels 7 and 8 in DRN-B, shown in <ref type="figure" target="#fig_6">Figure 5</ref>(b). This is akin to removing aliasing artifacts using filters with appropriate frequency <ref type="bibr" target="#b15">[16]</ref>. Removing residual connections. Adding layers with decreasing dilation, as described in the preceding paragraph, does not remove gridding artifacts entirely because of residual connections. The residual connections in levels 7 and 8 of DRN-B can propagate gridding artifacts from level 6. To remove gridding artifacts more effectively, we remove the residual connections in levels 7 and 8. This yields the DRN-C, our proposed construction, illustrated in <ref type="figure" target="#fig_6">Figure 5(c)</ref>. Note that the DRN-C has higher depth and capacity than the corresponding DRN-A or the ResNet that had been used as the starting point. However, we will show that the presented degridding scheme has a dramatic effect on accuracy, such that the accuracy gain compensates for the added depth and capacity. For example, experiments will demonstrate that DRN-C-26 has similar image classification accuracy to DRN-A-34 and higher object localization and semantic segmentation accuracy than DRN-A-50. The activations inside a DRN-C are illustrated in <ref type="figure" target="#fig_12">Figure 7</ref>. This figure shows a feature map from the output of each level in the network. The feature map with the largest average activation magnitude is shown.</p><note type="other">3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 Pooling 7 x 7 64 7 x 7 16 3 x 3 512 3 x 3 512 3 x 3 32 3 x 3 32 3 x 3 16 3 x 3 16 3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 Dilation 1 1 1 1 2 4 2 1 Level 1 2 3 4 5 6 7 8 7 x 7 16 3 x 3 512 3 x 3 512 3 x 3 32 3 x 3 32 3 x 3 16 3 x 3 16 3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 64 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 128 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 256 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3 512 3 x 3</note></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Image Classification</head><p>Training is performed on the ImageNet 2012 training set <ref type="bibr" target="#b11">[12]</ref>. The training procedure is similar to He et al. <ref type="bibr" target="#b5">[6]</ref>. We use scale and aspect ratio augmentation as in Szegedy et al. <ref type="bibr" target="#b13">[14]</ref> and color perturbation as in Krizhevsky et al. <ref type="bibr" target="#b7">[8]</ref> and Howard <ref type="bibr" target="#b6">[7]</ref>. Training is performed by SGD with mo- mentum 0.9 and weight decay 10 −4 . The learning rate is initially set to 10 −1 and is reduced by a factor of 10 every 30 epochs. Training proceeds for 120 epochs total.</p><p>The performance of trained models is evaluated on the ImageNet 2012 validation set. The images are resized so that the shorter side has 256 pixels. We use two evaluation protocols: 1-crop and 10-crop. In the 1-crop protocol, prediction accuracy is measured on the central 224×224 crop. In the 10-crop protocol, prediction accuracy is measured on 10 crops from each image. Specifically, for each image we take the center crop, four corner crops, and flipped versions of these crops. The reported 10-crop accuracy is averaged over these 10 crops.</p><p>ResNet vs. DRN-A. <ref type="table" target="#tab_0">Table 1</ref>    <ref type="table" target="#tab_0">Table 1</ref>: Image classification accuracy (error rates) on the ImageNet 2012 validation set. Lower is better. P is the number of parameters in each model.</p><p>ically, each DRN-C significantly outperforms the corresponding DRN-A. Although the degridding procedure increases depth and capacity, the resultant increase in accuracy is so substantial that the transformed DRN matches the accuracy of deeper models. Specifically, DRN-C-26, which is derived from DRN-A-18, matches the accuracy of the deeper DRN-A-34. In turn, DRN-C-42, which is derived from DRN-A-34, matches the accuracy of the deeper DRN-A-50. Comparing the degridded DRN to the original ResNet models, we see that DRN-C-42 approaches the accuracy of ResNet-101, although the latter is deeper by a factor of 2.4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Object Localization</head><p>We now evaluate the use of DRNs for weakly-supervised object localization, as described in Section 3. As shown in <ref type="figure" target="#fig_8">Figure 3</ref>, class activation maps provided by DRNs are much better spatially resolved than activation maps extracted from the corresponding ResNet.</p><p>We evaluate the utility of the high-resolution activation maps provided by DRNs for weakly-supervised object localization using the ImageNet 2012 validation set. We first predict the image categories based on 10-crop testing. Since the ground truth is in the form of bounding boxes, we need to fit bounding boxes to the activation maps. We predict the object bounding boxes by analyzing the class responses on all the response maps. The general idea is to find tight bounding boxes that cover pixels for which the dominant response indicates the correct object class. Specifically, given C response maps of resolution W×H, let f (c, w, h) be the response at location (w, h) on the c th response map. In the ImageNet dataset, C is 1000. We identify the dominant class at each location:</p><formula xml:id="formula_4">g(w, h) = c | ∀1 ≤ c ′ ≤ C. f (c, w, h) ≥ f (c ′ , w, h) .</formula><p>For each class c i , define the set of valid bounding boxes as</p><formula xml:id="formula_5">B i = ((w 1 , h 1 ), (w 2 , h 2 ))| ∀g(w, h) = c i and f (w, h, c i ) &gt; t. w 1 ≤ w ≤ w 2 and h 1 ≤ h ≤ h 2 ,</formula><p>where t is an activation threshold. The minimal bounding box for class c i is defined as</p><formula xml:id="formula_6">b i = arg min ((w1,h1),(w2,h2))∈Bi (w 2 − w 1 )(h 2 − h 1 ).</formula><p>To evaluate the accuracy of DRNs on weakly-supervised object localization, we simply compute the minimal bounding box b i for the predicted class i on each image. In the localization challenge, a predicted bounding box is considered accurate when its IoU with the ground-truth box is greater than 0.5. <ref type="table" target="#tab_2">Table 2</ref> reports the results. Note that the classification networks are used for localization directly, with no fine-tuning.</p><p>As shown in <ref type="table" target="#tab_2">Table 2</ref>, DRNs outperform the corresponding ResNet models. (Compare ResNet-18 to DRN-A-18, ResNet-34 to DRN-A-34, and ResNet-50 to DRN-A-50.) This again illustrates the benefits of the basic DRN construction presented in Section 2. Furthermore, DRN-C-26 significantly outperforms DRN-A-50, despite having much lower depth. This indicates that that the degridding scheme described in Section 4 has particularly significant benefits for applications that require more detailed spatial image analysis. DRN-C-26 also outperforms ResNet-101.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Semantic Segmentation</head><p>We now transfer DRNs to semantic segmentation. Highresolution internal representations are known to be important for this task <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b1">2]</ref>. Due to the severe downsampling in prior image classification architectures, their transfer to semantic segmentation necessitated post-hoc adaptations such as up-convolutions, skip connections, and posthoc dilation <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b17">18]</ref>. In contrast, the high resolution of the output layer in a DRN means that we can transfer a classification-trained DRN to semantic segmentation by simply removing the global pooling layer and operating the network fully-convolutionally <ref type="bibr" target="#b9">[10]</ref>, without any additional structural changes. The predictions synthesized by the output layer are upsampled to full resolution using bilinear interpolation, which does not involve any parameters.</p><p>We evaluate this capability using the Cityscapes dataset <ref type="bibr" target="#b1">[2]</ref>. We use the standard Cityscapes training and validation sets. To understand the properties of the models themselves, we only use image cropping and mirroring for training. We do not use any other data augmentation and do not append additional modules to the network. The results are reported in <ref type="table">Table 3</ref>.</p><p>All presented models outperform a comparable baseline setup of ResNet-101, which was reported to achieve a mean IoU of 66.6 <ref type="bibr" target="#b0">[1]</ref>. For example, DRN-C-26 outperforms the ResNet-101 baseline by more than a percentage point, despite having 4 times lower depth. The DRN-C-42 model outperforms the ResNet-101 baseline by more than 4 percentage points, despite 2.4 times lower depth.</p><p>Comparing different DRN models, we see that both DRN-C-26 and DRN-C-42 outperform DRN-A-50, sug-  <ref type="table">Table 3</ref>: Performance of dilated residual networks on the Cityscapes validation set. Higher is better. DRN-C-26 outperforms DRN-A-50, despite lower depth. DRN-C-42 achieves even higher accuracy. For reference, a comparable baseline setup of ResNet-101 was reported to achieve a mean IoU of 66.6. gesting that the degridding construction presented in Section 4 is particularly beneficial for dense prediction tasks. A qualitative comparison between DRN-A-50 and DRN-C-26 is shown in <ref type="figure" target="#fig_14">Figure 8</ref>. As the images show, the predictions of DRN-A-50 are marred by gridding artifacts even though the model was trained with dense pixel-level supervision. In contrast, the predictions of DRN-C-26 are not only more accurate, but also visibly cleaner.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have presented an approach to designing convolutional networks for image analysis. Rather than progressively reducing the resolution of internal representations until the spatial structure of the scene is no longer discernible, we keep high spatial resolution all the way through the final output layers. We have shown that this simple transformation improves image classification accuracy, outperforming state-of-the-art models. We have then shown that accuracy can be increased further by modifying the construction to alleviate gridding artifacts introduced by dilation.</p><p>The presented image classification networks produce informative output activations, which can be used directly for weakly-supervised object localization, without any finetuning. The presented models can also be used for dense prediction tasks such as semantic segmentation, where they outperform deeper and higher-capacity baselines.</p><p>The results indicate that dilated residual networks can be used as a starting point for image analysis tasks that involve complex natural images, particularly when detailed understanding of the scene is important. We will release code and pretrained models to support future research and applications.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>For simplicity of exposition, consider an idealized model in which each layer consists of a single feature map: the extension to multiple feature maps is straightforward. Let f ℓ i be the filter associated with layer G ℓ i . In the original model, the output of G</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>unaffected: we just doubled the output resolution of G</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 1 :</head><label>1</label><figDesc>Figure 1: Converting a ResNet into a DRN. The original ResNet is shown in (a), the resulting DRN is shown in (b). Striding in G 4 1 and G 5 1 is removed, bringing the resolution of all layers in G 4 and G 5 to the resolution of G 3 . To compensate for the consequent shrinkage of the receptive field, G 4 i and G</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>5 i</head><label>5</label><figDesc>are dilated by a factor of 4, for all i ≥ 2. c, 2c, and 4c denote the num- ber of feature maps in a layer, w and h denote feature map resolution, and d is the dilation factor.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: Using a classification network for localization. The output stages of a DRN trained for image classification are shown in (a). Here K is a 1 × 1 convolution that maps c channels to n. To reconfigure the network for localization, we remove the pooling operator. The result is shown in (b). The reconfigured network produces n activation maps of resolution w × h. No training or parameter tuning is involved.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Activation maps of ResNet-18 and corresponding DRNs. A DRN constructed from ResNet-18 as described in Section 2 is referred to as DRN-A-18. The corresponding DRN produced by the degridding scheme described in Section 4 is referred to as DRN-C-26. The DRN-B-26 is an intermediate construction.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: A gridding artifact.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_10"><head>Figure 5 :</head><label>5</label><figDesc>Figure 5: Changing the DRN architecture to remove gridding artifacts from the output activation maps. Each rectangle is a Conv-BN-ReLU group and the numbers specify the filter size and the number of channels in that layer. The bold green lines represent downsampling by stride 2. The networks are divided into levels, such that all layers within a given level have the same dilation and spatial resolution. (a) DRN-A dilates the ResNet model directly, as described in Section 2. (b) DRN-B replaces an early max pooling layer by residual blocks and adds residual blocks at the end of the network. (c) DRN-C removes residual connections from some of the added blocks. The rationale for each step is described in the text.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_11"><head>Figure 6 :</head><label>6</label><figDesc>Figure 6: First stage of degridding, which modifies the early layers of the network. (b) and (c) show input feature maps for the first convolutional layer in level 3 of DRN-A-18 and DRN-B-26. The feature map with the highest average activation is shown.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_12"><head>Figure 7 :</head><label>7</label><figDesc>Figure 7: Activations inside a trained DRN-C-26. For each level, we show the feature map with the highest average activation magnitude among feature maps in the level's output. The levels are defined in Figure 5.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_13"><head></head><label></label><figDesc>reports the accuracy of differ- ent models according to both evaluation protocols. Each DRN-A outperforms the corresponding ResNet model, de- spite having the same depth and capacity. For exam- ple, DRN-A-18 and DRN-A-34 outperform ResNet-18 and ResNet-34 in 1-crop top-1 accuracy by 2.43 and 2.92 per- centage points, respectively. (A 10.5% error reduction in the case of ResNet-34 → DRN-A-34.) DRN-A-50 outperforms ResNet-50 in 1-crop top-1 ac- curacy by more than a percentage point. For comparison, the corresponding error reduction achieved by ResNet-152 over ResNet-101 is 0.3 percentage points. (From 22.44 to 22.16 on the center crop.) These results indicate that even the direct transformation of a ResNet into a DRN-A, which does not change the depth or capacity of the model at all, significantly improves classification accuracy. DRN-A vs. DRN-C.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_14"><head>Figure 8 :</head><label>8</label><figDesc>Figure 8: Semantic segmentation on the Cityscapes dataset. The degridded DRN-C-26 produces cleaner results than the deeper DRN-A-50.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 also</head><label>1</label><figDesc></figDesc><table>shows that the degridding 
+construction described in Section 4 is beneficial. Specif-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Weakly-supervised object localization error rates on the ImageNet validation set. Lower is better. The de- gridded DRN-C-26 outperforms DRN-A-50, despite lower depth and classification accuracy. DRN-C-26 also outper- forms ResNet-101.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work was supported by Intel and the National Science Foundation (IIS-1251217 and VEC 1539014/1539099).</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">DeepLab: Semantic image segmentation with deep convolutional nets, atrous convolution, and fully connected CRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.00915</idno>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">The Cityscapes dataset for semantic urban scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cordts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Rehfeld</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enzweiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Context based object categorization: A critical survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Galleguillos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Vision and Image Understanding</title>
+		<imprint>
+			<biblScope unit="volume">114</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Regionbased convolutional networks for accurate object detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno>2016. 1</idno>
+		<imprint>
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">38</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Hypercolumns for object segmentation and fine-grained localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Deep residual learning for image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Some improvements on deep convolutional neural network based image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Howard</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.5402</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Backpropagation applied to handwritten zip code recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Boser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Henderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hubbard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename></persName>
+		</author>
+		<idno>1989. 1</idno>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Learning deconvolution network for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Noh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">ImageNet large scale visual recognition challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">115</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">80 million tiny images: A large data set for nonparametric object and scene recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Empirical filter estimation for subpixel interpolation and matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Understanding convolution for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Hou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Cottrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1702.08502</idno>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Multi-scale context aggregation by dilated convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning deep features for discriminative localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">À</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -69,7 +69,7 @@ class TextDetectEast:
         return (rects, confidences)
 
 
-    def getText(self, fileName, image):
+    def getText(self, fileName, image, fig_text):
         
         spellcorr = sc()
         imcpy = image.copy()
@@ -80,7 +80,7 @@ class TextDetectEast:
         rH = height / float(new_height)
         
         layerNames = [	"feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]     
-        net = cv2.dnn.readNet("frozen_east_text_detection.pb")
+        net = cv2.dnn.readNet(os.path.dirname(os.path.abspath(__file__)) + "/frozen_east_text_detection.pb")
         blob = cv2.dnn.blobFromImage(im_resize, 1.0, (new_width, new_height), (123.68, 116.78, 103.94), swapRB=True, crop=False)
         net.setInput(blob)
         (scores, geometry) = net.forward(layerNames)
@@ -115,6 +115,7 @@ class TextDetectEast:
             if (type(roi) is np.ndarray):             
                 gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
             # Apply preprocessing to enhance the text
+            gray_roi = cv2.resize(gray_roi, (0,0), fx = 1.5, fy = 1.5)# interpolation = cv2.INTER_CUBIC)
             gray_roi = Image.fromarray(gray_roi)
             gray_roi = ImageEnhance.Sharpness(gray_roi).enhance(2)
             gray_roi = ImageEnhance.Contrast(gray_roi).enhance(2)
@@ -137,11 +138,11 @@ class TextDetectEast:
             tot_text = 0
             for index in range(len(text_list)):
                 
-                op = re.sub(r'^[^()+*-<>#={}[\]/\0-9a-zA-Z]*', '', re.sub(r'[^()+*-<>#={}[\]/\0-9a-zA-Z]*$', '', text_list[index]))
+                op = re.sub(r'^[^()+*-<>#=&{}[\]/\0-9a-zA-Z]*', '', re.sub(r'[^()+*-<>#=&{}[\]/\0-9a-zA-Z]*$', '', text_list[index]))
                 op = "".join([c if ord(c) < 128 else "" for c in op]).strip()
                 op = re.sub('\W+','', op)
                 if op != "":
-                    op_cor = spellcorr.correctWord(op)
+                    op_cor = spellcorr.correctWord(op, fig_text)
                     #print("EAST op = %s, op_cor: %s"%(op, op_cor))
                     text = text+op_cor+" "
                     prob = (prob+prob_list[index])

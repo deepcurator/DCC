@@ -1,0 +1,856 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Context Selection for Embedding Models</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li-Ping</forename><surname>Liu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Tufts University</orgName>
+								<orgName type="institution" key="instit2">Columbia University</orgName>
+								<orgName type="institution" key="instit3">University of Cambridge</orgName>
+								<orgName type="institution" key="instit4">Stanford University</orgName>
+								<orgName type="institution" key="instit5">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Francisco</forename><forename type="middle">J R</forename><surname>Ruiz</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Tufts University</orgName>
+								<orgName type="institution" key="instit2">Columbia University</orgName>
+								<orgName type="institution" key="instit3">University of Cambridge</orgName>
+								<orgName type="institution" key="instit4">Stanford University</orgName>
+								<orgName type="institution" key="instit5">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Susan</forename><surname>Athey</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Tufts University</orgName>
+								<orgName type="institution" key="instit2">Columbia University</orgName>
+								<orgName type="institution" key="instit3">University of Cambridge</orgName>
+								<orgName type="institution" key="instit4">Stanford University</orgName>
+								<orgName type="institution" key="instit5">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">David</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Tufts University</orgName>
+								<orgName type="institution" key="instit2">Columbia University</orgName>
+								<orgName type="institution" key="instit3">University of Cambridge</orgName>
+								<orgName type="institution" key="instit4">Stanford University</orgName>
+								<orgName type="institution" key="instit5">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Context Selection for Embedding Models</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Word embeddings are an effective tool to analyze language. They have been recently extended to model other types of data beyond text, such as items in recommendation systems. Embedding models consider the probability of a target observation (a word or an item) conditioned on the elements in the context (other words or items). In this paper, we show that conditioning on all the elements in the context is not optimal. Instead, we model the probability of the target conditioned on a learned subset of the elements in the context. We use amortized variational inference to automatically choose this subset. Compared to standard embedding models, this method improves predictions and the quality of the embeddings.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Word embeddings are a powerful model to capture latent semantic structure of language. They can capture the co-occurrence patterns of words <ref type="bibr" target="#b3">(Bengio et al., 2006;</ref><ref type="bibr">Mikolov et al., 2013a,b,c;</ref><ref type="bibr" target="#b24">Pennington et al., 2014;</ref><ref type="bibr" target="#b20">Mnih and Kavukcuoglu, 2013;</ref><ref type="bibr" target="#b14">Levy and Goldberg, 2014;</ref><ref type="bibr" target="#b31">Vilnis and McCallum, 2015;</ref><ref type="bibr" target="#b0">Arora et al., 2016)</ref>, which allows for reasoning about word usage and meaning <ref type="bibr" target="#b9">(Harris, 1954;</ref><ref type="bibr" target="#b6">Firth, 1957;</ref><ref type="bibr" target="#b29">Rumelhart et al., 1986)</ref>. The ideas of word embeddings have been extended to other types of high-dimensional data beyond text, such as items in a supermarket or movies in a recommendation system <ref type="bibr" target="#b2">Barkan and Koenigstein, 2016)</ref>, with the goal of capturing the co-occurrence patterns of objects. Here, we focus on exponential family embeddings (EFE) <ref type="bibr" target="#b28">(Rudolph et al., 2016)</ref>, a method that encompasses many existing methods for embeddings and opens the door to bringing expressive probabilistic modeling <ref type="bibr" target="#b4">(Bishop, 2006;</ref><ref type="bibr" target="#b22">Murphy, 2012)</ref> to the problem of learning distributed representations.</p><p>In embedding models, the object of interest is the conditional probability of a target given its context. For instance, in text, the target corresponds to a word in a given position and the context are the words in a window around it. For an embedding model of items in a supermarket, the target corresponds to an item in a basket and the context are the other items purchased in the same shopping trip.</p><p>In this paper, we show that conditioning on all elements of the context is not optimal. Intuitively, this is because not all objects (words or items) necessarily interact with each other, though they may appear together as target/context pairs. For instance, in shopping data, the probability of purchasing chocolates should be independent of whether bathroom tissue is in the context, even if the latter is actually purchased in the same shopping trip.</p><p>With this in mind, we build a generalization of the EFE model <ref type="bibr" target="#b28">(Rudolph et al., 2016)</ref> that relaxes the assumption that the target depends on all elements in the context. Rather, our model considers that the target depends only on a subset of the elements in the context. We refer to our approach as context selection for exponential family embeddings (CS-EFE). Specifically, we introduce a binary hidden vector to indicate which elements the target depends on. By inferring the indicator vector, the embedding model is able to use more related context elements to fit the conditional distribution, and the resulting learned vectors capture more about the underlying item relations.</p><p>The introduction of the indicator comes at the price of solving this inference problem. Most embedding tasks have a large amount of target/context pairs and require a fast solution to the inference problem. To avoid solving the inference problem separately for all target/context pairs, we use amortized variational inference <ref type="bibr" target="#b5">(Dayan et al., 1995;</ref><ref type="bibr" target="#b7">Gershman and Goodman, 2014;</ref><ref type="bibr" target="#b13">Korattikara et al., 2015;</ref><ref type="bibr" target="#b12">Kingma and Welling, 2014;</ref><ref type="bibr" target="#b27">Rezende et al., 2014;</ref><ref type="bibr" target="#b19">Mnih and Gregor, 2014)</ref>. We design a shared neural network structure to perform inference for all pairs. One difficulty here is that the varied sizes of the contexts require varied input and output sizes for the shared structure. We overcome this problem with a binning technique, which we detail in Section 2.3.</p><p>Our contributions are as follows. First, we develop a model that allows conditioning on a subset of the elements in the context in an EFE model. Second, we develop an efficient inference algorithm for the CS-EFE model, based on amortized variational inference, which can automatically infer the subset of elements in the context that are most relevant to predict the target. Third, we run a comprehensive experimental study on three datasets, namely, MovieLens for movie recommendations, eBird-PA for bird watching events, and grocery data for shopping behavior. We found that CS-EFE consistently outperforms EFE in terms of held-out predictive performance on the three datasets. For MovieLens, we also show that the embedding representations of the CS-EFE model have higher quality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">The Model</head><p>Our context selection procedure builds on models based on embeddings. We adopt the formalism of exponential family embeddings (EFE) <ref type="bibr" target="#b28">(Rudolph et al., 2016)</ref>, which extend the ideas of word embeddings to other types of data such as count or continuous-valued data. We briefly review the EFE model in Section 2.1. We then describe our model in Section 2.2, and we put forward an efficient inference procedure in Section 2.3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Exponential Family Embeddings</head><p>In exponential family embeddings (EFE), we have a collection of J objects, such as words (in text applications) or movies (in a recommendation problem). Our goal is to learn a vector representation of these objects based on their co-occurrence patterns.</p><p>Let us consider a dataset represented as a (typically sparse) N × J matrix X, where rows are datapoints and columns are objects. For example, in text applications each row corresponds to a location in the text, and it is a one-hot vector that represents the word appearing in that location. In movie data, each entry x nj indicates the rating of movie j for user n.</p><p>The EFE model learns the vector representation of objects based on the conditional probability of each observation, conditioned on the observations in its context. The context c nj = [(n 1 , j 1 ), (n 2 , j 2 ), . . .] gives the indices of the observations that appear in the conditional probability distribution of x nj . The definition of the context varies across applications. In text, it corresponds to the set of words in a fixed-size window centered at location n. In movie recommendation, c nj corresponds to the set of movies rated by user n, excluding j.</p><p>In EFE, we represent each object j with two vectors: an embedding vector ρ j and a context vector α j . These two vectors interact in the conditional probability distributions of each observation x nj as follows. Given the context c nj and the corresponding observations x cnj indexed by c nj , the distribution for x nj is in the exponential family,</p><formula xml:id="formula_0">p(x nj | x cnj ; α, ρ) = ExpFam t(x nj ), η j (x cnj ; α, ρ) ,<label>(1)</label></formula><p>where t(x nj ) is the sufficient statistic of the exponential family distribution, and η j (x cnj ; α, ρ) is its natural parameter. The natural parameter is set to</p><formula xml:id="formula_1">η j (x cnj ; α, ρ) = g   ρ (0) j + 1 |c nj | ρ j |cnj | k=1 x n k j k α j k   ,<label>(2)</label></formula><p>where |c nj | is the number of elements in the context, and g(·) is the link function (which depends on the application and plays the same role as in generalized linear models). We consider a slightly different form for η j (x cnj ; α, ρ) than in the original EFE paper by including the intercept terms ρ (0) j . We also average the elements in the context. These choices generally improve the model performance.</p><p>The vectors α j and ρ j (and the intercepts) are found by maximizing the pseudo-likelihood, i.e., the product of the conditional probabilities in Eq. 1 for each observation x nj .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Context Selection for Exponential Family Embeddings</head><p>The base EFE model assumes that all objects in the context c nj play a role in the distribution of x nj through Eq. 2. This is often an unrealistic assumption. The probability of purchasing chocolates should not depend on the context vector of bathroom tissue, even when the latter is actually in the context. Put formally, there are domains where the all elements in the context interact selectively in the probability of x nj .</p><p>We now develop our context selection for exponential family embeddings (CS-EFE) model, which selects a subset of the elements in the context for the embedding model, so that the natural parameter only depends on objects that are truly related to the target object. For each pair (n, j), we introduce a hidden binary vector b nj ∈ {0, 1} |cnj | that indicates which elements in the context c nj should be considered in the distribution for x nj . Thus, we set the natural parameter as</p><formula xml:id="formula_2">η j (x cnj , b nj ; α, ρ) = g   ρ (0) j + 1 B nj ρ j |cnj | k=1 b njk x n k j k α j k   ,<label>(3)</label></formula><p>where B nj = k b njk is the number of non-zero elements of b nj .</p><p>The prior distribution. We assign a prior to b nj , such that B nj ≥ 1 and</p><formula xml:id="formula_3">p(b nj ; π nj ) ∝ k (π njk ) b njk (1 − π njk ) 1−b njk .<label>(4)</label></formula><p>The constraint B nj ≥ 1 states that at least one element in the context needs to be selected. For values of b nj satisfying the constraint, their probabilities are proportional to those of independent Bernoulli variables, with hyperparameters π njk . If π njk is small for all k (near 0), then the distribution approaches a categorical distribution. If a few π njk values are large (near 1), then the constraint B nj ≥ 1 becomes less relevant and the distribution approaches a product of Bernoulli distributions.</p><p>The scale of the probabilities π nj has an impact on the number if elements to be selected as the context. We let</p><formula xml:id="formula_4">π njk ≡ π nj = π min(1, β/|c nj |),<label>(5)</label></formula><p>where π ∈ (0, 1) is a global parameter to be learned, and β is a hyperparameter. The value of β controls the average number of elements to be selected. If β tends to infinity and we hold π fixed to 1, then we recover the basic EFE model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>The objective function.</head><p>We form the objective function L as the (regularized) pseudo log-likelihood. After marginalizing out the variables b nj , it is</p><formula xml:id="formula_5">L = L reg + n,j log bnj p(x nj | x cnj , b nj ; α, ρ)p(b nj ; π nj ),<label>(6)</label></formula><p>where L reg is the regularization term. Following <ref type="bibr" target="#b28">Rudolph et al. (2016)</ref>, we use 2 -regularization over the embedding and context vectors.</p><p>It is computationally difficult to marginalize out the context selection variables b nj , particularly when the cardinality of the context c nj is large. We address this issue in the next section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Inference</head><p>We now show how to maximize the objective function in Eq. 6. We propose an algorithm based on amortized variational inference, which shares a global inference network for all local variables b nk . Here, we describe the inference method in detail.</p><p>Variational inference. In variational inference, we introduce a variational distribution q(b nj ; ν nj ), parameterized by ν nj ∈ R |cnj | , and we maximize a lower bound L of the objective in Eq. 6, L ≥ L,</p><formula xml:id="formula_6">L = L reg + n,j E q(bnj ;νnj ) log p(x nj | x cnj , b nj ; α, ρ) + log p(b nj ; π nj ) − log q(b nj ; ν nj ) .</formula><p>(7) Maximizing this bound with respect to the variational parameters ν nj corresponds to minimizing the Kullback-Leibler divergence from the posterior of b nj to the variational distribution q(b nj ; ν nj ) <ref type="bibr" target="#b10">(Jordan et al., 1999;</ref><ref type="bibr" target="#b32">Wainwright and Jordan, 2008)</ref>. Variational inference was also used for EFE by <ref type="bibr" target="#b1">Bamler and Mandt (2017)</ref>.</p><p>The properties of this maximization problem makes this approach hard in our case. First, there is no closed-form solution, even if we use a mean-field variational distribution. Second, the large size of the dataset requires fast online training of the model. Generally, we cannot fit each q(b nj ; ν nj ) individually by solving a set of optimization problems, nor even store ν nj for later use.</p><p>To address the former problem, we use black-box variational inference <ref type="bibr" target="#b25">(Ranganath et al., 2014)</ref>, which approximates the expectations via Monte Carlo to obtain noisy gradients of the variational lower bound. To tackle the latter, we use amortized inference <ref type="bibr" target="#b7">(Gershman and Goodman, 2014;</ref><ref type="bibr" target="#b5">Dayan et al., 1995)</ref>, which has the advantage that we do not need to store or optimize local variables.</p><p>Amortization. Amortized inference avoids the optimization of the parameter ν nj for each local variational distribution q(b nj ; ν nj ); instead, it fits a shared structure to calculate each local parameter ν nj . Specifically, we consider a function f (·) that inputs the target observation x nj , the context elements x cnj and indices c nj , and the model parameters, and outputs a variational distribution for b nj . Let a nj = [x nj , c nj , x cnj , α, ρ, π nj ] be the set of inputs of f (·), and let ν nj ∈ R |cnj | be its output, such that ν nj = f (a nj ) is a vector containing the logits of the variational distribution,</p><formula xml:id="formula_7">q(b njk = 1; ν njk ) = sigmoid (ν njk ) , with ν njk = [f (a nj )] k .<label>(8)</label></formula><p>Similarly to previous work <ref type="bibr" target="#b13">(Korattikara et al., 2015;</ref><ref type="bibr" target="#b12">Kingma and Welling, 2014;</ref><ref type="bibr" target="#b27">Rezende et al., 2014;</ref><ref type="bibr" target="#b19">Mnih and Gregor, 2014)</ref>, we let f (·) be a neural network, parameterized by W. The key in amortized inference is to design the network and learn its parameters W.</p><p>Network design. Typical neural networks transform fixed-length inputs into fixed-length outputs. However, in our case, we face variable size inputs and outputs. First, the output of the function f (·) for q(b nj ; ν nj ) has length equal to the context size |c nj |, which varies across target/context pairs. Second, the length of the local variables a nj also varies, because the length of x cnj depends on the number of elements in the context. We propose a network design that addresses these challenges.</p><p>To overcome the difficulty of the varying output sizes, we split the computation of each component ν njk of ν nj into |c nj | separate tasks. Each task computes the logit ν njk using a shared function f (·), ν njk = f (a njk ). The input a njk contains information about a nj and depends on the index k.</p><p>We now need to specify how we form the input a njk . A naïve approach would be to represent the indices of the context items and their corresponding counts as a sparse vector, but this would require a network with a very large input size. Moreover, most of the weights of this large network would not be used (nor trained) in the computation of ν njk , since only a small subset of them would be assigned a non-zero input.</p><p>Instead, in this work we use a two-step process to build an input vector a njk that has fixed length regardless of the context size |c nj |. In</p><p>Step 1, we transform the original input a nj = [x nj , c nj , x cnj , α, ρ, π nj ] into a vector of reduced dimensionality that preserves the relevant information (we define "relevant" below). In</p><p>Step 2, we transform the vector of reduced dimensionality into a fixed-length vector.</p><p>For</p><p>Step 1, we first need to determine which information is relevant. For that, we inspect the posterior for b nj ,</p><formula xml:id="formula_8">p(b nj | x nj , x cnj ; α, ρ, π nj ) ∝ p(x nj | x cnj , b nj , b nj ; α, ρ)p(b nj ; π nj ) = p(x nj | s nj , b nj )p(b nj ; π nj ).<label>(9)</label></formula><p>We note that the dependence on x cnj , α, and ρ comes through the scores s nj , a vector of length |c nj | that contains for each element the inner product of the corresponding embedding and context vector,</p><p>Other scores (variable length) <ref type="bibr">(L bins)</ref> h (k) njL <ref type="figure">Figure 1</ref>: Representation of the amortized inference network that outputs the variational parameter for the context selection variable b njk . The input has fixed size regardless of the context size, and it is formed by the score s njk (Eq. 10), the prior parameter π nj , the target observation x nj , and a histogram of the scores s njk (for k = k).</p><p>scaled by the context observation,</p><formula xml:id="formula_9">s njk = x n k j k ρ j α j k .<label>(10)</label></formula><p>Therefore, the scores s nj are sufficient: f (·) does not need the raw embedding vectors as input, but rather the scores s nj ∈ R |cnj | . We have thus reduced the dimensionality of the input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>For</head><p>Step 2, we need to transform the scores s nj ∈ R |cnj | into a fixed-length vector that the neural network f (·) can take as input. We represent this vector and the full neural network structure in <ref type="figure">Figure 1</ref>. The transformation is carried out differently for each value of k. For the network that outputs the variational parameter ν njk , we let the k-th score s njk be directly one of the inputs. The reason is that the k-th score s njk is more related to ν njk , because the network that outputs ν njk ultimately indicates the probability that b njk takes value 1, i.e., ν njk indicates whether to include the kth element as part of the context in the computation of the natural parameter in Eq. 3. All other scores (s njk for k = k) have the same relation to ν njk , and their permutations give the same posterior. We bin these scores (s njk , for k = k) into L bins, therefore obtaining a fixed-length vector. Instead of using bins with hard boundaries, we use Gaussian-shaped kernels. We denote by ω and σ the mean and width of each Gaussian kernel, and we denote by h</p><formula xml:id="formula_10">(k) nj ∈ R L to the binned variables, such that h (k) nj = |cnj | k =1 k =k exp − (s njk − ω ) 2 σ 2 .<label>(11)</label></formula><p>Finally, for ν njk = f (a njk ) we form a neural network that takes as input the score s njk , the binned variables h (k) nj , which summarize the information of the scores (s njk : k = k), as well as the target observation x nj and the prior probability π nj . That is,</p><formula xml:id="formula_11">a njk = [s njk , h (k) nj , x nj , π nj ].</formula><p>Variational updates. We denote by W the parameters of the network (all weights and biases). To perform inference, we need to iteratively update W, together with α, ρ, and π, to maximize Eq. 7, where ν nj is the output of the network f (·). We follow a variational expectation maximization (EM) algorithm. In the M step, we take a gradient step with respect to the model parameters (α, ρ, and π). In the E step, we take a gradient step with respect to the network parameters (W). We obtain the (noisy) gradient with respect to W using the score function method as in black-box variational inference <ref type="bibr" target="#b23">(Paisley et al., 2012;</ref><ref type="bibr" target="#b19">Mnih and Gregor, 2014;</ref><ref type="bibr" target="#b26">Ranganath et al., 2015)</ref>, which allows rewriting the gradient of Eq. 7 as an expectation with respect to the variational distribution,</p><formula xml:id="formula_12">∇ L = n,j E q(bnj ;W) log p(x nj | x snj , b nj ) + log p(b nj ; π nj ) − log q(b nj ; W) · ∇ log q(b nj ; W) .</formula><p>Then, we can estimate the gradient via Monte Carlo by drawing samples from q(b nj ; W).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Empirical Study</head><p>We study the performance of context selection on three different application domains: movie recommendations, ornithology, and market basket analysis. On these domains, we show that context selection improves predictions. For the movie data, we also show that the learned embeddings are more interpretable; and for the market basket analysis, we provide a motivating example of the variational probabilities inferred by the network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Data. MovieLens:</head><p>We consider the MovieLens-100K dataset <ref type="bibr" target="#b8">(Harper and Konstan, 2015)</ref>, which contains ratings of movies on a scale from 1 to 5. We only keep those ratings with value 3 or more (and we subtract 2 from all ratings, so that the counts are between 0 and 3). We remove users who rated less than 20 movies and movies that were rated fewer than 50 times, yielding a dataset with 943 users and 811 movies. The average number of non-zeros per user is 82.2. We set aside 9% of the data for validation and 10% for test.</p><p>eBird-PA: The eBird data <ref type="bibr" target="#b21">(Munson et al., 2015;</ref><ref type="bibr" target="#b30">Sullivan et al., 2009</ref>) contains information about a set of bird observation events. Each datum corresponds to a checklist of counts of 213 bird species reported from each event. The values of the counts range from zero to hundreds. Some extraordinarily large counts are treated as outliers and set to the mean of positive counts of that species. Bird observations in the subset eBird-PA are from a rectangular area that mostly overlaps Pennsylvania and the period from day 180 to day 210 of years from 2002 to 2014. There are 22, 363 checklists in the data and 213 unique species. The average number of non-zeros per checklist is 18.3. We split the data into train (67%), test (26%), and validation (7%) sets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Market-Basket:</head><p>This dataset contains purchase records of more than 3, 000 customers on an anonymous supermarket. We aggregate the purchases of one month at the category level, i.e., we combine all individual UPC (Universal Product Code) items into item categories. This yields 45, 615 purchases and 364 unique items. The average basket size is of 12.5 items. We split the data into training (86%), test (5%), and validation (9%) sets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Models.</head><p>We compare the base exponential family embeddings (EFE) model <ref type="bibr" target="#b28">(Rudolph et al., 2016)</ref> with our context selection procedure. We implement the amortized inference network described in Section 2.3 2 , for different values of the prior hyperparameter β (Eq. 5) (see below).</p><p>For the movie data, in which the ratings range from 0 to 3, we use a binomial conditional distribution (Eq. 1) with 3 trials, and we use an identity link function for the natural parameter η j (Eq. 2), which is the logit of the binomial probability. For the eBird-PA and Market-Basket data, which contain counts, we consider a Poisson conditional distribution and use the link function 3 g(·) = log softplus (·) for the natural parameter, which is the Poisson log-rate. The context set corresponds to the set of other movies rated by the same user in MovieLens; the set of other birds in the same checklist on eBird-PA; and the rest of items in the same market basket. Experimental setup. We explore different values for the dimensionality K of the embedding vectors. In our tables of results, we report the values that performed best in the validation set (there was no qualitative difference in the relative performance between the methods for the non-reported results). We use negative sampling <ref type="bibr" target="#b28">(Rudolph et al., 2016</ref>) with a ratio of 1/10 of positive (non-zero) versus negative samples. We use stochastic gradient descent to maximize the objective function, adaptively setting the stepsize with Adam <ref type="bibr" target="#b11">(Kingma and Ba, 2015)</ref>, and we use the validation log-likelihood to assess convergence. We consider unit-variance 2 -regularization, and the weight of the regularization term is fixed to 1.0.</p><p>In the context selection for exponential family embeddings (CS-EFE) model, we set the number of hidden units to 30 and 15 for each of the hidden layers, and we consider 40 bins to form the histogram. (We have also explored other settings of the network, obtaining very similar results.) We believe that the network layers can adapt to different settings of the bins as long as they pick up essential information of the scores. In this work, we place these 40 bins equally spaced by a distance of 0.2 and set the width to 0.1.  In our experiments, we vary the hyperparameter β in Eq. 5 to check how the expected context size (see Section 2.2) impacts the results. For the MovieLens dataset, we choose β ∈ {20, 50, 100, ∞}, while for the other two datasets we choose β ∈ {2, 5, 10, ∞}.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>CS-EFE (this paper)</head><p>Results: Predictive performance. We compare the methods in terms of predictive pseudo loglikelihood on the test set. We calculate the marginal log-likelihood in the same way as <ref type="bibr" target="#b27">Rezende et al. (2014)</ref>. We report the average test log-likelihood on the three datasets in <ref type="table" target="#tab_0">Table 1</ref>. The numbers are the average predictive log-likelihood per item, together with the standard errors in brackets. We compare the predictions of our models (in each setting) with the baseline EFE method using paired t-test, obtaining that all our results are better than the baseline at a significance level p = 0.05. In the table we only bold the best performance across different settings of β.</p><p>The results show that our method outperforms the baseline on all three datasets. The improvement over the baseline is more significant on the eBird-PA datasets. We can also see that the prior parameter β has some impact on the model's performance.</p><p>Evaluation: Embedding quality. We also study how context selection affects the quality of the embedding vectors of the items. In the MovieLens dataset, each movie has up to 3 genre labels. We calculate movie similarities by their genre labels and check whether the similarities derived from the embedding vectors are consistent with genre similarities.</p><p>More in detail, let g j ∈ {0, 1} G be a binary vector containing the genre labels for each movie j, where G = 19 is the number of genres. We define the similarity between two genre vectors, g j and g j , as the number of common genres normalized by the larger number genres,</p><formula xml:id="formula_13">sim(g j , g j ) = g j g j max(1 g j , 1 g j ) ,<label>(12)</label></formula><p>where 1 is a vector of ones. In an analogous manner, we define the similarity of two embedding vectors as their cosine distance.</p><p>We now compute the similarities of each movie to all other movies, according to both definitions of similarity (based on genre and based on embeddings). For each query movie, we provide two correlation metrics between both lists. The first metric is simply Spearman's correlation between the two ranked lists. For the second metric, we rank the movies based on the embedding similarity only, and we calculate the average genre similarity of the top 5 movies. Finally, we average both metrics across all possible query movies, and we report the results in <ref type="table" target="#tab_2">Table 2</ref>.</p><p>Baseline: EFE CS-EFE (this paper) Metric <ref type="bibr" target="#b28">(Rudolph et al., 2016</ref>) β = 20 β = 50 β = 100 β = ∞   <ref type="table">Table 3</ref>: Approximate posterior probabilities of the CS-EFE model for a basket with eight items broken down into two unrelated clusters. The left column represents a basket of eight items of two types, and then we take one item of each type as target in the other two columns. For a Mexican food target, the posterior probabilities of the items in the Mexican type are larger compared to the probabilities in the pet type, and vice-versa.</p><p>From this result, we can see that the similarity of the embedding vectors obtained by our model is more consistent with the genre similarity. (We have also computed the top-1 and top-10 similarities, which supports the same conclusion.) The result suggests a small number of context items are actually better for learning relations of movies.</p><p>Evaluation: Posterior checking. To get more insight of the variational posterior distribution that our model provides, we form a heterogeneous market basket that contains two types of items: Mexican food, and pet-related products. In particular, we form a basket with four items of each of those types, and we compute the variational distribution (i.e., the output of the neural network) for two different target items from the basket. Intuitively, the Mexican food items should have higher probabilities when the target item is also in the same type, and similarly for the pet food.</p><p>We fit the CS-EFE model with β = 2 on the Market-Basket data. We report the approximate posterior probabilities in <ref type="table">Table 3</ref>, for two query items (one from each type). As expected, the probabilities for the items of the same type than the target are higher, indicating that their contribution to the context will be higher.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Conclusion</head><p>The standard exponential family embeddings (EFE) model finds vector representations by fitting the conditional distributions of objects conditioned on their contexts. In this work, we show that choosing a subset of the elements in the context can improve performance when the objects in the subset are truly related to the object to be modeled. As a consequence, the embedding vectors can reflect co-occurrence relations with higher fidelity compared with the base embedding model.</p><p>We formulate the context selection problem as a Bayesian inference problem by using a hidden binary vector to indicate which objects to select from each context set. This leads to a difficult inference problem due to the (large) scale of the problems we face. We develop a fast inference algorithm by leveraging amortization and stochastic gradients. The varying length of the binary context selection vectors poses further challenges in our amortized inference algorithm, which we address using a binning technique. We fit our model on three datasets from different application domains, showing its superiority over the EFE model.</p><p>There are still many directions to explore to further improve the performance of the proposed context selection for exponential family embeddings (CS-EFE). First, we can apply the context selection technique on text data. Though the neighboring words of each target word are more likely to be the "correct" context, we can still combine the context selection technique with the ordering in which words appear in the context, hopefully leading to better word representations. Second, we can explore variational inference schemes that do not rely on mean-field, improving the inference network to capture more complex variational distributions.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Test log-likelihood for the three considered datasets. Our CS-EFE models consistently outperforms the baseline for different values of the prior hyperparameter β. The numbers in brackets indicate the standard errors.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Correlation between the embedding vectors and the movie genre. The embedding vectors found with our CS-EFE model exhibit higher correlation with movie genres.: Taco shells Target: Cat food dry</figDesc><table>TargetTaco shells 
+− 
+0.219 
+Hispanic salsa 
+0.309 
+0.185 
+Tortilla 
+0.287 
+0.151 
+Hispanic canned food 
+0.315 
+0.221 
+
+Cat food dry 
+0.220 
+− 
+Cat food wet 
+0.206 
+0.297 
+Cat litter 
+0.225 
+0.347 
+Pet supplies 
+0.173 
+0.312 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">The code is in the github repo: https://github.com/blei-lab/context-selection-embedding 3 The softplus function is defined as softplus (x) = log(1 + exp(x)).</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work is supported by NSF IIS-1247664, ONR N00014-11-1-0651, DARPA PPAML FA8750-14-2-0009, DARPA SIMPLEX N66001-15-C-4032, the Alfred P. Sloan Foundation, and the John Simon Guggenheim Foundation. Francisco J. R. Ruiz is supported by the EU H2020 programme (Marie Skłodowska-Curie grant agreement 706760). We also acknowledge the support of NVIDIA Corporation with the donation of two GPUs used for this research.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">RAND-WALK: A latent variable model approach to word embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Arora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions of the Association for Computational Linguistics</title>
+		<imprint>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Dynamic word embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bamler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mandt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference in Machine Learning</title>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Item2Vec: Neural item embedding for collaborative filtering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Barkan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Koenigstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Workshop on Machine Learning for Signal Processing</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Neural probabilistic language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Schwenk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-S</forename><surname>Senécal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Morin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-L</forename><surname>Gauvain</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Innovations in Machine Learning</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+		<title level="m">Pattern Recognition and Machine Learning (Information Science and Statistics)</title>
+		<meeting><address><addrLine>Secaucus, NJ, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>SpringerVerlag New York, Inc</publisher>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The Helmholtz machine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="889" to="904" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A synopsis of linguistic theory 1930-1955</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Firth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Studies in Linguistic Analysis</title>
+		<imprint>
+			<date type="published" when="1957" />
+			<biblScope unit="page" from="1952" to="1959" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Amortized inference in probabilistic reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Gershman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">D</forename><surname>Goodman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Thirty-Sixth Annual Conference of the Cognitive Science Society</title>
+		<meeting>the Thirty-Sixth Annual Conference of the Cognitive Science Society</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">The MovieLens datasets: History and context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">M</forename><surname>Harper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Konstan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Interactive Intelligent Systems (TiiS)</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">19</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><forename type="middle">S</forename><surname>Harris</surname></persName>
+		</author>
+		<title level="m">Distributional structure. Word</title>
+		<imprint>
+			<date type="published" when="1954" />
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page" from="146" to="162" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">An introduction to variational methods for graphical models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">S</forename><surname>Jaakkola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">K</forename><surname>Saul</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="183" to="233" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Auto-encoding variational Bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Bayesian dark knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Korattikara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rathod</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Neural word embedding as implicit matrix factorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Levy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Factorization meets the item embedding: Regularizing matrix factorization with item co-occurrence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Altosaar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Charlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Conference on Recommender System</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Efficient estimation of word representations in vector space</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Distributed representations of words and phrases and their compositionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Linguistic regularities in continuous space word representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-T</forename><forename type="middle">A</forename><surname>Yih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Zweig</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Neural variational inference and learning in belief networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning word embeddings efficiently with noise-contrastive estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Munson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Webb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sheldon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">M</forename><surname>Hochachka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Iliff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedewald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sorokina</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kelling</surname></persName>
+		</author>
+		<title level="m">The eBird reference dataset</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Machine Learning: A Probabilistic Perspective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>MIT Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Variational Bayesian inference with stochastic search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Paisley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jordan</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">GloVe: Global vectors for word representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pennington</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Empirical Methods on Natural Language Processing</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Black box variational inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranganath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gerrish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Deep exponential families</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranganath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Charlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Stochastic backpropagation and approximate inference in deep generative models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Rezende</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Exponential family embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rudolph</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">J R</forename><surname>Ruiz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Learning representations by back-propagating errors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">E</forename><surname>Rumelhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="volume">323</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="533" to="536" />
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">eBird: A citizen-based bird observation network in the biological sciences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Iliff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Bonney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kelling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biological Conservation</title>
+		<imprint>
+			<biblScope unit="volume">142</biblScope>
+			<biblScope unit="page" from="2282" to="2292" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Word representations via Gaussian embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Vilnis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mccallum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Graphical models, exponential families, and variational inference. Foundations and Trends in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Jordan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1" to="305" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

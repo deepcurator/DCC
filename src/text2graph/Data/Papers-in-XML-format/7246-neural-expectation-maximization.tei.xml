@@ -1,0 +1,1004 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 C:\Grobid\grobid-0.5.5\grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.5" ident="GROBID" when="2019-09-05T11:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Neural Expectation Maximization</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus</forename><surname>Greff</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">IDSIA</orgName>
+								<orgName type="institution" key="instit2">IDSIA</orgName>
+								<orgName type="institution" key="instit3">IDSIA</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sjoerd</forename><surname>Van Steenkiste</surname></persName>
+							<email>sjoerd@idsia.ch</email>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">IDSIA</orgName>
+								<orgName type="institution" key="instit2">IDSIA</orgName>
+								<orgName type="institution" key="instit3">IDSIA</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">IDSIA</orgName>
+								<orgName type="institution" key="instit2">IDSIA</orgName>
+								<orgName type="institution" key="instit3">IDSIA</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Neural Expectation Maximization</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Many real world tasks such as reasoning and physical interaction require identification and manipulation of conceptual entities. A first step towards solving these tasks is the automated discovery of distributed symbol-like representations. In this paper, we explicitly formalize this problem as inference in a spatial mixture model where each component is parametrized by a neural network. Based on the Expectation Maximization framework we then derive a differentiable clustering method that simultaneously learns how to group and represent individual entities. We evaluate our method on the (sequential) perceptual grouping task and find that it is able to accurately recover the constituent objects. We demonstrate that the learned representations are useful for next-step prediction.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1">Introduction</head><p>Learning useful representations is an important aspect of unsupervised learning, and one of the main open problems in machine learning. It has been argued that such representations should be distributed <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b36">37]</ref> and disentangled <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b2">3]</ref>. The latter has recently received an increasing amount of attention, producing representations that can disentangle features like rotation and lighting <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b11">12]</ref>.</p><p>So far, these methods have mostly focused on the single object case whereas, for real world tasks such as reasoning and physical interaction, it is often necessary to identify and manipulate multiple entities and their relationships. In current systems this is difficult, since superimposing multiple distributed and disentangled representations can lead to ambiguities. This is known as the Binding Problem <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b12">13]</ref> and has been extensively discussed in neuroscience <ref type="bibr" target="#b32">[33]</ref>. One solution to this problem involves learning a separate representation for each object. In order to allow these representations to be processed identically they must be described in terms of the same (disentangled) features. This would then avoid the binding problem, and facilitate a wide range of tasks that require knowledge about individual objects. This solution requires a process known as perceptual grouping: dynamically splitting (segmenting) each input into its constituent conceptual entities.</p><p>In this work, we tackle this problem of learning how to group and efficiently represent individual entities, in an unsupervised manner, based solely on the statistical structure of the data. Our work follows a similar approach as the recently proposed Tagger <ref type="bibr" target="#b6">[7]</ref> and aims to further develop the understanding, as well as build a theoretical framework, for the problem of symbol-like representation learning. We formalize this problem as inference in a spatial mixture model where each component is parametrized by a neural network. Based on the Expectation Maximization framework we then derive a differentiable clustering method, which we call Neural Expectation Maximization (N-EM). It can be trained in an unsupervised manner to perform perceptual grouping in order to learn an efficient representation for each group, and naturally extends to sequential data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2">Neural Expectation Maximization</head><p>The goal of training a system that produces separate representations for the individual conceptual entities contained in a given input (here: image) depends on what notion of entity we use. Since we are interested in the case of unsupervised learning, this notion can only rely on statistical properties of the data. We therefore adopt the intuitive notion of a conceptual entity as being a common cause (the object) for multiple observations (the pixels that depict the object). This common cause induces a dependency-structure among the affected pixels, while the pixels that correspond to different entities remain (largely) independent. Intuitively this means that knowledge about some pixels of an object helps in predicting its remainder, whereas it does not improve the predictions for pixels of other objects. This is especially obvious for sequential data, where pixels belonging to a certain object share a common fate (e.g. move in the same direction), which makes this setting particularly appealing.</p><p>We are interested in representing each entity (object) k with some vector θ k that captures all the structure of the affected pixels, but carries no information about the remainder of the image. This modularity is a powerful invariant, since it allows the same representation to be reused in different contexts, which enables generalization to novel combinations of known objects. Further, having all possible objects represented in the same format makes it easier to work with these representations. Finally, having a separate θ k for each object (as opposed to for the entire image) allows θ k to be distributed and disentangled without suffering from the binding problem.</p><p>We treat each image as a composition of K objects, where each pixel is determined by exactly one object. Which objects are present, as well as the corresponding assignment of pixels, varies from input to input. Assuming that we have access to the family of distributions P (x|θ k ) that corresponds to an object level representation as described above, we can model each image as a mixture model. Then Expectation Maximization (EM) can be used to simultaneously compute a Maximum Likelihood Estimate (MLE) for the individual θ k -s and the grouping that we are interested in.</p><p>The central problem we consider in this work is therefore how to learn such a P (x|θ k ) in a completely unsupervised fashion. We accomplish this by parametrizing this family of distributions by a differentiable function f φ (θ) (a neural network with weights φ). We show that in that case, the corresponding EM procedure becomes fully differentiable, which allows us to backpropagate an appropriate outer loss into the weights of the neural network. In the remainder of this section we formalize and derive this method which we call Neural Expectation Maximization (N-EM).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1">Parametrized Spatial Mixture Model</head><p>We model each image x ∈ R D as a spatial mixture of K components parametrized by vectors</p><formula xml:id="formula_0">θ 1 , . . . , θ K ∈ R M</formula><p>. A differentiable non-linear function f φ (a neural network) is used to transform these representations θ k into parameters ψ i,k = f φ (θ k ) i for separate pixel-wise distributions. These distributions are typically Bernoulli or Gaussian, in which case ψ i,k would be a single probability or a mean and variance respectively. This parametrization assumes that given the representation, the pixels are independent but not identically distributed (unlike in standard mixture models). A set of binary latent variables Z ∈ [0, 1] D×K encodes the unknown true pixel assignments, such that z i,k = 1 iff pixel i was generated by component k, and</p><formula xml:id="formula_1">� k z i,k = 1.</formula><p>A graphical representation of this model can be seen in <ref type="figure" target="#fig_0">Figure 1</ref>, where π = (π 1 , . . . π K ) are the mixing coefficients (or prior for z). The full likelihood for x given θ = (θ 1 , . . . , θ K ) is given by:</p><formula xml:id="formula_2">P (x|θ) = D � i=1 � zi P (x i , z i |ψ i ) = D � i=1 K � k=1 P (z i,k = 1) � �� � π k P (x i |ψ i,k , z i,k = 1).<label>(1)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2">Expectation Maximization</head><p>Directly optimizing log P (x|ψ) with respect to θ is difficult due to marginalization over z, while for many distributions optimizing log P (x, z|ψ) is much easier. Expectation Maximization (EM; <ref type="bibr" target="#b5">[6]</ref>) takes advantage of this and instead optimizes a lower bound given by the expected log likelihood: Iterative optimization of this bound alternates between two steps: in the E-step we compute a new estimate of the posterior probability distribution over the latent variables given θ old from the previous iteration, yielding a new soft-assignment of the pixels to the components (clusters):</p><formula xml:id="formula_3">Q(θ, θ old ) = � z P (z|x, ψ old ) log P (x, z|ψ).<label>(2)</label></formula><formula xml:id="formula_4">γ i,k := P (z i,k = 1|x i , ψ old i ).<label>(3)</label></formula><p>In the M-step we then aim to find the configuration of θ that would maximize the expected loglikelihood using the posteriors computed in the E-step. Due to the non-linearity of f φ there exists no analytical solution to arg max θ Q(θ, θ old ). However, since f φ is differentiable, we can improve Q(θ, θ old ) by taking a gradient ascent step:</p><formula xml:id="formula_5">2 θ new = θ old + η ∂Q ∂θ where ∂Q ∂θ k ∝ D � i=1 γ i,k (ψ i,k − x i ) ∂ψ i,k ∂θ k .<label>(4)</label></formula><p>The resulting algorithm belongs to the class of generalized EM algorithms and is guaranteed (for a sufficiently small learning rate η) to converge to a (local) optimum of the data log likelihood <ref type="bibr" target="#b41">[42]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3">Unrolling</head><p>In our model the information about statistical regularities required for clustering the pixels into objects is encoded in the neural network f φ with weights φ. So far we have considered f φ to be fixed and have shown how we can compute an MLE for θ alongside the appropriate clustering. We now observe that by unrolling the iterations of the presented generalized EM, we obtain an end-to-end differentiable clustering procedure based on the statistical model implemented by f φ . We can therefore use (stochastic) gradient descent and fit the statistical model to capture the regularities corresponding to objects for a given dataset. This is implemented by back-propagating an appropriate loss (see Section 2.4) through "time" (BPTT; <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b40">41]</ref>) into the weights φ. We refer to this trainable procedure as Neural Expectation Maximization (N-EM), an overview of which can be seen in <ref type="figure" target="#fig_0">Figure 1</ref>. Upon inspection of the structure of N-EM we find that it resembles K copies of a recurrent neural network with hidden states θ k that, at each timestep, receive γ k � (ψ k − x) as their input. Each copy generates a new ψ k , which is then used by the E-step to re-estimate the soft-assignments γ. In order to accurately mimic the M-Step (4) with an RNN, we must impose several restrictions on its weights and structure: the "encoder" must correspond to the Jacobian ∂ψ k /∂θ k , and the recurrent update must linearly combine the output of the encoder with θ k from the previous timestep. Instead, we introduce a new algorithm named RNN-EM, when substituting that part of the computational graph of N-EM with an actual RNN (without imposing any restrictions). Although RNN-EM can no longer guarantee convergence of the data log likelihood, its recurrent weights increase the flexibility of the clustering procedure. Moreover, by using a fully parametrized recurrent weight matrix RNN-EM naturally extends to sequential data. <ref type="figure" target="#fig_1">Figure 2</ref> presents the computational graph of a single RNN-EM timestep.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4">Training Objective</head><p>N-EM is a differentiable clustering procedure, whose outcome relies on the statistical model f φ . We are interested in a particular unsupervised clustering that corresponds to grouping entities based on the statistical regularities in the data. To train our system, we therefore require a loss function that teaches f φ to map from representations θ to parameters ψ that correspond to pixelwise distributions for such objects. We accomplish this with a two-term loss function that guides each of the K networks to model the structure of a single object independently of any other information in the image:</p><formula xml:id="formula_6">L(x) = − D � i=1 K � k=1 γ i,k log P (x i , z i,k |ψ i,k ) � �� � intra-cluster loss − (1 − γ i,k )D KL [P (x i )||P (x i |ψ i,k , z i,k )] � �� � inter-cluster loss .<label>(5)</label></formula><p>The intra-cluster loss corresponds to the same expected data log-likelihood Q as is optimized by N-EM. It is analogous to a standard reconstruction loss used for training autoencoders, weighted by the cluster assignment. Similar to autoencoders, this objective is prone to trivial solutions in case of overcapacity, which prevent the network from modelling the statistical regularities that we are interested in. Standard techniques can be used to overcome this problem, such as making θ a bottleneck or using a noisy version of x to compute the inputs to the network. Furthermore, when RNN-EM is used on sequential data we can use a next-step prediction loss.</p><p>Weighing the loss pixelwise is crucial, since it allows each network to specialize its predictions to an individual object. However, it also introduces a problem: the loss for out-of-cluster pixels (γ i,k = 0) vanishes. This leaves the network free to predict anything and does not yield specialized representations. Therefore, we add a second term (inter-cluster loss) which penalizes the KL divergence between out-of-cluster predictions and the pixelwise prior of the data. Intuitively this tells each representation θ k to contain no information regarding non-assigned pixels</p><formula xml:id="formula_7">x i : P (x i |ψ i,k , z i,k ) = P (x i ).</formula><p>A disadvantage of the interaction between γ and ψ in (5) is that it may yield conflicting gradients. For any θ k the loss for a given pixel i can be reduced by better predicting x i , or by decreasing γ i,k (i.e. taking less responsibility) which is (due to the E-step) realized by being worse at predicting x i . A practical solution to this problem is obtained by stopping the γ gradients, i.e. by setting ∂L/∂γ = 0 during backpropagation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3">Related work</head><p>The method most closely related to our approach is Tagger <ref type="bibr" target="#b6">[7]</ref>, which similarly learns perceptual grouping in an unsupervised fashion using K copies of a neural network that work together by reconstructing different parts of the input. Unlike in case of N-EM, these copies additionally learn to output the grouping, which gives Tagger more direct control over the segmentation and supports its use on complex texture segmentation tasks. Our work maintains a close connection to EM and relies on the posterior inference of the E-Step as a grouping mechanism. This facilitates theoretical analysis and simplifies the task for the resulting networks, which we find can be markedly smaller than in Tagger. Furthermore, Tagger does not include any recurrent connections on the level of the hidden states, precluding it from next step prediction on sequential tasks. <ref type="bibr" target="#b2">3</ref> The Binding problem was first considered in the context of Neuroscience <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b36">37]</ref> and has sparked some early work in oscillatory neural networks that use synchronization as a grouping mechanism <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b23">24]</ref>. Later, complex valued activations have been used to replace the explicit simulation of oscillation <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b25">26]</ref>. By virtue of being general computers, any RNN can in principle learn a suitable mechanism. In practice however it seems hard to learn, and adding a suitable mechanism like competition <ref type="bibr" target="#b39">[40]</ref>, fast weights <ref type="bibr" target="#b28">[29]</ref>, or perceptual grouping as in N-EM seems necessary. Unsupervised Segmentation has been studied in several different contexts <ref type="bibr" target="#b29">[30]</ref>, from random vectors <ref type="bibr" target="#b13">[14]</ref> over texture segmentation <ref type="bibr" target="#b9">[10]</ref> to images <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b15">16]</ref>. Early work in unsupervised video segmentation <ref type="bibr" target="#b16">[17]</ref> used generalized Expectation Maximization (EM) to infer how to split frames of moving sprites. More recently optical flow has been used to train convolutional networks to do figure/ground segmentation <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b33">34]</ref>. A related line of work under the term of multi-causal modelling <ref type="bibr" target="#b27">[28]</ref> has formalized perceptual grouping as inference in a generative compositional model of images. Masked RBMs <ref type="bibr" target="#b19">[20]</ref> for example extend Restricted Boltzmann Machines with a latent mask inferred through Block-Gibbs sampling.</p><p>Gradient backpropagation through inference updates has previously been addressed in the context of sparse coding with (Fast) Iterative Shrinkage/Tresholding Algorithms ((F)ISTA; <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b1">2]</ref>). Here the unrolled graph of a fixed number of ISTA iterations is replaced by a recurrent neural network that parametrizes the gradient computations and is trained to predict the sparse codes directly <ref type="bibr" target="#b8">[9]</ref>. We derive RNN-EM from N-EM in a similar fashion and likewise obtain a trainable procedure that has the structure of iterative pursuit built into the architecture, while leaving tunable degrees of freedom that can improve their modeling capabilities <ref type="bibr" target="#b31">[32]</ref>. An alternative to further empower the network by untying its weights across iterations <ref type="bibr" target="#b10">[11]</ref> was not considered for flexibility reasons.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4">Experiments</head><p>We evaluate our approach on a perceptual grouping task for generated static images and video. By composing images out of simple shapes we have control over the statistical structure of the data, as well as access to the ground-truth clustering. This allows us to verify that the proposed method indeed recovers the intended grouping and learns representations corresponding to these objects. In particular we are interested in studying the role of next-step prediction as a unsupervised objective for perceptual grouping, the effect of the hyperparameter K, and the usefulness of the learned representations.</p><p>In all experiments we train the networks using ADAM <ref type="bibr" target="#b18">[19]</ref> with default parameters, a batch size of 64 and 50 000 train + 10 000 validation + 10 000 test inputs. Consistent with earlier work <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b6">7]</ref>, we evaluate the quality of the learned groupings with respect to the ground truth while ignoring the background and overlap regions. This comparison is done using the Adjusted Mutual Information (AMI; <ref type="bibr" target="#b34">[35]</ref>) score, which provides a measure of clustering similarity between 0 (random) and 1 (perfect match). We use early stopping when the validation loss has not improved for 10 epochs. <ref type="bibr" target="#b3">4</ref> A detailed overview of the experimental setup can be found in Appendix A. All reported results are averages computed over five runs. <ref type="bibr" target="#b4">5</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1">Static Shapes</head><p>To validate that our approach yields the intended behavior we consider a simple perceptual grouping task that involves grouping three randomly chosen regular shapes (� � �) located in random positions of 28 × 28 binary images <ref type="bibr" target="#b25">[26]</ref>. This simple setup serves as a test-bed for comparing N-EM and RNN-EM, before moving on to more complex scenarios. As shown in <ref type="figure" target="#fig_2">Figure 3</ref>, we observe that both approaches are able to recover the individual shapes as long as they are separated, even when confronted with identical shapes. N-EM performs worse if the image contains occlusion, and we find that RNN-EM is in general more stable and produces considerably better groupings. This observation is in line with findings for Sparse Coding <ref type="bibr" target="#b8">[9]</ref>. Similarly we conclude that the tunable degrees of freedom in RNN-EM help speed-up the optimization process resulting in a more powerful approach that requires fewer iterations. The benefit is reflected in the large score difference between the two: 0.826 ± 0.005 AMI compared to 0.475 ± 0.043 AMI for N-EM. In comparison, Tagger achieves an AMI score of 0.79 ± 0.034 (and 0.97 ± 0.009 with layernorm), while using about twenty times more parameters <ref type="bibr" target="#b6">[7]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2">Flying Shapes</head><p>We consider a sequential extension of the static shapes dataset in which the shapes (� � �) are floating along random trajectories and bounce off walls. An example sequence with 5 shapes can be seen in the bottom row of <ref type="figure" target="#fig_3">Figure 4</ref>. We use a convolutional encoder and decoder inspired by the discriminator and generator networks of infoGAN <ref type="bibr" target="#b3">[4]</ref>, with a recurrent neural network of 100 sigmoidal units (for details see Section A.2). At each timestep t the network receives γ k (ψ</p><formula xml:id="formula_8">(t−1) k −x (t) ) as input, wherẽ x (t)</formula><p>is the current frame corrupted with additional bitflip noise (p = 0.2). The next-step prediction objective is implemented by replacing x with x (t+1)</p><p>in <ref type="formula" target="#formula_6">(5)</ref>, and is evaluated at each time-step. <ref type="table">Table 1</ref> summarizes the results on flying shapes, and an example of a sequence with 5 shapes when using K = 5 can be seen in <ref type="figure" target="#fig_3">Figure 4</ref>. For 3 shapes we observe that the produced groupings are close to perfect (AMI: 0.970 ± 0.005). Even in the very cluttered case of 5 shapes the network is able to separate the individual objects in almost all cases (AMI: 0.878 ± 0.003).</p><p>These results demonstrate the adequacy of the next step prediction task for perceptual grouping. However, we find that the converse also holds: the corresponding representations are useful for the prediction task. In <ref type="figure">Figure 5</ref> we compare the next-step prediction error of RNN-EM with K = 1 (which reduces to a recurrent autoencoder that receives the difference between its previous prediction and the current frame as input) to RNN-EM with K = 5 on this task. To evaluate RNN-EM on next-step prediction we computed its loss using P (</p><formula xml:id="formula_9">x i |ψ i ) = P (x i | max k ψ i,k ) as opposed to P (x i |ψ i ) = � k γ i,k P (x i |ψ i,k )</formula><p>to avoid including information from the next timestep. The reported BCE loss for RNN-EM is therefore an upperbound to the true BCE loss. From the figure we observe that RNN-EM produces significantly lower errors, especially when the number of objects increases.  <ref type="table">Table 1</ref>: AMI scores obtained by RNN-EM on flying shapes when varying the number of objects and number of components K, during training and at test time.</p><p>Finally, in <ref type="table">Table 1</ref> we also provide insight about the impact of choosing the hyper-parameter K, which is unknown for many real-world scenarios. Surprisingly we observe that training with too large K is in fact favourable, and that the network learns to leave the excess groups empty. When training with too few components we find that the network still learns about the individual shapes and we observe only a slight drop in score when correctly setting the number of components at test time. We conclude that RNN-EM is robust towards different choices of K, and specifically that choosing K to be too high is not detrimental.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3">Flying MNIST</head><p>In order to incorporate greater variability among the objects we consider a sequential extension of MNIST. Here each sequence consists of gray-scale 24 × 24 images containing two down-sampled MNIST digits that start in random positions and float along randomly sampled trajectories within the image for T timesteps. An example sequence can be seen in the bottom row of <ref type="figure" target="#fig_5">Figure 7</ref>.</p><p>We deploy a slightly deeper version of the architecture used in flying shapes. Its details can be found in Appendix A.3. Since the images are gray-scale we now use a Gaussian distribution for each pixel with fixed σ 2 = 0.25 and µ = ψ i,k as computed by each copy of the network. The training procedure is identical to flying shapes except that we replace bitflip noise with masked uniform noise: we first sample a binary mask from a multi-variate Bernoulli distribution with p = 0.2 and then use this mask to interpolate between the original image and samples from a Uniform distribution between the minimum and maximum values of the data (0,1).</p><p>We train with K = 2 and T = 20 on flying MNIST having two digits and obtain an AMI score of 0.819 ± 0.022 on the test set, measured across 5 runs.</p><p>In early experiments we observed that, given the large variability among the 50 000 unique digits, we can boost the model performance by training in stages using 20, 500, 50 000 digits. Here we exploit the generalization capabilities of RNN-EM to quickly transfer knowledge from a less varying set of The next-step prediction of each copy of the network (rows 2 to 4) and the soft-assignment of the pixels to each of the copies (top row). Although the network was trained (stage-wise) on sequences with two digits, it is accurately able to separate three digits.</p><p>MNIST digits to unseen variations. We used the same hyper-parameter configuration as before and obtain an AMI score of 0.917 ± 0.005 on the test set, measured across 5 runs.</p><p>We study the generalization capabilities and robustness of these trained RNN-EM networks by means of three experiments. In the first experiment we evaluate them on flying MNIST having three digits (one extra) and likewise set K = 3. Even without further training we are able to maintain a high AMI score of 0.729 ± 0.019 (stage-wise: 0.838 ± 0.008) on the test-set. A test example can be seen in <ref type="figure" target="#fig_5">Figure 7</ref>. In the second experiment we are interested in whether the grouping mechanism that has been learned can be transferred to static images. We find that using 50 RNN-EM steps we are able to transfer a large part of the learned grouping dynamics and obtain an AMI score of 0.619 ± 0.023 (stage-wise: 0.772 ± 0.008) for two static digits. As a final experiment we evaluate the directly trained network on the same dataset for a larger number of timesteps. <ref type="figure">Figure 6</ref> displays the average AMI score across the test set as well as the range of the upper and lower quartile for each timestep.</p><p>The results of these experiments confirm our earlier observations for flying shapes, in that the learned grouping dynamics are robust and generalize across a wide range of variations. Moreover we find that the AMI score further improves at test time when increasing the sequence length.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5">Discussion</head><p>The experimental results indicate that the proposed Neural Expectation Maximization framework can indeed learn how to group pixels according to constituent objects. In doing so the network learns a useful and localized representation for individual entities, which encodes only the information relevant to it. Each entity is represented separately in the same space, which avoids the binding problem and makes the representations usable as efficient symbols for arbitrary entities in the dataset. We believe that this is useful for reasoning in particular, and a potentially wide range of other tasks that depend on interaction between multiple entities. Empirically we find that the learned representations are already beneficial in next-step prediction with multiple objects, a task in which overlapping objects are problematic for standard approaches, but can be handled efficiently when learning a separate representation for each object.</p><p>As is typical in clustering methods, in N-EM there is no preferred assignment of objects to groups and so the grouping numbering is arbitrary and only depends on initialization. This property renders our results permutation invariant and naturally allows for instance segmentation, as opposed to semantic segmentation where groups correspond to pre-defined categories. RNN-EM learns to segment in an unsupervised fashion, which makes it applicable to settings with little or no labeled data. On the downside this lack of supervision means that the resulting segmentation may not always match the intended outcome. This problem is inherent to this task since in real world images the notion of an object is ill-defined and task dependent. We envision future work to alleviate this by extending unsupervised segmentation to hierarchical groupings, and by dynamically conditioning them on the task at hand using top-down feedback and attention.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6">Conclusion</head><p>We have argued for the importance of separately representing conceptual entities contained in the input, and suggested clustering based on statistical regularities as an appropriate unsupervised approach for separating them. We formalized this notion and derived a novel framework that combines neural networks and generalized EM into a trainable clustering algorithm. We have shown how this method can be trained in a fully unsupervised fashion to segment its inputs into entities, and to represent them individually. Using synthetic images and video, we have empirically verified that our method can recover the objects underlying the data, and represent them in a useful way. We believe that this work will help to develop a theoretical foundation for understanding this important problem of unsupervised learning, as well as providing a first step towards building practical solutions that make use of these symbol-like representations.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>DFigure 1 :</head><label>1</label><figDesc>Figure 1: left: The probabilistic graphical model that underlies N-EM. right: Illustration of the computations for two steps of N-EM.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Figure 2: RNN-EM Illustration. Note the changed encoder and recurrence compared to Figure 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Figure 3: Groupings by RNN-EM (bottom row), N-EM (middle row) for six input images (top row). Both methods recover the individual shapes accurately when they are separated (a, b, f), even when confronted with the same shape (b). RNN-EM is able to handle most occlusion (c, d) but sometimes fails (e). The exact assignments are permutation invariant and depend on γ initialization; compare (a) and (f).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Figure 4: A sequence of 5 shapes flying along random trajectories (bottom row). The next-step prediction of each copy of the network (rows 2 to 5) and the soft-assignment of the pixels to each of the copies (top row). Observe that the network learns to separate the individual shapes as a means to efficiently solve next-step prediction. Even when many of the shapes are overlapping, as can be seen in time-steps 18-20, the network is still able to disentangle the individual shapes from the clutter.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :Figure 6 :</head><label>56</label><figDesc>Figure 5: Binomial Cross Entropy Error obtained by RNN-EM and a recurrent autoencoder (RNN-EM with K = 1) on the denoising and next-step prediction task. RNN-EM produces significantly lower BCE across different numbers of objects.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 :</head><label>7</label><figDesc>Figure 7: A sequence of 3 MNIST digits flying across random trajectories in the image (bottom row). The next-step prediction of each copy of the network (rows 2 to 4) and the soft-assignment of the pixels to each of the copies (top row). Although the network was trained (stage-wise) on sequences with two digits, it is accurately able to separate three digits.</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Here we assume that P (xi|z i,k = 1, ψ i,k ) is given by N (xi; µ = ψ i,k , σ 2 ) for some fixed σ 2 , yet a similar update arises for many typical parametrizations of pixel distributions.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">RTagger [15]: a recurrent extension of Tagger that does support sequential data was developed concurrent to this work.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Note that we do not stop on the AMI score as this is not part of our objective function and only measured to evaluate the performance after training. 5 Code to reproduce all experiments is available at https://github.com/sjoerdvansteenkiste/ Neural-EM</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>The authors wish to thank Paulo Rauber and the anonymous reviewers for their constructive feedback. This research was supported by the Swiss National Science Foundation grant 200021_165675/1 and the EU project "INPUT" (H2020-ICT-2015 grant no. 687795). We are grateful to NVIDIA Corporation for donating us a DGX-1 as part of the Pioneers of AI Research award, and to IBM for donating a "Minsky" machine.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Finding Minimum Entropy Codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">B</forename><surname>Barlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">P</forename><surname>Kaushal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Mitchison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="412" to="423" />
+			<date type="published" when="1989-09" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">A fast iterative shrinkage-thresholding algorithm with application to wavelet-based image deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amir</forename><surname>Beck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><surname>Teboulle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Acoustics, Speech and Signal Processing</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="693" to="696" />
+		</imprint>
+	</monogr>
+	<note>IEEE International Conference On</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Deep learning of representations: Looking forward</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yoshua</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Statistical Language and Speech Processing</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1" to="37" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xi</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yan</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rein</forename><surname>Houthooft</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Schulman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.03657</idno>
+		<title level="m">Ilya Sutskever, and Pieter Abbeel. InfoGAN: Interpretable Representation Learning by Information Maximizing Generative Adversarial Nets</title>
+		<imprint>
+			<date type="published" when="2016-06" />
+		</imprint>
+	</monogr>
+	<note>cs, stat</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">An iterative thresholding algorithm for linear inverse problems with a sparsity constraint</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ingrid</forename><surname>Daubechies</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michel</forename><surname>Defrise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christine</forename><forename type="middle">De</forename><surname>Mol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications on pure and applied mathematics</title>
+		<imprint>
+			<biblScope unit="volume">57</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1413" to="1457" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Maximum likelihood from incomplete data via the EM algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Dempster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">M</forename><surname>Laird</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Rubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the royal statistical society</title>
+		<imprint>
+			<biblScope unit="page" from="1" to="38" />
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antti</forename><surname>Rasmus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mathias</forename><surname>Berglund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tele Hotloo</forename><surname>Hao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Harri</forename><surname>Valpola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Tagger</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1606.06724</idno>
+		<title level="m">Deep Unsupervised Perceptual Grouping</title>
+		<imprint>
+			<date type="published" when="2016-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rupesh Kumar</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06418</idno>
+		<title level="m">Binding via Reconstruction Clustering</title>
+		<imprint>
+			<date type="published" when="2015-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Learning fast approximations of sparse coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karol</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 27th International Conference on Machine Learning (ICML-10)</title>
+		<meeting>the 27th International Conference on Machine Learning (ICML-10)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="399" to="406" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Image denoising using mixtures of Gaussian scale mixtures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jose</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eero</forename><forename type="middle">P</forename><surname>Guerrero-Colón</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Javier</forename><surname>Simoncelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Portilla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">15th IEEE International Conference On</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="565" to="568" />
+		</imprint>
+	</monogr>
+	<note>Image Processing</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">R</forename><surname>Hershey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><forename type="middle">Le</forename><surname>Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Felix</forename><surname>Weninger</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.2574</idno>
+		<title level="m">Deep unfolding: Model-based inspiration of novel deep architectures</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Beta-VAE: Learning basic visual concepts with a constrained variational framework</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Irina</forename><surname>Higgins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Loic</forename><surname>Matthey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arka</forename><surname>Pal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><surname>Burgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xavier</forename><surname>Glorot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthew</forename><surname>Botvinick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shakir</forename><surname>Mohamed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Lerchner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Learning Representations (ICLR</title>
+		<meeting>the International Conference on Learning Representations (ICLR</meeting>
+		<imprint>
+			<date type="published" when="2017" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Distributed representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Geoffrey</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1984" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Learning to Segment Any Random Vector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aapo</forename><surname>Hyvärinen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jukka</forename><surname>Perkiö</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The 2006 IEEE International Joint Conference on Neural Network Proceedings</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="4167" to="4172" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Ilin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Isabeau</forename><surname>Prémont-Schwarz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tele Hotloo</forename><surname>Hao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antti</forename><surname>Rasmus</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1707.09219</idno>
+		<title level="m">Rinu Boney, and Harri Valpola. Recurrent Ladder Networks</title>
+		<imprint>
+			<date type="published" when="2017-07" />
+		</imprint>
+	</monogr>
+	<note>cs, stat</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Learning visual groups from co-occurrences in space and time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Phillip</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Zoran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dilip</forename><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Edward</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.06811</idno>
+		<imprint>
+			<date type="published" when="2015-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Learning flexible sprites in video layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nebojsa</forename><surname>Jojic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brendan</forename><forename type="middle">J</forename><surname>Frey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2001 IEEE Computer Society Conference On</title>
+		<meeting>the 2001 IEEE Computer Society Conference On</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note>Computer Vision and Pattern Recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Clustering appearance and shape by learning jigsaws</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anitha</forename><surname>Kannan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carsten</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="657" to="664" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diederik</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jimmy</forename><surname>Ba</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6980</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning a generative model of images by factoring appearance and shape</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Le Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nicolas</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jamie</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><surname>Winn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="593" to="650" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A model for visual shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Milner</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Psychological review</title>
+		<imprint>
+			<biblScope unit="volume">81</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">521</biblScope>
+			<date type="published" when="1974" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Deconvolution and Checkerboard Artifacts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Augustus</forename><surname>Odena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Dumoulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chris</forename><surname>Olah</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>Distill</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Deepak</forename><surname>Pathak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Piotr</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bharath</forename><surname>Hariharan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1612.06370</idno>
+		<title level="m">Learning Features by Watching Objects Move</title>
+		<imprint>
+			<date type="published" when="2016-12" />
+		</imprint>
+	</monogr>
+	<note>cs, stat</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Unsupervised segmentation with dynamical units</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Rao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Cecchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Peck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Kozloski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="168" to="182" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+	<note>Neural Networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">An objective function utilizing complex sparsity for efficient segmentation in multi-layer oscillatory networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Rao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">A</forename><surname>Cecchi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Intelligent Computing and Cybernetics</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="173" to="206" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>David</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Reichert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Serre</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6115</idno>
+		<title level="m">Neuronal Synchrony in Complex-Valued Deep Networks</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+		</imprint>
+	</monogr>
+	<note>cs, q-bio, stat</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Sparse coding via thresholding and local competition in neural circuits</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christopher</forename><forename type="middle">J</forename><surname>Rozell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Don</forename><forename type="middle">H</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><forename type="middle">G</forename><surname>Baraniuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bruno</forename><forename type="middle">A</forename><surname>Olshausen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="2526" to="2563" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A multiple cause mixture model for unsupervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Saund</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="51" to="71" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Learning to control fast-weight memories: An alternative to dynamic recurrent networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="131" to="139" />
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Extended Sequences Using the Principle of History Compression</title>
+	</analytic>
+	<monogr>
+		<title level="j">Jürgen Schmidhuber. Learning Complex</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="234" to="242" />
+			<date type="published" when="1992-03" />
+		</imprint>
+	</monogr>
+	<note>Neural Computation</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning Factorial Codes by Predictability Minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jürgen</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="863" to="879" />
+			<date type="published" when="1992-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning efficient sparse and low rank models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pablo</forename><surname>Sprechmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Guillermo</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE transactions on pattern analysis and machine intelligence</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="1821" to="1833" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">The binding problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anne</forename><surname>Treisman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Current Opinion in Neurobiology</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="171" to="178" />
+			<date type="published" when="1996-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sudheendra</forename><surname>Vijayanarasimhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Susanna</forename><surname>Ricco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cordelia</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rahul</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Katerina</forename><surname>Fragkiadaki</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1704.07804</idno>
+		<title level="m">SfM-Net: Learning of Structure and Motion from Video</title>
+		<imprint>
+			<date type="published" when="2017-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Information theoretic measures for clusterings comparison: Variants, properties, normalization and correction for chance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">X</forename><surname>Vinh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Epps</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bailey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="2837" to="2854" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Binding in models of perception and brain function</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Der Malsburg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Current opinion in neurobiology</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="520" to="526" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">The Correlation Theory of Brain Function</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christoph</forename><surname>Von Der Malsburg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Departmental technical report</title>
+		<imprint>
+			<date type="published" when="1981" />
+			<publisher>MPI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Locally excitatory globally inhibitory oscillator networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Terman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="283" to="286" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+	<note>Neural Networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Generalization of backpropagation with application to a recurrent gas market model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Paul</forename><forename type="middle">J</forename><surname>Werbos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural networks</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="339" to="356" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">A competitive-layer model for feature binding and sensory segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wersing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Steil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ritter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="357" to="387" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Complexity of exact gradient computation algorithms for recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ronald</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+		<idno>NU-CCS-89-27</idno>
+		<imprint>
+			<date type="published" when="1989" />
+			<pubPlace>Boston</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>Northeastern University, College of Computer Science</orgName>
+		</respStmt>
+	</monogr>
+<note type="report_type">Technical Report Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">On the convergence properties of the EM algorithm. The Annals of statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Cf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Wu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1983" />
+			<biblScope unit="page" from="95" to="103" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
