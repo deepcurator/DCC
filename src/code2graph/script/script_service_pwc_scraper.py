@@ -42,6 +42,7 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
 
     args = Namespace(input_path=code_path, is_dataset=False, dest_path=".",
                      combined_triples_only=False, recursive=False,
+                     paper_id=None, ontology='../core/DeepSciKG.nt',
                      output_types=[1, 3, 5, 6], show_arg=True, show_url=True)
     config = LightWeightMethodConfig(args)
 

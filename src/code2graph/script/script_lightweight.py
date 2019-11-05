@@ -250,7 +250,7 @@ def pipeline_the_lightweight_approach(args):
     else:
         task = {'code_path': config.input_path, 'meta': fetch_meta_info(config.input_path.parent)}
         tasks.append(task)
-
+    
     for task in tasks:
         preprocess(task['code_path'])
         task['success'], task['err_msg'] = run_lightweight_method(
