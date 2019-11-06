@@ -36,17 +36,17 @@ from .pyan.node import Flavor
 def get_name(node):
     return "%s.%s" % (node.namespace, node.name)
 
-om = OntologyManager()
-
 class CallVisitor(ast.NodeVisitor):  
 
-    def __init__(self, pyan_edges, parent):
+    def __init__(self, pyan_edges, parent, ontology):
 
         self.pyan_edges = pyan_edges
 
         self.root = parent
 
         self.function_to_be_visited = []
+
+        self.om = ontology
 
     def check_internal_function(self, base_name):
         if "pyan" in self.root:
@@ -79,10 +79,10 @@ class CallVisitor(ast.NodeVisitor):
 
     def check_tensorflow_function(self, call_name, node):
         # print("inside Call name .!!")
-        result = om.search(call_name)
+        result = self.om.search(call_name)
 
         if result:
-            matching = om.type_hash[result[0]]
+            matching = self.om.type_hash[result[0]]
             # print(call_name, matching)
             new_node = {"name": matching['name'].split(
                 '.')[-1], "url": matching['uri'], "children": [], "type":
@@ -97,7 +97,7 @@ class CallVisitor(ast.NodeVisitor):
             return True
         else:
             if isinstance(node.func, ast.Call):
-                func_visitor = CallVisitor(self.pyan_edges, self.root)
+                func_visitor = CallVisitor(self.pyan_edges, self.root, self.om)
                 func_visitor.visit(node.func)
                 # import pdb; pdb.set_trace()
                 # check __call__
@@ -141,7 +141,7 @@ class CallVisitor(ast.NodeVisitor):
                 for _, arg in enumerate(node.args):
                     # print("\targs:", arg)
                     another_visitor = CallVisitor(
-                        self.pyan_edges, self.root)
+                        self.pyan_edges, self.root, self.om)
                     another_visitor.visit(arg)
                     self.function_to_be_visited += another_visitor.function_to_be_visited
 
@@ -153,14 +153,14 @@ class CallVisitor(ast.NodeVisitor):
                         # print("fieldd:",field, "value:",value)
                         if isinstance(value, ast.Call):
                             another_visitor_k = CallVisitor(
-                                self.pyan_edges, self.root)
+                                self.pyan_edges, self.root, self.om)
                             another_visitor_k.visit(keyword)
                             self.function_to_be_visited += another_visitor_k.function_to_be_visited
 
                         elif isinstance(value, ast.Str):
-                            result = om.search(value.s)
+                            result = self.om.search(value.s)
                             if result:
-                                matching = om.type_hash[result[0]]
+                                matching = self.om.type_hash[result[0]]
                                 new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
                                             "children": [], "args": [], "type": "tf_keyword"}
                                 self.root['children'].append(new_node)
@@ -168,9 +168,9 @@ class CallVisitor(ast.NodeVisitor):
                         elif isinstance(value, list):
                             for item in value:
                                 if isinstance(item, ast.Str):
-                                    result = om.search(item.s)
+                                    result = self.om.search(item.s)
                                     if result:
-                                        matching = om.type_hash[result[0]]
+                                        matching = self.om.type_hash[result[0]]
                                         new_node = {"name": matching['name'].split('.')[-1], "url": matching['uri'],
                                                     "children": [], "args": [], "type": "tf_keyword"}
                                         self.root['children'].append(new_node)
@@ -180,7 +180,7 @@ class CallVisitor(ast.NodeVisitor):
             for _, arg in enumerate(node.args):
 
                 another_visitor = CallVisitor(
-                    self.pyan_edges, new_node)
+                    self.pyan_edges, new_node, self.om)
                 another_visitor.visit(arg)
 
                 if isinstance(arg, ast.Str):
@@ -199,7 +199,7 @@ class CallVisitor(ast.NodeVisitor):
         if len(node.keywords):
             # import pdb; pdb.set_trace()
             for keyword in node.keywords:
-                another_visitor = CallVisitor(self.pyan_edges, new_node)
+                another_visitor = CallVisitor(self.pyan_edges, new_node, self.om)
                 another_visitor.visit(keyword)
 
                 if isinstance(keyword.value, ast.Str):
@@ -223,13 +223,15 @@ class CallVisitor(ast.NodeVisitor):
 
 class ProgramLineVisitor:
 
-    def __init__(self, pyan_edges, node):
+    def __init__(self, pyan_edges, node, ontology):
         self.pyan_edges = pyan_edges
 
         self.root = {"name": get_name(node), 
                      "children": [],
                      "type": node.flavor,
                      "pyan": node}
+
+        self.om = ontology
 
     def visit(self, node, parent):
 
@@ -248,7 +250,7 @@ class ProgramLineVisitor:
             
             if isinstance(child, type_statements):
 
-                call_visitor = CallVisitor(self.pyan_edges, parent)
+                call_visitor = CallVisitor(self.pyan_edges, parent, self.om)
                 call_visitor.visit(child)  # search function calls by line
 
                 for function, function_node in call_visitor.function_to_be_visited:
@@ -271,6 +273,8 @@ class TFTokenExplorer:
     def __init__(self, code_path, config, meta={}):
         """Initializing the class"""
 
+        self.om = OntologyManager(config.ontology)
+
         self.dump_functions = {
             1: self.dump_call_graph,
             2: self.dump_call_trees,
@@ -284,7 +288,8 @@ class TFTokenExplorer:
 
         self.code_repo_path = Path(code_path).resolve()
         self.repo_name = '-'.join(self.code_repo_path.name.split('-')[:-1])
-        self.repo_name_uri = URIRef(om.dcc_prefix + self.repo_name)
+        self.repo_name_uri = URIRef(self.om.dcc_prefix + self.repo_name)
+        self.paper_id = config.paper_id
         self.metadata = meta
         self.all_py_files = glob("%s/**/*.py" % str(self.code_repo_path), recursive=True)
 
@@ -353,9 +358,9 @@ class TFTokenExplorer:
             if caller.flavor is Flavor.UNKNOWN:
                 continue
 
-            caller_uri = URIRef(om.user_defined + "/" + get_name(caller))
+            caller_uri = URIRef(self.om.user_defined + "/" + get_name(caller))
     
-            self.call_graph.add((caller_uri, om.type, om.user_defined))
+            self.call_graph.add((caller_uri, self.om.type, self.om.user_defined))
 
             self.pyan_node_dict[str(caller_uri)] = caller
 
@@ -366,10 +371,10 @@ class TFTokenExplorer:
                 if callee.flavor is Flavor.UNKNOWN:
                     continue
 
-                callee_uri = URIRef(om.user_defined + "/" + get_name(callee))
+                callee_uri = URIRef(self.om.user_defined + "/" + get_name(callee))
 
-                self.call_graph.add((callee_uri, om.type, om.user_defined))
-                self.call_graph.add((caller_uri, om.call, callee_uri))
+                self.call_graph.add((callee_uri, self.om.type, self.om.user_defined))
+                self.call_graph.add((caller_uri, self.om.call, callee_uri))
 
                 self.pyan_node_dict[str(callee_uri)] = callee
 
@@ -391,7 +396,7 @@ class TFTokenExplorer:
 
         G = nx.DiGraph()
 
-        for s, o in graph[:om.call]:
+        for s, o in graph[:self.om.call]:
             G.add_node(str(s))
             G.add_node(str(o))
             G.add_edge(str(s), str(o))
@@ -404,7 +409,7 @@ class TFTokenExplorer:
         return starts
 
     def grow_function_calls(self, start):
-        line_visitor = ProgramLineVisitor(self.pyan_edges, self.pyan_node_dict[start])
+        line_visitor = ProgramLineVisitor(self.pyan_edges, self.pyan_node_dict[start], self.om)
         line_visitor.visit(self.pyan_node_dict[start].ast_node, line_visitor.root)
 
         return line_visitor.root
@@ -445,18 +450,22 @@ class TFTokenExplorer:
         if self.metadata:
             if self.metadata['paper']:
                 pub_id = self.metadata['paper'].split('/')[-1].replace('.pdf', '')
-                publication_id_uri = URIRef(om.dcc_prefix + pub_id)
+                publication_id_uri = URIRef(self.om.dcc_prefix + pub_id)
             else:
-                publication_id_uri = URIRef(om.dcc_prefix + self.metadata['stored_dir_name'])
-            graph.add((self.repo_name_uri, om.type, om.repository))
-            graph.add((publication_id_uri, om.has_repository, self.repo_name_uri))
-            graph.add((self.repo_name_uri, om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
+                publication_id_uri = URIRef(self.om.dcc_prefix + self.metadata['stored_dir_name'])
+            
+            graph.add((self.repo_name_uri, self.om.type, self.om.repository))
+            if self.paper_id:
+                paper_id_uri = URIRef(self.om.dcc_prefix + self.paper_id)
+                graph.add((self.repo_name_uri, self.om.part_of_publication, paper_id_uri))
+            graph.add((publication_id_uri, self.om.has_repository, self.repo_name_uri))
+            graph.add((self.repo_name_uri, self.om.githubrepo, Literal(self.metadata['code'], datatype=XSD.string)))
 
             for file in self.all_py_files:
-                file_name = URIRef(om.dcc_prefix + self.repo_name + '/' + Path(file).name)
-                graph.add((self.repo_name_uri, om.has_file, file_name))
+                file_name = URIRef(self.om.dcc_prefix + self.repo_name + '/' + Path(file).name)
+                graph.add((self.repo_name_uri, self.om.has_file, file_name))
                 # String Literal cannot be the subject
-                graph.add((file_name, om.part_of, self.repo_name_uri))
+                graph.add((file_name, self.om.part_of, self.repo_name_uri))
             
             self.rdf_graphs['metadata'] = graph
 
@@ -478,13 +487,13 @@ class TFTokenExplorer:
 
         while queue:
             s = queue.pop(0)
-            node_uri = URIRef(om.user_defined+'/'+s['rdf_name'])
-            graph.add((self.repo_name_uri, om.has_function, node_uri))
+            node_uri = URIRef(self.om.user_defined+'/'+s['rdf_name'])
+            graph.add((self.repo_name_uri, self.om.has_function, node_uri))
 
             if s["type"] == "tf_keyword":
-                graph.add((node_uri, om.type, s["url"]))
+                graph.add((node_uri, self.om.type, s["url"]))
             else:
-                graph.add((node_uri, om.type, om.user_defined))
+                graph.add((node_uri, self.om.type, self.om.user_defined))
                 
                 if "name" in s:
                     graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
@@ -492,11 +501,11 @@ class TFTokenExplorer:
 
             if "children" in s:
                 for idx, child in enumerate(s["children"]):
-                    child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
-                    graph.add((node_uri, om.call, child_uri))
+                    child_uri = URIRef(self.om.user_defined+'/'+child['rdf_name'])
+                    graph.add((node_uri, self.om.call, child_uri))
                     if idx > 0:
-                        prev_child_uri = URIRef(om.user_defined+'/'+s["children"][idx-1]["rdf_name"])
-                        graph.add((prev_child_uri, om.followedby, child_uri))
+                        prev_child_uri = URIRef(self.om.user_defined+'/'+s["children"][idx-1]["rdf_name"])
+                        graph.add((prev_child_uri, self.om.followedby, child_uri))
                     queue.append(child)
 
             if "args" in s and self.config.show_arg:
@@ -504,42 +513,42 @@ class TFTokenExplorer:
                 if len(s['args']) == 3:
                     k_size = "("+str(s['args'][1])+","+str(s['args'][2])+")"
                     k_size.replace('\n','').replace('\t','').replace(' ','')
-                    has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
-                    has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
+                    has_output_feature_size = URIRef(self.om.dcc_prefix+'/has_output_feature_size')
+                    has_kernel_size = URIRef(self.om.dcc_prefix+'/has_kernel_size')
                     graph.add((node_uri, has_output_feature_size, Literal(str(s['args'][0]), datatype=XSD.string))) 
                     graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
                 else:
                     for idx, arg in enumerate(s['args']):
                         arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
-                        # arg_uri = URIRef(om.dcc_prefix+'has_arg_%d'%idx)
-                        arg_uri = URIRef(om.dcc_prefix+'has_arg')
-                        graph.add((arg_uri, om.type, OWL.DatatypeProperty))
+                        # arg_uri = URIRef(self.om.dcc_prefix+'has_arg_%d'%idx)
+                        arg_uri = URIRef(self.om.dcc_prefix+'has_arg')
+                        graph.add((arg_uri, self.om.type, OWL.DatatypeProperty))
                         graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
             if "keywords" in s and self.config.show_arg:
                 for keyword in s['keywords']:
-                    keyword_uri = URIRef(om.dcc_prefix+'has_keyword_'+str(keyword))
-                    graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
+                    keyword_uri = URIRef(self.om.dcc_prefix+'has_keyword_'+str(keyword))
+                    graph.add((keyword_uri, self.om.type, OWL.DatatypeProperty))
                     graph.add((node_uri, keyword_uri, Literal(str(s['keywords'][keyword]), datatype=XSD.string)))
 
         # DFS
-        # node_uri = URIRef(om.user_defined+'/'+node['rdf_name'])
+        # node_uri = URIRef(self.om.user_defined+'/'+node['rdf_name'])
 
         # if node["type"] == "tf_keyword":
-        #     graph.add((node_uri, om.type, node["url"]))
+        #     graph.add((node_uri, self.om.type, node["url"]))
         # else:
-        #     graph.add((node_uri, om.type, om.user_defined))
+        #     graph.add((node_uri, self.om.type, self.om.user_defined))
 
         # if "name" in node:
         #     graph.add((node_uri, RDFS.label, Literal(node["name"], datatype=XSD.string)))
 
         # if "children" in node:
         #     for idx, child in enumerate(node["children"]):
-        #         child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
-        #         graph.add((node_uri, om.call, child_uri))
+        #         child_uri = URIRef(self.om.user_defined+'/'+child['rdf_name'])
+        #         graph.add((node_uri, self.om.call, child_uri))
         #         if idx > 0:
-        #             prev_child_uri = URIRef(om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
-        #             graph.add((prev_child_uri, om.followedby, child_uri))
+        #             prev_child_uri = URIRef(self.om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
+        #             graph.add((prev_child_uri, self.om.followedby, child_uri))
         #         self.build_rdf_graph(child, graph)
 
         # if "args" in node and self.config.show_arg:
@@ -547,21 +556,21 @@ class TFTokenExplorer:
         #     if len(node['args']) == 3:
         #         k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
         #         k_size.replace('\n','').replace('\t','').replace(' ','')
-        #         has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
-        #         has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
+        #         has_output_feature_size = URIRef(self.om.dcc_prefix+'/has_output_feature_size')
+        #         has_kernel_size = URIRef(self.om.dcc_prefix+'/has_kernel_size')
         #         graph.add((node_uri, has_output_feature_size, Literal(node['args'][0], datatype=XSD.string))) 
         #         graph.add((node_uri, has_kernel_size, Literal(k_size, datatype=XSD.string)))
         #     else:
         #         for idx, arg in enumerate(node['args']):
         #             arg = str(arg).replace('\n', '').replace('\t', '').replace(' ', '')
-        #             arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
-        #             graph.add((arg_uri, om.type, OWL.DatatypeProperty))
+        #             arg_uri = URIRef(self.om.dcc_prefix+'/has_arg_%d'%idx)
+        #             graph.add((arg_uri, self.om.type, OWL.DatatypeProperty))
         #             graph.add((node_uri, arg_uri, Literal(arg, datatype=XSD.string)))
 
         # if "keywords" in node and self.config.show_arg:
         #     for keyword in node['keywords']:
-        #         keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
-        #         graph.add((keyword_uri, om.type, OWL.DatatypeProperty))
+        #         keyword_uri = URIRef(self.om.dcc_prefix+'/has_keyword_'+str(keyword))
+        #         graph.add((keyword_uri, self.om.type, OWL.DatatypeProperty))
         #         graph.add((node_uri, keyword_uri, Literal(node['keywords'][keyword], datatype=XSD.string)))
         #         # change type according to what's inside
 
@@ -570,7 +579,7 @@ class TFTokenExplorer:
             quad.append(node["name"] + "\t" + "has_root" +
                         "\t" + root + "\t" + node["idx"] + "\n")
         
-        node_uri = URIRef(om.user_defined+'/'+node['rdf_name'])
+        node_uri = URIRef(self.om.user_defined+'/'+node['rdf_name'])
 
         if node["type"] == "tf_keyword":
             quad.append(node["name"] + "\t" + "type" + "\t" + node["url"] + "\t" + node["idx"] + "\n")
@@ -582,10 +591,10 @@ class TFTokenExplorer:
 
         if "children" in node:
             for idx, child in enumerate(node["children"]):
-                child_uri = URIRef(om.user_defined+'/'+child['rdf_name'])
+                child_uri = URIRef(self.om.user_defined+'/'+child['rdf_name'])
                 quad.append(node["name"] + "\t" + "call" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 if idx > 0:
-                    prev_child_uri = URIRef(om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
+                    prev_child_uri = URIRef(self.om.user_defined+'/'+node["children"][idx-1]["rdf_name"])
                     quad.append(node["children"][idx-1]["name"] + "\t" + "followed_by" + "\t" + child["name"] + "\t" + node["idx"] + "\n")
                 self.build_rdf_quads(child, graph, quad, root)
 
@@ -593,8 +602,8 @@ class TFTokenExplorer:
             if len(node['args']) == 3:
                 k_size = "("+str(node['args'][1])+","+str(node['args'][2])+")"
                 k_size.replace('\n','').replace('\t','').replace(' ','')
-                has_output_feature_size = URIRef(om.dcc_prefix+'/has_output_feature_size')
-                has_kernel_size = URIRef(om.dcc_prefix+'/has_kernel_size')
+                has_output_feature_size = URIRef(self.om.dcc_prefix+'/has_output_feature_size')
+                has_kernel_size = URIRef(self.om.dcc_prefix+'/has_kernel_size')
                 quad.append(node["name"] + "\t" + "has_output_feature_size" +
                             "\t" + str(node["args"][0]) + "\t" + node["idx"] + "\n")
                 quad.append(node["name"] + "\t" + "has_kernel_size" +
@@ -602,13 +611,13 @@ class TFTokenExplorer:
             else:
                 for idx, arg in enumerate(node['args']):
                     arg = str(arg).replace('\n', '').replace('\t', '')
-                    arg_uri = URIRef(om.dcc_prefix+'/has_arg_%d'%idx)
+                    arg_uri = URIRef(self.om.dcc_prefix+'/has_arg_%d'%idx)
                     quad.append(node["name"] + "\t" + ("has_arg%d" % idx) + "\t" + str(arg).replace(
                         '\n', '').replace('\t', '').replace('    ', '') + "\t" + node["idx"] + "\n")
 
         if "keywords" in node and self.config.show_arg:
             for keyword in node['keywords']:
-                keyword_uri = URIRef(om.dcc_prefix+'/has_keyword_'+str(keyword))
+                keyword_uri = URIRef(self.om.dcc_prefix+'/has_keyword_'+str(keyword))
                 # change type according to what's inside
                 quad.append(node["name"] + "\t" + ("has_%s" % str(keyword)) + "\t" + str(node['keywords'][keyword]) + "\t" + node["idx"] + "\n")
 
@@ -686,7 +695,7 @@ class TFTokenExplorer:
 
     def dump_rdf(self):
         exported_path = str(self.code_repo_path / "rdf_graph.rdf")
-        combined_graph = copy.deepcopy(om.g)
+        combined_graph = copy.deepcopy(self.om.g)
         
         for graph in self.rdf_graphs.values():
             combined_graph += graph
@@ -702,11 +711,11 @@ class TFTokenExplorer:
 
         for src, edge, dst in graph:
 
-            if edge == om.type and not self.config.show_url:
+            if edge == self.om.type and not self.config.show_url:
                 continue
 
-            src_type = [x for x in graph[src:om.type]]
-            dst_type = [x for x in graph[dst:om.type]]
+            src_type = [x for x in graph[src:self.om.type]]
+            dst_type = [x for x in graph[dst:self.omtype]]
 
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):
