@@ -67,6 +67,7 @@ pip install -r requirements.txt
 * showast==0.2.4 => Visualizing AST.
 * autopep8==1.4.4 => Preprocess data.
 * apscheduler==3.6.1 => Scheduler for web crawler.
+* pykg2vec==0.0.49 => Knowledge Graph Embedding library.
  
 ## Usage Examples
 
