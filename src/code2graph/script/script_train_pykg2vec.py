@@ -37,8 +37,6 @@ def preprocess(triples_path, save_name):
     # import pdb; pdb.set_trace()
     test_size = 0.2 / (len(data) / len(data + type_info))
     valid_size = 0.2 / (1 - test_size)
-    print("Test size: " + str(test_size))
-    print("Valid size: " + str(valid_size))
 
     train, test = train_test_split(data, test_size=test_size)
     train, valid = train_test_split(train, test_size=valid_size)
