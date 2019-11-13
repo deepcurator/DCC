@@ -56,8 +56,8 @@ def preprocess(triples_path, save_name):
 def main():
     # getting the customized configurations from the command-line arguments.
     args = PyKG2VecArgParser().get_args(sys.argv[1:])
-    dataset_path = preprocess(args.triples_path, args.dataset_name)
-
+    args.dataset_path = preprocess(args.triples_path, args.dataset_name)
+    
     # Preparing data and cache the data for later usage
     knowledge_graph = KnowledgeGraph(dataset=args.dataset_name, negative_sample=args.sampling, custom_dataset_path=dataset_path)
     knowledge_graph.prepare_data()
