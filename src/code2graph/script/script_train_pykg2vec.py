@@ -44,6 +44,7 @@ def preprocess(triples_path, save_name):
     train, valid = train_test_split(train, test_size=valid_size)
     train = train + type_info
 
+    Path("../pykg2vec_dataset").mkdir(exist_ok=True)
     save_path = Path("../pykg2vec_dataset/" + save_name).resolve()
     Path(save_path).mkdir(exist_ok=True)
     
