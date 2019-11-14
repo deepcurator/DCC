@@ -66,7 +66,7 @@ class Doc2Vec:
     def get_most_similar_function(self, function: str):
         assert(self.model)
         vector = self.infer_vector(function)
-        sims = self.model.docvecs.most_similar([vector], topn=len(model.docvecs))
+        sims = self.model.docvecs.most_similar([vector], topn=len(self.model.docvecs))
         return ' '.join(self.train_corpus[sims[0][0]].words)
 
     def save_model(self, fname):
@@ -88,4 +88,8 @@ if __name__ == "__main__":
     # d2v.train_model()
     # d2v.save_model("d2v_model")
     # d2v.load_model("d2v_model")
+    # test = [] 
+    # with open(str(save_path / "test.txt"), "r") as file:
+    #     for line in file:
+    #         test.append(line)
     # import pdb; pdb.set_trace()
