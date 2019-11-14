@@ -75,7 +75,7 @@ class Doc2Vec:
 
     def load_model(self, fname):
         load_path = self.data_dir / fname
-        self.model = gensim.model.doc2vec.load(str(load_path))
+        self.model = gensim.models.doc2vec.load(str(load_path))
 
 if __name__ == "__main__":
 
