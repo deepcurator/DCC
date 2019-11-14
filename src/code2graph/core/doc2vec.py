@@ -85,5 +85,7 @@ if __name__ == "__main__":
     # preprocess(raw_data_path, "functions.txt", save_path)
     
     d2v = Doc2Vec(save_path)
-    d2v.train_model()
-    d2v.save_model("d2v_model")
+    # d2v.train_model()
+    # d2v.save_model("d2v_model")
+    # d2v.load_model("d2v_model")
+    # import pdb; pdb.set_trace()
