@@ -66,7 +66,7 @@ class Doc2Vec:
     def get_most_similar_function(self, function: str):
         assert(self.model)
         vector = self.infer_vector(function)
-        sims = self.model.docvecs.most_similar([vector], topn=len(model.docvecs))
+        sims = self.model.docvecs.most_similar([vector], topn=len(self.model.docvecs))
         return ' '.join(self.train_corpus[sims[0][0]].words)
 
     def save_model(self, fname):
@@ -75,7 +75,7 @@ class Doc2Vec:
 
     def load_model(self, fname):
         load_path = self.data_dir / fname
-        self.model = Doc2Vec.load(str(load_path))
+        self.model = gensim.models.doc2vec.Doc2Vec.load(str(load_path))
 
 if __name__ == "__main__":
 
@@ -85,5 +85,11 @@ if __name__ == "__main__":
     # preprocess(raw_data_path, "functions.txt", save_path)
     
     d2v = Doc2Vec(save_path)
-    d2v.train_model()
-    d2v.save_model("d2v_model")
+    # d2v.train_model()
+    # d2v.save_model("d2v_model")
+    # d2v.load_model("d2v_model")
+    # test = [] 
+    # with open(str(save_path / "test.txt"), "r") as file:
+    #     for line in file:
+    #         test.append(line)
+    # import pdb; pdb.set_trace()

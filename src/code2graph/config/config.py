@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+from pykg2vec.config.config import KGEArgParser
 
 try:
     from pathlib import Path
@@ -170,3 +171,13 @@ class GraphASTConfig:
         self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
         self.resolution = arg.resolution
+
+
+class PyKG2VecArgParser (KGEArgParser):
+    """The class implements the argument parser for the pykg2vec script."""
+
+    def __init__(self):
+        super().__init__()
+        self.general_group.set_defaults(dataset_name='lightweight')
+        self.general_group.add_argument('-tp', dest='triples_path', default=None, type=str, 
+                                        help='The path to output triples from lightweight method.')
