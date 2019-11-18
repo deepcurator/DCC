@@ -12,12 +12,6 @@ from pykg2vec.utils.trainer import Trainer
 sys.path.append('../')
 from config.config import PyKG2VecArgParser
 
-''' 
-    script_train_pykg2vec.py aims to run the trainer of pykg2vec and acquire the embeddings for nodes and edges. 
-    Embeddings of nodes and edges should be save in []. 
-    can use tensorflow projector to visualize the result. (https://projector.tensorflow.org/)
-'''
-
 def preprocess(triples_path, save_name):
     
     def save_to_file(data, name, path):
