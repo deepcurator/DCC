@@ -12,15 +12,14 @@ from pykg2vec.utils.trainer import Trainer
 sys.path.append('../')
 from config.config import PyKG2VecArgParser
 
-
-def save_to_file(data, name, path):
-    file_path = Path(path) / name
-    with open(str(file_path), "w") as f:
-        for line in data:
-            f.write(line)
-
-
 def preprocess(triples_path, save_name):
+    
+    def save_to_file(data, name, path):
+        file_path = Path(path) / name
+        with open(str(file_path), "w") as f:
+            for line in data:
+                f.write(line)
+
     data = []
     type_info = []
     triples_path = Path(triples_path).resolve()
