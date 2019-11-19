@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import os
+import os, pprint
 from pykg2vec.config.config import KGEArgParser
 
 try:
@@ -171,6 +171,9 @@ class GraphASTConfig:
         self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
         self.resolution = arg.resolution
+
+    def dump(self):
+        pprint.pprint(self.__dict__)
 
 
 class PyKG2VecArgParser (KGEArgParser):
