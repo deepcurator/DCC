@@ -81,9 +81,18 @@ def extract_function_level_doc2vec(code_path, store_path, resolution='function')
     # for doc2vec methods, generate text-based content for each function. 
     # TODO: to be modified to dump source code level & repository level.
     try:
-        explorer = ASTExplorer(str(code_path), 'function')
+        explorer = ASTExplorer(str(code_path), resolution=resolution)
         explorer.dump_functions_source_code(stored_path=store_path)
         
+    except Exception as e:
+        print(e)
+
+def extract_function_level_ast(code_path, store_path, resolution='function'):
+    try:
+        explorer = ASTExplorer(str(code_path), resolution=resolution)
+        explorer.process_all_nodes()
+        # explorer.visualize_ast()
+        explorer.export(stored_path=store_path)
     except Exception as e:
         print(e)
 
@@ -115,6 +124,10 @@ def graphast_pipeline(args):
         resolution = config.resolution
         
         extract_function_level_doc2vec(code_path, store_path, resolution=resolution)
+        extract_function_level_ast(code_path, store_path, resolution=resolution)
+        # extract_function_level_ast()
+
+
 
 
 if __name__ == "__main__":

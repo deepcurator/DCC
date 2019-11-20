@@ -154,12 +154,15 @@ class ASTExplorer:
             # with open(str(save_path/file_name), 'w') as f:
             #     f.write(svg._repr_svg_())
 
-    def export(self):
+    def export(self, stored_path = None):
         # export all the paths contained in self.paths to file_name.txt
         # file name contains labels. 
-
-        triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
-        triple_dir_path.mkdir(exist_ok=True)
+        if stored_path:
+            triple_dir_path = (Path(stored_path) / ('triples_ast_%s'%self.resolution)).resolve()
+            triple_dir_path.mkdir(exist_ok=True)
+        else:
+            triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
+            triple_dir_path.mkdir(exist_ok=True)
 
         for node_name in self.paths:
 
