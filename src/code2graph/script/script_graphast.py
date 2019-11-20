@@ -124,10 +124,7 @@ def graphast_pipeline(args):
         resolution = config.resolution
         
         extract_function_level_doc2vec(code_path, store_path, resolution=resolution)
-        extract_function_level_ast(code_path, store_path, resolution=resolution)
-        # extract_function_level_ast()
-
-
+        extract_function_level_ast    (code_path, store_path, resolution=resolution)
 
 
 if __name__ == "__main__":
