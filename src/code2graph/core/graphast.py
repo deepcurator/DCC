@@ -182,12 +182,18 @@ class ASTExplorer:
 
                         f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
     
-    def dump_functions_source_code(self):
+    def dump_functions_source_code(self, stored_path = None):
         assert(self.resolution is "function")
-        filepath = Path(self.code_path) / "functions.txt"
+        
+        if stored_path:
+            filepath = Path(stored_path) / "functions.txt"
+        else:
+            filepath = Path(self.code_path) / "functions.txt"
+
         with open(str(filepath.resolve()), 'w') as file:
             for function in self.nodes.values():
                 file.write(astor.to_source(function).replace('\n', ' <nl>') + '\n')
+        # import pdb; pdb.set_trace()
 
     def dump_node(self, node):
         # utility function.
