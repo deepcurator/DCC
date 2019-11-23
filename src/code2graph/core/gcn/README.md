@@ -31,11 +31,13 @@ python gae_train.py
 ```
 
 ## Example output from GAE
-The figure below shows the TSNE representation of the supernodes. Colors represent the 10 label categories. However, note that these embeddings currently reflect the loss function used for link prediction. **We need to adapt this to whole-graph embedding**.
+The figure below shows the TSNE representation of the supernodes. Colors represent the 10 label categories. However, note that these embeddings currently reflect the loss function used for link prediction. 
+
 ![diagonal matrix](./figures/gae_supernodes.png)
 
+
 ## TODO
-1. For GCN we need to get to the embeddings. 
-2. For GAE we need to do whole graph embedding instead of link prediction.
+1. For GCN we need to get to the embeddings instead of the classifier. 
+2. For GAE we need to do adapt to whole graph embedding instead of link prediction.
 3. We need more data.
 4. We need better labels.
