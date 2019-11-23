@@ -46,6 +46,8 @@ adj = nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
 features = scipy.sparse.csr.csr_matrix(x_train)
 y_val = y_test = y_train
 
+#graph_generator.show_matrix(n_by_n[:536,:536])
+
 
 # Values from cora dataset
 #adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)

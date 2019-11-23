@@ -153,6 +153,10 @@ def load_data(labels_dict):
     return block, node_attributes, label_matrix, train_mask, val_mask, test_mask, idx_supernodes
 
 
+def show_matrix(mat):
+    plt.matshow(mat)
+    plt.show()
+
 def load_labels(myfile):
     with open(myfile, mode='r', encoding='utf-8-sig') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
