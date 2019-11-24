@@ -208,12 +208,15 @@ def move_output_files(config: LightWeightMethodConfig):
         copy_files(config.input_path, config.dest_path, "*.rdf")
 
 
-def copy_files(data_path, dest_path, filetype, name_index=-3):
+def copy_files(data_path, dest_path, filetype, name_index=3):
     """ Copy files in data_path that matches filetype to dest_path """
     for path in Path(data_path).rglob(filetype):
         path = Path(path)
-        repo_name = str(path).split('/')[name_index]
-        repo_path = Path(dest_path) / repo_name
+
+        for _ in range(name_index):
+            repo_path = path.parent
+
+        repo_path = Path(dest_path) / repo_name.name
         if not repo_path.is_dir():
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)
