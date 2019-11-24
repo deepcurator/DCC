@@ -214,9 +214,9 @@ def copy_files(data_path, dest_path, filetype, name_index=3):
         path = Path(path)
 
         for _ in range(name_index):
-            repo_path = path.parent
+            code_dir_path = path.parent
 
-        repo_path = Path(dest_path) / repo_name.name
+        repo_path = Path(dest_path) / code_dir_path.name
         if not repo_path.is_dir():
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)

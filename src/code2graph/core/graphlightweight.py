@@ -486,7 +486,7 @@ class TFTokenExplorer:
         queue.append(node)
 
         node_name_key = "rdf_name"
-        if config.simple_name:
+        if self.config.simple_name:
             node_name_key = "name"
         
         while queue:
@@ -499,7 +499,7 @@ class TFTokenExplorer:
             else:
                 graph.add((node_uri, self.om.type, self.om.user_defined))
                 
-                if "name" in s and not config.simple_name:
+                if "name" in s and not self.config.simple_name:
                     graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
             
 
