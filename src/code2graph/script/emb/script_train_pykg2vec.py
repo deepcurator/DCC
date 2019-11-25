@@ -9,18 +9,23 @@ from pykg2vec.utils.kgcontroller import KnowledgeGraph
 from pykg2vec.config.config import Importer
 from pykg2vec.utils.trainer import Trainer
 
-sys.path.append('../')
+sys.path.append('../..')
 from config.config import PyKG2VecArgParser
 
-
-def save_to_file(data, name, path):
-    file_path = Path(path) / name
-    with open(str(file_path), "w") as f:
-        for line in data:
-            f.write(line)
-
+''' 
+    script_train_pykg2vec.py aims to run the trainer of pykg2vec and acquire the embeddings for nodes and edges. 
+    Embeddings of nodes and edges should be save in []. 
+    can use tensorflow projector to visualize the result. (https://projector.tensorflow.org/)
+'''
 
 def preprocess(triples_path, save_name):
+    
+    def save_to_file(data, name, path):
+        file_path = Path(path) / name
+        with open(str(file_path), "w") as f:
+            for line in data:
+                f.write(line)
+
     data = []
     type_info = []
     triples_path = Path(triples_path).resolve()
@@ -53,7 +58,7 @@ def preprocess(triples_path, save_name):
 
     return save_path
 
-def main():
+def run_pykg2vec():
     # getting the customized configurations from the command-line arguments.
     args = PyKG2VecArgParser().get_args(sys.argv[1:])
     args.dataset_path = preprocess(args.triples_path, args.dataset_name)
@@ -74,4 +79,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_pykg2vec()

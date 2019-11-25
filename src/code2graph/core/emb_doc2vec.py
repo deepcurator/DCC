@@ -26,7 +26,12 @@ def preprocess(raw_data_path: Path, filename, save_path: Path):
 
 
 class Doc2Vec:
-
+    ''' 
+        doc2vec is a method that learns paragraph and document embeddings. 
+        It is proposed by Mikilov and Le in 2014. 
+        This class includes a Gensim implementation of doc2vec. 
+    '''
+    
     def __init__(self, data_dir):
         self.data_dir = Path(data_dir).resolve()
         self.train_path = data_dir / "train.txt"
