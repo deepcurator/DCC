@@ -189,13 +189,20 @@ class ASTExplorer:
         assert(self.resolution is "function")
         
         if stored_path:
-            filepath = Path(stored_path) / "functions.txt"
+            dirpath = Path(stored_path / ('functions_source_code')).resolve()
+            dirpath.mkdir(exist_ok=True)
         else:
-            filepath = Path(self.code_path) / "functions.txt"
+            dirpath = Path(self.code_path / ('functions_source_code')).resolve()
+            dirpath.mkdir(exist_ok=True)
 
-        with open(str(filepath.resolve()), 'w') as file:
-            for function in self.nodes.values():
-                file.write(astor.to_source(function).replace('\n', ' <nl>') + '\n')
+        for function in self.nodes.values():
+            function_string = astor.to_source(function)
+            function_name = function_string.split('(')[0].replace('def ','')
+            # TODO: Funciton name includes input arguments, 
+            # so removing it might remove important information.
+            # function_string = ':'.join(function_string.split(':')[1:])
+            with open(str(dirpath / (function_name + ".txt")), 'w') as file:
+                file.write(function_string.strip().replace('\n', ' <nl>'))
         # import pdb; pdb.set_trace()
 
     def dump_node(self, node):
