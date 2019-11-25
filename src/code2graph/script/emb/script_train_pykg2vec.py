@@ -9,7 +9,7 @@ from pykg2vec.utils.kgcontroller import KnowledgeGraph
 from pykg2vec.config.config import Importer
 from pykg2vec.utils.trainer import Trainer
 
-sys.path.append('../')
+sys.path.append('../..')
 from config.config import PyKG2VecArgParser
 
 ''' 
