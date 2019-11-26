@@ -41,7 +41,7 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 #test_mask = np.load('aske.test.npy')
 
 labels_dict = graph_generator.load_labels('./labels.csv')
-n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes = graph_generator.load_data(labels_dict)
+n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(labels_dict)
 adj = nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
 features = scipy.sparse.csr.csr_matrix(x_train)
 y_val = y_test = y_train

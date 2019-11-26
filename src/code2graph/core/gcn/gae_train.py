@@ -45,7 +45,7 @@ dataset_str = FLAGS.dataset
 
 
 labels_dict = graph_generator.load_labels('./labels.csv')
-n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes = graph_generator.load_data(labels_dict)
+n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(labels_dict)
 adj = nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
 features = scipy.sparse.csr.csr_matrix(x_train)
 
@@ -111,7 +111,7 @@ cost_val = []
 acc_val = []
 
 
-def get_embeddings(labels):
+def get_embeddings(labels, label_encoder):
     feed_dict.update({placeholders['dropout']:0})
     emb = sess.run(model.z_mean, feed_dict=feed_dict)
 
@@ -141,9 +141,16 @@ def get_embeddings(labels):
         colors.append(color_label[0][0])
     supernodes = np.array(supernodes)
 
+    np.savetxt('uci_embeddings.csv', emb, delimiter='\t')
+    np.savetxt('uci_supernodes.csv', supernodes, delimiter='\t')
+
+    labels_txt = label_encoder.inverse_transform(labels)
+    np.savetxt('labels.txt', labels_txt, fmt='%s')
+
     plt.scatter(supernodes[:,0], supernodes[:,1], c=colors, cmap='jet')
     plt.show()
     pdb.set_trace()
+
 
 
 def get_roc_score(edges_pos, edges_neg, emb=None):
@@ -211,6 +218,6 @@ roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
 print('Test ROC score: ' + str(roc_score))
 print('Test AP score: ' + str(ap_score))
 
-get_embeddings(y_train)
+get_embeddings(y_train, label_encoder)
 
 pdb.set_trace()

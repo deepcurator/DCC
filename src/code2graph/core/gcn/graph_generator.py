@@ -150,7 +150,7 @@ def load_data(labels_dict):
     elts, _ = block.shape
     train_mask, val_mask, test_mask = create_masks(elts, idx_supernodes)
 
-    return block, node_attributes, label_matrix, train_mask, val_mask, test_mask, idx_supernodes
+    return block, node_attributes, label_matrix, train_mask, val_mask, test_mask, idx_supernodes, lb
 
 
 def show_matrix(mat):
@@ -167,7 +167,7 @@ def load_labels(myfile):
 
 if __name__ == '__main__':
     labels_dict = load_labels('./labels.csv')
-    adj, features, labels, train, val, test = load_data(labels_dict)
+    adj, features, labels, train, val, test, label_encoder = load_data(labels_dict)
     np.save('aske.graph', adj)
     np.save('aske.allx', features)
     np.save('aske.ally', labels)
