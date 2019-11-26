@@ -134,18 +134,25 @@ def get_embeddings(labels, label_encoder):
     #plt.scatter(tsne_results[:,0], tsne_results[:,1], c=colors, cmap='jet')
 
     supernodes = []
+    supernodes_embeddings = []
+    supernodes_labels = []
     colors = []
+
+    labels_txt = label_encoder.inverse_transform(labels)
+
     for i in idx_supernodes:
         supernodes.append(tsne_results[i-1,:])
+        supernodes_embeddings.append(emb[i-1,:])
+        supernodes_labels.append(labels_txt[i-1])
         color_label = np.where(labels[i-1]==1)
         colors.append(color_label[0][0])
     supernodes = np.array(supernodes)
 
     np.savetxt('uci_embeddings.csv', emb, delimiter='\t')
-    np.savetxt('uci_supernodes.csv', supernodes, delimiter='\t')
+    np.savetxt('uci_supernodes.csv', supernodes_embeddings, delimiter='\t')
 
-    labels_txt = label_encoder.inverse_transform(labels)
-    np.savetxt('labels.txt', labels_txt, fmt='%s')
+    np.savetxt('uci_embeddings_labels.txt', labels_txt, fmt='%s')
+    np.savetxt('uci_supernodes_labels.txt', supernodes_labels, fmt='%s')
 
     plt.scatter(supernodes[:,0], supernodes[:,1], c=colors, cmap='jet')
     plt.show()
