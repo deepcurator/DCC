@@ -154,12 +154,15 @@ class ASTExplorer:
             # with open(str(save_path/file_name), 'w') as f:
             #     f.write(svg._repr_svg_())
 
-    def export(self):
+    def export(self, stored_path = None):
         # export all the paths contained in self.paths to file_name.txt
         # file name contains labels. 
-
-        triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
-        triple_dir_path.mkdir(exist_ok=True)
+        if stored_path:
+            triple_dir_path = (Path(stored_path) / ('triples_ast_%s'%self.resolution)).resolve()
+            triple_dir_path.mkdir(exist_ok=True)
+        else:
+            triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
+            triple_dir_path.mkdir(exist_ok=True)
 
         for node_name in self.paths:
 
@@ -182,12 +185,25 @@ class ASTExplorer:
 
                         f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
     
-    def dump_functions_source_code(self):
+    def dump_functions_source_code(self, stored_path = None):
         assert(self.resolution is "function")
-        filepath = Path(self.code_path) / "functions.txt"
-        with open(str(filepath.resolve()), 'w') as file:
-            for function in self.nodes.values():
-                file.write(astor.to_source(function).replace('\n', ' <nl>') + '\n')
+        
+        if stored_path:
+            dirpath = Path(stored_path / ('functions_source_code')).resolve()
+            dirpath.mkdir(exist_ok=True)
+        else:
+            dirpath = Path(self.code_path / ('functions_source_code')).resolve()
+            dirpath.mkdir(exist_ok=True)
+
+        for function in self.nodes.values():
+            function_string = astor.to_source(function)
+            function_name = function_string.split('(')[0].replace('def ','')
+            # TODO: Funciton name includes input arguments, 
+            # so removing it might remove important information.
+            # function_string = ':'.join(function_string.split(':')[1:])
+            with open(str(dirpath / (function_name + ".txt")), 'w') as file:
+                file.write(function_string.strip().replace('\n', ' <nl>'))
+        # import pdb; pdb.set_trace()
 
     def dump_node(self, node):
         # utility function.

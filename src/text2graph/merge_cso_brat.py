@@ -112,7 +112,7 @@ for topic in cso_topic_list:
 for term,entity in vocab.items():
     if term not in cso_entity_map:
         # create uri
-        uri=rdflib.URIRef('https://siemens/'+urllib.parse.quote(term))
+        uri=rdflib.URIRef('https://siemens/'+urllib.parse.quote(term.replace(' ','_')))
         cso_entity_map[term]=uri
         # add to 
         uri2entity[uri]=entity

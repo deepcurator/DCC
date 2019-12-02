@@ -6,9 +6,9 @@ import numpy as np
 
 class PathContextReader:
     ''' class for preprocessing the data '''
-    def __init__(self, config):
+    def __init__(self, config, path):
         self.config = config
-        self.path = Path('C:\\Users\\louisccc\\Documents\\GitHub\\DCC\\src\\code2graph\\test\\triples_ast_function').resolve()
+        self.path = Path(path).resolve()
 
         self.function_paths = glob("%s/**/*.txt" % str(self.path), recursive=True)
 
@@ -74,8 +74,8 @@ class Config:
 
 class Trainer:
     ''' the trainer for code2vec '''
-    def __init__(self):
-        self.reader = PathContextReader(None)
+    def __init__(self, path):
+        self.reader = PathContextReader(None, path)
         self.reader.read_path_contexts()
 
         self.model = code2vec(None)
