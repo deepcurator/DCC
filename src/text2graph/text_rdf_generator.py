@@ -27,7 +27,7 @@ def getabstract(filename):
     return abstxt
 
 
-def createrdf(filename, consolidatedGraph, model_dir, text_dir):
+def createRDF(filename, consolidatedGraph, model_dir, text_dir):
     # g = Graph()
     # g.parse(ontology,format="n3")
     dcc_namespace = "https://github.com/deepcurator/DCC/"
@@ -65,7 +65,7 @@ def createrdf(filename, consolidatedGraph, model_dir, text_dir):
         textLiteral = Literal(entitytext)
         consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + 'hasText'),textLiteral))
 
-    print("Completed processing file " + filename)
+    print("Completed processing file " + filename) 
  
 
 def createTextRDF(text_dir, destinationfolder, ontology, model_dir):    
@@ -73,7 +73,7 @@ def createTextRDF(text_dir, destinationfolder, ontology, model_dir):
     # ontology = "/home/z003z47y/git/DCC/src/ontology/DeepSciKG.nt"
 
     consolidatedGraph = Graph() 
-    consolidatedGraph.parse(ontology, format="n3") 
+    # consolidatedGraph.parse(ontology, format="n3") 
     
     # model_dir = 'Models'
 
@@ -84,7 +84,7 @@ def createTextRDF(text_dir, destinationfolder, ontology, model_dir):
     #  for index,row in df.iterrows():
     for f in onlyFiles:
        if f.endswith(".txt"):
-           createrdf(f, consolidatedGraph, model_dir, text_dir)
+           createRDF(f, consolidatedGraph, model_dir, text_dir)
     
     destinationfile = destinationfolder + "text2graph.ttl"
     print("Saving rdf file " + destinationfile)

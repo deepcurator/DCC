@@ -7,7 +7,6 @@ from glob import glob
 import pandas as pd
 
 # RDF specific libraries
-
 from rdflib import URIRef, BNode, Literal
 from rdflib.namespace import RDF, FOAF 
 import rdflib
@@ -133,7 +132,8 @@ def runI2G(paper_dir, image_triple_dir, image_output_dir, ontology_file):
     dcc_namespace = "https://github.com/deepcurator/DCC/"
     g = Graph()
     # ontology = "C:/dcc_test/demo/DeepSciKG.nt"
-    g.parse(ontology_file, format="n3") 
+    
+    # g.parse(ontology_file, format="n3") 
     
     paperList = [f for f in listdir(paper_dir) if isfile(join(paper_dir, f))]
     # onlyFiles = [os.path.join(dp, f) for dp, dn, filenames in os.walk(image_triple_dir) for f in filenames if os.path.splitext(f)[1] == '.txt']
@@ -153,9 +153,12 @@ def runI2G(paper_dir, image_triple_dir, image_output_dir, ontology_file):
             print(image2graphfiles)
             for image2graphfile in image2graphfiles:
                 createimage2graph(image2graphfile, None, filesubject, g)
-    
-    destinationFile = image_triple_dir + "/image2graph.ttl"
-    g.serialize(destination=destinationFile, format='turtle')
+        
+        destination_dir = image_triple_dir + "/" + paper_name_short
+        destinationFile = image_triple_dir + "/" + paper_name_short + "/image2graph.ttl"
+        if not os.path.exists(destination_dir):
+            os.makedirs(destination_dir)
+        g.serialize(destination=destinationFile, format='turtle')
 
 # image_triple_dir = "C:/aske-2/dcc/grobid-workspace/image_input/diag2graph/"
 # image_output_dir = "C:/aske-2/dcc/grobid-workspace/image_output/"

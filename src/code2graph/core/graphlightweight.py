@@ -715,7 +715,7 @@ class TFTokenExplorer:
                 continue
 
             src_type = [x for x in graph[src:self.om.type]]
-            dst_type = [x for x in graph[dst:self.omtype]]
+            dst_type = [x for x in graph[dst:self.om.type]]
 
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):

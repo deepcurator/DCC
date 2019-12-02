@@ -2,11 +2,16 @@ import os
 from code2graph.script import script_lightweight
 import shlex
 import glob
+import pandas as pd
 
-def run(codeFolder, outputFolder, folder_name):
+def run(codeFolder, outputFolder, ontology_path, inputCSV):
+
+    input_df = pd.read_csv(inputCSV)
 
     all_code_folders = [dI for dI in os.listdir(codeFolder) if os.path.isdir(os.path.join(codeFolder,dI))]
     for folder_name in all_code_folders:
+        paper_id = input_df.loc[input_df["code"] == folder_name]["paper"].values[0]
+        # print(paper_id)
         # code_dir = os.path.join(codeFolder, folder_name)
         code_repository_path = codeFolder + "/" + folder_name
 
@@ -21,7 +26,9 @@ def run(codeFolder, outputFolder, folder_name):
         # argv = shlex.split(command_6)
         # script_lightweight.pipeline_the_lightweight_approach(argv[2:])
 
-        command_3 = "python script_lightweight.py -ip %s -opt 3 --arg --url" % code_repository_path
+        # command_3 = "python script_lightweight.py -ip %s -r -opt 3 --arg --url" % code_repository_path
+        command_3 = "python script_lightweight.py -ip %s -opt 3 -ont %s -pid %s --arg --url" % (code_repository_path, ontology_path, paper_id)
+
         argv = shlex.split(command_3)
         script_lightweight.pipeline_the_lightweight_approach(argv[2:])
         
@@ -36,7 +43,7 @@ def run(codeFolder, outputFolder, folder_name):
             if html_file not in existing_html_files:
                 html_file_name = os.path.basename(html_file)
                 try:
-                    os.remove(c2g_output_dir + html_file_name)
+                    os.remove(c2g_output_dir + "/" + html_file_name)
                 except:
                     pass
                     
