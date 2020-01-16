@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import glob
 import pandas as pd
+import yaml
+import pickle
 
 # RDF specific libraries
 
@@ -51,7 +53,7 @@ consolidatedGraph = Graph()
 consolidatedGraph.parse(ontology,format="n3")
 
 
-def createrdf(row):
+def createrdf(row,csomap):
     # image2graphfiles = []
     g = Graph()
     g.parse(ontology,format="n3")
@@ -97,6 +99,12 @@ def createrdf(row):
 
     for entitytext, entitylabel in entity_dict.items():
         entitytext = entitytext.replace(" ",'_')
+        if(entitytext in entity_map):
+            csovalue = entity_map[entitytext]
+            str_value = str(csovalue)
+            if("cso" in str_value):
+                consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + "hasCSOEquivalent"),csovalue))
+            # print("CSO label found for entity text : " + entitytext  + " : and value is " + entity_map[entitytext])
         # print(entitytext)
         # print(filesubject + "_" + entitytext)
         consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),RDF.type,URIRef(dcc_namespace + entitylabel)))
@@ -132,13 +140,40 @@ df.head()
 
 # iterate through the rows in the dataframe
 
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+model_dir=config['MODEL_PATH']
+print(model_dir)
+
+f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+[entity_map,uri2entity, uri2rel]=pickle.load(f)
+f.close()
+
+# print(entity_map.items())
+
 for index,row in df.iterrows():
-    createrdf(row)
+    createrdf(row,entity_map)
 
 
 
 # print("Total files converted now are " + filecount)
 print("Saving final consolidated rdf file ")
-destinationfile = destinationfolder + "text2graph.ttl"
+destinationfile = destinationfolder + "text2graph_v3.ttl"
 print("Saving final consolidated rdf file : " + destinationfile)
 consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+
+for key,value in entity_map.items():
+    print(key + " : " + str(value))
+    # print(type(value))
+
+# print(uri2entity.items())
+# print(uri2rel.items())
+
+# import spacy
+
+# word1 = "convolutional neural network"
+# word2 = "convolutional neural networks"
+
+# nlp = spacy.load(model_dir)
+# token1 = nlp(word1)
+# token2 = nlp(word2)
+# print("Similarity :", token1.similarity(token2))
