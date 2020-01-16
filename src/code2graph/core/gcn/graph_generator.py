@@ -10,6 +10,7 @@ from sklearn import preprocessing
 from sklearn.feature_extraction.text import TfidfVectorizer
 from gensim.test.utils import common_texts
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+import os
 
 class DocEmbedder:
     def __init__(self, embedder='tfidf', vector_size=16, window=2, workers=4):
@@ -63,9 +64,13 @@ def generate_node_attributes(G, model):
 def create_masks(elts, idx_supernodes):
     # idx supernodes = [78, 218, 289, 536, 613, 773, 861, 1063, 1126, 1229, 1280, 1382, 1460, 1541, 1620, 1802, 2119, 2361, 2398, 2474, 2617, 2698, 2842, 2869, 2956, 3100, 3186, 3280, 3448, 3524, 3602, 3867, 3948, 4024, 4122, 4248, 4369, 4422, 4479, 4593, 4657, 4733, 5064, 5175, 5270, 5510, 5568, 5660, 5789, 5850, 5924, 6045, 6126, 6290, 6985, 7071, 7209, 7444, 7525, 7841, 7987, 8009, 8016]
 
+#    train_ix = idx_supernodes[40]
+#    val_ix = idx_supernodes[53]
+#    test_ix = idx_supernodes[62]
+    
     train_ix = idx_supernodes[40]
     val_ix = idx_supernodes[53]
-    test_ix = idx_supernodes[62]
+    # test_ix = idx_supernodes[62]
 
     train = np.zeros((elts,), dtype=bool)
     train[:train_ix-1] = True
@@ -79,7 +84,8 @@ def create_masks(elts, idx_supernodes):
 
 
 def load_data(labels_dict):
-    files = glob.glob('./*/combined_triples.triples')
+    # files = glob.glob('./text2graph/*/text2graph.triples')
+    files = glob.glob('./rdf_triples/*/combined_triples.triples')
     all_triples = []
     all_graphs = []
     all_As = []
@@ -93,13 +99,19 @@ def load_data(labels_dict):
 
     d2v = DocEmbedder()
 
+    # print(labels_dict)
+    
     # process triples
     for f in files:
+        # print(f)
         with open(f) as fd:
             all_lines = fd.readlines()
             clean_triples = [x.strip() for x in all_lines]
-            all_triples.append(clean_triples) 
-            all_labels.append(labels_dict[f.split('/')[1]])
+            if f.split(os.sep)[1] in labels_dict:
+                all_triples.append(clean_triples)
+                # print(f.split(os.sep))
+                # all_labels.append(labels_dict[f.split('/')[1]])
+                all_labels.append(labels_dict[f.split(os.sep)[1]])
 
     # Build nx graphs
     for i, repo in enumerate(all_triples):
@@ -167,10 +179,10 @@ def load_labels(myfile):
 
 if __name__ == '__main__':
     labels_dict = load_labels('./labels.csv')
-    adj, features, labels, train, val, test, label_encoder = load_data(labels_dict)
+    adj, features, labels, train, val, test, idx_supernodes, label_encoder = load_data(labels_dict)
     np.save('aske.graph', adj)
     np.save('aske.allx', features)
     np.save('aske.ally', labels)
-    np.save('aske.train', train) 
-    np.save('aske.val', val) 
-    np.save('aske.test', test) 
+    np.save('aske.train', train)
+    np.save('aske.val', val)
+    np.save('aske.test', test)
