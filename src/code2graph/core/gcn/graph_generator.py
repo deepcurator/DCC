@@ -85,7 +85,7 @@ def create_masks(elts, idx_supernodes):
 
 def load_data(labels_dict):
     # files = glob.glob('./text2graph/*/text2graph.triples')
-    files = glob.glob('./rdf_triples/*/combined_triples.triples')
+    files = glob.glob('./*/combined_triples.triples')
     all_triples = []
     all_graphs = []
     all_As = []
