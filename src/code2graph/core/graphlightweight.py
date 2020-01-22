@@ -485,9 +485,13 @@ class TFTokenExplorer:
         queue = []
         queue.append(node)
 
+        node_name_key = "rdf_name"
+        if self.config.simple_name:
+            node_name_key = "name"
+        
         while queue:
             s = queue.pop(0)
-            node_uri = URIRef(self.om.user_defined+'/'+s['rdf_name'])
+            node_uri = URIRef(self.om.user_defined+'/'+s[node_name_key])
             graph.add((self.repo_name_uri, self.om.has_function, node_uri))
 
             if s["type"] == "tf_keyword":
@@ -495,16 +499,16 @@ class TFTokenExplorer:
             else:
                 graph.add((node_uri, self.om.type, self.om.user_defined))
                 
-                if "name" in s:
+                if "name" in s and not self.config.simple_name:
                     graph.add((node_uri, RDFS.label, Literal(s["name"], datatype=XSD.string)))
             
 
             if "children" in s:
                 for idx, child in enumerate(s["children"]):
-                    child_uri = URIRef(self.om.user_defined+'/'+child['rdf_name'])
+                    child_uri = URIRef(self.om.user_defined+'/'+child[node_name_key])
                     graph.add((node_uri, self.om.call, child_uri))
                     if idx > 0:
-                        prev_child_uri = URIRef(self.om.user_defined+'/'+s["children"][idx-1]["rdf_name"])
+                        prev_child_uri = URIRef(self.om.user_defined+'/'+s["children"][idx-1][node_name_key])
                         graph.add((prev_child_uri, self.om.followedby, child_uri))
                     queue.append(child)
 
@@ -715,7 +719,7 @@ class TFTokenExplorer:
                 continue
 
             src_type = [x for x in graph[src:self.om.type]]
-            dst_type = [x for x in graph[dst:self.omtype]]
+            dst_type = [x for x in graph[dst:self.om.type]]
 
             if len(src_type):
                 if str(Flavor.FUNCTION) == str(src_type[0]) or str(Flavor.METHOD) == str(src_type[0]):

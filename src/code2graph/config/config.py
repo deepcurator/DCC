@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import os
+import os, pprint
 from pykg2vec.config.config import KGEArgParser
 
 try:
@@ -51,6 +51,10 @@ class LightWeightMethodArgParser:
                                  action='store_true',
                                  help='Show url on graph.')
         self.parser.set_defaults(show_url=False)
+        self.parser.add_argument('--sn', dest='simple_name',
+                                 action='store_true',
+                                 help='Remove path and index information from node name.')
+        self.parser.set_defaults(show_url=False)
 
     def get_args(self, args):
         return self.parser.parse_args(args)
@@ -71,6 +75,7 @@ class LightWeightMethodConfig:
         self.output_types = arg.output_types
         self.show_arg = arg.show_arg
         self.show_url = arg.show_url
+        self.simple_name = arg.simple_name
 
 
 class GenerateSummaryArgParser:
@@ -171,6 +176,9 @@ class GraphASTConfig:
         self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
         self.resolution = arg.resolution
+
+    def dump(self):
+        pprint.pprint(self.__dict__)
 
 
 class PyKG2VecArgParser (KGEArgParser):

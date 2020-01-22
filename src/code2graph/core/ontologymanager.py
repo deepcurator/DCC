@@ -8,7 +8,7 @@ class OntologyManager:
     def __init__(self, ont_path='../core/DeepSciKG.nt'):
 
         # This scrapes all the functions and classes from TF Website.
-        self.scraper = TFVocScraper("r1.14")
+        self.scraper = TFVocScraper("r1.15")
 
         # self.g stores the template owl file acquired from Siemens.
         self.g = Graph()

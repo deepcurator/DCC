@@ -464,7 +464,7 @@ class Diag2Graph:
             op_file.write(":%s hasFlow %s \n"% (FigureID, flow_dir_updated))   
         
         
-        #cv2.imwrite(op_image_name, final_graph_im)
+        cv2.imwrite(op_image_name, final_graph_im)
         op_file.close()       
             
         
