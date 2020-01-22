@@ -39,6 +39,7 @@ image_dir = '/home/z003z47y/Projects/Government/ASKE/2019/092219_output/'
 image_dir_addon = 'diag2graph'
 output_dir = './Output/'
 rdf_dir = 'Output/rdf/'
+triple_dir = 'Output/text/'
 
 
 def getabstract(filename):
@@ -55,6 +56,7 @@ consolidatedGraph.parse(ontology,format="n3")
 
 def createrdf(row,csomap):
     # image2graphfiles = []
+    triple_list = []
     g = Graph()
     g.parse(ontology,format="n3")
     dcc_namespace = "https://github.com/deepcurator/DCC/"
@@ -77,6 +79,7 @@ def createrdf(row,csomap):
     # g.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     # consolidatedGraph
     consolidatedGraph.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
+    triple_list.append(filename + " isa " + "Publication")
     year = Literal(row['year'])
     conference = Literal(row['conference'])
     platform = Literal(row['Platform'])
@@ -84,6 +87,12 @@ def createrdf(row,csomap):
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "yearOfPublication"),year ))
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "conferenceSeries"),conference ))
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "platform"),platform ))
+
+    # Just the triple list
+    triple_list.append(filename + " year of publication " + str(row['year']))
+    triple_list.append(filename + " conference series " + str(row['conference']))
+    triple_list.append(filename + " platform " + str(row['Platform']))
+
    
     #load the spacy nlp model
     nlp = spacy.load(model_dir)
@@ -111,6 +120,11 @@ def createrdf(row,csomap):
         consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "hasEntity"),URIRef(filesubject + "_" + entitytext)))
         textLiteral = Literal(entitytext)
         consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + 'hasText'),textLiteral))
+
+        triple_list.append(entitytext + " isa " + entitylabel)
+        # triple_list.append(filename + " has entity " + )
+
+
     # print("---------------------------------")
 
     # image2graphfiles = glob.glob(image_dir + filename + "/" + image_dir_addon + "/*.txt")
@@ -124,6 +138,13 @@ def createrdf(row,csomap):
 
     # print(len(image2graphfiles))
     # print(image2graphfiles)
+
+    #Write to output text
+    triplefilename = triple_dir + filename + ".txt"
+    with open(triplefilename,'w') as f :
+        for line in triple_list:
+            f.write(line + "\n")
+
     print("Done with file " + filename)
     
 
@@ -177,3 +198,12 @@ for key,value in entity_map.items():
 # token1 = nlp(word1)
 # token2 = nlp(word2)
 # print("Similarity :", token1.similarity(token2))
+
+
+# Run this when you want to merge the image and text to graphs
+# TODO : These lines will be moved to another independent file.
+mergedGraph = Graph()
+mergedGraph.parse(destinationfolder + 'image2graph.ttl',format='ttl')
+mergedGraph.parse(destinationfolder + 'text2graph_v3.ttl',format='ttl')
+
+mergedGraph.serialize(destination='Output/rdf/consolidated_1_16_2020.ttl',format='ttl')
