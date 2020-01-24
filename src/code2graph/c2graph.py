@@ -28,6 +28,7 @@ def run(codeFolder, outputFolder, ontology_path, inputCSV):
 
         # command_3 = "python script_lightweight.py -ip %s -r -opt 3 --arg --url" % code_repository_path
         command_3 = "python script_lightweight.py -ip %s -opt 3 -ont %s -pid %s --arg --url" % (code_repository_path, ontology_path, paper_id)
+        print(command_3)
 
         argv = shlex.split(command_3)
         script_lightweight.pipeline_the_lightweight_approach(argv[2:])

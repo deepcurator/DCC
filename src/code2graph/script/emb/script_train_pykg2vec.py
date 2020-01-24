@@ -1,6 +1,5 @@
 import sys
 
-import glob
 from pathlib import Path
 from rdflib import RDF, RDFS
 from sklearn.model_selection import train_test_split
@@ -8,9 +7,19 @@ from sklearn.model_selection import train_test_split
 from pykg2vec.utils.kgcontroller import KnowledgeGraph
 from pykg2vec.config.config import Importer
 from pykg2vec.utils.trainer import Trainer
+from pykg2vec.config.config import KGEArgParser
 
 sys.path.append('../..')
-from config.config import PyKG2VecArgParser
+#from config.config import PyKG2VecArgParser
+
+class PyKG2VecArgParser (KGEArgParser):
+    """The class implements the argument parser for the pykg2vec script."""
+
+    def __init__(self):
+        super().__init__()
+        self.general_group.set_defaults(dataset_name='lightweight')
+        self.general_group.add_argument('-tp', dest='triples_path', default=None, type=str, 
+                                        help='The path to output triples from lightweight method.')
 
 ''' 
     script_train_pykg2vec.py aims to run the trainer of pykg2vec and acquire the embeddings for nodes and edges. 
