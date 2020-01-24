@@ -20,14 +20,14 @@ import nltk
 
 def getabstract(filename):
     abstxt = ""
-    with open(filename) as file:
+    with open(filename, encoding="utf8") as file:
         lines = file.readlines()
         abstxt = ''.join(str(line) for line in lines)
         abstxt = abstxt.lower()
     return abstxt
 
 
-def createRDF(filename, consolidatedGraph, model_dir, text_dir):
+def createRDF(filename, consolidatedGraph=None, model_dir='', text_dir=''):
     # g = Graph()
     # g.parse(ontology,format="n3")
     dcc_namespace = "https://github.com/deepcurator/DCC/"
@@ -40,9 +40,12 @@ def createRDF(filename, consolidatedGraph, model_dir, text_dir):
     ## filename will act as a unique URI to connect all the three graphs
 
     filesubject = dcc_namespace + filename
+    ### DF added:
+    triple_list = [] 
     # g.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     # consolidatedGraph
-    consolidatedGraph.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
+    if consolidatedGraph is not None:
+        consolidatedGraph.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     
     #load the spacy nlp model
     nlp = spacy.load(model_dir)
@@ -60,13 +63,23 @@ def createRDF(filename, consolidatedGraph, model_dir, text_dir):
         entitytext = entitytext.replace(" ",'_')
         # print(entitytext)
         # print(filesubject + "_" + entitytext)
-        consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),RDF.type,URIRef(dcc_namespace + entitylabel)))
-        consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "hasEntity"),URIRef(filesubject + "_" + entitytext)))
-        textLiteral = Literal(entitytext)
-        consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + 'hasText'),textLiteral))
+        if consolidatedGraph is not None:
+            consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),RDF.type,URIRef(dcc_namespace + entitylabel)))
+            consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "hasEntity"),URIRef(filesubject + "_" + entitytext)))
+            textLiteral = Literal(entitytext)
+            consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + 'hasText'),textLiteral))
+
+        ### DF added:
+        triple_list.append([entitytext, "is_a", entitylabel])
+        triple_list.append([filename.replace(" ", "_"), "has_entity", entitytext])
 
     print("Completed processing file " + filename) 
+    return(triple_list)
  
+def save_triples(triple_list, triplesFile):
+    with open(triplesFile, 'w') as f:
+        for triple in triple_list:
+            f.write(triple[0] + "\t" + triple[1] + "\t" + triple[2] + "\n")
 
 def createTextRDF(text_dir, destinationfolder, ontology, model_dir):    
     # Ontology locations
@@ -84,8 +97,19 @@ def createTextRDF(text_dir, destinationfolder, ontology, model_dir):
     #  for index,row in df.iterrows():
     for f in onlyFiles:
        if f.endswith(".txt"):
-           createRDF(f, consolidatedGraph, model_dir, text_dir)
+           _=createRDF(f, consolidatedGraph, model_dir, text_dir)
     
     destinationfile = destinationfolder + "text2graph.ttl"
     print("Saving rdf file " + destinationfile)
     consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+
+    
+def createTextTriples(text_dir, destinationfolder, ontology, model_dir):    
+    onlyFiles = [f for f in listdir(text_dir) if isfile(join(text_dir, f))]    
+    # iterate through the rows in the dataframe
+    #  for index,row in df.iterrows():
+    for f in onlyFiles:
+       if f.endswith(".txt"):
+           triple_list = createRDF(f, None, model_dir, text_dir)
+           triplesFile = destinationfolder + "text2graph.triples"
+           save_triples(triple_list, triplesFile)
