@@ -40,13 +40,13 @@ flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.'
 
 class RunGAE(object):
     
-    def __init__(self, file_expr, label_file, model_str='gcn_ae', file_sep='\t', out_tag='',
+    def __init__(self, file_expr, labels_dict, model_str='gcn_ae', file_sep='\t', out_tag='',
                  use_features=True, epochs=100, dropout_rate=0):
         self.model = None
         self.model_str=model_str
         self.out_tag=out_tag
         self.file_expr=file_expr
-        self.label_file=label_file
+        self.labels_dict=labels_dict
         self.use_features=use_features
         self.dropout_rate=dropout_rate
         self.epochs=epochs
@@ -61,7 +61,6 @@ class RunGAE(object):
         }                
         
     def run(self):
-        self.labels_dict = graph_generator.load_pwc_labels(self.label_file) #load_labels(self.label_file)   
         n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr, sep=self.file_sep)
         self.idx_supernodes=idx_supernodes
         adj = nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
@@ -224,17 +223,20 @@ if __name__ == "__main__":
     dataset_str = "code" #"text"  #FLAGS.dataset
 
     #label_file='./labels.csv'    
-    label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
     doCode=(dataset_str=='code')
     if doCode:
+        label_file='./labels.csv'
         out_tag=''
         file_expr='./rdf_triples/*/combined_triples.triples'
         sep='\t'
+        labels_dict = graph_generator.load_labels(label_file)
     else:
+        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
         out_tag='_t2g'
         #file_expr='./text2graph/*/text2graph.triples'
         #file_expr='../text2graph/Output/text/*.txt'
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
-    runner=RunGAE(file_expr, label_file, model_str=model_str, file_sep=sep, out_tag=out_tag)
+        labels_dict = graph_generator.load_pwc_labels(label_file)
+    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag)
     runner.run()
