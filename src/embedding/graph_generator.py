@@ -1,6 +1,6 @@
 import networkx as nx
 import glob
-from scipy.linalg import block_diag
+from scipy.sparse import block_diag
 import matplotlib.pyplot as plt
 import csv
 import numpy as np
@@ -9,9 +9,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 import os
 import pandas as pd
+import scipy
+from datetime import datetime
 
 class DocEmbedder:
-    def __init__(self, embedder='tfidf', vector_size=16, window=2, workers=4):
+    def __init__(self, embedder='tfidf', vector_size=16, window=2, workers=4,
+                 min_df=1, token_pattern=r'(?u)\b\w\w+\b'):
         self.documents = []
         self.n_docs = 1
         self.vector_size = vector_size
@@ -19,6 +22,8 @@ class DocEmbedder:
         self.workers = workers
         self.map = {}
         self.embedder = embedder
+        self.min_df = min_df
+        self.token_pattern=token_pattern
 
     def add_doc(self, doc):
         if 'doc2vec' in self.embedder:
@@ -32,7 +37,7 @@ class DocEmbedder:
         if 'doc2vec' in self.embedder:
             self.model = Doc2Vec(self.documents, vector_size=self.vector_size, window=self.window, min_count=1, workers=self.workers)
         else:
-            self.model = TfidfVectorizer()
+            self.model = TfidfVectorizer(min_df=self.min_df,token_pattern=self.token_pattern)
             self.model.fit_transform(self.documents)
         return self.model
 
@@ -41,7 +46,7 @@ class DocEmbedder:
             return self.model.infer_vector([doc])
         else:
             result = self.model.transform([doc])
-            return np.array(result.toarray()[0])
+            return result#np.array(result.toarray()[0])
 
 
 def add_supernode(G):
@@ -83,23 +88,13 @@ def create_masks(elts, idx_supernodes):
     return train, val, test
 
 
-def load_data(labels_dict, file_expr, sep='\t'):
+def load_data(labels_dict, file_expr, sep='\t', min_df=1, token_pattern='(?u)\b\w\w+\b'):
     files = glob.glob(file_expr)
+    # skip one paper with very large triple file for code
+    #files=[x for x in files if '6749-terngrad-ternary-gradients-to-reduce-communication-in-distributed-deep-learning' not in x]
+
     all_triples = []
-    all_graphs = []
-    all_As = []
-    all_labels = []
-    all_node_attributes = []
-    idx_supernodes = []
-    idx_labels = []
-    g_sizes = []
-    total_nodes = 0
-
-
-    d2v = DocEmbedder()
-
-    # print(labels_dict)
-    
+    all_labels = []    
     # process triples
     for f in files:
         # directory name is the paper tag
@@ -107,15 +102,39 @@ def load_data(labels_dict, file_expr, sep='\t'):
         if paper_tag in labels_dict:
             with open(f) as fd:
                 all_lines = fd.readlines()
-                clean_triples = [x.strip() for x in all_lines]
+                clean_triples = [x.strip().replace('https://github.com/deepcurator/DCC/','').split(sep) for x in all_lines]
                 all_triples.append(clean_triples)
                 all_labels.append(labels_dict[paper_tag])
-    # Build nx graphs
+
+    #all_df = [pd.DataFrame(triples, columns = ['s', 'p','o']) for triples in all_triples]
+    #z=pd.concat(all_df,axis=0)
+    #ind=z.p.apply(lambda x: 'has_keyword_' not in x and '_size' not in x and 'has_arg' not in x and '#label' not in x).values
+    #z2=z[ind]
+    #temp_df=z2[z2.p.apply(lambda x: '#label' in x)]
+    #type_df=z2[z2.p.apply(lambda x: '#type' in x)]
+    
+#    ln=np.array([len(x) for x in all_triples])
+#    ind=np.where(ln<10000)[0]
+#    print('Skipping {} repos with more than 10K edges'.format(len(ln)-len(ind)))
+#    all_triples=[all_triples[i] for i in ind]
+#    all_labels=[all_labels[i] for i in ind]
+    
+    all_graphs = []
+    all_As = []
+    all_node_attributes = []
+    idx_supernodes = []
+    idx_labels = []
+    g_sizes = []
+    total_nodes = 0
+    
+    ### Build nx graphs
+    d2v = DocEmbedder(min_df=2)
     for i, repo in enumerate(all_triples):
         G = nx.Graph()
         for triple in repo:
             try:
-                s, _, o = triple.split(sep)
+                s, p, o = triple
+                #if 'has_keyword_' not in p and '_size' not in p and 'has_arg' not in p and '#label' not in p:
                 G.add_edge(s,o)
             except:
                 pass             
@@ -132,20 +151,25 @@ def load_data(labels_dict, file_expr, sep='\t'):
             # Collect node attributes
             [d2v.add_doc(x) for x in G.nodes()]
 
-    # Generate node attributes
-    d2v.train()
-    for G in all_graphs:
-        all_node_attributes.append(generate_node_attributes(G, d2v))
-
-
-    print('Total nodes = %s' % (total_nodes))
-    print('idx supernodes = %s' % (idx_supernodes))
-    print('idx labels = %s' % (idx_labels))
-
+    d2v.train()    
+    # Generate node attributes:  Node attribute NxD feature matrix
+    node_attributes=0
+    if d2v.embedder=='tfidf':
+        for G in all_graphs:
+            all_node_attributes.append(scipy.sparse.vstack(generate_node_attributes(G, d2v)))
+        node_attributes = scipy.sparse.vstack(all_node_attributes)
+    else:
+        for G in all_graphs:
+            all_node_attributes.append(generate_node_attributes(G, d2v))            
+        node_attributes = np.concatenate(all_node_attributes)
     # NxN matrix
-    block = block_diag(*[x.todense() for x in all_As])
-    # Node attribute NxD feature matrix
-    node_attributes = np.concatenate(all_node_attributes)
+    block = block_diag(all_As).tocsr() #block_diag(*[x.todense() for x in all_As])
+    
+    print('Total nodes = %s' % (total_nodes))
+    print('Total edges = %s' % (block.nnz))
+    #print('idx supernodes = %s' % (idx_supernodes))
+    #print('idx labels = %s' % (idx_labels))
+
     # NxE binary label matrix where E is the number of classes
     lb = preprocessing.LabelBinarizer()
     idx_binary_labels = lb.fit_transform(idx_labels)
@@ -156,7 +180,7 @@ def load_data(labels_dict, file_expr, sep='\t'):
 
     elts, _ = block.shape
     train_mask, val_mask, test_mask = create_masks(elts, idx_supernodes)
-
+    print('Finished Data Loading {}'.format(datetime.now()))
     return block, node_attributes, label_matrix, train_mask, val_mask, test_mask, idx_supernodes, lb
 
 
@@ -176,24 +200,44 @@ def load_pwc_labels(myfile):
     def link2fn(x):
         x2=x.split('/')[-1].replace('.html','').replace('.pdf','')
         return(x2)
-    pwc=pd.read_csv('../../../pwc_edited_plt/pwc_edited_plt.csv')
+    pwc=pd.read_csv(myfile)
     fns=pwc.paper_link.apply(link2fn)
     labels_dict = dict(zip(fns, pwc.conference))
     return labels_dict
 
+# maps repo url to conference
+def load_repo_labels(myfile):
+    pwc=pd.read_csv(myfile)
+    labels_dict = dict(zip(pwc.repo_link, pwc.conference))
+    return labels_dict
+
 if __name__ == '__main__':
     
-    doCode=True
-    if doCode:
-        labels_dict = load_labels('./labels.csv')
+    dataset_str='code'
+    if dataset_str == "code":
         out_tag=''
-        file_expr='./rdf_triples/*/combined_triples.triples'
-    else:
-        labels_dict=load_pwc_labels('../../../pwc_edited_plt/pwc_edited_plt.csv')
+        sep='\t'
+        #label_file='./labels2.csv'
+        #file_expr='./old_data/rdf_triples/*/combined_triples.triples'
+        #labels_dict = load_labels(label_file)
+        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        file_expr='./pwc_triples/*/combined_triples.triples'
+        labels_dict = load_pwc_labels(label_file)
+    elif dataset_str == 'text':
+        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
         out_tag='_t2g'
         #file_expr='./text2graph/*/text2graph.triples'
+        #file_expr='../text2graph/Output/text/*.txt'
         file_expr='../text2graph/Output/text/*/t2g.triples'
-    adj, features, labels, train, val, test, idx_supernodes, label_encoder = load_data(labels_dict, file_expr)
+        sep=' '
+        labels_dict = load_pwc_labels(label_file)
+    else:
+        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        out_tag='_i2g'
+        file_expr='./image/*/*.triples'
+        sep='\t'
+        labels_dict = load_pwc_labels(label_file)
+    adj, features, labels, train, val, test, idx_supernodes, label_encoder = load_data(labels_dict, file_expr, sep=sep)
 #    np.save('aske'+out_tag+'.graph', adj)
 #    np.save('aske'+out_tag+'.allx', features)
 #    np.save('aske'+out_tag+'.ally', labels)

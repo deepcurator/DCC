@@ -21,6 +21,7 @@ from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_t
 import graph_generator
 import networkx as nx
 import scipy
+from datetime import datetime
 
 # Settings
 flags = tf.app.flags
@@ -36,6 +37,93 @@ flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.'
 #flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 #flags.DEFINE_string('dataset', 'code', 'code or text')
 #flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
+
+def generate_random_pairs(N,size):
+    e1=np.random.randint(low=0,high=N, size=size)
+    e2=np.random.randint(low=0,high=N, size=size)
+    return set(x for x in zip(e1,e2))
+
+
+def mask_test_edges2(adj):
+    # Function to build test set with 10% positive links
+    # NOTE: Splits are randomized and results might slightly deviate from reported numbers in the paper.
+    # TODO: Clean up.
+
+    # Remove diagonal elements
+    adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]), shape=adj.shape)
+    adj.eliminate_zeros()
+    # Efficiently check that diag is zero: DmitriyFradkin
+    assert np.sum(adj.diagonal()) == 0
+
+    adj_triu = sp.triu(adj)
+    adj_tuple = sparse_to_tuple(adj_triu)
+    edges = adj_tuple[0]
+    edges_all = sparse_to_tuple(adj)[0]
+    num_test = int(np.floor(edges.shape[0] / 10.))
+    num_val = int(np.floor(edges.shape[0] / 20.))
+
+    all_edge_idx = list(range(edges.shape[0]))
+    np.random.shuffle(all_edge_idx)
+    val_edge_idx = all_edge_idx[:num_val]
+    test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
+    test_edges = edges[test_edge_idx]
+    val_edges = edges[val_edge_idx]
+    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
+
+    data = np.ones(train_edges.shape[0])
+    # Re-build adj matrix
+    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj.shape)
+    adj_train = adj_train + adj_train.T
+
+    def ismember(a, b, tol=5):
+        rows_close = np.all(np.round(a - b[:, None], tol) == 0, axis=-1)
+        return np.any(rows_close)
+
+    print('Generating test_edges_false {}'.format(datetime.now()))
+    ### all edges - symmetric 
+    edges_all_set = set([(x[0],x[1]) for x in edges_all])
+    # generate initial set randomly:
+    test_edges_false = generate_random_pairs(adj.shape[0], len(test_edges))
+    # make sure it doesn't have real edges:
+    test_edges_false = test_edges_false - edges_all_set
+    # add as many edges as needed:
+    while len(test_edges_false) < len(test_edges):
+        idx_i = np.random.randint(0, adj.shape[0])
+        idx_j = np.random.randint(0, adj.shape[0])
+        if idx_i == idx_j or (idx_i, idx_j) in edges_all_set:
+            continue
+        if (idx_j, idx_i) in test_edges_false or (idx_i, idx_j) in test_edges_false:
+                continue
+        test_edges_false.add((idx_i, idx_j))
+
+    print('Generating val_edges_false {}'.format(datetime.now()))
+    val_edges_false = generate_random_pairs(adj.shape[0], len(val_edges))
+    # remove edges already existing or in test_false:
+    val_edges_false = val_edges_false - edges_all_set
+    val_edges_false = val_edges_false - test_edges_false    
+    while len(val_edges_false) < len(val_edges):
+        idx_i = np.random.randint(0, adj.shape[0])
+        idx_j = np.random.randint(0, adj.shape[0])
+        if idx_i == idx_j or (idx_i, idx_j) in edges_all_set:
+            continue
+        if (idx_i, idx_j) in test_edges_false or (idx_j, idx_i) in test_edges_false:
+            continue
+        if (idx_i, idx_j) in val_edges_false or (idx_j, idx_i) in val_edges_false:
+            continue
+        val_edges_false.add((idx_i, idx_j))
+
+#    assert ~ismember(test_edges_false, edges_all)
+#    assert ~ismember(val_edges_false, edges_all)
+#    assert ~ismember(val_edges, train_edges)
+#    assert ~ismember(test_edges, train_edges)
+#    assert ~ismember(val_edges, test_edges)
+
+    # convert sets to numpy arrays:
+    test_edges_false=np.array([np.array(x) for x in test_edges_false])
+    val_edges_false=np.array([np.array(x) for x in val_edges_false])
+    
+    # NOTE: these edge lists only contain single direction of edge!
+    return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
 
 
 class RunGAE(object):
@@ -63,7 +151,7 @@ class RunGAE(object):
     def run(self):
         n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr, sep=self.file_sep)
         self.idx_supernodes=idx_supernodes
-        adj = nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
+        adj = nx.adjacency_matrix(nx.from_scipy_sparse_matrix(n_by_n)) #nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
         features = scipy.sparse.csr.csr_matrix(x_train)
             
         # Store original adjacency matrix (without diagonal entries) for later
@@ -72,12 +160,11 @@ class RunGAE(object):
         adj_orig.eliminate_zeros()
         self.adj_orig=adj_orig
         
-        adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
+        adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges2(adj)
         adj = adj_train        
         # Some preprocessing
         adj_norm = preprocess_graph(adj)                
         num_nodes = adj.shape[0]
-
 
         if not self.use_features:
             features = sp.identity(features.shape[0])  # featureless        
@@ -150,7 +237,9 @@ class RunGAE(object):
         print('Test ROC score: ' + str(roc_score))
         print('Test AP score: ' + str(ap_score))
         
-        self.get_embeddings(y_train, label_encoder, out_tag=self.out_tag)
+        [supernodes, supernodes_embeddings, supernodes_labels]=self.get_embeddings(y_train, label_encoder)
+        self.supernodes=[supernodes, supernodes_embeddings, supernodes_labels]
+        self.plot_embeddings(supernodes, supernodes_embeddings, supernodes_labels)
 
     def get_roc_score(self,edges_pos, edges_neg, emb=None):
         if emb is None:
@@ -181,7 +270,7 @@ class RunGAE(object):
     
         return roc_score, ap_score
     
-    def get_embeddings(self, labels, label_encoder, out_tag=''):
+    def get_embeddings(self, labels, label_encoder):
         self.feed_dict.update({self.placeholders['dropout']:0})
         emb = self.sess.run(self.model.z_mean, feed_dict=self.feed_dict)
         labels_txt = label_encoder.inverse_transform(labels)
@@ -203,40 +292,57 @@ class RunGAE(object):
             colors.append(color_label[0][0])
         supernodes = np.array(supernodes)
     
-        np.savetxt('uci_embeddings'+out_tag+'.csv', emb, delimiter='\t')
-        np.savetxt('uci_supernodes'+out_tag+'.csv', supernodes_embeddings, delimiter='\t')
-        np.savetxt('uci_embeddings_labels'+out_tag+'.txt', labels_txt, fmt='%s')
-        np.savetxt('uci_supernodes_labels'+out_tag+'.txt', supernodes_labels, fmt='%s')
-
-        import matplotlib.pyplot as plt
-        #import seaborn as sns    
+        np.savetxt('uci_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
+        np.savetxt('uci_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
+        np.savetxt('uci_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
+        np.savetxt('uci_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
+        return(supernodes, supernodes_embeddings, supernodes_labels)
+        
+        
+    def plot_embeddings(self,supernodes, supernodes_embeddings, supernodes_labels):
+        #import matplotlib.pyplot as plt
         #sns.scatterplot(tsne_results[:,0], tsne_results[:,1], hue=colors)
-        #plt.scatter(tsne_results[:,0], tsne_results[:,1], c=colors, cmap='jet') 
-        plt.scatter(supernodes[:,0], supernodes[:,1], c=colors, cmap='jet')
-        #plt.show()
-        plt.savefig('supernode_tsne'+out_tag+'.png')
-        plt.clf()
+        #plt.scatter(tsne_results[:,0], tsne_results[:,1], c=colors, cmap='jet')
+        
+#        labels=np.unique(supernodes_labels)
+#        label_ind={k: v for v, k in enumerate(labels)}
+#        plt.scatter(supernodes[:,0], supernodes[:,1], cmap="jet",
+#                    c=[label_ind[x] for x in supernodes_labels],
+#                    label=labels)
+#        plt.savefig('supernode_tsne'+self.out_tag+'.png')
+#        plt.clf()
+        import seaborn as sns    
+        sns_plot=sns.scatterplot(x=supernodes[:,0], y=supernodes[:,1], hue=supernodes_labels)        
+        fig = sns_plot.get_figure()
+        fig.savefig('supernode_tsne'+self.out_tag+'.png')
 
 ######################################
 if __name__ == "__main__":
     model_str = "gcn_ae" #FLAGS.model
-    dataset_str = "code" #"text"  #FLAGS.dataset
+    dataset_str = "code" #"text" "code" ###FLAGS.dataset
 
-    #label_file='./labels.csv'    
-    doCode=(dataset_str=='code')
-    if doCode:
-        label_file='./labels.csv'
+    if dataset_str == "code":
         out_tag=''
-        file_expr='./rdf_triples/*/combined_triples.triples'
         sep='\t'
+        label_file='./labels2.csv'
+        file_expr='./old_data/rdf_triples/*/combined_triples.triples'
         labels_dict = graph_generator.load_labels(label_file)
-    else:
+        #label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        #file_expr='./pwc_triples/*/combined_triples.triples'
+        #labels_dict = graph_generator.load_pwc_labels(label_file)
+    elif dataset_str == 'text':
         label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
         out_tag='_t2g'
         #file_expr='./text2graph/*/text2graph.triples'
         #file_expr='../text2graph/Output/text/*.txt'
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
+        labels_dict = graph_generator.load_pwc_labels(label_file)
+    else:
+        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        out_tag='_i2g'
+        file_expr='./image/*/*.triples'
+        sep='\t'
         labels_dict = graph_generator.load_pwc_labels(label_file)
     runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag)
     runner.run()
