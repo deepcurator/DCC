@@ -209,6 +209,99 @@ results_df = results_df.drop(['counttype.datatype', 'conference.type','counttype
        ],axis=1)
 results_df.head()
 results_df["counttype.value"] = pd.to_numeric(results_df["counttype.value"])
-results_df = results_df[results_df['counttype.value'] > 3000]
+results_df = results_df[results_df['counttype.value'] > 1000]
 # results_df["year.value"] = pd.to_numeric(results_df["year.value"])
-results_df.groupby(['type.value','counttype.value']).size().unstack().plot(kind='bar',stacked='True')
+results_df.groupby(['type.value','counttype.value']).size().unstack().plot(kind='bar',stacked='True',legend='False')
+
+ax = results_df.plot(kind='bar',x='type.value',y='counttype.value',color='blue')
+ax.set(xlabel = "TF Functions", ylabel = "Count")
+
+
+#### Function trends across years
+
+functionyeartrends = """
+
+Select count(?type) as ?counttype  ?type  ?year where {
+
+?s <https://github.com/deepcurator/DCC/conferenceSeries> ?conference .
+?s <https://github.com/deepcurator/DCC/yearOfPublication> ?year .
+?s <https://github.com/deepcurator/DCC/hasRepository> ?repository .
+?repository <https://github.com/deepcurator/DCC/hasFunction> ?y.
+?y a ?type .
+FILTER(!(STR(?type) = "https://github.com/deepcurator/DCC/UserDefined")).
+
+}group by ?type ?year ORDER by DESC(?counttype)
+
+
+"""
+
+results_df = execute_query(functionyeartrends)
+results_df.columns
+
+results_df = results_df.drop(['counttype.datatype', 'year.type','counttype.type',  'type.type',
+       ],axis=1)
+results_df.head()
+results_df["counttype.value"] = pd.to_numeric(results_df["counttype.value"])
+results_df = results_df[results_df['counttype.value'] > 1000]
+# results_df["year.value"] = pd.to_numeric(results_df["year.value"])
+results_df.groupby(['counttype.value','year.value']).size().unstack().plot(kind='bar',stacked='True',legend='False')
+
+ax = results_df.plot(kind='bar',x='type.value',y='counttype.value',color='blue')
+ax.set(xlabel = "TF Functions", ylabel = "Count")
+
+
+
+## CSO Queries :
+
+csoquery1 = """
+
+Select distinct ?cso  where {
+
+?o <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?cso .
+
+}
+
+"""
+
+
+## Query that shows publications and  CSO entities
+
+csoquery2 = """   
+
+Select distinct ?s count(?cso) as ?countcso  where {
+
+?s a <https://github.com/deepcurator/DCC/Publication> .
+?s <https://github.com/deepcurator/DCC/hasEntity> ?o .
+?o <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?cso .
+
+}order by DESC(?countcso)
+
+"""
+
+## Query that shows types and CSO objects
+
+csoquery3 = """
+
+Select ?type ?cso  where {
+
+?s a <https://github.com/deepcurator/DCC/Publication> .
+?s <https://github.com/deepcurator/DCC/hasEntity> ?o .
+?o a ?type .
+?o <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?cso .
+
+}
+
+"""
+
+csoquery4  = """
+
+Select distinct ?type count(?cso) as ?csocount where {
+
+?s a <https://github.com/deepcurator/DCC/Publication> .
+?s <https://github.com/deepcurator/DCC/hasEntity> ?o .
+?o a ?type .
+?o <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?cso .
+
+}order by desc(?csocount)
+
+"""
