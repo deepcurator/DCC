@@ -86,18 +86,15 @@ def extract_doc2vec_dataset(code_path, store_path):
         explorer.dump_functions_source_code()
         
     except Exception as e:
-        print(e)
-
         traceback.print_exc()
 
 def extract_code2vec_dataset(code_path, store_path):
     try:
-        explorer = Code2vecDataExtractor(str(code_path))
+        explorer = Code2vecDataExtractor(str(code_path), store_path)
         explorer.process_all_nodes()
-        # explorer.visualize_ast()
-        explorer.export(stored_path=store_path)
+        explorer.export()
     except Exception as e:
-        print(e)
+        traceback.print_exc()
 
 
 def graphast_pipeline(args, dataset='doc2vec'):
@@ -131,7 +128,7 @@ def graphast_pipeline(args, dataset='doc2vec'):
             extract_code2vec_dataset(code_path, store_path)
 
 if __name__ == "__main__":
-    # graphast_pipeline(sys.argv[1:], dataset='doc2vec')
+    graphast_pipeline(sys.argv[1:], dataset='doc2vec')
     graphast_pipeline(sys.argv[1:], dataset='code2vec')
     # graphast_pipeline(sys.argv[1:])
     # test with "python script_graphast.py -ip ../test/ -r"

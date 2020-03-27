@@ -36,15 +36,14 @@ class Doc2vecDataExtractor:
 
     def dump_functions_source_code(self):    
         
-        dirpath = Path(self.store_path / ('functions_source_code')).resolve()
-        dirpath.mkdir(exist_ok=True)
+        save_path = Path(self.store_path / "doc2vec.txt").resolve()
 
-        with open(str(dirpath / "doc2vec.txt"), 'w') as file:
+        with open(str(save_path), 'w') as file:
             
             for name, function_ast in self.ast_nodes:
 
                 # data_helper.xxx.__init__ => ['data', 'helper', 'xxx', 'init']
-                keywords = set([x for x in re.split('[^a-zA-Z]', name) if x is not ''])
+                keywords = set([x for x in re.split('[^1-9a-zA-Z]', name) if x is not ''])
                 splited_function_string = [s.strip() for s in astor.to_source(function_ast).split('\n')]
                 
                 """ the format of dataset rows """
@@ -55,27 +54,24 @@ class Doc2vecDataExtractor:
 
 class Code2vecDataExtractor:
     
-    def __init__(self, code_path, resolution="module"):
+    def __init__(self, code_path, store_path):
         # path to code repository
         self.code_path = code_path
+        self.store_path = store_path
+
         # path of all python files
         self.all_py_files = glob("%s/**/*.py" % str(code_path), recursive=True)
+        
         # leaves nodes of ast tree for each module
-        self.leaves={}
         # paths between leaves of ast tree for each module
-        self.paths={}
-
-        self.function_defs={}
+        self.leaves, self.paths = {}, {} 
         
         # hyperparameters
         self.path_length_upper_bound = 10
         self.path_length_lower_bound = 3
-
-        # common parameters
-        self.resolution = resolution
         
         # acquire the trunk of extracted ast nodes, all of the nodes are functions.
-        self.nodes = self.extract_code_to_astnodes()
+        self.ast_nodes = self.extract_code_to_astnodes()
     
     def extract_code_to_astnodes(self):
         ''' generate all the ast nodes according to resolution. '''
@@ -93,103 +89,95 @@ class Code2vecDataExtractor:
         
     def process_all_nodes(self):
         
-        for node_name, node in self.nodes:
-            
-            print('processing:', node_name)
-            
-            ''' acquire leaves with corresponding paths in self.leaves for each starting node (module or function)'''
-            self.leaves[node_name] = self.generate_leaves(node)
+        ''' acquire leaves with corresponding paths in self.leaves for each starting node (module or function)'''
+        ''' acquire paths by iterating through all leave pairs for each starting node (module or function)'''
+        self.generate_leaves()
+        self.generate_paths()
 
-            ''' acquire paths by iterating through all leave pairs for each starting node (module or function)'''
-            self.paths[node_name]  = self.generate_paths(self.leaves[node_name])
-                        
+        for node_name, node in self.ast_nodes:            
             print(node_name, ' gets %s leaves' % len(self.leaves[node_name]))
             print(node_name, ' gets %s paths' %  len(self.paths[node_name]))
 
-    def generate_leaves(self, node):
+    def generate_leaves(self):
         # for each python file, the root will always be a module class. 
-
         # the node is the root of the AST subtree. (can be module/functiondef)
-        
         # a tuple is used for each item in DFS (ast node and visited paths)
 
-        fringe = [(node, [])] 
-        leaf_nodes = []
-        
-        while fringe:
-          
-            node, path = fringe.pop(0)
-            trunk = []
+        for node_name, node in self.ast_nodes:
 
-            curr_path = path + [node]
+            fringe = [(node, [])] 
+            leaf_nodes = []
+            
+            while fringe:
+              
+                node, path = fringe.pop(0)
+                trunk = []
 
-            for f in ast.iter_fields(node): 
+                curr_path = path + [node]
 
-                if isinstance(f[1], list):
-                    for item in f[1]: 
-                        if isinstance(item, ast.AST):
-                            trunk.append((item, curr_path))
+                for f in ast.iter_fields(node): 
 
-                            if isinstance(item, ast.FunctionDef):
-                                pass
-                                # print(self.dump_node(item))
+                    if isinstance(f[1], list):
+                        for item in f[1]: 
+                            if isinstance(item, ast.AST):
+                                trunk.append((item, curr_path))
 
-                        else:
-                            leaf_nodes.append((item, curr_path))
+                                if isinstance(item, ast.FunctionDef):
+                                    pass
+                                    # print(self.dump_node(item))
 
-                elif isinstance(f[1], ast.AST):
-                    trunk.append((f[1], curr_path))
+                            else:
+                                leaf_nodes.append((item, curr_path))
+
+                    elif isinstance(f[1], ast.AST):
+                        trunk.append((f[1], curr_path))
+                    
+                    else:
+                        if f[1] is not None:
+                            leaf_nodes.append((f[1], curr_path))
+
+                # fringe should be updated to be [trunk;fringe].
+                fringe = trunk + fringe
                 
-                else:
-                    if f[1] is not None:
-                        # print(node, "has_%s"%f[0], f[1])
-                        leaf_nodes.append((f[1], curr_path))
-                        # print('leaves:', f[1], curr_path)
+            self.leaves[node_name] = leaf_nodes
 
-            # fringe should be updated to be [trunk;fringe].
-            fringe = trunk + fringe
-            
-        return leaf_nodes
+    def generate_paths(self):
 
-    def generate_paths(self, leaves):
-        paths = []
-        # iterate through leaves in pairs. 
-        for leaf_pair in itertools.combinations(leaves, 2):
-            left_leaf, left_path = leaf_pair[0]
-            right_leaf, right_path = leaf_pair[1]
-            
-            last_common_root_idx = 0 
+        for node_name, node in self.ast_nodes:
 
-            # finding the last common root.
-            while last_common_root_idx < len(left_path) and last_common_root_idx < len(right_path):
-                if left_path[last_common_root_idx] == right_path[last_common_root_idx]:
-                    last_common_root_idx += 1
-                else:
-                    break 
+            paths = []
+            # iterate through leaves in pairs. 
+            for leaf_pair in itertools.combinations(self.leaves[node_name], 2):
+                left_leaf, left_path = leaf_pair[0]
+                right_leaf, right_path = leaf_pair[1]
+                
+                last_common_root_idx = 0 
 
-            path = left_path[last_common_root_idx:][::-1] + right_path[last_common_root_idx-1:]
-            paths.append((left_leaf, path, right_leaf))
-            paths.append((right_leaf, path[::-1], left_leaf))
+                # finding the last common root.
+                while last_common_root_idx < len(left_path) and last_common_root_idx < len(right_path):
+                    if left_path[last_common_root_idx] == right_path[last_common_root_idx]:
+                        last_common_root_idx += 1
+                    else:
+                        break 
 
-        return paths
+                path = left_path[last_common_root_idx:][::-1] + right_path[last_common_root_idx-1:]
+                paths.append((left_leaf, path, right_leaf))
+                paths.append((right_leaf, path[::-1], left_leaf))
 
-    def export(self, stored_path = None):
+            self.paths[node_name] = paths
+
+    def export(self):
         # export all the paths contained in self.paths to file_name.txt
         # file name contains labels. 
-        if stored_path:
-            triple_dir_path = (Path(stored_path) / ('triples_ast_%s'%self.resolution)).resolve()
-            triple_dir_path.mkdir(exist_ok=True)
-        else:
-            triple_dir_path = (Path(self.code_path) / ('triples_ast_%s'%self.resolution)).resolve()
-            triple_dir_path.mkdir(exist_ok=True)
+        save_path = (Path(self.store_path) / 'code2vec.txt').resolve()
 
-        for node_name in self.paths:
+        with open(str(save_path), 'w') as f:
 
-            file_name = "%s.txt" % (node_name)
-            save_path = triple_dir_path / file_name
+            for node_name in self.paths:
+                keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
+                f.write('|'.join(keywords) + ' ')
 
-            with open(str(save_path), 'w') as f:
-                for left_leaf, path, right_leaf in self.paths[node_name]:
+                for left, path, right in self.paths[node_name]:
                     
                     if len(path) >= 2 and (type(path[-1]).__name__ == "Str" and type(path[-2]).__name__ == "Expr"):
                         ## skip comment in left leaf for easier data pre-processing. 
@@ -202,46 +190,7 @@ class Code2vecDataExtractor:
                     if self.path_length_lower_bound <= len(path) <= self.path_length_upper_bound:
                         path_string = "_".join([type(i).__name__ for i in path])
 
-                        f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
-    
-    def dump_functions_source_code(self, stored_path = None):
-        
-        assert self.resolution is "function"
-        
-        if stored_path:
-            dirpath = Path(stored_path / ('functions_source_code')).resolve()
-            dirpath.mkdir(exist_ok=True)
-        else:
-            dirpath = Path(self.code_path / ('functions_source_code')).resolve()
-            dirpath.mkdir(exist_ok=True)
-
-        for name, function in self.nodes:
-            print(name, function)
-            function_string = astor.to_source(function)
-            function_name = function_string.split('(')[0].replace('def ','')
-            # TODO: Funciton name includes input arguments, 
-            # so removing it might remove important information.
-            # function_string = ':'.join(function_string.split(':')[1:])
-            with open(str(dirpath / (function_name + ".txt")), 'w') as file:
-                file.write(function_string.strip().replace('\n', ' <nl>'))
-        
-        import pdb; pdb.set_trace()
-
-    def dump_node(self, node):
-        # utility function.
-        print(ast.dump(node))
-
-    def dump_leaf_nodes(self):
-        pprint.pprint(self.leaves)
-
-    def dump_paths(self):
-        pprint.pprint(self.paths)
-
-if __name__ == "__main__":
-    # explorer = ASTExplorer('../test/fashion_mnist')
-    # explorer = ASTExplorer('../test/Alexnet')
-    # explorer = ASTExplorer('../test/AGAN', resolution="function")
-    explorer = ASTExplorer('../test')
-    explorer.process_all_nodes()
-    # explorer.visualize_ast()
-    explorer.export()
+                        f.write("%s,%s,%s" % (left, path_string, right))
+                        f.write(' ')
+                
+                f.write('\n')
