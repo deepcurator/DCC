@@ -1,9 +1,59 @@
-import ast, pprint, itertools, astor
+import ast, pprint, itertools, astor, re
 from glob import glob
 from pathlib import Path
 
+from .pyan.analyzer import CallGraphVisitor
+from .pyan.node import Flavor
 
-class ASTExplorer:
+class Doc2vecDataExtractor:
+
+    ''' this class is for creating dataset for doc2vec '''
+
+    def __init__(self, code_path, store_path):
+        # path to code repository
+        self.code_path = code_path
+        self.store_path = store_path
+
+        # path of all python files
+        self.all_py_files = glob("%s/**/*.py" % str(code_path), recursive=True)
+
+        # acquire the trunk of extracted ast nodes, all of the nodes are functions.
+        self.ast_nodes = self.extract_code_to_astnodes()
+
+    def extract_code_to_astnodes(self):
+        ''' generate all the ast nodes according to resolution. '''
+        nodes = []
+
+        call_graph_visitor = CallGraphVisitor(self.all_py_files)
+
+        uses_edges = call_graph_visitor.uses_edges
+        
+        for pyan_node in uses_edges.keys():
+            if pyan_node.flavor == Flavor.FUNCTION or pyan_node.flavor == Flavor.METHOD:
+                nodes.append((pyan_node.namespace +'.'+ pyan_node.name, pyan_node.ast_node))
+
+        return nodes
+
+    def dump_functions_source_code(self):    
+        
+        dirpath = Path(self.store_path / ('functions_source_code')).resolve()
+        dirpath.mkdir(exist_ok=True)
+
+        with open(str(dirpath / "doc2vec.txt"), 'w') as file:
+            
+            for name, function_ast in self.ast_nodes:
+
+                # data_helper.xxx.__init__ => ['data', 'helper', 'xxx', 'init']
+                keywords = set([x for x in re.split('[^a-zA-Z]', name) if x is not ''])
+                splited_function_string = [s.strip() for s in astor.to_source(function_ast).split('\n')]
+                
+                """ the format of dataset rows """
+                file.write('|'.join(keywords) + ' ')
+                file.write(' '.join(splited_function_string))
+                file.write('\n')
+
+
+class Code2vecDataExtractor:
     
     def __init__(self, code_path, resolution="module"):
         # path to code repository
@@ -17,40 +67,33 @@ class ASTExplorer:
 
         self.function_defs={}
         
-        # parameters
+        # hyperparameters
         self.path_length_upper_bound = 10
         self.path_length_lower_bound = 3
+
+        # common parameters
         self.resolution = resolution
         
-        # this is the trunk of nodes, the type of it will change depending on resolution. 
-        self.nodes = self.get_all_nodes()
+        # acquire the trunk of extracted ast nodes, all of the nodes are functions.
+        self.nodes = self.extract_code_to_astnodes()
     
-    def get_all_nodes(self):
+    def extract_code_to_astnodes(self):
         ''' generate all the ast nodes according to resolution. '''
-        nodes = {} 
+        nodes = []
 
-        for py_file in self.all_py_files:
-            
-            with open(py_file, "rt", encoding="utf-8") as f:
-                
-                root_node = ast.parse(f.read(), py_file)
-                
-                module_name = Path(py_file).resolve().stem
-                
-                if self.resolution is "module":
-                    nodes[module_name] = root_node
-                
-                elif self.resolution is "function":
-                    for node in ast.walk(root_node):
-                        if isinstance(node, ast.FunctionDef):
-                            #TODO need to address __init__ one day. 
-                            nodes[module_name +'.'+ node.name] = node
+        call_graph_visitor = CallGraphVisitor(self.all_py_files)
+
+        uses_edges = call_graph_visitor.uses_edges
+        
+        for pyan_node in uses_edges.keys():
+            if pyan_node.flavor == Flavor.FUNCTION or pyan_node.flavor == Flavor.METHOD:
+                nodes.append((pyan_node.namespace +'.'+ pyan_node.name, pyan_node.ast_node))
 
         return nodes
         
     def process_all_nodes(self):
         
-        for node_name, node in self.nodes.items():
+        for node_name, node in self.nodes:
             
             print('processing:', node_name)
             
@@ -59,9 +102,7 @@ class ASTExplorer:
 
             ''' acquire paths by iterating through all leave pairs for each starting node (module or function)'''
             self.paths[node_name]  = self.generate_paths(self.leaves[node_name])
-            
-            # self.function_defs[node] = self.generate_function_defs(node)
-            
+                        
             print(node_name, ' gets %s leaves' % len(self.leaves[node_name]))
             print(node_name, ' gets %s paths' %  len(self.paths[node_name]))
 
@@ -110,20 +151,9 @@ class ASTExplorer:
             
         return leaf_nodes
 
-    # def generate_function_defs(self, root):
-    #     # Given a module name, return list of function definitions
-    #     function_defs = []
-    #     for f in ast.iter_fields(root):
-    #         if isinstance(f[1], list):
-    #             for item in f[1]:
-    #                 if isinstance(item, ast.FunctionDef):
-    #                     function_defs.append(item.name)
-    #                     print('Function definition %s found at %s' % (item.name, item.lineno))
-    #     return function_defs
-
     def generate_paths(self, leaves):
         paths = []
-        
+        # iterate through leaves in pairs. 
         for leaf_pair in itertools.combinations(leaves, 2):
             left_leaf, left_path = leaf_pair[0]
             right_leaf, right_path = leaf_pair[1]
@@ -141,18 +171,7 @@ class ASTExplorer:
             paths.append((left_leaf, path, right_leaf))
             paths.append((right_leaf, path[::-1], left_leaf))
 
-        return paths   
-
-    def visualize_ast(self):
-        save_path = (Path(self.code_path) / "ast_trees")
-        save_path.mkdir(exist_ok=True)
-        # for py_file in self.ast_nodes:
-            # file_name = (py_file.split('/')[-1]).split('.')[0] + '.svg'
-            # module = self.ast_nodes[py_file]
-            # Settings['terminal_color'] = "#8B0000"
-            # svg = render(module, Settings)
-            # with open(str(save_path/file_name), 'w') as f:
-            #     f.write(svg._repr_svg_())
+        return paths
 
     def export(self, stored_path = None):
         # export all the paths contained in self.paths to file_name.txt
@@ -186,7 +205,8 @@ class ASTExplorer:
                         f.write(str(left_leaf)+'\t'+path_string+'\t'+str(right_leaf)+'\n')
     
     def dump_functions_source_code(self, stored_path = None):
-        assert(self.resolution is "function")
+        
+        assert self.resolution is "function"
         
         if stored_path:
             dirpath = Path(stored_path / ('functions_source_code')).resolve()
@@ -195,7 +215,8 @@ class ASTExplorer:
             dirpath = Path(self.code_path / ('functions_source_code')).resolve()
             dirpath.mkdir(exist_ok=True)
 
-        for function in self.nodes.values():
+        for name, function in self.nodes:
+            print(name, function)
             function_string = astor.to_source(function)
             function_name = function_string.split('(')[0].replace('def ','')
             # TODO: Funciton name includes input arguments, 
@@ -203,7 +224,8 @@ class ASTExplorer:
             # function_string = ':'.join(function_string.split(':')[1:])
             with open(str(dirpath / (function_name + ".txt")), 'w') as file:
                 file.write(function_string.strip().replace('\n', ' <nl>'))
-        # import pdb; pdb.set_trace()
+        
+        import pdb; pdb.set_trace()
 
     def dump_node(self, node):
         # utility function.
@@ -219,7 +241,7 @@ if __name__ == "__main__":
     # explorer = ASTExplorer('../test/fashion_mnist')
     # explorer = ASTExplorer('../test/Alexnet')
     # explorer = ASTExplorer('../test/AGAN', resolution="function")
-    explorer = ASTExplorer('../test', resolution="function")
+    explorer = ASTExplorer('../test')
     explorer.process_all_nodes()
     # explorer.visualize_ast()
     explorer.export()
