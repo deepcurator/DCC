@@ -189,8 +189,7 @@ class Code2vecDataExtractor:
                         
                     if self.path_length_lower_bound <= len(path) <= self.path_length_upper_bound:
                         path_string = "_".join([type(i).__name__ for i in path])
-
-                        f.write("%s,%s,%s" % (left, path_string, right))
+                        f.write("%s\t%s\t%s" % (str(left).replace(' ', ''), path_string, str(right).replace(' ', '')))
                         f.write(' ')
                 
                 f.write('\n')
