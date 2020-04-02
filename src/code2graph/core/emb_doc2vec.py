@@ -33,7 +33,7 @@ class Doc2Vec:
                     # For training data, add tags
                     yield gensim.models.doc2vec.TaggedDocument(gensim.utils.simple_preprocess(content), [tag])
 
-    def train_model(self, vector_size=50, window=2, min_count=2, epochs=40, workers=4):
+    def train_model(self, vector_size=50, window=2, min_count=2, epochs=100, workers=4):
         self.model = gensim.models.doc2vec.Doc2Vec(vector_size=vector_size, window=window, 
                                                    min_count=min_count, epochs=epochs,
                                                    workers=workers)

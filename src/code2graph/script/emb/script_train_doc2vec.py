@@ -57,11 +57,3 @@ def run_doc2vec(dataset_path:str):
 
 if __name__ == "__main__":
     run_doc2vec('../../graphast_output')
-
-    # d2v.train_model()
-    # d2v.save_model("d2v_model")
-    # d2v.load_model("d2v_model")
-    # test = [] 
-    # with open(str(save_path / "test.txt"), "r") as file:
-    #     for line in file:
-    #         test.append(line)
