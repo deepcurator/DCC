@@ -1,6 +1,10 @@
 import sys, tqdm, pickle, random
+from sklearn.model_selection import train_test_split
+
 sys.path.append('../../')
+
 from core.code2vec import *
+
 
 def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename):
 
@@ -90,6 +94,7 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
 
     return "Success"
 
+
 def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
     # maximum number of contexts to keep for each function 
     max_contexts = 200 
@@ -163,9 +168,26 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
 
                 content = " ".join(triple_ids)
                 label_info = "|".join(label_ids)
-                print(content)
-                print(label_info)
-                # data_functions.append((labels, content))
+                # print(content)
+                # print(label_info)
+                data_functions.append((label_info, content))
+
+    train, test = train_test_split(data_functions, test_size=0.1, shuffle=True)
+
+    with open(str(dataset_save_path / "train.txt"), 'w') as file:
+        for labels, content in train:
+            file.write(labels)
+            file.write(" ")
+            file.write(content)
+            file.write("\n")
+
+    with open(str(dataset_save_path / "test.txt"), 'w') as file:
+        for labels, content in test:
+            file.write(labels)
+            file.write(" ")
+            file.write(content)
+            file.write("\n")
+
 
 def prepare_dataset(dataset_path: str, filename):
     
@@ -176,122 +198,15 @@ def prepare_dataset(dataset_path: str, filename):
     create_dataset_indexes(raw_data_path, dataset_save_path, filename) # create dictionaries. 
     preprocess_dataset(raw_data_path, dataset_save_path, filename) # preprocessing the dataset. 
 
-    # maximum number of contexts to keep for each function 
-    # max_contexts = 200 
-
-    # max_words = 10000000
-    # max_paths = 10000000
-
-    # word_count = {}
-    # word2idx = {}
-    # idx2word = {}
-
-    # path_count = {}
-    # path2idx = {} 
-    # idx2path = {}
-
-    # target_count = {}
-    # target2idx = {}
-    # idx2target = {}
-
-    # data_functions = [] 
-
-    # for code2vec_file in raw_data_path.rglob(filename):
-    #     with open(code2vec_file, 'r') as file:
-    #         for function_line in file:
-    #             splited_function_line = function_line.split(" ")
-    #             labels = splited_function_line[0]
-
-    #             for label in labels.split('|'):
-    #                 if label not in target_count:
-    #                     target_count[label]=1
-    #                 else:
-    #                     target_count[label]+=1
-
-    #             triples = splited_function_line[1:]
-
-    #             for triple in triples:
-    #                 splited_triple = triple.split('\t')
-    #                 print(splited_triple)
-    #                 if len(splited_triple) != 3: 
-    #                     continue
-    #                 e1, p, e2 = splited_triple[0], splited_triple[1], splited_triple[2]
-                    
-    #                 if e1 not in word_count:
-    #                     word_count[e1]=1
-    #                 else:
-    #                     word_count[e1]+=1
-
-    #                 if e2 not in word_count:
-    #                     word_count[e2]=1
-    #                 else:
-    #                     word_count[e2]+=1
-
-    #                 if p not in path_count:
-    #                     path_count[p]=1
-    #                 else:
-    #                     path_count[p]+=1
-
-    #             content = " ".join(splited_function_line[1:])
-    #             data_functions.append((labels, content))
-    
-    # word_count = {k: v for k, v in sorted(word_count.items(), key=lambda item: item[1], reverse=True)}
-    # word2idx = {v: k for k, v in enumerate(word_count.keys())}
-    # idx2word = {v: k for k, v in word2idx.items()}
-
-    # path_count = {k: v for k, v in sorted(path_count.items(), key=lambda item: item[1], reverse=True)}
-    # path2idx = {v: k for k, v in enumerate(path_count.keys())}
-    # idx2path = {v: k for k, v in path2idx.items()}
-
-    # target_count = {k: v for k, v in sorted(target_count.items(), key=lambda item: item[1], reverse=True)}
-    # target2idx = {v: k for k, v in enumerate(target_count.keys())}
-    # idx2target = {v: k for k, v in target2idx.items()}
-
-    # with open(str(dataset_save_path / 'word_count.pkl'), 'wb') as f:
-    #     pickle.dump(word_count, f)
-    # with open(str(dataset_save_path / 'word2idx.pkl'), 'wb') as f:
-    #     pickle.dump(word2idx, f)
-    # with open(str(dataset_save_path / 'idx2word.pkl'), 'wb') as f:
-    #     pickle.dump(idx2word, f)
-
-    # with open(str(dataset_save_path / 'path_count.pkl'), 'wb') as f:
-    #     pickle.dump(path_count, f)
-    # with open(str(dataset_save_path / 'path2idx.pkl'), 'wb') as f:
-    #     pickle.dump(path2idx, f)
-    # with open(str(dataset_save_path / 'idx2path.pkl'), 'wb') as f:
-    #     pickle.dump(idx2path, f)
-
-    # with open(str(dataset_save_path / 'target_count.pkl'), 'wb') as f:
-    #     pickle.dump(target_count, f)
-    # with open(str(dataset_save_path / 'target2idx.pkl'), 'wb') as f:
-    #     pickle.dump(target2idx, f)
-    # with open(str(dataset_save_path / 'idx2target.pkl'), 'wb') as f:
-    #     pickle.dump(idx2target, f)
-
-    import pdb; pdb.set_trace()
-    # train, test = train_test_split(data_functions, test_size=0.1, shuffle=True)
-
-    # with open(str(dataset_save_path / "train.txt"), 'w') as file:
-    #     for labels, content in train:
-    #         file.write(labels)
-    #         file.write(" ")
-    #         file.write(content)
-
-    # with open(str(dataset_save_path / "test.txt"), 'w') as file:
-    #     for labels, content in test:
-    #         file.write(labels)
-    #         file.write(" ")
-    #         file.write(content)
-
     return dataset_save_path
 
 def run_code2vec(dataset_path:str):
 
     dataset_save_path = prepare_dataset(dataset_path, "code2vec.txt")
 
-    # trainer = Trainer('C:\\Users\\AICPS\\Documents\\GitHub\\louisccc-DCC\\src\\code2graph\\graphast_output\\fashion_mnist\\triples_ast_function')
-    # trainer.build_model()
-    # trainer.train_model()
+    trainer = Trainer(dataset_save_path)
+    trainer.build_model()
+    trainer.train_model()
 
     # code.interact(local=locals())
 
