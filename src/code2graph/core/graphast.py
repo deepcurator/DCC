@@ -174,8 +174,15 @@ class Code2vecDataExtractor:
         with open(str(save_path), 'w') as f:
 
             for node_name in self.paths:
-                keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
+                keywords = set()
+                x = node_name.split('.')
+                if x[-1] == "__init__":
+                    keywords.add(x[-2])
+                else:
+                    keywords.add(x[-1])
+                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
                 f.write('|'.join(keywords) + ' ')
+                
 
                 for left, path, right in self.paths[node_name]:
                     

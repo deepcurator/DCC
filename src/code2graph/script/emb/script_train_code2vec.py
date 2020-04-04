@@ -205,7 +205,6 @@ def run_code2vec(dataset_path:str):
     dataset_save_path = prepare_dataset(dataset_path, "code2vec.txt")
 
     trainer = Trainer(dataset_save_path)
-    trainer.build_model()
     trainer.train_model()
 
     # code.interact(local=locals())
