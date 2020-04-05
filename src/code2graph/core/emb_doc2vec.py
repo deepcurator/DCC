@@ -56,15 +56,41 @@ class Doc2Vec:
         sims = self.model.docvecs.most_similar([vector], topn=len(self.model.docvecs))
         return ' '.join(self.train_corpus[sims[0][0]].words)
 
+    def get_subtokens(self, name):
+        hierarchy = name.split('.')[:-1]
+        function_name = name.split('.')[-1].split('|')
+        return hierarchy + function_name
+
     def evaluate(self):
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        nr_predictions = 0
+
         for tag, test_corpus in self.test_corpus:
             print("evaluating", tag, test_corpus)
+            nr_predictions += 1
 
             inferred_vector = self.model.infer_vector(test_corpus)
-            sims = self.model.docvecs.most_similar([inferred_vector], topn=len(self.model.docvecs))
+            sims = self.model.docvecs.most_similar([inferred_vector], topn=10)
 
-            print(sims)
-            print(inferred_vector)
+            inferred_names = [sim[0] for sim in sims]
+
+            original_subtokens = self.get_subtokens(tag)
+            
+            for inferred_name in inferred_names:
+                inferred_subtokens = self.get_subtokens(inferred_name)
+                true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
+                false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
+                false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+
+        true_positives /= nr_predictions
+        false_positives /= nr_predictions
+        false_negatives /= nr_predictions
+        precision = true_positives / (true_positives + false_positives)
+        recall = true_positives / (true_positives + false_negatives)
+        f1 = 2 * precision * recall / (precision + recall)
+        print("Precision: {}, Recall: {}, F1: {}".format(precision, recall, f1))
 
     def save_model(self, fname):
         save_path = self.data_dir / fname
