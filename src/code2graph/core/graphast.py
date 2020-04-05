@@ -43,7 +43,16 @@ class Doc2vecDataExtractor:
             for name, function_ast in self.ast_nodes:
 
                 # data_helper.xxx.__init__ => ['data', 'helper', 'xxx', 'init']
-                keywords = set([x for x in re.split('[^1-9a-zA-Z]', name) if x is not ''])
+                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', name) if x is not ''])
+                keywords = set()
+                x = name.split('.')
+                if x[-1] == "__init__":
+                    keywords.add(x[-2])
+                else:
+                    keywords.add(x[-1])
+                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
+                # f.write('|'.join(keywords) + ' ')
+
                 splited_function_string = [s.strip() for s in astor.to_source(function_ast).split('\n')]
                 
                 """ the format of dataset rows """
