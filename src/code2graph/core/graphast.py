@@ -41,22 +41,17 @@ class Doc2vecDataExtractor:
         with open(str(save_path), 'w') as file:
             
             for name, function_ast in self.ast_nodes:
-
-                # data_helper.xxx.__init__ => ['data', 'helper', 'xxx', 'init']
-                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', name) if x is not ''])
-                keywords = set()
-                x = name.split('.')
-                if x[-1] == "__init__":
-                    keywords.add(x[-2])
-                else:
-                    keywords.add(x[-1])
-                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
-                # f.write('|'.join(keywords) + ' ')
-
+                # data_helper.data_helper.__init__ => data_helper.data_helper.data|helper
+                hierarchy = name.split('.')[:-1]
+                keyword = name.split('.')[-1]
+                if keyword == "__init__":
+                    keyword = hierarchy[-1]
+                keywords = set([x for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
+                
                 splited_function_string = [s.strip() for s in astor.to_source(function_ast).split('\n')]
                 
                 """ the format of dataset rows """
-                file.write('|'.join(keywords) + ' ')
+                file.write('.'.join(hierarchy) + '.' + '|'.join(keywords) + ' ')
                 file.write(' '.join(splited_function_string))
                 file.write('\n')
 
@@ -183,15 +178,14 @@ class Code2vecDataExtractor:
         with open(str(save_path), 'w') as f:
 
             for node_name in self.paths:
-                keywords = set()
-                x = node_name.split('.')
-                if x[-1] == "__init__":
-                    keywords.add(x[-2])
-                else:
-                    keywords.add(x[-1])
-                # keywords = set([x for x in re.split('[^1-9a-zA-Z]', node_name) if x is not ''])
-                f.write('|'.join(keywords) + ' ')
+
+                hierarchy = node_name.split('.')[:-1]
+                keyword = node_name.split('.')[-1]
+                if keyword == "__init__":
+                    keyword = hierarchy[-1]
+                keywords = set([x for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
                 
+                f.write('.'.join(hierarchy) + '.' + '|'.join(keywords) + ' ')                
 
                 for left, path, right in self.paths[node_name]:
                     
