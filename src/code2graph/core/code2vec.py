@@ -113,22 +113,21 @@ class Trainer:
         self.config.num_of_words = len(self.reader.word_count)
         self.config.num_of_paths = len(self.reader.path_count)
         self.config.num_of_tags  = len(self.reader.target_count)
-        self.config.epoch = 500
+        self.config.epoch = 1
 
         self.model = code2vec(self.config)
         self.model.def_parameters()
         self.optimizer = tf.keras.optimizers.Adam()
-
-        self.batch_generator = Generator(self.reader.bags_train, 2)
         
     def train_model(self):
 
+        self.train_batch_generator = Generator(self.reader.bags_train, 2)
         for epoch_idx in tqdm(range(self.config.epoch)):
             
             acc_loss = 0
 
-            for batch_idx in range(self.batch_generator.number_of_batch):
-                data, tag = next(self.batch_generator)
+            for batch_idx in range(self.train_batch_generator.number_of_batch):
+                data, tag = next(self.train_batch_generator)
 
                 e1 = data[:,:,0]
                 p  = data[:,:,1]
@@ -154,33 +153,40 @@ class Trainer:
         return loss
     
     # @tf.function
-    def test_step(self, e1, p, e2):
-        code_vectors, attention_weights = self.model.forward(e1, p, e2)
+    def test_step(self, e1, p, e2, topk=10):
+        code_vectors, _ = self.model.forward(e1, p, e2)
         logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
-        import pdb; pdb.set_trace()
+        _, ranks = tf.nn.top_k(logits, k=topk)
+        return ranks
 
     def evaluate_model(self):
+        self.test_batch_generator = Generator(self.reader.bags_test, 2)
         true_positives = 0
         false_positives = 0
         false_negatives = 0
         nr_predictions = 0
 
-        for tag, test_corpus in self.test_corpus:
-            print("evaluating", tag, test_corpus)
-            nr_predictions += 1
+        for batch_idx in range(self.test_batch_generator.number_of_batch):
+            data, tag = next(self.test_batch_generator)
+            e1 = data[:,:,0]
+            p  = data[:,:,1]
+            e2 = data[:,:,2]
+            y  = tag
 
-            # inferred_vector = self.model.infer_vector(test_corpus)
-            # sims = self.model.docvecs.most_similar([inferred_vector], topn=10)
+            ranks = self.test_step(e1, p, e2)
+            
+            for idx,rank in enumerate(ranks.numpy().tolist()):
+                nr_predictions += 1
+                original_name = self.reader.idx2target[tag.tolist()[idx]]
+                inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
+                
+                original_subtokens = original_name.split('|')
 
-            # inferred_names = [sim[0] for sim in sims]
-            
-            # original_subtokens = self.get_subtokens(tag)
-            
-            # for inferred_name in inferred_names:
-            #     inferred_subtokens = self.get_subtokens(inferred_name)
-            #     true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
-            #     false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
-            #     false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+                for inferred_name in inferred_names:
+                    inferred_subtokens = inferred_name.split('|')
+                    true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
+                    false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
+                    false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
 
         true_positives /= nr_predictions
         false_positives /= nr_predictions
@@ -189,8 +195,6 @@ class Trainer:
         recall = true_positives / (true_positives + false_negatives)
         f1 = 2 * precision * recall / (precision + recall)
         print("Precision: {}, Recall: {}, F1: {}".format(precision, recall, f1))
-
-    
 
 class code2vec(tf.keras.Model): 
 
