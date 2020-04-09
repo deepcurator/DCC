@@ -23,13 +23,15 @@ class Generator:
         data = self.data
         pos_start = self.batch_size * self.batch_idx
         pos_end   = self.batch_size * (self.batch_idx+1)
+
         raw_data = np.asarray([data[x][1] for x in self.random_ids[pos_start:pos_end]])
         raw_tags = np.asarray([int(data[x][0]) for x in self.random_ids[pos_start:pos_end]])
 
         self.batch_idx += 1
         if  self.batch_idx == self.number_of_batch:
             self.batch_idx = 0
-
+        # [t1, t2, t3], [t1, t2, t3]
+        # [3],          [4]
         return raw_data, raw_tags
 
 
@@ -91,6 +93,7 @@ class PathContextReader:
 
                 bags.append((label_ids, triple_ids))
 
+        # bags = [('label_id', [triples])]
         return bags
 
 
@@ -149,6 +152,45 @@ class Trainer:
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
         return loss
+    
+    # @tf.function
+    def test_step(self, e1, p, e2):
+        code_vectors, attention_weights = self.model.forward(e1, p, e2)
+        logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
+        import pdb; pdb.set_trace()
+
+    def evaluate_model(self):
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        nr_predictions = 0
+
+        for tag, test_corpus in self.test_corpus:
+            print("evaluating", tag, test_corpus)
+            nr_predictions += 1
+
+            # inferred_vector = self.model.infer_vector(test_corpus)
+            # sims = self.model.docvecs.most_similar([inferred_vector], topn=10)
+
+            # inferred_names = [sim[0] for sim in sims]
+            
+            # original_subtokens = self.get_subtokens(tag)
+            
+            # for inferred_name in inferred_names:
+            #     inferred_subtokens = self.get_subtokens(inferred_name)
+            #     true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
+            #     false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
+            #     false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+
+        true_positives /= nr_predictions
+        false_positives /= nr_predictions
+        false_negatives /= nr_predictions
+        precision = true_positives / (true_positives + false_positives)
+        recall = true_positives / (true_positives + false_negatives)
+        f1 = 2 * precision * recall / (precision + recall)
+        print("Precision: {}, Recall: {}, F1: {}".format(precision, recall, f1))
+
+    
 
 class code2vec(tf.keras.Model): 
 
