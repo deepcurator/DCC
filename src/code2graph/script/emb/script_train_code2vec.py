@@ -26,13 +26,12 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
         with open(code2vec_file, 'r') as file:
             for function_line in file:
                 splited_function_line = function_line.split(" ")
-                labels = splited_function_line[0]
+                label = splited_function_line[0].split('.')[-1]
 
-                for label in labels.split('|'):
-                    if label not in target_count:
-                        target_count[label]=1
-                    else:
-                        target_count[label]+=1
+                if label not in target_count:
+                    target_count[label]=1
+                else:
+                    target_count[label]+=1
 
                 triples = splited_function_line[1:]
 
@@ -141,11 +140,10 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
         with open(code2vec_file, 'r') as file:
             for function_line in file:
                 splited_function_line = function_line.split(" ")
-                labels = splited_function_line[0]
+                label = splited_function_line[0].split('.')[-1]
                 label_ids = []
                 
-                for label in labels.split('|'):
-                    label_ids.append(str(target2idx[label]))
+                label_ids.append(str(target2idx[label]))
 
                 triples = splited_function_line[1:]
                 triple_ids = []
