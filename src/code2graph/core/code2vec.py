@@ -113,7 +113,7 @@ class Trainer:
         self.config.num_of_words = len(self.reader.word_count)
         self.config.num_of_paths = len(self.reader.path_count)
         self.config.num_of_tags  = len(self.reader.target_count)
-        self.config.epoch = 1
+        self.config.epoch = 500
 
         self.model = code2vec(self.config)
         self.model.def_parameters()
