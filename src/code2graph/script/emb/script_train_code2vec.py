@@ -97,6 +97,9 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
 
 
 def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
+    if (dataset_save_path / "train.txt").exists():
+        print("Train.txt exists.")
+        return
     # maximum number of contexts to keep for each function 
     max_contexts = 200 
 
