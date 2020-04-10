@@ -7,7 +7,9 @@ from core.code2vec import *
 
 
 def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename):
-
+    if (dataset_save_path / 'word_count.pkl').exists(): 
+        print("Preprocess already done..")
+        return
     word_count = {}
     word2idx = {}
     idx2word = {}
