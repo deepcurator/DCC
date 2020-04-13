@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 import glob
 import pandas as pd
-
+import yaml
+import pickle
 # RDF specific libraries
 
 from rdflib import URIRef, BNode, Literal
@@ -37,27 +38,39 @@ image_dir = '/home/z003z47y/Projects/Government/ASKE/2019/092219_output/'
 image_dir_addon = 'diag2graph'
 output_dir = './Output/'
 rdf_dir = 'Output/rdf/'
+triple_dir = '/home/z003z47y/git/DCC/src/text2graph/Output/image/'
 
 consolidatedGraph = Graph() 
 consolidatedGraph.parse(ontology,format="n3")
 
 image2graphs = []
 
-for root, dirs, files in os.walk("/home/z003z47y/Projects/Government/ASKE/2019/092219_output/"):
+for root, dirs, files in os.walk("/home/z003z47y/Projects/Government/ASKE/2019/112919_output/"):
     for file in files:
         if file.endswith('.txt'):
             # print(os.path.join(root, file))
             image2graphs.append(os.path.join(root, file))
 
 
+def save_image_triple_file(triple_list,topdirectory,bottomdirectory):
+    # triplefilename = triple_dir + topdirectory + "/" + bottomdirectory + "/" + "i2g.triples"
+    if not os.path.exists(os.path.join(triple_dir,topdirectory)):
+        os.mkdir(os.path.join(triple_dir,topdirectory))
+    # if not os.path.exists(os.path.join(triple_dir,topdirectory,bottomdirectory)):
+    #     os.mkdir(os.path.join(triple_dir,topdirectory,bottomdirectory))
+    triplefilename = os.path.join(triple_dir,topdirectory,bottomdirectory+".triples")
+    with open(triplefilename,'w') as f :
+        for line in triple_list:
+            f.write(line + "\n")
 
-def createimage2graph(inputfile,ontology,filesubject):
+def createimage2graph(inputfile,ontology,filesubject,lowerlevel):
     
     #filesubject is the publication URI, which has to be linked to the image components
 
     # g = Graph()
     # g.parse(ontology,format="n3")
     # len(g)
+    imagetriples = []
 
     block_dict = {
         "Figure":"Figure",
@@ -78,7 +91,8 @@ def createimage2graph(inputfile,ontology,filesubject):
         "activation":"ActivationBlock",
         "loss":"LossBlock",
         "output":"OutputBlock",
-        "input":"InputBlock"
+        "input":"InputBlock",
+        "upsample":"UpsamplingBlock"
     }
 
 # Namespaces
@@ -131,38 +145,100 @@ def createimage2graph(inputfile,ontology,filesubject):
             subject = subject[1:]
         if (obj.startswith(":")):
             obj = obj[1:]
+        
         # print(line + "\n")
         if(predicate == "partOf"):
             ## Subject is a component
             ## Create a unique URI for that
             filename = inputfile.split('/')[-1]
             filename = filename.split('.txt')[0]
-            subject = URIRef(dcc_namespace + filename[4:] + "_" + subject[4:])
+            # print(subject + "\tpart of\t" + obj[4:])
+            imagetriples.append(subject + "\tpart of\t" + obj[4:])
+            subject = URIRef(dcc_namespace + filename[4:] + "_" + subject)
             obj = URIRef(dcc_namespace + obj[4:])
             # g.add((subject,partOf,obj))
+            
             consolidatedGraph.add((subject,partOf,obj))
+        elif(predicate == "hasCaption"):
+            triplesubj = subject 
+            subject = URIRef(dcc_namespace + subject)
+            literaltext = Literal(obj)
+            consolidatedGraph.add((subject,URIRef(dcc_namespace + "hasCaptionText"),literaltext))
+
+
         elif(predicate == "isA"):
-            subject = URIRef(dcc_namespace + subject[4:])
+            triplesubj = subject 
+            subject = URIRef(dcc_namespace + subject)
+            
+            # if(obj in entity_map):
+            #     print("found obj in entity map")
+            #     print("Found " + obj + " in cso")
+            #     csovalue = entity_map[obj]
+            #     str_value = str(csovalue)
+            #     print("CSO value is then " + str_value)
+
+            
             # g.add((subject,RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
             if(obj == "Figure"):
+                # print(filesubject + "\thas Figure\t" + obj)
+                imagetriples.append(filesubject + "\thas Figure\t" + obj)
                 consolidatedGraph.add((URIRef(dcc_namespace + filesubject),URIRef(dcc_namespace + "hasFigure"),subject))
+            
+            # print(triplesubj +"\tisA\t" + block_dict.get(obj))
+
+            imagetriples.append(triplesubj +"\tisA\t" + block_dict.get(obj))
             consolidatedGraph.add((subject,RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
         elif(predicate == "isType"):
+
             filename = inputfile.split('/')[-1]
             filename = filename.split('.txt')[0]
+            # print(subject + "\tisA\t" + block_dict.get(obj))
+            # print(obj)
+            imagetriples.append(subject + "\tisA\t" + block_dict.get(obj))
             subject = URIRef(dcc_namespace + filename[4:] + "_" + subject)
+            # print("Subject is " + subject)
             # g.add((subject, RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
             consolidatedGraph.add((subject, RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
 
+            # Link CSO 
+            if(obj in entity_map):
+                # print("found obj in entity map")
+                # print("Found " + obj + " in cso")
+                csovalue = entity_map[obj]
+                str_value = str(csovalue)
+                # print("CSO value is then " + str_value)
+                if("cso" in str_value):
+                    consolidatedGraph.add((subject,URIRef(dcc_namespace + "hasCSOEquivalent"),csovalue))
+
+
+    save_image_triple_file(imagetriples,filesubject,lowerlevel)
+
+
+config = yaml.safe_load(open('/home/z003z47y/git/DCC/conf/conf.yaml'))
+# model_dir=config['MODEL_PATH']
+model_dir = '/home/z003z47y/git/DCC/src/text2graph/Models'
+print(model_dir)
+
+f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+[entity_map,uri2entity, uri2rel]=pickle.load(f)
+f.close()
+
 for image2graph in image2graphs:
-    print("Working on file " + image2graph)
+    # print("Working on file " + image2graph)
     filesubject = image2graph.split('/')[-3]
-    print(filesubject)
-    createimage2graph(image2graph,ontology,filesubject)
+
+    # print("Top folder is " + image2graph.split('/')[-3])
+    lowerlevel = image2graph.split('/')[-1]
+    lowerlevel = lowerlevel[4:]
+    filenameLength = len(filesubject)+1
+    lowerlevel = lowerlevel[filenameLength:]
+    # print("Next Folder is " + lowerlevel.split('.')[-2])
+    # print(filesubject)
+    createimage2graph(image2graph,ontology,filesubject,lowerlevel.split('.')[-2])
 
 
 print("Saving final consolidated rdf file ")
-destinationfile = destinationfolder + "image2graph.ttl"
+destinationfile = destinationfolder + "image2graph_4_12.ttl"
 print("Saving final consolidated rdf file : " + destinationfile)
 consolidatedGraph.serialize(destination=destinationfile,format='turtle')
 
