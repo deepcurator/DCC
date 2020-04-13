@@ -26,7 +26,7 @@ class Generator:
 
         raw_data = np.asarray([data[x][1] for x in self.random_ids[pos_start:pos_end]])
         raw_tags = np.asarray([int(data[x][0]) for x in self.random_ids[pos_start:pos_end]])
-
+        
         self.batch_idx += 1
         if  self.batch_idx == self.number_of_batch:
             self.batch_idx = 0
@@ -89,7 +89,7 @@ class PathContextReader:
                         assert False, "Weird non-triple data row."
 
                     e1, p, e2 = int(splited_triple[0]), int(splited_triple[1]), int(splited_triple[2])
-                    triple_ids.append((e1,p,e2))
+                    triple_ids.append([e1,p,e2])
 
                 bags.append((label_ids, triple_ids))
 
