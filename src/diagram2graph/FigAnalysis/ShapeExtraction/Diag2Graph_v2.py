@@ -348,6 +348,9 @@ class Diag2Graph:
         op_image_name = os.path.join(op_dir, paper_file_name + "/diag2graph/"+ os.path.basename(filename))
         op_file_name = os.path.join(op_dir, paper_file_name + "/diag2graph/" + os.path.splitext(os.path.basename(filename))[0] + '.txt')
         
+        # create intermediate directories:
+        if not os.path.exists(os.path.join(op_dir, paper_file_name + "/diag2graph/" )):
+            os.makedirs(os.path.join(op_dir, paper_file_name + "/diag2graph/" ))
 
         op_file = open(op_file_name, "w", encoding="utf-8")
         FigureID = os.path.splitext(os.path.basename(filename))[0] #+"_"+paper_conf+"_"+paper_year
