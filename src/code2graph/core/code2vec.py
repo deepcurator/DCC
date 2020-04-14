@@ -51,26 +51,30 @@ class PathContextReader:
         self.bags_test  = self.read_data(data_path="test.txt")
 
     def read_dictionaries(self):
-        with open(str(self.path / 'word_count.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_word_count.pkl'), 'rb') as f:
             self.word_count = pickle.load(f)
-        with open(str(self.path / 'word2idx.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_word2idx.pkl'), 'rb') as f:
             self.word2idx = pickle.load(f)
-        with open(str(self.path / 'idx2word.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_idx2word.pkl'), 'rb') as f:
             self.idx2word = pickle.load(f)
 
-        with open(str(self.path / 'path_count.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_path_count.pkl'), 'rb') as f:
             self.path_count = pickle.load(f)
-        with open(str(self.path / 'path2idx.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_path2idx.pkl'), 'rb') as f:
             self.path2idx = pickle.load(f)
-        with open(str(self.path / 'idx2path.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_idx2path.pkl'), 'rb') as f:
             self.idx2path = pickle.load(f)
 
-        with open(str(self.path / 'target_count.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_target_count.pkl'), 'rb') as f:
             self.target_count = pickle.load(f)
-        with open(str(self.path / 'target2idx.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_target2idx.pkl'), 'rb') as f:
             self.target2idx = pickle.load(f)
-        with open(str(self.path / 'idx2target.pkl'), 'rb') as f:
+        with open(str(self.path / 'reduced_idx2target.pkl'), 'rb') as f:
             self.idx2target = pickle.load(f)
+        
+        print("Number of unique of words: " + len(self.word_count))
+        print("Number of unique of paths: " + len(self.path_count))
+        print("Number of unique of targets: " + len(self.target_count))
 
     def read_data(self, data_path="train.txt"):
         bags=[]
@@ -84,7 +88,6 @@ class PathContextReader:
 
                 for triple in triples:
                     splited_triple = triple.split('\t')
-                    
                     if len(splited_triple) != 3: 
                         assert False, "Weird non-triple data row."
 
