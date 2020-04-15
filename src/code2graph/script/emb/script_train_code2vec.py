@@ -59,7 +59,7 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
                         path_count[p]=1
                     else:
                         path_count[p]+=1
-    
+        
     word_count = {k: v for k, v in sorted(word_count.items(), key=lambda item: item[1], reverse=True)}
     word2idx = {v: k for k, v in enumerate(word_count.keys())}
     idx2word = {v: k for k, v in word2idx.items()}
@@ -169,13 +169,106 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
                 if num_contexts > max_contexts:
                     triple_ids = random.sample(triple_ids, max_contexts)
 
-                content = " ".join(triple_ids)
-                label_info = "|".join(label_ids)
-                # print(content)
-                # print(label_info)
-                data_functions.append((label_info, content))
+                    content = " ".join(triple_ids)
+                    label_info = "|".join(label_ids)
+                    # print(content)
+                    # print(label_info)
+                    data_functions.append((label_info, content))
 
-    train, test = train_test_split(data_functions, test_size=0.1, shuffle=True)
+    reduced_word_count = {}
+    reduced_word2idx = {}
+    reduced_idx2word = {}
+
+    reduced_path_count = {}
+    reduced_path2idx = {} 
+    reduced_idx2path = {}
+
+    reduced_target_count = {}
+    reduced_target2idx = {}
+    reduced_idx2target = {}
+
+    for label, triples in data_functions:
+        if label not in reduced_target_count:
+            reduced_target_count[label] = 1
+        else:
+            reduced_target_count[label] += 1
+        
+        for triple in triples.split(" "):
+            splited_triple = triple.split('\t')
+            # import pdb; pdb.set_trace()
+            e1 = int(splited_triple[0])
+            p = int(splited_triple[1])
+            e2 = int(splited_triple[2])
+
+            if idx2word[e1] in reduced_word_count:
+                reduced_word_count[idx2word[e1]] += 1
+            else:
+                reduced_word_count[idx2word[e1]] = 1
+
+            if idx2path[p] in reduced_path_count:
+                reduced_path_count[idx2path[p]] += 1
+            else:
+                reduced_path_count[idx2path[p]] = 1
+            
+            if idx2word[e2] in reduced_word_count:
+                reduced_word_count[idx2word[e2]] += 1
+            else:
+                reduced_word_count[idx2word[e2]] = 1
+
+    reduced_word_count = {k: v for k, v in sorted(reduced_word_count.items(), key=lambda item: item[1], reverse=True)}
+    reduced_word2idx = {v: k for k, v in enumerate(reduced_word_count.keys())}
+    reduced_idx2word = {v: k for k, v in reduced_word2idx.items()}
+
+    reduced_path_count = {k: v for k, v in sorted(reduced_path_count.items(), key=lambda item: item[1], reverse=True)}
+    reduced_path2idx = {v: k for k, v in enumerate(reduced_path_count.keys())}
+    reduced_idx2path = {v: k for k, v in reduced_path2idx.items()}
+
+    reduced_target_count = {k: v for k, v in sorted(reduced_target_count.items(), key=lambda item: item[1], reverse=True)}
+    reduced_target2idx = {v: k for k, v in enumerate(reduced_target_count.keys())}
+    reduced_idx2target = {v: k for k, v in reduced_target2idx.items()}
+    
+    with open(str(dataset_save_path / 'reduced_word_count.pkl'), 'wb') as f:
+        pickle.dump(reduced_word_count, f)
+    with open(str(dataset_save_path / 'reduced_word2idx.pkl'), 'wb') as f:
+        pickle.dump(reduced_word2idx, f)
+    with open(str(dataset_save_path / 'reduced_idx2word.pkl'), 'wb') as f:
+        pickle.dump(reduced_idx2word, f)
+
+    with open(str(dataset_save_path / 'reduced_path_count.pkl'), 'wb') as f:
+        pickle.dump(reduced_path_count, f)
+    with open(str(dataset_save_path / 'reduced_path2idx.pkl'), 'wb') as f:
+        pickle.dump(reduced_path2idx, f)
+    with open(str(dataset_save_path / 'reduced_idx2path.pkl'), 'wb') as f:
+        pickle.dump(reduced_idx2path, f)
+
+    with open(str(dataset_save_path / 'reduced_target_count.pkl'), 'wb') as f:
+        pickle.dump(reduced_target_count, f)
+    with open(str(dataset_save_path / 'reduced_target2idx.pkl'), 'wb') as f:
+        pickle.dump(reduced_target2idx, f)
+    with open(str(dataset_save_path / 'reduced_idx2target.pkl'), 'wb') as f:
+        pickle.dump(reduced_idx2target, f)
+
+    reduced_data_functions = []
+
+    for label, triples in data_functions:
+        
+        new_triples = []
+
+        for triple in triples.split(' '):
+            splited_triple = triple.split('\t')
+            e1 = int(splited_triple[0])
+            p = int(splited_triple[1])
+            e2 = int(splited_triple[2])
+
+            e1 = reduced_word2idx[idx2word[e1]]
+            p = reduced_path2idx[idx2path[p]]
+            e2 = reduced_word2idx[idx2word[e2]]
+
+            new_triples.append("%s\t%s\t%s" % (e1, p, e2))
+        
+        reduced_data_functions.append((str(reduced_target2idx[label]), ' '.join(new_triples)))
+
+    train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=True)
 
     with open(str(dataset_save_path / "train.txt"), 'w') as file:
         for labels, content in train:
