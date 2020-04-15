@@ -141,6 +141,9 @@ class Trainer:
 
                 acc_loss += loss
 
+            if epoch_idx % 5 == 0:
+                self.evaluate_model()
+
             print('epoch[%d] ---Acc Train Loss: %.5f' % (epoch_idx, acc_loss))
 
     @tf.function
