@@ -72,9 +72,9 @@ class PathContextReader:
         with open(str(self.path / 'reduced_idx2target.pkl'), 'rb') as f:
             self.idx2target = pickle.load(f)
         
-        print("Number of unique of words: " + len(self.word_count))
-        print("Number of unique of paths: " + len(self.path_count))
-        print("Number of unique of targets: " + len(self.target_count))
+        print("Number of unique of words: " + str(len(self.word_count)))
+        print("Number of unique of paths: " + str(len(self.path_count)))
+        print("Number of unique of targets: " + str(len(self.target_count)))
 
     def read_data(self, data_path="train.txt"):
         bags=[]
