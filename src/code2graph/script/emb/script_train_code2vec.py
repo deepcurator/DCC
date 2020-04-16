@@ -71,7 +71,7 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
     target_count = {k: v for k, v in sorted(target_count.items(), key=lambda item: item[1], reverse=True)}
     target2idx = {v: k for k, v in enumerate(target_count.keys())}
     idx2target = {v: k for k, v in target2idx.items()}
-
+   
     with open(str(dataset_save_path / 'word_count.pkl'), 'wb') as f:
         pickle.dump(word_count, f)
     with open(str(dataset_save_path / 'word2idx.pkl'), 'wb') as f:
@@ -186,13 +186,14 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
     reduced_target_count = {}
     reduced_target2idx = {}
     reduced_idx2target = {}
-
+    
     for label, triples in data_functions:
-        if label not in reduced_target_count:
-            reduced_target_count[label] = 1
-        else:
-            reduced_target_count[label] += 1
         
+        if idx2target[int(label)] not in reduced_target_count:
+            reduced_target_count[idx2target[int(label)]] = 1
+        else:
+            reduced_target_count[idx2target[int(label)]] += 1
+
         for triple in triples.split(" "):
             splited_triple = triple.split('\t')
             # import pdb; pdb.set_trace()
@@ -266,7 +267,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
 
             new_triples.append("%s\t%s\t%s" % (e1, p, e2))
         
-        reduced_data_functions.append((str(reduced_target2idx[label]), ' '.join(new_triples)))
+        reduced_data_functions.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
 
     train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=True)
 
