@@ -167,7 +167,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
                 
                 num_contexts = len(triples)-counter
                 if num_contexts > max_contexts:
-                    for _ in range(3):
+                    for _ in range(num_contexts // max_contexts):
                         triple_ids = random.sample(triple_ids, max_contexts)
 
                         content = " ".join(triple_ids)
