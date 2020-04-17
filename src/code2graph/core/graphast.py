@@ -46,7 +46,7 @@ class Doc2vecDataExtractor:
                 keyword = name.split('.')[-1]
                 if keyword == "__init__":
                     keyword = hierarchy[-1]
-                keywords = set([x for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
+                keywords = set([x.lower() for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
                 
                 splited_function_string = [s.strip() for s in astor.to_source(function_ast).split('\n')]
                 
@@ -183,7 +183,7 @@ class Code2vecDataExtractor:
                 keyword = node_name.split('.')[-1]
                 if keyword == "__init__":
                     keyword = hierarchy[-1]
-                keywords = set([x for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
+                keywords = set([x.lower() for x in re.split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+", keyword) if x is not ''])
                 
                 f.write('.'.join(hierarchy) + '.' + '|'.join(keywords) + ' ')                
 
