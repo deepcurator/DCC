@@ -170,6 +170,7 @@ class Trainer:
         true_positives = 0
         false_positives = 0
         false_negatives = 0
+        prediction_rank = 0 
         nr_predictions = 0
 
         for batch_idx in range(self.test_batch_generator.number_of_batch):
@@ -178,11 +179,19 @@ class Trainer:
             p  = data[:,:,1]
             e2 = data[:,:,2]
             y  = tag
-
+            
             ranks = self.test_step(e1, p, e2)
             
-            for idx,rank in enumerate(ranks.numpy().tolist()):
+            ranks_number = tf.where(tf.equal(self.test_step(e1, p, e2, topk=self.config.num_of_tags), tf.expand_dims(y,-1)))
+
+            # import pdb; pdb.set_trace()
+            for idx, rank_number in enumerate(ranks_number.numpy().tolist()): 
+                prediction_rank += rank_number[1]
+
+            for idx, rank in enumerate(ranks.numpy().tolist()):
                 nr_predictions += 1
+                
+
                 original_name = self.reader.idx2target[tag.tolist()[idx]]
                 inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
                 
@@ -200,7 +209,8 @@ class Trainer:
         precision = true_positives / (true_positives + false_positives)
         recall = true_positives / (true_positives + false_negatives)
         f1 = 2 * precision * recall / (precision + recall)
-        print("Precision: {}, Recall: {}, F1: {}".format(precision, recall, f1))
+        prediction_rank /= nr_predictions
+        print("Precision: {}, Recall: {}, F1: {} Rank: {}".format(precision, recall, f1, prediction_rank))
 
 class code2vec(tf.keras.Model): 
 
