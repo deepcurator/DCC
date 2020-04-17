@@ -182,7 +182,7 @@ class Trainer:
             
             ranks = self.test_step(e1, p, e2)
             
-            ranks_number = tf.where(tf.equal(self.test_step(e1, p, e2, topk=self.config.num_of_tags), tf.expand_dims(y,-1)))
+            ranks_number = tf.where(tf.equal(self.test_step(e1, p, e2, topk=self.config.num_of_tags), tf.cast(tf.expand_dims(y,-1), dtype=tf.int32)))
 
             # import pdb; pdb.set_trace()
             for idx, rank_number in enumerate(ranks_number.numpy().tolist()): 
