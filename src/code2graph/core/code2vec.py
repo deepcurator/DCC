@@ -141,8 +141,8 @@ class Trainer:
 
                 acc_loss += loss
 
-            if epoch_idx % 5 == 0:
-                self.evaluate_model()
+            # if epoch_idx % 5 == 0:
+            self.evaluate_model()
 
             print('epoch[%d] ---Acc Train Loss: %.5f' % (epoch_idx, acc_loss))
 
@@ -217,7 +217,7 @@ class code2vec(tf.keras.Model):
     def __init__(self, config):
         super(code2vec, self).__init__()
 
-        self.embedding_size = 128
+        self.embedding_size = 50
         self.code_embedding_size = 50
 
         self.tot_tags = config.num_of_tags
