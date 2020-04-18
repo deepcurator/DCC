@@ -165,7 +165,7 @@ class Trainer:
         return loss
     
     # @tf.function
-    def test_step(self, e1, p, e2, topk=10):
+    def test_step(self, e1, p, e2, topk=1):
         code_vectors, _ = self.model.forward(e1, p, e2, train=False)
         logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
         _, ranks = tf.nn.top_k(logits, k=topk)
@@ -191,7 +191,6 @@ class Trainer:
             
             ranks_number = tf.where(tf.equal(self.test_step(e1, p, e2, topk=self.config.num_of_tags), tf.cast(tf.expand_dims(y,-1), dtype=tf.int32)))
 
-            # import pdb; pdb.set_trace()
             for idx, rank_number in enumerate(ranks_number.numpy().tolist()): 
                 prediction_rank += (rank_number[1] + 1)
                 prediction_reciprocal_rank += 1.0 / (rank_number[1] + 1)
@@ -201,8 +200,7 @@ class Trainer:
                 
                 original_name = self.reader.idx2target[tag.tolist()[idx]]
                 inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
-                # print(original_name)
-                # print(inferred_names)
+
                 original_subtokens = original_name.split('|')
 
                 for inferred_name in inferred_names:
@@ -212,9 +210,6 @@ class Trainer:
                     false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
                     false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
 
-        true_positives /= nr_predictions
-        false_positives /= nr_predictions
-        false_negatives /= nr_predictions
         precision = true_positives / (true_positives + false_positives)
         recall = true_positives / (true_positives + false_negatives)
         f1 = 2 * precision * recall / (precision + recall)
