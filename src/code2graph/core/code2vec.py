@@ -122,6 +122,7 @@ class Trainer:
 
         self.reader = PathContextReader(path)
         self.reader.read_path_contexts()
+        self.config.path = path
 
         self.config.num_of_words = len(self.reader.word_count)
         self.config.num_of_paths = len(self.reader.path_count)
@@ -172,6 +173,8 @@ class Trainer:
 
             if epoch_idx % 5 == 0:
                 self.evaluate_model()
+                self.save_model(epoch_idx)
+                self.export_code_embeddings(epoch_idx)
 
             print('epoch[%d] ---Acc Train Loss: %.5f' % (epoch_idx, acc_loss))
 
@@ -225,6 +228,34 @@ class Trainer:
         prediction_reciprocal_rank /= nr_predictions
 
         print("Precision: {}, Recall: {}, F1: {} Rank: {} Reciprocal_Rank: {}\n".format(precision, recall, f1, prediction_rank, prediction_reciprocal_rank))
+    
+    def export_code_embeddings(self, epoch_idx):
+        save_path = self.config.path / ('epoch_%d' % epoch_idx)
+        save_path.mkdir(parents=True, exist_ok=True)
+
+        with open(str(save_path / "code_labels.tsv"), 'w') as l_export_file:
+            for label in self.reader.idx2target.values():
+                l_export_file.write(label + "\n")
+
+            parameter = self.model.tags_embeddings
+            
+            all_ids = list(range(0, int(parameter.shape[0])))
+            stored_name = parameter.name.split(':')[0]
+
+            if len(parameter.shape) == 2:
+                all_embs = parameter.numpy()
+                with open(str(save_path / ("%s.tsv" % stored_name)), 'w') as v_export_file:
+                    for idx in all_ids:
+                        v_export_file.write("\t".join([str(x) for x in all_embs[idx]]) + "\n")
+
+    def save_model(self, epoch_idx):
+        saved_path = self.config.path / ('epoch_%d' % epoch_idx)
+        saved_path.mkdir(parents=True, exist_ok=True)
+        self.model.save_weights(str(saved_path / 'model.vec'))
+
+    def load_model(self, path):
+        if path.exists():
+            self.model.load_weights(str(path / 'model.vec'))
 
 class code2vec(tf.keras.Model): 
 
