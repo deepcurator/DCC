@@ -1,7 +1,9 @@
-import sys, tqdm, pickle, random
+import sys, pickle, random
 from sklearn.model_selection import train_test_split
 
+
 sys.path.append('../../')
+
 
 from core.code2vec import *
 
@@ -10,6 +12,7 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
     if (dataset_save_path / 'word_count.pkl').exists(): 
         print("Preprocess already done..")
         return
+    
     word_count = {}
     word2idx = {}
     idx2word = {}
@@ -21,8 +24,6 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
     target_count = {}
     target2idx = {}
     idx2target = {}
-
-    data_functions = [] 
 
     for code2vec_file in raw_data_path.rglob(filename):
         with open(code2vec_file, 'r') as file:
@@ -78,14 +79,12 @@ def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename)
         pickle.dump(word2idx, f)
     with open(str(dataset_save_path / 'idx2word.pkl'), 'wb') as f:
         pickle.dump(idx2word, f)
-
     with open(str(dataset_save_path / 'path_count.pkl'), 'wb') as f:
         pickle.dump(path_count, f)
     with open(str(dataset_save_path / 'path2idx.pkl'), 'wb') as f:
         pickle.dump(path2idx, f)
     with open(str(dataset_save_path / 'idx2path.pkl'), 'wb') as f:
         pickle.dump(idx2path, f)
-
     with open(str(dataset_save_path / 'target_count.pkl'), 'wb') as f:
         pickle.dump(target_count, f)
     with open(str(dataset_save_path / 'target2idx.pkl'), 'wb') as f:
@@ -103,37 +102,23 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
     # maximum number of contexts to keep for each function 
     max_contexts = 200 
 
-    max_words = 10000000
-    max_paths = 10000000
-
-    word_count = {}
     word2idx = {}
     idx2word = {}
-
-    path_count = {}
     path2idx = {} 
     idx2path = {}
-
-    target_count = {}
     target2idx = {}
     idx2target = {}
 
-    with open(str(dataset_save_path / 'word_count.pkl'), 'rb') as f:
-        word_count = pickle.load(f)
     with open(str(dataset_save_path / 'word2idx.pkl'), 'rb') as f:
         word2idx = pickle.load(f)
     with open(str(dataset_save_path / 'idx2word.pkl'), 'rb') as f:
         idx2word = pickle.load(f)
 
-    with open(str(dataset_save_path / 'path_count.pkl'), 'rb') as f:
-        path_count = pickle.load(f)
     with open(str(dataset_save_path / 'path2idx.pkl'), 'rb') as f:
         path2idx = pickle.load(f)
     with open(str(dataset_save_path / 'idx2path.pkl'), 'rb') as f:
         idx2path = pickle.load(f)
 
-    with open(str(dataset_save_path / 'target_count.pkl'), 'rb') as f:
-        target_count = pickle.load(f)
     with open(str(dataset_save_path / 'target2idx.pkl'), 'rb') as f:
         target2idx = pickle.load(f)
     with open(str(dataset_save_path / 'idx2target.pkl'), 'rb') as f:
@@ -160,9 +145,9 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
                     if len(splited_triple) != 3: 
                         counter += 1
                         continue
-                    e1, p, e2 = splited_triple[0], splited_triple[1], splited_triple[2]
-                    # print(word2idx[e1], path2idx[p], word2idx[e2])
                     
+                    e1, p, e2 = splited_triple[0], splited_triple[1], splited_triple[2]
+
                     triple_ids.append("%s\t%s\t%s"%(word2idx[e1], path2idx[p], word2idx[e2]))
                 
                 num_contexts = len(triples)-counter
@@ -172,8 +157,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
 
                         content = " ".join(triple_ids)
                         label_info = "|".join(label_ids)
-                        # print(content)
-                        # print(label_info)
+                        
                         data_functions.append((label_info, content))
 
     reduced_word_count = {}
@@ -197,7 +181,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
 
         for triple in triples.split(" "):
             splited_triple = triple.split('\t')
-            # import pdb; pdb.set_trace()
+
             e1 = int(splited_triple[0])
             p = int(splited_triple[1])
             e2 = int(splited_triple[2])
@@ -298,6 +282,7 @@ def prepare_dataset(dataset_path: str, filename):
 
     return dataset_save_path
 
+
 def run_code2vec(dataset_path:str):
 
     dataset_save_path = prepare_dataset(dataset_path, "code2vec.txt")
@@ -306,7 +291,9 @@ def run_code2vec(dataset_path:str):
     trainer.train_model()
     trainer.evaluate_model()
 
-    # code.interact(local=locals())
+    code.interact(local=locals())
+
 
 if __name__ == "__main__":
+    # parameterize path setting
     run_code2vec('../../graphast_output')
