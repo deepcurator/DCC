@@ -50,6 +50,13 @@ class PathContextReader:
         self.bags_train = self.read_data(data_path="train.txt")
         self.bags_test  = self.read_data(data_path="test.txt")
 
+        print("Number of unique of words: " + str(len(self.word_count)))
+        print("Number of unique of paths: " + str(len(self.path_count)))
+        print("Number of unique of targets: " + str(len(self.target_count)))
+
+        print("Number of training samples: " + str(len(self.bags_train)))
+        print("Number of testing samples: " + str(len(self.bags_test)))
+
     def read_dictionaries(self):
         with open(str(self.path / 'reduced_word_count.pkl'), 'rb') as f:
             self.word_count = pickle.load(f)
@@ -72,9 +79,7 @@ class PathContextReader:
         with open(str(self.path / 'reduced_idx2target.pkl'), 'rb') as f:
             self.idx2target = pickle.load(f)
         
-        print("Number of unique of words: " + str(len(self.word_count)))
-        print("Number of unique of paths: " + str(len(self.path_count)))
-        print("Number of unique of targets: " + str(len(self.target_count)))
+        
 
     def read_data(self, data_path="train.txt"):
         bags=[]
@@ -124,7 +129,7 @@ class Trainer:
         
     def train_model(self):
 
-        self.train_batch_generator = Generator(self.reader.bags_train, 2)
+        self.train_batch_generator = Generator(self.reader.bags_train, 128)
         for epoch_idx in tqdm(range(self.config.epoch)):
             
             acc_loss = 0
@@ -166,7 +171,7 @@ class Trainer:
         return ranks
 
     def evaluate_model(self):
-        self.test_batch_generator = Generator(self.reader.bags_test, 2)
+        self.test_batch_generator = Generator(self.reader.bags_test, 32)
         true_positives = 0
         false_positives = 0
         false_negatives = 0
