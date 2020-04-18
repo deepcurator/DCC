@@ -160,7 +160,7 @@ class Trainer:
     
     # @tf.function
     def test_step(self, e1, p, e2, topk=10):
-        code_vectors, _ = self.model.forward(e1, p, e2)
+        code_vectors, _ = self.model.forward(e1, p, e2, train=False)
         logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
         _, ranks = tf.nn.top_k(logits, k=topk)
         return ranks
@@ -238,7 +238,7 @@ class code2vec(tf.keras.Model):
         self.attention_param = tf.Variable(emb_initializer(shape=(self.code_embedding_size, 1)), name='attention_param')
         self.transform_matrix= tf.Variable(emb_initializer(shape=(3*self.embedding_size, self.code_embedding_size)), name='transform')
 
-    def forward(self, e1, p, e2):
+    def forward(self, e1, p, e2, train=True):
         # e1_e is [batch_size, max_contexts, embeddings size]
         # p_e  is [batch_size, max_contexts, embeddings size]
         # e2_e is [batch_size, max_contexts, embeddings size]
@@ -251,7 +251,8 @@ class code2vec(tf.keras.Model):
         context_e = tf.concat([e1_e, p_e, e2_e], axis=-1) 
 
         # apply a dropout to context emb. 
-        context_e = tf.nn.dropout(context_e, rate=1-self.dropout_factor)
+        if train:
+            context_e = tf.nn.dropout(context_e, rate=1-self.dropout_factor)
 
         # flatten context embeddings => [batch_size*max_contexts, 3*embedding_size]
         context_e = tf.reshape(context_e, [-1, 3*self.embedding_size])
