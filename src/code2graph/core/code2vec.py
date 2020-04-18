@@ -125,7 +125,8 @@ class Trainer:
 
         self.model = code2vec(self.config)
         self.model.def_parameters()
-        self.optimizer = tf.keras.optimizers.Adam()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate = 0.05)
+        # self.optimizer = tf.keras.optimizers.SGD(learning_rate = 0.01)
         
     def train_model(self):
 
@@ -171,11 +172,12 @@ class Trainer:
         return ranks
 
     def evaluate_model(self):
-        self.test_batch_generator = Generator(self.reader.bags_test, 32)
+        self.test_batch_generator = Generator(self.reader.bags_test, 128)
         true_positives = 0
         false_positives = 0
         false_negatives = 0
         prediction_rank = 0 
+        prediction_reciprocal_rank = 0
         nr_predictions = 0
 
         for batch_idx in range(self.test_batch_generator.number_of_batch):
@@ -191,19 +193,21 @@ class Trainer:
 
             # import pdb; pdb.set_trace()
             for idx, rank_number in enumerate(ranks_number.numpy().tolist()): 
-                prediction_rank += rank_number[1]
+                prediction_rank += (rank_number[1] + 1)
+                prediction_reciprocal_rank += 1.0 / (rank_number[1] + 1)
 
             for idx, rank in enumerate(ranks.numpy().tolist()):
                 nr_predictions += 1
                 
-
                 original_name = self.reader.idx2target[tag.tolist()[idx]]
                 inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
-                
+                # print(original_name)
+                # print(inferred_names)
                 original_subtokens = original_name.split('|')
 
                 for inferred_name in inferred_names:
                     inferred_subtokens = inferred_name.split('|')
+
                     true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
                     false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
                     false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
@@ -215,7 +219,8 @@ class Trainer:
         recall = true_positives / (true_positives + false_negatives)
         f1 = 2 * precision * recall / (precision + recall)
         prediction_rank /= nr_predictions
-        print("Precision: {}, Recall: {}, F1: {} Rank: {}".format(precision, recall, f1, prediction_rank))
+        prediction_reciprocal_rank /= nr_predictions
+        print("Precision: {}, Recall: {}, F1: {} Rank: {} Reciprocal_Rank: {}\n".format(precision, recall, f1, prediction_rank, prediction_reciprocal_rank))
 
 class code2vec(tf.keras.Model): 
 
@@ -229,7 +234,7 @@ class code2vec(tf.keras.Model):
         self.tot_ents =  config.num_of_words
         self.tot_paths = config.num_of_paths 
 
-        self.dropout_factor = 0.75
+        self.dropout_factor = 0.5
         
         self.max_contexts = 200
 
