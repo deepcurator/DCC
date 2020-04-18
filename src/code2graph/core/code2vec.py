@@ -212,9 +212,6 @@ class Trainer:
                     false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
                     false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
 
-        true_positives /= nr_predictions
-        false_positives /= nr_predictions
-        false_negatives /= nr_predictions
         precision = true_positives / (true_positives + false_positives)
         recall = true_positives / (true_positives + false_negatives)
         f1 = 2 * precision * recall / (precision + recall)
