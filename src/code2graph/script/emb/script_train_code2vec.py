@@ -254,20 +254,20 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
         
         reduced_data_functions.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
 
-    train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=True)
+    train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=False)
 
+    train_labels = set()
     with open(str(dataset_save_path / "train.txt"), 'w') as file:
         for labels, content in train:
+            train_labels.add(labels)
             file.write(labels)
             file.write(" ")
             file.write(content)
             file.write("\n")
  
-    test_labels = []
     with open(str(dataset_save_path / "test.txt"), 'w') as file:
         for labels, content in test:
-            if labels not in test_labels:
-                test_labels.append(labels)
+            if labels not in train_labels:
                 file.write(labels)
                 file.write(" ")
                 file.write(content)
