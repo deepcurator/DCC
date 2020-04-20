@@ -30,6 +30,8 @@ class Doc2vecDataExtractor:
         
         for pyan_node in uses_edges.keys():
             if pyan_node.flavor == Flavor.FUNCTION or pyan_node.flavor == Flavor.METHOD:
+                pyan_node.ast_node.name = "_"
+                pyan_node.ast_node.decorator = []
                 nodes.append((pyan_node.namespace +'.'+ pyan_node.name, pyan_node.ast_node))
 
         return nodes
