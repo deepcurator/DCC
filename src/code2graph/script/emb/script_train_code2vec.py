@@ -1,5 +1,6 @@
 import sys, pickle, random
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 
 
 sys.path.append('../../')
@@ -255,7 +256,9 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
         reduced_data_functions.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
 
     train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=False)
-
+    train = shuffle(train)
+    test = shuffle(test)
+    
     train_labels = set()
     with open(str(dataset_save_path / "train.txt"), 'w') as file:
         for labels, content in train:
