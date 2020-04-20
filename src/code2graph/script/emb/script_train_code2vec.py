@@ -262,13 +262,16 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
             file.write(" ")
             file.write(content)
             file.write("\n")
-
+ 
+    test_labels = []
     with open(str(dataset_save_path / "test.txt"), 'w') as file:
         for labels, content in test:
-            file.write(labels)
-            file.write(" ")
-            file.write(content)
-            file.write("\n")
+            if labels not in test_labels:
+                test_labels.append(labels)
+                file.write(labels)
+                file.write(" ")
+                file.write(content)
+                file.write("\n")
 
 
 def prepare_dataset(dataset_path: str, filename):
