@@ -46,7 +46,7 @@ class Doc2Vec:
                                                    min_count=min_count, epochs=epochs,
                                                    workers=workers)
         self.model.build_vocab(self.train_corpus)
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         self.model.train(self.train_corpus, total_examples=self.model.corpus_count, epochs=self.model.epochs)
 
     def dump_vectors(self):
