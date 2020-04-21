@@ -1,5 +1,6 @@
 import sys, pickle, random
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 
 
 sys.path.append('../../')
@@ -312,7 +313,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
             file.write(" ")
             file.write(content)
             file.write("\n")
-
+ 
     with open(str(dataset_save_path / "test.txt"), 'w') as file:
         for labels, content in test:
             file.write(labels)
