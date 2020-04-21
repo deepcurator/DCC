@@ -9,6 +9,7 @@ from core.code2vec import *
 
 
 def create_dataset_indexes(raw_data_path:Path, dataset_save_path:Path, filename):
+    
     if (dataset_save_path / 'word_count.pkl').exists(): 
         print("Preprocess already done..")
         return
@@ -152,13 +153,48 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
                 
                 num_contexts = len(triples)-counter
                 if num_contexts > max_contexts:
-                    for _ in range(min(num_contexts // max_contexts, 5)):
-                        triple_ids = random.sample(triple_ids, max_contexts)
 
-                        content = " ".join(triple_ids)
-                        label_info = "|".join(label_ids)
-                        
-                        data_functions.append((label_info, content))
+                    content = " ".join(triple_ids)
+                    label_info = "|".join(label_ids)
+                    
+                    data_functions.append((label_info, content))
+
+    train, test = train_test_split(data_functions, test_size=0.1, shuffle=True)
+    data_functions = []
+    # import pdb; pdb.set_trace()
+    processed_train = [] 
+    processed_test = []
+
+    for label_info, triples in train:
+        splited_triples = triples.split(' ')
+
+        num_contexts = len(splited_triples)
+
+        if num_contexts > max_contexts:
+
+            for _ in range(min(num_contexts // max_contexts, 10)):
+                new_triple_ids = random.sample(splited_triples, max_contexts)
+
+                content = " ".join(new_triple_ids)
+
+                processed_train.append((label_info, content))
+
+    for label_info, triples in test:
+        splited_triples = triples.split(' ')
+
+        num_contexts = len(splited_triples)
+
+        if num_contexts > max_contexts:
+            
+            new_triple_ids = random.sample(splited_triples, max_contexts)
+
+            content = " ".join(new_triple_ids)
+
+            processed_test.append((label_info, content))
+
+    train = []
+    test = []
+    data_functions = processed_train + processed_test
 
     reduced_word_count = {}
     reduced_word2idx = {}
@@ -234,9 +270,7 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
     with open(str(dataset_save_path / 'reduced_idx2target.pkl'), 'wb') as f:
         pickle.dump(reduced_idx2target, f)
 
-    reduced_data_functions = []
-
-    for label, triples in data_functions:
+    for label, triples in processed_train:
         
         new_triples = []
 
@@ -252,9 +286,25 @@ def preprocess_dataset(raw_data_path, dataset_save_path:Path, filename):
 
             new_triples.append("%s\t%s\t%s" % (e1, p, e2))
         
-        reduced_data_functions.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
+        train.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
 
-    train, test = train_test_split(reduced_data_functions, test_size=0.1, shuffle=True)
+    for label, triples in processed_test:
+        
+        new_triples = []
+
+        for triple in triples.split(' '):
+            splited_triple = triple.split('\t')
+            e1 = int(splited_triple[0])
+            p = int(splited_triple[1])
+            e2 = int(splited_triple[2])
+
+            e1 = reduced_word2idx[idx2word[e1]]
+            p = reduced_path2idx[idx2path[p]]
+            e2 = reduced_word2idx[idx2word[e2]]
+
+            new_triples.append("%s\t%s\t%s" % (e1, p, e2))
+        
+        test.append((str(reduced_target2idx[idx2target[int(label)]]), ' '.join(new_triples)))
 
     with open(str(dataset_save_path / "train.txt"), 'w') as file:
         for labels, content in train:
