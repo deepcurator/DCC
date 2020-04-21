@@ -15,7 +15,9 @@ class Doc2Vec:
         self.test_path = data_dir / "test.txt"
 
         self.train_corpus = list(self.read_dataset(self.train_path))
-        self.test_corpus = list(self.read_dataset(self.test_path, True))
+        self.test_corpus = list(self.read_dataset(self.test_path, tokens_only=True))
+
+        self.train_tags = list(self.read_keywords(self.train_path))
 
     def read_dataset(self, fname, tokens_only=False):
         with open(fname, encoding="iso-8859-1") as f:
@@ -31,35 +33,29 @@ class Doc2Vec:
                     # For training data, add tags
                     yield gensim.models.doc2vec.TaggedDocument(gensim.utils.simple_preprocess(content), [tag])
 
+    def read_keywords(self, fname):
+        with open(fname, encoding="iso-8859-1") as f:
+            for line in f:
+                splited_line = line.split(" ")
+                
+                tag = splited_line[0]
+                yield tag
+                
     def train_model(self, vector_size=50, window=2, min_count=2, epochs=100, workers=4):
         self.model = gensim.models.doc2vec.Doc2Vec(vector_size=vector_size, window=window, 
                                                    min_count=min_count, epochs=epochs,
                                                    workers=workers)
         self.model.build_vocab(self.train_corpus)
+        import pdb; pdb.set_trace()
         self.model.train(self.train_corpus, total_examples=self.model.corpus_count, epochs=self.model.epochs)
-
-    def get_learned_vector(self, tag):
-        return self.model.docvecs[tag]
 
     def dump_vectors(self):
         file_path = self.data_dir / "doc2vec_vectors.txt"
         self.model.docvecs.save_word2vec_format(str(file_path))
 
-    def infer_vector(self, function: str):
-        assert(self.model)
-        tokens = gensim.utils.simple_preprocess(function)
-        return self.model.infer_vector(tokens)
-
-    def get_most_similar_function(self, function: str):
-        assert(self.model)
-        vector = self.infer_vector(function)
-        sims = self.model.docvecs.most_similar([vector], topn=len(self.model.docvecs))
-        return ' '.join(self.train_corpus[sims[0][0]].words)
-
     def get_subtokens(self, name):
-        hierarchy = name.split('.')[:-1]
-        function_name = name.split('.')[-1].split('|')
-        return hierarchy + function_name
+        function_names = name.split('.')[-1].split('|')
+        return function_names
 
     def evaluate(self):
         true_positives = 0
@@ -67,19 +63,19 @@ class Doc2Vec:
         false_negatives = 0
         nr_predictions = 0
 
-        for tag, test_corpus in self.test_corpus:
-            print("evaluating", tag, test_corpus)
+        for tag, keywords_doc in self.test_corpus:
             nr_predictions += 1
 
-            inferred_vector = self.model.infer_vector(test_corpus)
+            inferred_vector = self.model.infer_vector(keywords_doc)
             sims = self.model.docvecs.most_similar([inferred_vector], topn=10)
 
-            inferred_names = [sim[0] for sim in sims]
-
+            inferred_names = [sim[0] for sim in sims if sim[0] in self.train_tags][:1]
+            print(tag, inferred_names)
             original_subtokens = self.get_subtokens(tag)
             
             for inferred_name in inferred_names:
                 inferred_subtokens = self.get_subtokens(inferred_name)
+                print(original_subtokens, inferred_subtokens)
                 true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
                 false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
                 false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
@@ -96,3 +92,4 @@ class Doc2Vec:
     def load_model(self, fname):
         load_path = self.data_dir / fname
         self.model = gensim.models.doc2vec.Doc2Vec.load(str(load_path))
+        self.model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True)
