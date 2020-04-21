@@ -104,11 +104,11 @@ class Config:
         # hyperparameters used in tf dataset training. 
 
         self.epoch = 500
-        self.training_batch_size = 128
+        self.training_batch_size = 256
         self.testing_batch_size = 128
 
         self.dropout_factor = 0.5
-        self.learning_rate = 0.05
+        self.learning_rate = 0.005
         self.embedding_size = 50
         self.code_embedding_size = 50
 
@@ -172,15 +172,20 @@ class Trainer:
                 acc_loss += loss
 
             if epoch_idx % 5 == 0:
-                self.evaluate_model()
+                print("Evaluation Set Test:")
+                self.evaluate_model(training_set=False)
+                print("Training Set Test:")
+                self.evaluate_model(training_set=True)
                 self.save_model(epoch_idx)
                 self.export_code_embeddings(epoch_idx)
 
             print('epoch[%d] ---Acc Train Loss: %.5f' % (epoch_idx, acc_loss))
 
-    def evaluate_model(self):
-        
-        self.test_batch_generator = Generator(self.reader.bags_test, self.config.testing_batch_size)
+    def evaluate_model(self, training_set = False):
+        if training_set: 
+            self.test_batch_generator = Generator(self.reader.bags_train, self.config.testing_batch_size)
+        else:
+            self.test_batch_generator = Generator(self.reader.bags_test, self.config.testing_batch_size)
 
         true_positives = 0
         false_positives = 0
@@ -213,13 +218,26 @@ class Trainer:
                 inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
 
                 original_subtokens = original_name.split('|')
+                
+
+                true_positive = 0
+                false_positive = 0
+                false_negative = 0
 
                 for inferred_name in inferred_names:
                     inferred_subtokens = inferred_name.split('|')
 
-                    true_positives += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
-                    false_positives += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
-                    false_negatives += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+                    true_positive += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
+                    false_positive += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
+                    false_negative += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+
+                # if false_positive > 0:
+                #     print(original_name)
+                #     print(inferred_names)
+
+                true_positives += true_positive
+                false_positives += false_positive
+                false_negatives += false_negative
 
         precision = true_positives / (true_positives + false_positives)
         recall = true_positives / (true_positives + false_negatives)
@@ -227,7 +245,7 @@ class Trainer:
         prediction_rank /= nr_predictions
         prediction_reciprocal_rank /= nr_predictions
 
-        print("Precision: {}, Recall: {}, F1: {} Rank: {} Reciprocal_Rank: {}\n".format(precision, recall, f1, prediction_rank, prediction_reciprocal_rank))
+        print("\nPrecision: {}, Recall: {}, F1: {} Rank: {} Reciprocal_Rank: {}\n".format(precision, recall, f1, prediction_rank, prediction_reciprocal_rank))
     
     def export_code_embeddings(self, epoch_idx):
         save_path = self.config.path / ('epoch_%d' % epoch_idx)
