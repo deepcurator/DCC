@@ -27,18 +27,16 @@ def getabstract(filename):
         abstxt = abstxt.lower()
     return abstxt
 
-def save_triple_file(triple_list,triplefilename):
+def save_triple_file(triple_list,filename):
     triplefilename = triple_dir + filename + ".txt"
-    with open(triplefilename,'w') as f :
+    with open(triplefilename,'w+') as f :
         for line in triple_list:
             f.write(line + "\n")
 
 def createrdf(row,csomap, consolidatedGraph):
-    # image2graphfiles = []
+
     triple_list = []
-    ### DOESN'T SEEM to be used???
-    #g = Graph()
-    #g.parse(ontology,format="n3")
+
     dcc_namespace = "https://github.com/deepcurator/DCC/"
 
     # print(row['paper_title'],row['paper_link'],row['conference'], row['year'], row['Platform'])
@@ -51,7 +49,6 @@ def createrdf(row,csomap, consolidatedGraph):
 
     ## filename will act as a unique URI to connect all the three graphs
     filesubject = dcc_namespace + filename
-    # g.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     # consolidatedGraph
     consolidatedGraph.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     triple_list.append(filename + " isa " + "Publication")
@@ -64,8 +61,8 @@ def createrdf(row,csomap, consolidatedGraph):
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "platform"),platform ))
 
     # Just the triple list
-    triple_list.append(filename + " year of publication " + str(row['year']))
-    triple_list.append(filename + " conference series " + str(row['conference']))
+    triple_list.append(filename + " year_of_publication " + str(row['year']))
+    triple_list.append(filename + " conference_series " + str(row['conference']))
     triple_list.append(filename + " platform " + str(row['Platform']))
 
     textfilename = text_dir + filename + ".txt"
@@ -100,102 +97,47 @@ def createrdf(row,csomap, consolidatedGraph):
         # triple_list.append(filename + " has entity " + )
 
 
-    # print("---------------------------------")
-
-    # image2graphfiles = glob.glob(image_dir + filename + "/" + image_dir_addon + "/*.txt")
-
-    # file_length = len(image2graphfiles)
-    # if(file_length > 0):
-    #     for file in image2graphfiles:
-    #         createimage2graph(file,ontology,filesubject)
-    # else :
-    #     noimage2graphlist.append(filename)
-
-    # print(len(image2graphfiles))
-    # print(image2graphfiles)
-
     print("Done with file " + filename)
     return(filename, triple_list)
     
 
-if __name__ == '__main__':
-
-    ### THESE COMPUTER SPECIFIC PATHS SHOULD BE REPLACED!
-    # Ontology locations
-    ontology = "/home/z003z47y/git/DCC/src/ontology/DeepSciKG.nt"
-    destinationfolder = "/home/z003z47y/git/DCC/src/text2graph/Output/rdf/"
-    # csv file location
-    csvfile = '/home/z003z47y/git/DCC/src/text2graph.csv'
-    # other files
-    filecount = 0
-    noimage2graphlist = []
-    model_dir = './Models/'
-    text_dir = '/home/z003z47y/git/DCC/src/text2graph/NewPapers/'
-    image_dir = '/home/z003z47y/Projects/Government/ASKE/2019/092219_output/'
-    image_dir_addon = 'diag2graph'
-    output_dir = './Output/'
-    rdf_dir = 'Output/rdf/'
-    triple_dir = 'Output/text/'
-                
-    try:
-    	os.chdir(os.path.join(os.getcwd(), 'src/text2graph'))
-    	print(os.getcwd())
-    except:
-    	pass
 
 
-    # load ontology:
-    consolidatedGraph = Graph() 
-    consolidatedGraph.parse(ontology,format="n3")
 
-    df = pd.read_csv(csvfile)
-    df.head()
-    
-    # iterate through the rows in the dataframe
-    config = yaml.safe_load(open('../../conf/conf.yaml'))
-    model_dir=config['MODEL_PATH']
-    print(model_dir)
-    
-    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
-    [entity_map,uri2entity, uri2rel]=pickle.load(f)
-    f.close()
-    
-    # print(entity_map.items())
-    
-    for index,row in df.iterrows():
-        filename, triple_list= createrdf(row,entity_map,consolidatedGraph)
-        #Write to output text
-        triplefilename = os.path.join(triple_dir,os.path.join(filename,'t2g.ttl'))
-        save_triple_file(triple_list,triplefilename)
-                                      
-    # print("Total files converted now are " + filecount)
-    print("Saving final consolidated rdf file ")
-    destinationfile = destinationfolder + "text2graph_v3.ttl"
-    print("Saving final consolidated rdf file : " + destinationfile)
-    consolidatedGraph.serialize(destination=destinationfile,format='turtle')
-    
-    for key,value in entity_map.items():
-        print(key + " : " + str(value))
-        # print(type(value))
-    
-    # print(uri2entity.items())
-    # print(uri2rel.items())
-    
-    # import spacy
-    
-    # word1 = "convolutional neural network"
-    # word2 = "convolutional neural networks"
-    
-    # nlp = spacy.load(model_dir)
-    # token1 = nlp(word1)
-    # token2 = nlp(word2)
-    # print("Similarity :", token1.similarity(token2))
-    
-    
-    # Run this when you want to merge the image and text to graphs
-    # TODO : These lines will be moved to another independent file.
-    mergedGraph = Graph()
-    mergedGraph.parse(destinationfolder + 'image2graph.ttl',format='ttl')
-    mergedGraph.parse(destinationfolder + 'text2graph_v3.ttl',format='ttl')
-    
-    mergedGraph.serialize(destination='Output/rdf/consolidated_1_16_2020.ttl',format='ttl')
+# Load paths
+config = yaml.safe_load(open('../../conf/conf.yaml'))
+model_dir=config['MODEL_PATH']
+ontology=config['ONTOLOGY_PATH']
+destinationfolder = config['EXTRACT_TEXT_RDF_GRAPH_PATH']
+triple_dir = config['EXTRACT_TEXT_TRIPLE_GRAPH_PATH']
+csvfile = config['TEXT_GRAPH_CSV']
+text_dir = config['TEXT_GRAPH_PAPERS']
+
+
+# load ontology:
+consolidatedGraph = Graph() 
+consolidatedGraph.parse(ontology,format="n3")
+
+#text2graphs are present in the text2graph.csv
+df = pd.read_csv(csvfile)
+# df.head()
+
+
+#load CSO
+f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+[entity_map,uri2entity, uri2rel]=pickle.load(f)
+f.close()
+# print(entity_map.items())
+
+
+# For each paper from text2graph.csv create triples (embedding) and text2graph(rdf)
+for index,row in df.iterrows():
+    filename, triple_list= createrdf(row,entity_map,consolidatedGraph)
+    save_triple_file(triple_list,filename)
+                                    
+# print("Total files converted now are " + filecount)
+print("Saving final consolidated rdf file ")
+destinationfile = destinationfolder + "text2graph_v4.ttl"
+print("Saving final consolidated rdf file : " + destinationfile)
+consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+   
