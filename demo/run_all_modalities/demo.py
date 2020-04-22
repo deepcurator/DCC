@@ -56,18 +56,18 @@ pytesseract.pytesseract.tesseract_cmd = conf["tesseract_cmd"]
 
 # --------- INPUT ---------
 # Input paper pdf will be downloaded into this folder
-inputFolder = 'demo_input'
+inputFolder = 'demo_input_demo2'
 
 # Input paper code will be downloaded into this folder
-codeFolder = "demo_code"
+codeFolder = "demo_code_demo2"
 
 # CSV file that maps the pdf file name in the inputFolder to the code repository name in the codeFolder
 # This file will be generated on the fly
-inputCSV = 'input.csv'
+inputCSV = 'input_demo2.csv'
 
 # --------- OUTPUT ---------
 # Output will be placed into this folder
-outputFolder = 'demo_output'
+outputFolder = 'demo_output_demo2'
 
 
 
