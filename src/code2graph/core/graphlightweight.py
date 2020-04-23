@@ -449,7 +449,7 @@ class TFTokenExplorer:
         graph = Graph()
         if self.metadata:
             if self.metadata['paper']:
-                pub_id = self.metadata['paper'].split('/')[-1].replace('.pdf', '')
+                pub_id = self.metadata['paper'].split('/')[-1].split('.')[0]
                 publication_id_uri = URIRef(self.om.dcc_prefix + pub_id)
             else:
                 publication_id_uri = URIRef(self.om.dcc_prefix + self.metadata['stored_dir_name'])
@@ -704,7 +704,7 @@ class TFTokenExplorer:
         for graph in self.rdf_graphs.values():
             combined_graph += graph
         
-        combined_graph.serialize(destination=exported_path, format='turtle')
+        combined_graph.serialize(destination=exported_path, format='nt')
         
     def pyvis_draw(self, graph, name):
 
