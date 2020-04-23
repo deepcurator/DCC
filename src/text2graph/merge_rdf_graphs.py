@@ -32,8 +32,8 @@ csvfile = config['TEXT_GRAPH_CSV']
 text_dir = config['TEXT_GRAPH_PAPERS']
 
 mergedGraph = Graph()
-mergedGraph.parse(destinationfolder + 'image2graph.ttl',format='ttl')
-mergedGraph.parse(destinationfolder + 'text2graph.ttl',format='ttl')
+mergedGraph.parse(destinationfolder + 'image2graph.ttl',format='nt')
+mergedGraph.parse(destinationfolder.ttl + 'text2graph.ttl',format='nt')
 # mergedGraph.parse(destinationfolder + 'code2graph.ttl',format='ttl')
     
 mergedGraph.serialize(destination=destinationfolder + 'consolidated_image_text_4_22_2020.ttl',format='nt')
