@@ -240,6 +240,6 @@ for image2graph in image2graphs:
 print("Saving final consolidated rdf file ")
 destinationfile = destinationfolder + "image2graph_4_12.ttl"
 print("Saving final consolidated rdf file : " + destinationfile)
-consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+consolidatedGraph.serialize(destination=destinationfile,format='nt')
 
 print(len(image2graphs))
