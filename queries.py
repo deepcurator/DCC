@@ -457,3 +457,35 @@ results_df.columns
 
 results_df = results_df.drop(['counttype.datatype','counttype.type','task.type', 'type.type'],axis=1)
 results_df.head()
+
+
+## Image component specific tensorflow functions
+
+image_tf_query = """
+
+Select count(?type) as ?counttype ?cso ?type  where {
+
+
+
+?s  <https://github.com/deepcurator/DCC/hasFigure> ?f .
+
+?component <https://github.com/deepcurator/DCC/partOf> ?f .
+?component <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?cso.
+
+
+?s <https://github.com/deepcurator/DCC/hasRepository> ?repository .
+?repository <https://github.com/deepcurator/DCC/hasFunction> ?y.
+
+?y a ?type .
+FILTER(!(STR(?type) = "https://github.com/deepcurator/DCC/UserDefined")).
+
+}group by ?cso ?type ORDER by DESC(?counttype)
+
+"""
+
+
+results_df = execute_query(image_tf_query)
+results_df.columns
+
+results_df = results_df.drop(['counttype.datatype','counttype.type','cso.type', 'type.type'],axis=1)
+results_df.head()
