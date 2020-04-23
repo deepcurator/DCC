@@ -405,3 +405,27 @@ results_df = results_df.drop(['method.type', 'task.type'],axis=1)
 results_df.head()
 
 
+### Top methods and the associated tensorflow functions used for implementation
+
+method_tf_query = """
+
+Select count(?type) as ?counttype ?method ?type  where {
+
+?s <https://github.com/deepcurator/DCC/hasEntity> ?methodentity .
+?methodentity <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?method .
+?s <https://github.com/deepcurator/DCC/hasRepository> ?repository .
+?repository <https://github.com/deepcurator/DCC/hasFunction> ?y.
+
+?y a ?type .
+FILTER(!(STR(?type) = "https://github.com/deepcurator/DCC/UserDefined")).
+
+}group by ?method ?type ORDER by DESC(?counttype)
+
+
+"""
+
+results_df = execute_query(method_tf_query)
+results_df.columns
+
+results_df = results_df.drop(['counttype.datatype','counttype.type','method.type', 'type.type'],axis=1)
+results_df.head()
