@@ -377,6 +377,7 @@ results_df.head()
 
 
 ## Top ML methods for tasks from the Knowledge graph
+## They show the cso equivalents
 
 method_task_query = """ 
 
