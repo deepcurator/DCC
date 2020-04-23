@@ -231,6 +231,8 @@ def save_metadata(metadata: list, stat_file_path: str):
 def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
 
     if config.recursive:
+        config.dest_path.mkdir(exist_ok=True)
+        move_output_files(config)
         database = Database()
         for task in tasks:
             metadata[task['id']][3] = task['success']
@@ -240,9 +242,7 @@ def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
                 database.update_query(paper[0], paper[3], paper[4])
             except Exception as e:
                 continue
-        config.dest_path.mkdir(exist_ok=True)
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
-        move_output_files(config)
 
 
 def pipeline_the_lightweight_approach(args):
