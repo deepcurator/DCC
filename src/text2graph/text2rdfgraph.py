@@ -139,7 +139,7 @@ if __name__ == '__main__':
                                         
     # print("Total files converted now are " + filecount)
     print("Saving final consolidated rdf file ")
-    destinationfile = destinationfolder + "text2graph_v4.ttl"
+    destinationfile = destinationfolder + "text2graph.ttl"
     print("Saving final consolidated rdf file : " + destinationfile)
-    consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+    consolidatedGraph.serialize(destination=destinationfile,format='nt')
     
