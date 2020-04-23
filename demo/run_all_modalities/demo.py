@@ -116,7 +116,8 @@ def visualize_graphs(rels):
     g_vis.save_graph("image2graph.html")
     
     g = Graph()
-    g.parse(outputFolder + "/code2graph/pointnetvlad/code2graph.ttl", format="ttl")
+    code_dir_name = os.listdir(codeFolder)[0]
+    g.parse(outputFolder + "/code2graph/" + code_dir_name + "/code2graph.ttl", format="ttl")
     # rels = ["https://github.com/deepcurator/DCC/calls", "https://github.com/deepcurator/DCC/followedBy"]
     g_vis = get_vis(g, "Code", rels=rels, show=True)
     g_vis.show("code2graph.html")
@@ -183,6 +184,7 @@ def run(pdfURL, codeURL):
     git.Git(codeFolder).clone(codeURL)
     # Get code folder name
     code_dir_name = os.listdir(codeFolder)[0]
+    # code_dir_name = "input_paper"
     # print("DIR NAME: " + code_dir_name)
     
     enablePrint()
@@ -192,7 +194,7 @@ def run(pdfURL, codeURL):
     disablePrint()
     
     # Create CSV file
-    with open(inputCSV, 'a') as f:
+    with open(inputCSV, 'w') as f:
         f.write('paper,code\n')
         f.write('input_paper.pdf,' + code_dir_name)
     
