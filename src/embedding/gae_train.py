@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import time
 import os
+import glob
 
 # Train on CPU (hide GPU) due to memory constraints
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -17,7 +18,7 @@ from sklearn.metrics import average_precision_score
 from gae.optimizer import OptimizerAE, OptimizerVAE
 #from gae.input_data import load_data
 from gae.model import GCNModelAE, GCNModelVAE
-from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
+from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple #, mask_test_edges
 import graph_generator
 import networkx as nx
 import scipy
@@ -43,7 +44,10 @@ def generate_random_pairs(N,size):
     e2=np.random.randint(low=0,high=N, size=size)
     return set(x for x in zip(e1,e2))
 
-
+'''
+Reimplemented for efficiency (compared to gae package, preprocessing.py)
+Here we use sets of triples ie sparse rep, which is faster than original
+'''
 def mask_test_edges2(adj):
     # Function to build test set with 10% positive links
     # NOTE: Splits are randomized and results might slightly deviate from reported numbers in the paper.
@@ -75,9 +79,9 @@ def mask_test_edges2(adj):
     adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj.shape)
     adj_train = adj_train + adj_train.T
 
-    def ismember(a, b, tol=5):
-        rows_close = np.all(np.round(a - b[:, None], tol) == 0, axis=-1)
-        return np.any(rows_close)
+    #def ismember(a, b, tol=5):
+    #    rows_close = np.all(np.round(a - b[:, None], tol) == 0, axis=-1)
+    #    return np.any(rows_close)
 
     print('Generating test_edges_false {}'.format(datetime.now()))
     ### all edges - symmetric 
@@ -129,7 +133,7 @@ def mask_test_edges2(adj):
 class RunGAE(object):
     
     def __init__(self, file_expr, labels_dict, model_str='gcn_ae', file_sep='\t', out_tag='',
-                 use_features=True, epochs=100, dropout_rate=0):
+                 use_features=True, select_rels=[],  epochs=100, dropout_rate=0):
         self.model = None
         self.model_str=model_str
         self.out_tag=out_tag
@@ -139,6 +143,7 @@ class RunGAE(object):
         self.dropout_rate=dropout_rate
         self.epochs=epochs
         self.file_sep=file_sep
+        self.select_rels=select_rels
         
         # Define placeholders
         self.placeholders = {
@@ -149,7 +154,11 @@ class RunGAE(object):
         }                
         
     def run(self):
-        n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr, sep=self.file_sep)
+        if self.file_expr == '':
+            # text-image-code combination
+            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_combo()
+        else:
+            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr,sep=self.file_sep, select_rels=self.select_rels)
         self.idx_supernodes=idx_supernodes
         adj = nx.adjacency_matrix(nx.from_scipy_sparse_matrix(n_by_n)) #nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
         features = scipy.sparse.csr.csr_matrix(x_train)
@@ -292,10 +301,10 @@ class RunGAE(object):
             colors.append(color_label[0][0])
         supernodes = np.array(supernodes)
     
-        np.savetxt('uci_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
-        np.savetxt('uci_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
-        np.savetxt('uci_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
-        np.savetxt('uci_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
+        np.savetxt('dcc_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
+        np.savetxt('dcc_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
+        np.savetxt('dcc_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
+        np.savetxt('dcc_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
         return(supernodes, supernodes_embeddings, supernodes_labels)
         
         
@@ -319,30 +328,55 @@ class RunGAE(object):
 ######################################
 if __name__ == "__main__":
     model_str = "gcn_ae" #FLAGS.model
-    dataset_str = "code" #"text" "code" ###FLAGS.dataset
+    dataset_str = "image" #image" #"text" "code" ###FLAGS.dataset
+    data_path = '../../Data/'
 
     if dataset_str == "code":
-        out_tag=''
         sep='\t'
-        label_file='./labels2.csv'
-        file_expr='./old_data/rdf_triples/*/combined_triples.triples'
-        labels_dict = graph_generator.load_labels(label_file)
-        #label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
-        #file_expr='./pwc_triples/*/combined_triples.triples'
-        #labels_dict = graph_generator.load_pwc_labels(label_file)
+        ### data initially used: 67 papers processed by UCI/ 63 have triples
+#        out_tag=''
+#        label_file='./labels2.csv'
+#        file_expr = data_path + 'UCI_TF_Papers/rdf_triples/*/combined_triples.triples' # data generated by UCI - small enough, used for embedding
+#        labels_dict = graph_generator.load_labels(label_file)
+#        select_rels=[]
+        ### PWC data/repos - doesn't fit in memory
+        out_tag='_c2g'
+        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
+        file_expr=data_path+'pwc_triples/*/combined_triples.triples'
+        labels_dict = graph_generator.load_pwc_labels(label_file)
+        select_rels=['followedBy','calls']
+        ### filter labels to only those that also have images:
+        im_files=set()
+        files = glob.glob(data_path+'image/*/*.triples')
+        for f in files:
+            # directory name is the paper tag
+            paper_tag=f.split(os.sep)[-2]
+            im_files.add(paper_tag)
+        papers=list(labels_dict.keys())
+        for paper in papers:
+            if paper not in im_files:
+                del labels_dict[paper]
     elif dataset_str == 'text':
-        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_t2g'
-        #file_expr='./text2graph/*/text2graph.triples'
-        #file_expr='../text2graph/Output/text/*.txt'
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
         labels_dict = graph_generator.load_pwc_labels(label_file)
-    else:
-        label_file='../../../pwc_edited_plt/pwc_edited_plt.csv'
+        select_rels=[]
+    elif dataset_str == 'image':
+        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_i2g'
-        file_expr='./image/*/*.triples'
+        file_expr=data_path+'image/*/*.triples'  # './image/*/*.triples'
         sep='\t'
         labels_dict = graph_generator.load_pwc_labels(label_file)
-    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag)
+        select_rels=[]
+    elif dataset_str == 'combo':
+        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
+        out_tag='_combo'
+        sep='\t'
+        file_expr=''
+        labels_dict = graph_generator.load_pwc_labels(label_file)   
+        select_rels=[]
+    print(dataset_str+" : "+out_tag)
+    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag, select_rels=select_rels)
     runner.run()

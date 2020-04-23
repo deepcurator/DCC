@@ -28,7 +28,9 @@ def getabstract(filename):
     return abstxt
 
 def save_triple_file(triple_list,filename):
-    triplefilename = triple_dir + filename + ".txt"
+    triplefilename = triple_dir + filename + "/t2g.triples"
+    if not os.path.exists(triple_dir + filename):
+        os.makedirs(triple_dir + filename)
     with open(triplefilename,'w+') as f :
         for line in triple_list:
             f.write(line + "\n")
@@ -102,42 +104,42 @@ def createrdf(row,csomap, consolidatedGraph):
     
 
 
+if __name__ == '__main__':
+
+    # Load paths
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    model_dir=config['MODEL_PATH']
+    ontology=config['ONTOLOGY_PATH']
+    destinationfolder = config['EXTRACT_TEXT_RDF_GRAPH_PATH']
+    triple_dir = config['EXTRACT_TEXT_TRIPLE_GRAPH_PATH']
+    csvfile = config['TEXT_GRAPH_CSV']
+    text_dir = config['TEXT_GRAPH_PAPERS']
 
 
-# Load paths
-config = yaml.safe_load(open('../../conf/conf.yaml'))
-model_dir=config['MODEL_PATH']
-ontology=config['ONTOLOGY_PATH']
-destinationfolder = config['EXTRACT_TEXT_RDF_GRAPH_PATH']
-triple_dir = config['EXTRACT_TEXT_TRIPLE_GRAPH_PATH']
-csvfile = config['TEXT_GRAPH_CSV']
-text_dir = config['TEXT_GRAPH_PAPERS']
+    # load ontology:
+    consolidatedGraph = Graph() 
+    consolidatedGraph.parse(ontology,format="n3")
+
+    #text2graphs are present in the text2graph.csv
+    df = pd.read_csv(csvfile)
+    # df.head()
 
 
-# load ontology:
-consolidatedGraph = Graph() 
-consolidatedGraph.parse(ontology,format="n3")
-
-#text2graphs are present in the text2graph.csv
-df = pd.read_csv(csvfile)
-# df.head()
+    #load CSO
+    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+    [entity_map,uri2entity, uri2rel]=pickle.load(f)
+    f.close()
+    # print(entity_map.items())
 
 
-#load CSO
-f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
-[entity_map,uri2entity, uri2rel]=pickle.load(f)
-f.close()
-# print(entity_map.items())
-
-
-# For each paper from text2graph.csv create triples (embedding) and text2graph(rdf)
-for index,row in df.iterrows():
-    filename, triple_list= createrdf(row,entity_map,consolidatedGraph)
-    save_triple_file(triple_list,filename)
-                                    
-# print("Total files converted now are " + filecount)
-print("Saving final consolidated rdf file ")
-destinationfile = destinationfolder + "text2graph_v4.ttl"
-print("Saving final consolidated rdf file : " + destinationfile)
-consolidatedGraph.serialize(destination=destinationfile,format='turtle')
-   
+    # For each paper from text2graph.csv create triples (embedding) and text2graph(rdf)
+    for index,row in df.iterrows():
+        filename, triple_list= createrdf(row,entity_map,consolidatedGraph)
+        save_triple_file(triple_list,filename)
+                                        
+    # print("Total files converted now are " + filecount)
+    print("Saving final consolidated rdf file ")
+    destinationfile = destinationfolder + "text2graph_v4.ttl"
+    print("Saving final consolidated rdf file : " + destinationfile)
+    consolidatedGraph.serialize(destination=destinationfile,format='turtle')
+    
