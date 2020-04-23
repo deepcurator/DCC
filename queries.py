@@ -405,13 +405,14 @@ results_df = results_df.drop(['method.type', 'task.type'],axis=1)
 results_df.head()
 
 
-### Top methods and the associated tensorflow functions used for implementation
+### Top DL methods and the associated tensorflow functions used for implementation
 
 method_tf_query = """
 
 Select count(?type) as ?counttype ?method ?type  where {
 
 ?s <https://github.com/deepcurator/DCC/hasEntity> ?methodentity .
+?methodentity a <https://github.com/deepcurator/DCC/Method> .
 ?methodentity <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?method .
 ?s <https://github.com/deepcurator/DCC/hasRepository> ?repository .
 ?repository <https://github.com/deepcurator/DCC/hasFunction> ?y.
@@ -422,10 +423,37 @@ FILTER(!(STR(?type) = "https://github.com/deepcurator/DCC/UserDefined")).
 }group by ?method ?type ORDER by DESC(?counttype)
 
 
+
 """
 
 results_df = execute_query(method_tf_query)
 results_df.columns
 
 results_df = results_df.drop(['counttype.datatype','counttype.type','method.type', 'type.type'],axis=1)
+results_df.head()
+
+### Top DL tasks and the associated tensorflow functions used for implementation
+
+task_tf_query = """
+
+Select count(?type) as ?counttype ?task ?type  where {
+
+?s <https://github.com/deepcurator/DCC/hasEntity> ?taskentity .
+?taskentity <https://github.com/deepcurator/DCC/hasCSOEquivalent> ?task .
+?taskentity a <https://github.com/deepcurator/DCC/Task> .
+?s <https://github.com/deepcurator/DCC/hasRepository> ?repository .
+?repository <https://github.com/deepcurator/DCC/hasFunction> ?y.
+
+?y a ?type .
+FILTER(!(STR(?type) = "https://github.com/deepcurator/DCC/UserDefined")).
+
+}group by ?task ?type ORDER by DESC(?counttype)
+
+
+"""
+
+results_df = execute_query(task_tf_query)
+results_df.columns
+
+results_df = results_df.drop(['counttype.datatype','counttype.type','task.type', 'type.type'],axis=1)
 results_df.head()
