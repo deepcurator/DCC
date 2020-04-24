@@ -7,6 +7,7 @@ from os.path import isfile, join
 from .xml2txt_no_sents import TEIFile
 from .text_rdf_generator import createTextRDF, createRDF
 from rdflib import Graph
+import pickle
 
 def run(input_dir, output_dir, ontology_file, model_dir, grobid_client):
     # output_dir = "C:/aske-2/dcc/grobid-workspace/output"
@@ -77,13 +78,18 @@ def run(input_dir, output_dir, ontology_file, model_dir, grobid_client):
     
     onlyFiles = [f for f in listdir(rdf_input_dir) if isfile(join(rdf_input_dir, f))]
     
+    #load CSO
+    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+    [entity_map,uri2entity, uri2rel]=pickle.load(f)
+    f.close()
+    
     # iterate through the rows in the dataframe
     #  for index,row in df.iterrows():
     for f in onlyFiles:
         g = Graph() 
         # g.parse(ontology_file, format="n3") 
         if f.endswith(".txt"):
-            createRDF(f, g, model_dir, rdf_input_dir)
+            createRDF(f, entity_map, g, model_dir, rdf_input_dir)
             destinationfile = rdf_output_dir + f[:-4] + "_text2graph.ttl"
             print("Saving rdf file " + destinationfile)
             g.serialize(destination=destinationfile, format='turtle')

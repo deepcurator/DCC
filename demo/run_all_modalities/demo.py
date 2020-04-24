@@ -122,6 +122,11 @@ def visualize_graphs(rels):
     g_vis = get_vis(g, "Code", rels=rels, show=True)
     g_vis.show("code2graph.html")
     
+    g = Graph()
+    g.parse(outputFolder + "/consolidated.ttl", format="ttl")
+    g_vis = get_vis(g, "Merged")
+    g_vis.save_graph("paper2graph.html")
+    
     # vis_file_to_display = outputFolder + "/code2graph/pointnetvlad-master/pointnetvlad_clsquadruplet_loss.html"
     # iframe = '<iframe src=' + vis_file_to_display + ' width=100% height=350></iframe>'
     # IPython.display.HTML(iframe)
@@ -155,7 +160,20 @@ def vis(rels):
     addTitleToHTML(code_file, "Code2Graph")
     code_iframe = '<iframe src=' + code_file + ' width=100% height=520></iframe>'
     
-    return text_iframe, img_iframe, code_iframe
+    merged_file = "paper2graph.html"
+    addTitleToHTML(merged_file, "Paper2Graph")
+    merged_iframe = '<iframe src=' + merged_file + ' width=100% height=520></iframe>'
+    
+    return text_iframe, img_iframe, code_iframe, merged_iframe
+
+def merge():
+    mergedGraph = Graph()   
+    mergedGraph.parse(outputFolder + "/text2graph/input_paper_text2graph.ttl", format="ttl")
+    mergedGraph.parse(outputFolder + "/image2graph/input_paper/image2graph.ttl", format="ttl")
+    code_dir_name = os.listdir(codeFolder)[0]
+    mergedGraph.parse(outputFolder + "/code2graph/" + code_dir_name + "/code2graph.ttl", format="ttl")
+    mergedGraph.parse("DeepSciKG.nt", format="ttl")
+    mergedGraph.serialize(outputFolder + '/consolidated.ttl', format='ttl')
 
 def run(pdfURL, codeURL):
     # Delete existing folders and their contents
@@ -211,3 +229,5 @@ def run(pdfURL, codeURL):
     # enablePrint()
     
     print("Completed")
+    
+    merge()

@@ -27,7 +27,7 @@ def getabstract(filename):
     return abstxt
 
 
-def createRDF(filename, consolidatedGraph=None, model_dir='', text_dir=''):
+def createRDF(filename, entity_map, consolidatedGraph=None, model_dir='', text_dir=''):
     # g = Graph()
     # g.parse(ontology,format="n3")
     dcc_namespace = "https://github.com/deepcurator/DCC/"
@@ -61,6 +61,11 @@ def createRDF(filename, consolidatedGraph=None, model_dir='', text_dir=''):
 
     for entitytext, entitylabel in entity_dict.items():
         entitytext = entitytext.replace(" ",'_')
+        if(entitytext in entity_map):
+            csovalue = entity_map[entitytext]
+            str_value = str(csovalue)
+            if("cso" in str_value):
+                consolidatedGraph.add((URIRef(filesubject + "_" + entitytext),URIRef(dcc_namespace + "hasCSOEquivalent"),csovalue))
         # print(entitytext)
         # print(filesubject + "_" + entitytext)
         if consolidatedGraph is not None:

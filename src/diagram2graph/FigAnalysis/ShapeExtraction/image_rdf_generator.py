@@ -13,7 +13,7 @@ import rdflib
 from rdflib import Graph
 import pprint
 
-def createimage2graph(inputfile, ontology, filesubject, g):
+def createimage2graph(inputfile, entity_map, ontology, filesubject, g):
     
     #filesubject is the publication URI, which has to be linked to the image components
 
@@ -115,6 +115,17 @@ def createimage2graph(inputfile, ontology, filesubject, g):
             subject = URIRef(dcc_namespace + filename + "_" + subject)
             # g.add((subject, RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
             g.add((subject, RDF.type, URIRef(dcc_namespace + block_dict.get(obj))))
+        
+        
+        # Link CSO 
+        if(obj in entity_map):
+            # print("found obj in entity map")
+            # print("Found " + obj + " in cso")
+            csovalue = entity_map[obj]
+            str_value = str(csovalue)
+            # print("CSO value is then " + str_value)
+            if("cso" in str_value):
+                g.add((subject,URIRef(dcc_namespace + "hasCSOEquivalent"),csovalue))
 
     # All triples are created for the current file
     # Serialize the rdf files to their right folder
@@ -128,7 +139,7 @@ def createimage2graph(inputfile, ontology, filesubject, g):
 
 image_dir_addon = 'diag2graph'
 
-def runI2G(paper_dir, image_triple_dir, image_output_dir, ontology_file):
+def runI2G(paper_dir, entity_map, image_triple_dir, image_output_dir, ontology_file):
     dcc_namespace = "https://github.com/deepcurator/DCC/"
     g = Graph()
     # ontology = "C:/dcc_test/demo/DeepSciKG.nt"
@@ -152,7 +163,7 @@ def runI2G(paper_dir, image_triple_dir, image_output_dir, ontology_file):
             image2graphfiles = glob(image_triple_dir + "/" + paper_name_short + "/" + image_dir_addon + "/*.txt")
             print(image2graphfiles)
             for image2graphfile in image2graphfiles:
-                createimage2graph(image2graphfile, None, filesubject, g)
+                createimage2graph(image2graphfile, entity_map, None, filesubject, g)
         
         destination_dir = image_triple_dir + "/" + paper_name_short
         destinationFile = image_triple_dir + "/" + paper_name_short + "/image2graph.ttl"
