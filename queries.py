@@ -322,7 +322,7 @@ Select ?type ?cso  where {
 results_df = execute_query(csoquery3)
 results_df.columns
 
-results_df = results_df.drop(['cso.type', 'publication.type'],axis=1)
+results_df = results_df.drop(['cso.type', 'type.type'],axis=1)
 results_df.head()
 
 
@@ -330,7 +330,7 @@ results_df.head()
 
 csoquery4  = """
 
-Select distinct ?type count(?cso) as ?csocount where {
+Select distinct ?type count(distinct ?cso) as ?csocount where {
 
 ?s a <https://github.com/deepcurator/DCC/Publication> .
 ?s <https://github.com/deepcurator/DCC/hasEntity> ?o .
@@ -368,13 +368,32 @@ Select  distinct ?task ?dataset where {
 
 """
 
+task_dataset_query_analogous = """
+Select  distinct ?tasktext ?datasettext where {
+
+
+?publication <https://github.com/deepcurator/DCC/hasEntity> ?taskentity .
+?publication <https://github.com/deepcurator/DCC/hasEntity> ?dataset.
+
+?taskentity a <https://github.com/deepcurator/DCC/Task> .
+?dataset a <https://github.com/deepcurator/DCC/Material> .
+
+
+?taskentity <https://github.com/deepcurator/DCC/hasText> ?tasktext .
+?dataset <https://github.com/deepcurator/DCC/hasText> ?datasettext .
+
+}
+
+
+"""
+
 
 results_df = execute_query(task_dataset_query)
 results_df.columns
 
 results_df = results_df.drop(['dataset.type', 'task.type'],axis=1)
 results_df.head()
-
+# results_df.tail(20)
 
 ## Top ML methods for tasks from the Knowledge graph
 ## They show the cso equivalents
