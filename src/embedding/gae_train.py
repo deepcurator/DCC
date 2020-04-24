@@ -133,12 +133,13 @@ def mask_test_edges2(adj):
 class RunGAE(object):
     
     def __init__(self, file_expr, labels_dict, model_str='gcn_ae', file_sep='\t', out_tag='',
-                 use_features=True, select_rels=[],  epochs=100, dropout_rate=0):
+                 min_valid_triples=0, use_features=True, select_rels=[],  epochs=100, dropout_rate=0):
         self.model = None
         self.model_str=model_str
         self.out_tag=out_tag
         self.file_expr=file_expr
         self.labels_dict=labels_dict
+        self.min_valid_triples=min_valid_triples
         self.use_features=use_features
         self.dropout_rate=dropout_rate
         self.epochs=epochs
@@ -156,9 +157,9 @@ class RunGAE(object):
     def run(self):
         if self.file_expr == '':
             # text-image-code combination
-            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_combo()
+            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_combo(self.labels_dict)
         else:
-            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr,sep=self.file_sep, select_rels=self.select_rels)
+            n_by_n, x_train, y_train, train_mask, val_mask, test_mask, idx_supernodes, label_encoder = graph_generator.load_data(self.labels_dict, self.file_expr,min_valid_triples=self.min_valid_triples,sep=self.file_sep, select_rels=self.select_rels)
         self.idx_supernodes=idx_supernodes
         adj = nx.adjacency_matrix(nx.from_scipy_sparse_matrix(n_by_n)) #nx.adjacency_matrix(nx.from_numpy_array(n_by_n))
         features = scipy.sparse.csr.csr_matrix(x_train)
@@ -321,14 +322,16 @@ class RunGAE(object):
 #        plt.savefig('supernode_tsne'+self.out_tag+'.png')
 #        plt.clf()
         import seaborn as sns    
-        sns_plot=sns.scatterplot(x=supernodes[:,0], y=supernodes[:,1], hue=supernodes_labels)        
+        # color by conference
+        hue=[x.split('\t')[1] for x in supernodes_labels]
+        sns_plot=sns.scatterplot(x=supernodes[:,0], y=supernodes[:,1], hue=hue)        
         fig = sns_plot.get_figure()
         fig.savefig('supernode_tsne'+self.out_tag+'.png')
 
 ######################################
 if __name__ == "__main__":
     model_str = "gcn_ae" #FLAGS.model
-    dataset_str = "image" #image" #"text" "code" ###FLAGS.dataset
+    dataset_str = "code" #image" #"text" "code" ###FLAGS.dataset
     data_path = '../../Data/'
 
     if dataset_str == "code":
@@ -341,6 +344,7 @@ if __name__ == "__main__":
 #        select_rels=[]
         ### PWC data/repos - doesn't fit in memory
         out_tag='_c2g'
+        min_valid_triples=3        
         label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         file_expr=data_path+'pwc_triples/*/combined_triples.triples'
         labels_dict = graph_generator.load_pwc_labels(label_file)
@@ -361,6 +365,7 @@ if __name__ == "__main__":
         out_tag='_t2g'
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
+        min_valid_triples=4
         labels_dict = graph_generator.load_pwc_labels(label_file)
         select_rels=[]
     elif dataset_str == 'image':
@@ -368,15 +373,17 @@ if __name__ == "__main__":
         out_tag='_i2g'
         file_expr=data_path+'image/*/*.triples'  # './image/*/*.triples'
         sep='\t'
+        min_valid_triples=0        
         labels_dict = graph_generator.load_pwc_labels(label_file)
         select_rels=[]
-    elif dataset_str == 'combo':
+    else: # dataset_str == 'combo'
         label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
-        out_tag='_combo'
+        out_tag='_'+dataset_str
         sep='\t'
         file_expr=''
+        min_valid_triples=0 
         labels_dict = graph_generator.load_pwc_labels(label_file)   
         select_rels=[]
     print(dataset_str+" : "+out_tag)
-    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag, select_rels=select_rels)
+    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag, min_valid_triples=min_valid_triples, select_rels=select_rels)
     runner.run()

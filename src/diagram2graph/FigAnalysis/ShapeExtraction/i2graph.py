@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+import pickle
 
 import numpy as np
 import cv2
@@ -90,6 +91,9 @@ def run(input_path, op_path, ontology_file, model_dir):
 #    op_path = "out"
     
 
+    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+    [entity_map, uri2entity, uri2rel]=pickle.load(f)
+    f.close()
     
     
     for filename in glob.glob(os.path.join(op_path_all, '*png')):
@@ -149,7 +153,7 @@ def run(input_path, op_path, ontology_file, model_dir):
     # image_triple_dir = "C:/dcc_test/src/diagram2graph/FigAnalysis/ShapeExtraction/out/"
     # image_output_dir = "C:/dcc_test/src/diagram2graph/FigAnalysis/ShapeExtraction/out/"
     
-    runI2G(input_path, i2g_output_dir, op_path_all, ontology_file)
+    runI2G(input_path, entity_map, i2g_output_dir, op_path_all, ontology_file)
     
     print("[Info] Completed image2graph pipeline!")
 

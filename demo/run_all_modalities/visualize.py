@@ -17,34 +17,51 @@ import matplotlib.pyplot as plt
 cnames = ['#a569bd', '#ec7063', '#5dade2', '#58d68d', '#f4d03f', '#bfc9ca', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573', '#566573']
 
 auto_color_map_text = {}
-auto_color_map_text["https://github.com/deepcurator/DCC/Eval"] = cnames[0]
+auto_color_map_text["https://cso.kmi.open.ac.uk/"] = cnames[0]
+auto_color_map_text["https://github.com/deepcurator/DCC/Eval"] = cnames[7]
 auto_color_map_text["https://github.com/deepcurator/DCC/Generic"] = cnames[2]
 auto_color_map_text["https://github.com/deepcurator/DCC/Publication"] = cnames[1]
 auto_color_map_text["https://github.com/deepcurator/DCC/Method"] = cnames[3]
 auto_color_map_text["https://github.com/deepcurator/DCC/Task"] = cnames[4]
 auto_color_map_text["https://github.com/deepcurator/DCC/Other"] = cnames[5]
 auto_color_map_text["https://github.com/deepcurator/DCC/Material"] = cnames[6]
+auto_color_map_text["Literal"] = cnames[5]
 
 auto_color_map_image = {}
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[0]
-auto_color_map_text["https://github.com/deepcurator/DCC/Figure"] = cnames[1]
-auto_color_map_text["https://github.com/deepcurator/DCC/RnnBlock"] = cnames[2]
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[3]
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[4]
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[5]
+auto_color_map_image["https://cso.kmi.open.ac.uk/"] = cnames[0]
+auto_color_map_image["https://github.com/deepcurator/DCC/NormBlock"] = cnames[3]
+auto_color_map_image["https://github.com/deepcurator/DCC/Figure"] = cnames[1]
+auto_color_map_image["https://github.com/deepcurator/DCC/RnnBlock"] = cnames[2]
+auto_color_map_image["Literal"] = cnames[5]
 
 auto_color_map_code = {}
-auto_color_map_code["https://github.com/deepcurator/DCC/UserDefined"] = cnames[0]
-auto_color_map_code["https://github.com/deepcurator/DCC/tf"] = cnames[1]
-
+auto_color_map_code["https://cso.kmi.open.ac.uk/"] = cnames[0]
+auto_color_map_code["https://github.com/deepcurator/DCC/UserDefined"] = cnames[4]
+auto_color_map_code["https://github.com/deepcurator/DCC/tf"] = cnames[3]
+auto_color_map_code["Literal"] = cnames[5]
 
 auto_color_map_ont = {}
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[0]
 auto_color_map_text["https://github.com/deepcurator/DCC/Figure"] = cnames[1]
 auto_color_map_text["https://github.com/deepcurator/DCC/RnnBlock"] = cnames[2]
 auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[3]
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[4]
-auto_color_map_text["https://github.com/deepcurator/DCC/NormBlock"] = cnames[5]
+
+
+auto_color_map_merged = {}
+auto_color_map_merged["https://cso.kmi.open.ac.uk/"] = cnames[0]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Eval"] = cnames[7]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Generic"] = cnames[2]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Publication"] = cnames[1]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Method"] = cnames[3]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Task"] = cnames[4]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Other"] = cnames[5]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Material"] = cnames[6]
+auto_color_map_merged["https://github.com/deepcurator/DCC/Figure"] = cnames[1]
+auto_color_map_merged["https://github.com/deepcurator/DCC/RnnBlock"] = cnames[2]
+auto_color_map_merged["https://github.com/deepcurator/DCC/NormBlock"] = cnames[3]
+auto_color_map_merged["https://github.com/deepcurator/DCC/UserDefined"] = cnames[5]
+auto_color_map_merged["https://github.com/deepcurator/DCC/tf"] = cnames[3]
+auto_color_map_merged["Literal"] = cnames[5]
+
 
 defaults = []
 
@@ -80,7 +97,7 @@ def addNode(G, src, dst, edge, src_type, dst_type, src_text, dst_text, src_title
         G.add_edge(src, dst, width=edge_width, title=str(edge), physics=True, dashes=dash)
     else:
         if src_type not in color_map:
-            color_map[src_type] = cnames[len(defaults) % 10]
+            color_map[src_type] = cnames[(len(defaults) % 10) + 2]
             defaults.append(src_type)
         if dst_type not in color_map:
             color_map[dst_type] = cnames[len(defaults) % 10]
@@ -106,6 +123,16 @@ def get_rels(graph):
 def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map=None, directed=True, notebook=True):
     # ont = Graph()
     # ont.parse("run_all_modalities/DeepSciKG.nt", format="ttl")
+            
+    G = Network(height="500px", width="100%", directed=directed, notebook=notebook)
+    # G.repulsion()
+    # G.barnes_hut(gravity=-20000, spring_length=50) # no parameter, use 50 node size
+    # G.inherit_edge_colors(True)
+    
+    # G.toggle_physics(False)
+    # G.toggle_stabilization(False)
+    # G.show_buttons(filter_=['physics'])
+    
     
     auto_color_map = None
     if modality == "Text":
@@ -116,12 +143,10 @@ def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map
         auto_color_map = auto_color_map_ont
     elif modality == "Code":
         auto_color_map = auto_color_map_code
-            
-    G = Network(height="500px", width="100%", directed=directed, notebook=notebook)
-    # G.repulsion()
-    # G.barnes_hut(gravity=-20000, spring_length=50) # no parameter, use 50 node size
-    # G.inherit_edge_colors(True)
-    # G.toggle_physics(False)
+    elif modality == "Merged":
+        auto_color_map = auto_color_map_merged
+        G.show_buttons(filter_=['physics'])
+    
     count = 0
     rel_list = []
     hasText = URIRef("https://github.com/deepcurator/DCC/hasText")
@@ -140,8 +165,9 @@ def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map
         src_type = [x for x in graph[src:RDF.type]]
         dst_type = [x for x in graph[dst:RDF.type]]
         
-        # print(str(src) +"\t" + str(src_type))
-        # print(str(dst) +"\t" + str(dst_type))
+        print(str(src) +"\t" + str(src_type))
+        print(str(dst) +"\t" + str(dst_type))
+        print()
         
         if modality == "Image" and src_type == []:
             if "_Comp" in str(src):
@@ -181,16 +207,23 @@ def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map
         else:
             if str(src).startswith("http://www.w3.org/2002/07/owl"):
                 src_type = "OWL"
+            elif str(dst_type) == "http://www.w3.org/2002/07/owl#Class":
+                dst_type = "OWL"
+                continue
             elif str(src).startswith("https://github.com/deepcurator/DCC/"):
                 # print("--------------------" + src)
                 # src_type = "DCC"
                 src_type = str(src)
             elif src_type == []:
                 src_type = "Literal"
+                continue
             else:
                 # blank node
                 # src_type = "blank node"
-                pass
+                
+                # pass
+                continue
+                
                 # r = Resource(graph, src)
                 # for predicates, objects in graph.predicate_objects(subject=src):
                    #  print (predicates + "\t" + objects)
@@ -199,25 +232,34 @@ def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map
         else:
             if str(dst).startswith("http://www.w3.org/2002/07/owl"):
                 dst_type = "OWL"
+                # continue
+            elif str(dst_type) == "http://www.w3.org/2002/07/owl#Class":
+                dst_type = "OWL"
+                continue
             elif str(dst).startswith("https://github.com/deepcurator/DCC/"):
                 # print("--------------------" + dst)
                 # dst_type = "DCC"
                 dst_type = str(dst)
             elif dst_type == []:
                 dst_type = "Literal"
+                # continue
             else:
                 # dst_type = "default"
                 # blank node
                 # dst_type = "blank node"
-                pass
+                
+                # pass
+                continue
         
         src_title = str(src)
         dst_title = str(dst)
         
-        if modality == "Code" and str(src_type).startswith("https://github.com/deepcurator/DCC/UserDefined"):
+        if str(src).startswith("https://cso.kmi.open.ac.uk/"):
+            src_type = "https://cso.kmi.open.ac.uk/"
+        elif (modality == "Code" or modality == "Merged") and str(src_type).startswith("https://github.com/deepcurator/DCC/UserDefined"):
             src_type = "https://github.com/deepcurator/DCC/UserDefined"
             src_text = src_text.split(".")[-1]
-        elif modality == "Code" and str(src_type).startswith("https://github.com/deepcurator/DCC/tf"):         
+        elif (modality == "Code" or modality == "Merged") and str(src_type).startswith("https://github.com/deepcurator/DCC/tf"):         
             # src = str(src_type)
             src_text = src_type.replace("https://github.com/deepcurator/DCC/", "").split("/")[-1]
             # print(src_type)
@@ -225,10 +267,12 @@ def get_vis(graph, modality, max_node_count=10000, rels=[], show=True, color_map
             src_type = "https://github.com/deepcurator/DCC/tf"
             
 
-        if modality == "Code" and str(dst_type).startswith("https://github.com/deepcurator/DCC/UserDefined"):
+        if str(dst).startswith("https://cso.kmi.open.ac.uk/"):
+            dst_type = "https://cso.kmi.open.ac.uk/"
+        elif (modality == "Code" or modality == "Merged") and str(dst_type).startswith("https://github.com/deepcurator/DCC/UserDefined"):
             dst_type = "https://github.com/deepcurator/DCC/UserDefined"
             dst_text = dst_text.split(".")[-1]
-        elif modality == "Code" and str(dst_type).startswith("https://github.com/deepcurator/DCC/tf"):        
+        elif (modality == "Code" or modality == "Merged") and str(dst_type).startswith("https://github.com/deepcurator/DCC/tf"):        
             # dst = str(dst_type)
             dst_text = dst_type.replace("https://github.com/deepcurator/DCC/", "").split("/")[-1]
             # print(dst_type)
