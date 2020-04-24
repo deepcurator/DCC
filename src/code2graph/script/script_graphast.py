@@ -2,14 +2,15 @@ from pathlib import Path
 from zipfile import ZipFile
 import shutil
 from dateutil import parser
+import traceback, sys
 
-import sys
 sys.path.append('../')
 
-from core.graphast import ASTExplorer
+from core.graphast import Doc2vecDataExtractor, Code2vecDataExtractor
 from config.config import GraphASTArgParser, GraphASTConfig
 
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
+
 
 def extract_data(data_path: Path) -> list:
 
@@ -61,6 +62,7 @@ def extract_data(data_path: Path) -> list:
 
     return dataset
 
+
 def retrieve_tasks_from_root_dir(data_path):
     
     dataset = extract_data(data_path)
@@ -77,29 +79,28 @@ def retrieve_tasks_from_root_dir(data_path):
     return tasks
 
 
-def extract_function_level_doc2vec(code_path, store_path, resolution='function'):
-    # for doc2vec methods, generate text-based content for each function. 
-    # TODO: to be modified to dump source code level & repository level.
+def extract_doc2vec_dataset(code_path, store_path):
+    # for doc2vec methods, generate text-based content for each function.  
     try:
-        explorer = ASTExplorer(str(code_path), resolution=resolution)
-        explorer.dump_functions_source_code(stored_path=store_path)
+        explorer = Doc2vecDataExtractor(str(code_path), store_path)
+        explorer.dump_functions_source_code()
         
     except Exception as e:
-        print(e)
+        traceback.print_exc()
 
-def extract_function_level_ast(code_path, store_path, resolution='function'):
+
+def extract_code2vec_dataset(code_path, store_path):
     try:
-        explorer = ASTExplorer(str(code_path), resolution=resolution)
+        explorer = Code2vecDataExtractor(str(code_path), store_path)
         explorer.process_all_nodes()
-        # explorer.visualize_ast()
-        explorer.export(stored_path=store_path)
+        explorer.export()
     except Exception as e:
-        print(e)
+        traceback.print_exc()
 
 
-def graphast_pipeline(args):
+def graphast_pipeline(args, dataset='doc2vec'):
     config = GraphASTConfig(GraphASTArgParser().get_args(args))
-    config.dump() # sanity check for configurations. 
+    config.dump() # sanity check for configurations.
     
     # To make sure that both paths exist.
     root_path = config.input_path
@@ -121,13 +122,15 @@ def graphast_pipeline(args):
         code_path = task['code_path']
         store_path = result_path / task['dir_name']
         store_path.mkdir(exist_ok=True) 
-        resolution = config.resolution
         
-        extract_function_level_doc2vec(code_path, store_path, resolution=resolution)
-        extract_function_level_ast    (code_path, store_path, resolution=resolution)
+        if dataset == 'doc2vec':
+            extract_doc2vec_dataset (code_path, store_path)
+        else:
+            extract_code2vec_dataset(code_path, store_path)
 
 
 if __name__ == "__main__":
-    graphast_pipeline(sys.argv[1:])
+    graphast_pipeline(sys.argv[1:], dataset='doc2vec')
+    graphast_pipeline(sys.argv[1:], dataset='code2vec')
     # test with "python script_graphast.py -ip ../test/ -r"
     # test with "python script_graphast.py"
