@@ -4,6 +4,7 @@ from __future__ import print_function
 import time
 import os
 import glob
+import sys
 
 # Train on CPU (hide GPU) due to memory constraints
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -132,7 +133,7 @@ def mask_test_edges2(adj):
 
 class RunGAE(object):
     
-    def __init__(self, file_expr, labels_dict, model_str='gcn_ae', file_sep='\t', out_tag='',
+    def __init__(self, file_expr, labels_dict, model_str='gcn_ae', file_sep='\t', out_dir='', out_tag='',
                  min_valid_triples=0, use_features=True, select_rels=[],  epochs=100, dropout_rate=0):
         self.model = None
         self.model_str=model_str
@@ -145,6 +146,7 @@ class RunGAE(object):
         self.epochs=epochs
         self.file_sep=file_sep
         self.select_rels=select_rels
+        self.out_dir=out_dir
         
         # Define placeholders
         self.placeholders = {
@@ -249,7 +251,6 @@ class RunGAE(object):
         
         [supernodes, supernodes_embeddings, supernodes_labels]=self.get_embeddings(y_train, label_encoder)
         self.supernodes=[supernodes, supernodes_embeddings, supernodes_labels]
-        self.plot_embeddings(supernodes, supernodes_embeddings, supernodes_labels)
 
     def get_roc_score(self,edges_pos, edges_neg, emb=None):
         if emb is None:
@@ -302,40 +303,26 @@ class RunGAE(object):
             colors.append(color_label[0][0])
         supernodes = np.array(supernodes)
     
-        np.savetxt('dcc_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
-        np.savetxt('dcc_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
-        np.savetxt('dcc_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
-        np.savetxt('dcc_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
+        np.savetxt(self.out_dir+'dcc_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
+        np.savetxt(self.out_dir+'dcc_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
+        np.savetxt(self.out_dir+'dcc_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
+        np.savetxt(self.out_dir+'dcc_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
         return(supernodes, supernodes_embeddings, supernodes_labels)
         
-        
-    def plot_embeddings(self,supernodes, supernodes_embeddings, supernodes_labels):
-        #import matplotlib.pyplot as plt
-        #sns.scatterplot(tsne_results[:,0], tsne_results[:,1], hue=colors)
-        #plt.scatter(tsne_results[:,0], tsne_results[:,1], c=colors, cmap='jet')
-        
-#        labels=np.unique(supernodes_labels)
-#        label_ind={k: v for v, k in enumerate(labels)}
-#        plt.scatter(supernodes[:,0], supernodes[:,1], cmap="jet",
-#                    c=[label_ind[x] for x in supernodes_labels],
-#                    label=labels)
-#        plt.savefig('supernode_tsne'+self.out_tag+'.png')
-#        plt.clf()
-        import seaborn as sns    
-        # color by conference
-        hue=[x.split('\t')[1] for x in supernodes_labels]
-        sns_plot=sns.scatterplot(x=supernodes[:,0], y=supernodes[:,1], hue=hue)        
-        fig = sns_plot.get_figure()
-        fig.savefig('supernode_tsne'+self.out_tag+'.png')
-
 ######################################
 if __name__ == "__main__":
+    dataset_str=sys.argv[1]
+    #dataset_str = "code" #image" #"text" "code" ###FLAGS.dataset
     model_str = "gcn_ae" #FLAGS.model
-    dataset_str = "code" #image" #"text" "code" ###FLAGS.dataset
     data_path = '../../Data/'
 
+    label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
+    labels_dict = load_pwc_labels(label_file)
+    select_rels=[]
+    sep='\t'
+    min_df = 2
+
     if dataset_str == "code":
-        sep='\t'
         ### data initially used: 67 papers processed by UCI/ 63 have triples
 #        out_tag=''
 #        label_file='./labels2.csv'
@@ -345,9 +332,7 @@ if __name__ == "__main__":
         ### PWC data/repos - doesn't fit in memory
         out_tag='_c2g'
         min_valid_triples=3        
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         file_expr=data_path+'pwc_triples/*/combined_triples.triples'
-        labels_dict = graph_generator.load_pwc_labels(label_file)
         select_rels=['followedBy','calls']
         ### filter labels to only those that also have images:
         im_files=set()
@@ -366,24 +351,14 @@ if __name__ == "__main__":
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
         min_valid_triples=4
-        labels_dict = graph_generator.load_pwc_labels(label_file)
-        select_rels=[]
     elif dataset_str == 'image':
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_i2g'
         file_expr=data_path+'image/*/*.triples'  # './image/*/*.triples'
-        sep='\t'
         min_valid_triples=0        
-        labels_dict = graph_generator.load_pwc_labels(label_file)
-        select_rels=[]
     else: # dataset_str == 'combo'
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_'+dataset_str
-        sep='\t'
         file_expr=''
         min_valid_triples=0 
-        labels_dict = graph_generator.load_pwc_labels(label_file)   
-        select_rels=[]
     print(dataset_str+" : "+out_tag)
-    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_tag=out_tag, min_valid_triples=min_valid_triples, select_rels=select_rels)
+    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_dir='results/',out_tag=out_tag, min_valid_triples=min_valid_triples, select_rels=select_rels)
     runner.run()

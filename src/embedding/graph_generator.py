@@ -12,6 +12,7 @@ import pandas as pd
 import scipy
 from datetime import datetime
 import csv
+import sys
 
 class DocEmbedder:
     def __init__(self, embedder='tfidf', vector_size=16, window=2, workers=4,
@@ -133,7 +134,7 @@ def load_combo(labels_dict,min_df=2):
                         code_triples =  [t for t in code_triples if t[1] in select_rels]
                 triple_count[2]=len(code_triples)
                 if len(code_triples)<1000:
-                    print('Code {}: {} triples'.format(paper_tag,len(code_triples)))
+                    #print('Code {}: {} triples'.format(paper_tag,len(code_triples)))
                     clean_triples.extend(code_triples)
             if len(clean_triples)>0:
                 #print('Combined {}'.format(len(clean_triples)))
@@ -194,6 +195,8 @@ def generate_graphs(all_triples, all_labels, min_df=2):
     g_sizes = []
     total_nodes = 0
     
+    print('Papers = %s' % (len(all_labels)))
+
     ### Build nx graphs
     d2v = DocEmbedder(min_df=min_df)
     for i, repo in enumerate(all_triples):
@@ -231,6 +234,7 @@ def generate_graphs(all_triples, all_labels, min_df=2):
     # NxN matrix
     block = block_diag(all_As).tocsr() #block_diag(*[x.todense() for x in all_As])
     
+    print('Node attributes = %s' % (len(d2v.model.get_feature_names())))
     print('Total nodes = %s' % (total_nodes))
     print('Total edges = %s' % (block.nnz))
     #print('idx supernodes = %s' % (idx_supernodes))
@@ -281,13 +285,18 @@ def load_repo_labels(myfile):
     return labels_dict
 
 if __name__ == '__main__':
-    
-    dataset_str='combo'
+
+    dataset_str=sys.argv[1]
+    #dataset_str='combo'
     data_path = '../../Data/'
+    label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
+    labels_dict = load_pwc_labels(label_file)
+    select_rels=[]
+    sep='\t'
     min_df = 2
     if dataset_str == "code":
         sep='\t'
-        ### data Arqui used: 67 papers processed by UCI/ 63 have triples
+        ### data initially used: 67 papers processed by UCI/ 63 have triples
 #        out_tag=''
 #        label_file='./labels2.csv'
 #        file_expr = data_path + 'UCI_TF_Papers/rdf_triples/*/combined_triples.triples' # data Arqui used
@@ -297,9 +306,7 @@ if __name__ == '__main__':
         ### PWC data/repos - doesn't fit in memory
         out_tag='_c2g'
         min_valid_triples=3
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         file_expr=data_path+'pwc_triples/*/combined_triples.triples'
-        labels_dict = load_pwc_labels(label_file)
         select_rels=['followedBy','calls']
         ### filter labels to only those that also have images:
         im_files=set()
@@ -315,38 +322,20 @@ if __name__ == '__main__':
                 del labels_dict[paper]
         print(len(labels_dict))
     elif dataset_str == 'text':
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_t2g'
         file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
-        select_rels=[]
         min_valid_triples=4
-        labels_dict = load_pwc_labels(label_file)
     elif dataset_str == 'image':
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_i2g'
-        file_expr=data_path+'image/*/*.triples'  # './image/*/*.triples'
-        sep='\t'
-        select_rels=[]
+        file_expr=data_path+'image/*/*.triples'
         min_valid_triples=0
-        labels_dict = load_pwc_labels(label_file)
     elif dataset_str == 'combo':
-        label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
         out_tag='_combo'
-        sep='\t'
         file_expr=''
-        select_rels=[]
-        labels_dict = load_pwc_labels(label_file)   
 
     if dataset_str == 'combo':
         adj, features, labels, train, val, test, idx_supernodes, label_encoder = load_combo(labels_dict)
     else:
         adj, features, labels, train, val, test, idx_supernodes, label_encoder = load_data(labels_dict, file_expr, min_valid_triples=min_valid_triples, sep=sep, select_rels=select_rels,  min_df = min_df)
 
-
-#    np.save('aske'+out_tag+'.graph', adj)
-#    np.save('aske'+out_tag+'.allx', features)
-#    np.save('aske'+out_tag+'.ally', labels)
-#    np.save('aske'+out_tag+'.train', train)
-#    np.save('aske'+out_tag+'.val', val)
-#    np.save('aske'+out_tag+'.test', test)
