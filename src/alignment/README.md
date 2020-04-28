@@ -57,6 +57,7 @@ We expand this set with UWa annotation described nextwould
 
 ## UWa Annotations
 
+UWa has collected an annotated dataset at http://nlp.cs.washington.edu/sciIE/. We dowloaded and used file sciERC_raw.tar.gz
 There are several differences between our annotations and UWa:
 - Entities: ours (6): Method, Generic, Task, Material, Eval, Other  – UWa (6): Method, Generic, Task, Material, Metric, OtherScientificTerms
 - Relations: ours (7): Compare, Conjunction, Feature-of, Part-of, Used-for, IsA, sameAs – UWa (8): USED-FOR, FEATURE-OF, COREF, CONJUNCTION, HYPONYM-OF, EVALUATE-FOR, PART-OF, COMPARE]
@@ -92,7 +93,7 @@ Steps 3-7 are performed by [merge_cso_brat.py](merge_cso_brat.py)
 Note that the above process may result in conflicts between cso and annotations, or between annotations:
 
 
-##Automatic Annotation
+## Automatic Annotation
 We can now use the data structures created to annotate new pieces of text. Specifically, given some text we can:
 1. Find occurrences of all strings in our vocabulary in the text, with corresponding URIs
 2. Select those for which we have URI-to-entity mapping: we now have performed entity recognition
