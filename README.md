@@ -49,6 +49,7 @@ The code developed in this projet is stored in the current repository. The struc
 	- Models
 	- Ontology
 	- Output
+	
 	Some contents of these folders (ex. raw data, resulting rdf and ttl files, ontology file) are available at project's [OSF repository](https://osf.io/jdhw8/)
 
 
