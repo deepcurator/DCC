@@ -5,6 +5,10 @@ import glob
 import pandas as pd
 import yaml
 import pickle
+import subprocess
+from os import listdir
+from os.path import isfile, join
+from .xml2txt_no_sents import TEIFile
 
 # RDF specific libraries
 from rdflib import URIRef, BNode, Literal
@@ -35,14 +39,17 @@ def save_triple_file(triple_list,filename):
         for line in triple_list:
             f.write(line + "\n")
 
-def createrdf(row,csomap, consolidatedGraph):
+def createrdf(filepath, text_dir, year, conference, platform, entity_map, consolidatedGraph):
+
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    model_dir = config['MODEL_PATH']
 
     triple_list = []
 
     dcc_namespace = "https://github.com/deepcurator/DCC/"
 
     # print(row['paper_title'],row['paper_link'],row['conference'], row['year'], row['Platform'])
-    filename = row['paper_link'].split('/')[-1]
+    filename = filepath.split('/')[-1]
     if(filename.endswith('.pdf')):
         filename = filename.split('.pdf')[0]
     elif(filename.endswith('.html')):
@@ -54,18 +61,18 @@ def createrdf(row,csomap, consolidatedGraph):
     # consolidatedGraph
     consolidatedGraph.add((URIRef(filesubject),RDF.type,URIRef(dcc_namespace + "Publication")))
     triple_list.append(filename + " isa " + "Publication")
-    year = Literal(row['year'])
-    conference = Literal(row['conference'])
-    platform = Literal(row['Platform'])
+    year = Literal(year)
+    conference = Literal(conference)
+    platform = Literal(platform)
 
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "yearOfPublication"),year ))
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "conferenceSeries"),conference ))
     consolidatedGraph.add((URIRef(filesubject),URIRef(dcc_namespace + "platform"),platform ))
 
     # Just the triple list
-    triple_list.append(filename + " year_of_publication " + str(row['year']))
-    triple_list.append(filename + " conference_series " + str(row['conference']))
-    triple_list.append(filename + " platform " + str(row['Platform']))
+    triple_list.append(filename + " year_of_publication " + str(year))
+    triple_list.append(filename + " conference_series " + str(conference))
+    triple_list.append(filename + " platform " + str(platform))
 
     textfilename = text_dir + filename + ".txt"
     #load the spacy nlp model
@@ -102,7 +109,92 @@ def createrdf(row,csomap, consolidatedGraph):
     print("Done with file " + filename)
     return(filename, triple_list)
     
+def run_demo(input_dir, output_dir, ontology_file, model_dir, grobid_client):
+    # output_dir = "C:/aske-2/dcc/grobid-workspace/output"
+    
+    # ontology = "C:/dcc_test/demo/DeepSciKG.nt"
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    t2g_output_dir = output_dir + "/text2graph"
+    
+    if not os.path.exists(t2g_output_dir):
+        os.makedirs(t2g_output_dir)
+    
+    # command = "python grobid-client-python/grobid-client.py --config grobid-client-python/config.json --input C:/aske-2/dcc/grobid-workspace/input --output C:/aske-2/dcc/grobid-workspace/output processFulltextDocument"
+    # command = "python grobid-client-python/grobid-client.py --config grobid-client-python/config.json --input " + input_dir + " --output " + t2g_output_dir + " processFulltextDocument"
+    command = "python " + grobid_client + "/grobid-client.py --config grobid-client-python/config.json --input " + input_dir + " --output " + t2g_output_dir + " processFulltextDocument"
 
+    #process = Popen(command, shell=True)
+    #stdout, stderr = process.communicate()
+    
+    print("[Info] Extracting XML from PDF's...")
+    
+    # subprocess.call(["python", "grobid-client-python\grobid-client.py", "--config", "grobid-client-python\config.json", "--input", "C:\aske-2\dcc\grobid-workspace\input", "-–output", "C:\aske-2\dcc\grobid-workspace\output", "C:\aske-2\dcc\grobid-workspace\output", "processFulltextDocument"])
+    # , stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #process.wait()
+    stdout, stderr = process.communicate()
+    # print(stdout)
+    # print(stderr)
+    
+    #process.wait()
+    
+    ################## pip install lxml 
+    
+    print("[Info] Extracting abstracts from XML's...")
+    
+    # mypath = "C:/aske-2/dcc/grobid-workspace/output"
+    onlyXMLfiles = [f for f in listdir(t2g_output_dir) if isfile(join(t2g_output_dir, f))]
+    
+    for i, f in enumerate(onlyXMLfiles):
+        if f.endswith("xml"):
+            # print('Processing paper ', i)
+            # tei_file = join(t2g_output_dir, f)
+            tei_file = t2g_output_dir + "/" + f
+            paper = TEIFile(tei_file)
+        
+        
+            paper_body = paper.partial_text
+            paper_body = paper_body.lower()
+            paper_body = paper_body.replace('et al.', 'et al')
+            new_f = f.replace('.tei', '')
+            new_f = new_f.replace('.xml', '')
+        
+        
+            outfile = join(t2g_output_dir, new_f + '.txt')
+            with open(outfile, 'w', encoding='utf8') as of:
+                of.write(paper_body)
+    
+    print("[Info] Extracting entities/relationships and generating RDF's...")
+    
+    # inputFolder = 'C:/aske-2/dcc/grobid-workspace/output/'
+    # outputFolder = 'C:/aske-2/dcc/grobid-workspace/output/'
+    # rdf_folder = mypath + "/"
+    rdf_input_dir = t2g_output_dir + "/"
+    rdf_output_dir = t2g_output_dir + "/"
+    # createTextRDF(rdf_input_dir, rdf_output_dir, ontology_file, model_dir)
+    
+    onlyFiles = [f for f in listdir(rdf_input_dir) if isfile(join(rdf_input_dir, f))]
+    
+    #load CSO
+    f = open(os.path.join(model_dir,'full_annotations.pcl'), 'rb')
+    [entity_map,uri2entity, uri2rel]=pickle.load(f)
+    f.close()
+    
+    # iterate through the rows in the dataframe
+    #  for index,row in df.iterrows():
+    for f in onlyFiles:
+        g = Graph() 
+        # g.parse(ontology_file, format="n3") 
+        if f.endswith(".txt"):
+            createrdf(f.replace(".txt", ""), rdf_output_dir, "", "", "", entity_map, g)
+            destinationfile = rdf_output_dir + f[:-4] + "_text2graph.ttl"
+            print("Saving rdf file " + destinationfile)
+            g.serialize(destination=destinationfile, format='turtle')
+    
+    print("[Info] Completed text2graph pipeline!")
 
 if __name__ == '__main__':
 
@@ -134,7 +226,11 @@ if __name__ == '__main__':
 
     # For each paper from text2graph.csv create triples (embedding) and text2graph(rdf)
     for index,row in df.iterrows():
-        filename, triple_list= createrdf(row,entity_map,consolidatedGraph)
+        paper_link = row['paper_link']
+        year = row['year']
+        conference = row['conference']  
+        plaform = row['Platform']
+        filename, triple_list= createrdf(paper_link, text_dir, year, conference, plaform, entity_map, consolidatedGraph)
         save_triple_file(triple_list,filename)
                                         
     # print("Total files converted now are " + filecount)
