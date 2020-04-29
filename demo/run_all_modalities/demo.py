@@ -26,7 +26,7 @@ from visualize import get_vis
 from rdflib import Graph, URIRef
 
 from kgconstruction import i2graph
-from code2graph import c2graph
+from kgconstruction import c2graph
 
 import urllib
 import git
