@@ -37,11 +37,6 @@ import yaml
 from rdflib import Graph, URIRef
 from visualize import get_vis
 
-# %load_ext autoreload
-# %autoreload 2
-
-
-
 print("Necessary modules have been successfully imported!")
 
 # Read YAML file
@@ -69,9 +64,6 @@ inputCSV = 'input_demo2.csv'
 # Output will be placed into this folder
 outputFolder = 'demo_output_demo2'
 
-
-
-
 # Restore
 def enablePrint():
     sys.stdout = sys.__stdout__
@@ -88,13 +80,6 @@ def download_file(download_url):
 def onerror(func, path, exc_info):
     """
     Error handler for ``shutil.rmtree``.
-
-    If the error is due to an access error (read only file)
-    it attempts to add write permission and then retries.
-
-    If the error is for another reason it re-raises the error.
-
-    Usage : ``shutil.rmtree(path, onerror=onerror)``
     """
     import stat
     if not os.access(path, os.W_OK):
@@ -126,10 +111,6 @@ def visualize_graphs(rels):
     g.parse(outputFolder + "/consolidated.ttl", format="ttl")
     g_vis = get_vis(g, "Merged")
     g_vis.save_graph("paper2graph.html")
-    
-    # vis_file_to_display = outputFolder + "/code2graph/pointnetvlad-master/pointnetvlad_clsquadruplet_loss.html"
-    # iframe = '<iframe src=' + vis_file_to_display + ' width=100% height=350></iframe>'
-    # IPython.display.HTML(iframe)
 
 
 def addTitleToHTML(html_file, title):
@@ -202,14 +183,8 @@ def run(pdfURL, codeURL):
     git.Git(codeFolder).clone(codeURL)
     # Get code folder name
     code_dir_name = os.listdir(codeFolder)[0]
-    # code_dir_name = "input_paper"
-    # print("DIR NAME: " + code_dir_name)
-    
-    enablePrint()
     
     print("Retrieved paper and code.")
-    
-    disablePrint()
     
     # Create CSV file
     with open(inputCSV, 'w') as f:
@@ -221,13 +196,8 @@ def run(pdfURL, codeURL):
     os.environ['https_proxy'] = ""
 
     t2graph.run(inputFolder, outputFolder, ontology_file, text2graph_models_dir, grobid_client)
-    
     i2graph.run(inputFolder, outputFolder, ontology_file, image2graph_models_dir)
-    
     c2graph.run(codeFolder, outputFolder, ontology_file, inputCSV)
-    
-    # enablePrint()
-    
-    print("Completed")
-    
     merge()
+    print("Completed")
+
