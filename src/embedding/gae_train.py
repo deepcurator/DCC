@@ -5,6 +5,7 @@ import time
 import os
 import glob
 import sys
+import yaml
 
 # Train on CPU (hide GPU) due to memory constraints
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -311,10 +312,13 @@ class RunGAE(object):
         
 ######################################
 if __name__ == "__main__":
+    # 1st argument is the type of dataset to process
     dataset_str=sys.argv[1]
+
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    data_path=config['DATA_PATH']
     #dataset_str = "code" #image" #"text" "code" ###FLAGS.dataset
     model_str = "gcn_ae" #FLAGS.model
-    data_path = '../../Data/'
 
     label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
     labels_dict = load_pwc_labels(label_file)

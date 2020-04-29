@@ -29,15 +29,39 @@ The first part (top part of the figure) shows the details for the proposed curat
 
 In the second component (at the bottom of the overall architecture) we show how the curated knowledge graphs can be used to automatically infer code for papers that are not accompanied by implementation details (source code). First an aligned knowledge graph, without the components associated with the source code is extracted from those papers. Next the corresponding code graph is inferred by using previous related papers that are accompanied with code. More details can be found in the "Reports" folder.
 
+## Organization 
 
-## How to run? 
+The code developed in this projet is stored in the current repository. The structure is:
+- conf: folder containing conf.yaml - configuration file specifying paths to different folders, enabling the scripts to function without hardcoding paths
+- demo: folder containing high-level demos (descibed in the next section)
+- reports: reprets presented to DARPA at project milestones
+- src: folder containing code implementing the actual functionality, including:
+	- alignment: combining human annotations with CSO ontology
+	- code2graph
+	- diagram2graph
+	- embedding: code for graph embeddings and their visualizations 
+	- kgconstruction: code for processing and combining outputs of individual modalities 
+	- scrapers: code used to scrape some of Papers With Code 
+	- text2graph
+- dcc.yaml: environment file for working with the project
+- The following folders are not included in the repository, but we recommend users create them to match conf.yaml and for better organization. 
+	- Data
+	- Models
+	- Ontology
+	- Output
+	Some contents of these folders (ex. raw data, resulting rdf and ttl files, ontology file) are available at project's [OSF repository](https://osf.io/jdhw8/)
+
+
+
+## Demos 
 
 We provide two Jupyter notebooks to run main functionalities and to analyze results:
 
-- [The first notebook](demo/run_all_modalities/DCC.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files.
+- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files for each modality and for the combination.
 
 - [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and their corresponding source code repositories.
 
+There are also demos in the individual modalities: code2graph, diagram2graph, text2graph and in embedding. The README files accompanying these demos also describe the necessary setup.
 
 ## Acknowledgement
 

@@ -13,6 +13,7 @@ import scipy
 from datetime import datetime
 import csv
 import sys
+import yaml
 
 class DocEmbedder:
     def __init__(self, embedder='tfidf', vector_size=16, window=2, workers=4,
@@ -285,10 +286,10 @@ def load_repo_labels(myfile):
     return labels_dict
 
 if __name__ == '__main__':
-
+    # 1st argument is the type of dataset to process
     dataset_str=sys.argv[1]
-    #dataset_str='combo'
-    data_path = '../../Data/'
+    config = yaml.safe_load(open('../../conf/conf.yaml'))
+    data_path=config['DATA_PATH']
     label_file=os.path.join(data_path,'pwc_edited_plt/pwc_edited_plt.csv')
     labels_dict = load_pwc_labels(label_file)
     select_rels=[]
