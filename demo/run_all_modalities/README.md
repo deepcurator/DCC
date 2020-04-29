@@ -46,7 +46,7 @@ We provide some additional files through the demo folder in the corresponding [O
 Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted to a folder and its path need to be updated as the MODEL_PATH variable in the conf/conf.yaml file. We recommend to use a "Models" folder at the same level as "src' and "demo" folders.
 
 ### Ontology
-Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the ONTOLOGY_PATH variable in the conf/conf.yaml file. We recommend to use a "Ontology" folder at the same level as "src" and "demo" folders.
+Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the ONTOLOGY_PATH variable in the conf/conf.yaml file. We recommend to use an "Ontology" folder at the same level as "src" and "demo" folders.
 
 # Acknowledgement
 This material is based upon work supported by the Defense Advanced Research Projects Agency (DARPA) under Agreement No. HR00111990010
