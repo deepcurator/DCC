@@ -39,7 +39,7 @@ The code developed in this projet is stored in the current repository. The struc
 	- alignment: combining human annotations with CSO ontology
 	- code2graph
 	- diagram2graph
-	- embedding: code for graph embeddings and their visualizations 
+	- embedding: code for graph embeddings and their visualizations. The input data for this can be found in OSF: OSF: [https://osf.io/tks79/](https://osf.io/tks79/)
 	- kgconstruction: code for processing and combining outputs of individual modalities 
 	- scrapers: code used to scrape some of Papers With Code 
 	- text2graph
@@ -58,7 +58,7 @@ The code developed in this projet is stored in the current repository. The struc
 
 We provide two Jupyter notebooks to run main functionalities and to analyze results:
 
-- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files for each modality and for the combination.
+- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified paper and its corresponding source code, and the generates output RDF graph files for each modality and for the combination.
 
 - [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and their corresponding source code repositories.
 

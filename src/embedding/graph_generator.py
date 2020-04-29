@@ -324,12 +324,13 @@ if __name__ == '__main__':
         print(len(labels_dict))
     elif dataset_str == 'text':
         out_tag='_t2g'
-        file_expr='../text2graph/Output/text/*/t2g.triples'
+        file_expr=data_path+'text-triples/*/t2g.triples'
+        #file_expr='../text2graph/Output/text/*/t2g.triples'
         sep=' '
         min_valid_triples=4
     elif dataset_str == 'image':
         out_tag='_i2g'
-        file_expr=data_path+'image/*/*.triples'
+        file_expr=data_path+'image-triples/*/*.triples'
         min_valid_triples=0
     elif dataset_str == 'combo':
         out_tag='_combo'
