@@ -49,6 +49,7 @@ The code developed in this projet is stored in the current repository. The struc
 	- Models
 	- Ontology
 	- Output
+	
 	Some contents of these folders (ex. raw data, resulting rdf and ttl files, ontology file) are available at project's [OSF repository](https://osf.io/jdhw8/)
 
 
@@ -57,7 +58,7 @@ The code developed in this projet is stored in the current repository. The struc
 
 We provide two Jupyter notebooks to run main functionalities and to analyze results:
 
-- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files for each modality and for the combination.
+- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified paper and its corresponding source code, and the generates output RDF graph files for each modality and for the combination.
 
 - [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and their corresponding source code repositories.
 
