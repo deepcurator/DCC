@@ -93,14 +93,14 @@ Steps 3-7 are performed by [merge_cso_brat.py](merge_cso_brat.py)
 Note that the above process may result in conflicts between cso and annotations, or between annotations:
 
 
-## Automatic Annotation
+## Automatic Annotation 
 We can now use the data structures created to annotate new pieces of text. Specifically, given some text we can:
 1. Find occurrences of all strings in our vocabulary in the text, with corresponding URIs
 2. Select those for which we have URI-to-entity mapping: we now have performed entity recognition
 3. For all pairs of strings matching entities check for relations in the URI pairs-to-relations map: this provides initial relation extraction
 4. This workflow is implemented in: auto_annotate.py
 
-This functionality is implemented in [auto_annotator.py](auto_annotator.py)
+This functionality is implemented in [../text2graph/auto_annotator.py](../text2graph/auto_annotator.py)
 
 ## Next Steps
 The main improvements are to be gained from improving the quality of the data collected:
