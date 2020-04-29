@@ -8,6 +8,11 @@ Below the resulting diagonal matrix for the first three rdf code2graphs.  Note t
 
 ![diagonal matrix](./figures/diag_matrix_supernodes.png)
 
+## Data
+
+A zip file with triples from all modalities can be found in OSF: [https://osf.io/tks79/](https://osf.io/tks79/)
+It's contents should be place in the Data folder at root level.
+
 ## Node Features
 The features are the tfidf representations of node names.
 
