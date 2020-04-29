@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.abspath('../../src/diagram2graph/FigAnalysis/ShapeExtraction'))
 import pickle
 
 import numpy as np
@@ -27,7 +28,7 @@ from subprocess import TimeoutExpired
 # os.environ['https_proxy'] = "194.138.0.9:9400"
 
 from rdflib import Graph
-from text2graph.image2rdfgraph import createimage2graph
+from image2rdfgraph import createimage2graph
 from os import listdir
 from os.path import isfile, join
 from glob import glob

@@ -1,5 +1,6 @@
 from __future__ import unicode_literals, print_function
 import os
+import sys
 from pathlib import Path
 import glob
 import pandas as pd
@@ -8,7 +9,8 @@ import pickle
 import subprocess
 from os import listdir
 from os.path import isfile, join
-from .xml2txt_no_sents import TEIFile
+sys.path.append(os.path.abspath('../../src'))
+from text2graph.xml2txt_no_sents import TEIFile
 
 # RDF specific libraries
 from rdflib import URIRef, BNode, Literal

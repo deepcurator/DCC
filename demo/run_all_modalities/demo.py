@@ -14,7 +14,7 @@ if not sys.warnoptions:
 
 sys.path.append(os.path.abspath('../../src'))
 
-import text2graph
+from kgconstruction import text2rdfgraph
 import diagram2graph
 import code2graph
 import pytesseract
@@ -25,8 +25,7 @@ InteractiveShell.ast_node_interactivity = "all"
 from visualize import get_vis
 from rdflib import Graph, URIRef
 
-from text2graph import t2graph
-from diagram2graph.FigAnalysis.ShapeExtraction import i2graph
+from kgconstruction import i2graph
 from code2graph import c2graph
 
 import urllib
@@ -39,30 +38,21 @@ from visualize import get_vis
 
 print("Necessary modules have been successfully imported!")
 
-# Read YAML file
-with open("conf.yaml", 'r') as stream:
-    conf = yaml.safe_load(stream)
-
-ontology_file = conf["ontology_file"]
-text2graph_models_dir = conf["text2graph_models_dir"]
-image2graph_models_dir = conf["image2graph_models_dir"]
-grobid_client = conf["grobid_client"]
-pytesseract.pytesseract.tesseract_cmd = conf["tesseract_cmd"]
 
 # --------- INPUT ---------
 # Input paper pdf will be downloaded into this folder
-inputFolder = 'demo_input_demo2'
+inputFolder = 'demo_input'
 
 # Input paper code will be downloaded into this folder
-codeFolder = "demo_code_demo2"
+codeFolder = "demo_code"
 
 # CSV file that maps the pdf file name in the inputFolder to the code repository name in the codeFolder
 # This file will be generated on the fly
-inputCSV = 'input_demo2.csv'
+inputCSV = 'input_demo.csv'
 
 # --------- OUTPUT ---------
 # Output will be placed into this folder
-outputFolder = 'demo_output_demo2'
+outputFolder = 'demo_output'
 
 # Restore
 def enablePrint():
@@ -147,16 +137,27 @@ def vis(rels):
     
     return text_iframe, img_iframe, code_iframe, merged_iframe
 
-def merge():
+def merge(ontology_file):
     mergedGraph = Graph()   
     mergedGraph.parse(outputFolder + "/text2graph/input_paper_text2graph.ttl", format="ttl")
     mergedGraph.parse(outputFolder + "/image2graph/input_paper/image2graph.ttl", format="ttl")
     code_dir_name = os.listdir(codeFolder)[0]
     mergedGraph.parse(outputFolder + "/code2graph/" + code_dir_name + "/code2graph.ttl", format="ttl")
-    mergedGraph.parse("DeepSciKG.nt", format="ttl")
+    mergedGraph.parse(ontology_file, format="ttl")
     mergedGraph.serialize(outputFolder + '/consolidated.ttl', format='ttl')
 
-def run(pdfURL, codeURL):
+def run(pdfURL, codeURL, grobid_client, tesseract_cmd):
+    ##### Configurations #####
+    # Read Conf file
+    with open("../../conf/conf.yaml", 'r') as stream:
+        conf = yaml.safe_load(stream)
+
+    ontology_file = conf["ONTOLOGY_PATH"]
+    text2graph_models_dir = conf["MODEL_PATH"]
+    image2graph_models_dir = conf["MODEL_PATH"]
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    ###########################
+    
     # Delete existing folders and their contents
     if os.path.exists(inputFolder):
         shutil.rmtree(inputFolder,ignore_errors=False,onerror=onerror)
@@ -195,9 +196,9 @@ def run(pdfURL, codeURL):
     os.environ['http_proxy'] = ""
     os.environ['https_proxy'] = ""
 
-    t2graph.run(inputFolder, outputFolder, ontology_file, text2graph_models_dir, grobid_client)
+    text2rdfgraph.run_demo(inputFolder, outputFolder, ontology_file, text2graph_models_dir, grobid_client)
     i2graph.run(inputFolder, outputFolder, ontology_file, image2graph_models_dir)
     c2graph.run(codeFolder, outputFolder, ontology_file, inputCSV)
-    merge()
+    merge(ontology_file)
     print("Completed")
 
