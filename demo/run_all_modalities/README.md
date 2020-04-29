@@ -1,6 +1,6 @@
 # Deep Code Curator Demo Installation
 
-In this page we provide instructions on the installation of the Deep Code Curator [demo](Deep%20Code%20Curator%20(DCC).ipynb).
+In this page we provide instructions on the installation of the Deep Code Curator [demo](Paper2Graph.ipynb).
 
 ## Setup Python Environment
 
@@ -25,7 +25,7 @@ Grobid needs Gradle to be built, and based on our tests we found Gradle 4.10 and
 - At this point, Gradle server is built. Before running the demo, make sure to run `gradle run` in the grobid-0.5.5 folder to start the server. It is successfully started when it stops at 88% to wait for the client requests.
 
 ### Grobid Client
-Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the [demo notebook](Deep%20Code%20Curator%20(DCC).ipynb).
+Download [Grobid client](https://github.com/kermitt2/grobid-client-python/archive/master.zip) (the whole project as a zip) and extract it to a folder of your choice. You will be specifying its path as an input to the [demo notebook](Paper2Graph.ipynb).
 
 ## Install Tesseract
 [Tesseract](https://github.com/tesseract-ocr/tesseract) is used by the image2graph module.
@@ -43,7 +43,7 @@ We provide some additional files through the demo folder in the corresponding [O
 [PDFFigures 2.0](https://github.com/allenai/pdffigures2) is used by the image2graph module to extract the images from pdf files. To make its installation more convenient, we provide compiled jar files in the zip named pdffigures.zip. These jar files need to be placed **directly under the dcc\demo\run_all_modalities folder**, without any additional folders e.g. `dcc\demo\run_all_modalities\pdffigures2_2.12-0.1.0.jar`
 
 ### Models
-Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the corresponding lines from the [demo notebook](Deep%20Code%20Curator%20(DCC).ipynb) as shown below:
+Model files for text2graph (text2graph_models.zip) and image2graph (image2graph_models.zip) modules are provided. These zips need to be extracted into seperate folders of your choice, and their paths need to be updated in the corresponding lines from the [demo notebook](Paper2Graph.ipynb) as shown below:
 
 ```
 text2graph_models_dir = "YOUR_PATH_TO_THE_TEXT2GRAPH_MODELS_DIR"
@@ -51,7 +51,7 @@ image2graph_models_dir = "YOUR_PATH_TO_THE_IMAGE2GRAPH_MODELS_DIR"
 ```
 
 ### Ontology
-Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the corresponding line (given below) from the [demo notebook](Deep%20Code%20Curator%20(DCC).ipynb) .
+Download and place the ontology file named DeepSciKG.nt into a folder of your choice and update its path in the corresponding line (given below) from the [demo notebook](Paper2Graph.ipynb) .
 
 ```
 ontology_file = "YOUR_PATH_TO_THE_ONTOLOGY_DIR\DeepSciKG.nt"
