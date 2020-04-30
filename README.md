@@ -39,7 +39,7 @@ The code developed in this projet is stored in the current repository. The struc
 	- alignment: combining human annotations with CSO ontology
 	- code2graph
 	- diagram2graph
-	- embedding: code for graph embeddings and their visualizations. The input data for this can be found in OSF: OSF: [https://osf.io/tks79/](https://osf.io/tks79/)
+	- embedding: code for graph embeddings and their visualizations. The input data for this can be found in OSF: [https://osf.io/tks79/](https://osf.io/tks79/)
 	- kgconstruction: code for processing and combining outputs of individual modalities 
 	- scrapers: code used to scrape some of Papers With Code 
 	- text2graph
@@ -47,7 +47,7 @@ The code developed in this projet is stored in the current repository. The struc
 - The following folders are not included in the repository, but we recommend users create them to match conf.yaml and for better organization. Their contents can be obtained at project's [OSF repository](https://osf.io/jdhw8/):
 	- Data:
 	  - A spreadhseet with information on papers we used, as well as pdfs of these papers are at [https://osf.io/7qt8h/](https://osf.io/7qt8h/)
-	- Models: the trained models and data structures - can be obtained at: [https://osf.io/tks79/](https://osf.io/tks79/)
+	- Models: the trained models and data structures - can be obtained at: [https://osf.io/xd7rz/](https://osf.io/xd7rz/)
 	- Ontology: the ontology structure can be found at: [https://osf.io/bq5h6/](https://osf.io/bq5h6/)
 	- Output: 
 
