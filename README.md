@@ -44,14 +44,12 @@ The code developed in this projet is stored in the current repository. The struc
 	- scrapers: code used to scrape some of Papers With Code 
 	- text2graph
 - dcc.yaml: environment file for working with the project
-- The following folders are not included in the repository, but we recommend users create them to match conf.yaml and for better organization. 
-	- Data
-	- Models
-	- Ontology
-	- Output
-	
-	Some contents of these folders (ex. raw data, resulting rdf and ttl files, ontology file) are available at project's [OSF repository](https://osf.io/jdhw8/)
-
+- The following folders are not included in the repository, but we recommend users create them to match conf.yaml and for better organization. Their contents can be obtained at project's [OSF repository](https://osf.io/jdhw8/):
+	- Data:
+	  - A spreadhseet with information on papers we used, as well as pdfs of these papers are at [https://osf.io/7qt8h/](https://osf.io/7qt8h/)
+	- Models: the trained models and data structures - can be obtained at: [https://osf.io/tks79/](https://osf.io/tks79/)
+	- Ontology: the ontology structure can be found at: [https://osf.io/bq5h6/](https://osf.io/bq5h6/)
+	- Output: 
 
 
 ## Demos 
