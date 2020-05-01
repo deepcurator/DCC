@@ -148,6 +148,7 @@ class RunGAE(object):
         self.file_sep=file_sep
         self.select_rels=select_rels
         self.out_dir=out_dir
+        print('Outdir: '+self.out_dir)
         
         # Define placeholders
         self.placeholders = {
@@ -302,12 +303,15 @@ class RunGAE(object):
             supernodes_labels.append(labels_txt[i-1])
             color_label = np.where(labels[i-1]==1)
             colors.append(color_label[0][0])
-        supernodes = np.array(supernodes)
-    
-        np.savetxt(self.out_dir+'dcc_embeddings'+self.out_tag+'.csv', emb, delimiter='\t')
-        np.savetxt(self.out_dir+'dcc_supernodes'+self.out_tag+'.csv', supernodes_embeddings, delimiter='\t')
-        np.savetxt(self.out_dir+'dcc_embeddings_labels'+self.out_tag+'.txt', labels_txt, fmt='%s')
-        np.savetxt(self.out_dir+'dcc_supernodes_labels'+self.out_tag+'.txt', supernodes_labels, fmt='%s')
+        supernodes = np.array(supernodes)        
+        with open(os.path.join(self.out_dir,'dcc_embeddings'+self.out_tag+'.csv'),'w') as f:
+            np.savetxt(f, emb, delimiter='\t')
+        with open(os.path.join(self.out_dir,'dcc_supernodes'+self.out_tag+'.csv'),'w') as f:
+            np.savetxt(f, supernodes_embeddings, delimiter='\t')
+        with open(os.path.join(self.out_dir,'dcc_embeddings_labels'+self.out_tag+'.txt'),'w') as f:
+            np.savetxt(f, labels_txt, fmt='%s')
+        with open(os.path.join(self.out_dir,'dcc_supernodes_labels'+self.out_tag+'.txt'),'w') as f:
+            np.savetxt(f, supernodes_labels, fmt='%s')
         return(supernodes, supernodes_embeddings, supernodes_labels)
         
 ######################################
@@ -365,5 +369,5 @@ if __name__ == "__main__":
         file_expr=''
         min_valid_triples=0 
     print(dataset_str+" : "+out_tag)
-    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_dir='results/',out_tag=out_tag, min_valid_triples=min_valid_triples, select_rels=select_rels)
+    runner=RunGAE(file_expr, labels_dict, model_str=model_str, file_sep=sep, out_dir=os.path.join(data_path,'embedding_results'),out_tag=out_tag, min_valid_triples=min_valid_triples, select_rels=select_rels)
     runner.run()
