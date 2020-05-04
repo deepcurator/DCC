@@ -6,7 +6,7 @@ The [graph_generator.py](graph_generator.py) has methods load_data() and load_co
 
 Below the resulting diagonal matrix for the first three rdf code2graphs.  Note that the last node for each graph is the supernode solution described by Kipf (https://github.com/tkipf/gcn/issues/4).
 
-![diagonal matrix](./figures/diag_matrix_supernodes.png)
+![diagonal matrix](diag_matrix_supernodes.png)
 
 ## Data
 
@@ -34,13 +34,7 @@ Note that to us combo the paths to triples files from individual modalities need
 
 We performed some initial experiment with supervised learning with GCN (see [gcn_train.py](gcn_train.py)), but didn't pursue this further so the file is not up to date.
 
-A notebook [EmbeddingDemo.ipynb](EmbeddingDemo.ipynb) can be used to demonstrate visualization of supernode embedding results using TSNE (or other low dimensional embedding methods)
-
-## Example output from GAE
-The figure below shows the TSNE representation of the supernodes. Colors represent the conferences.
- However, note that these embeddings currently reflect the loss function used for link prediction. 
-
-![Combined Data Embedding with TSNE](./figures/Combined-TSNE-Embed.png)
+A [demo](../../demo/embedding_demo) showcases visualization of supernode embedding results using TSNE (or other low dimensional embedding methods)
 
 
 ## Future Work
