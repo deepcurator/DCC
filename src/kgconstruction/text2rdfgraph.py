@@ -209,6 +209,12 @@ if __name__ == '__main__':
     csvfile = config['TEXT_GRAPH_CSV']
     text_dir = config['TEXT_GRAPH_PAPERS']
 
+    # print(model_dir)
+    # print(ontology)
+    # print(destinationfolder)
+    # print(triple_dir)
+    # print(csvfile)
+    # print(text_dir)
 
     # load ontology:
     consolidatedGraph = Graph() 

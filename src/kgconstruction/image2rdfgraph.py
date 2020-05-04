@@ -25,6 +25,7 @@ import nltk
 
 
 def save_image_triple_file(triple_list,topdirectory,bottomdirectory, triple_dir):
+    # print("Entering save image triple file")
     # triplefilename = triple_dir + topdirectory + "/" + bottomdirectory + "/" + "i2g.triples"
     if not os.path.exists(os.path.join(triple_dir,topdirectory)):
         os.mkdir(os.path.join(triple_dir,topdirectory))
@@ -34,7 +35,7 @@ def save_image_triple_file(triple_list,topdirectory,bottomdirectory, triple_dir)
     with open(triplefilename,'w') as f :
         for line in triple_list:
             f.write(line + "\n")
-
+    # print("image triple file saved at " + triplefilename)
 def createimage2graph(inputfile, entity_map, ontology, filesubject, lowerlevel, consolidatedGraph, triple_dir, generateEmbTriples):
     
     #filesubject is the publication URI, which has to be linked to the image components
@@ -190,39 +191,27 @@ def createimage2graph(inputfile, entity_map, ontology, filesubject, lowerlevel, 
 def run_batch():
     config = yaml.safe_load(open('../../conf/conf.yaml'))
 
-    # Ontology locations
+    # Ontology location
     ontology = config["ONTOLOGY_PATH"]
-
+    #RDF file save location
     destinationfolder = config["EXTRACT_TEXT_RDF_GRAPH_PATH"]
-    # destinationfolder = "/home/z003z47y/git/DCC/src/text2graph/Output/rdf/"
-
-    # csv file location
-    csvfile = '/home/z003z47y/git/DCC/src/text2graph.csv'
-
-
-    filecount = 0
-    noimage2graphlist = []
-    model_dir = './Models/'
-    text_dir = '/home/z003z47y/git/DCC/src/text2graph/NewPapers/'
-    image_dir = '/home/z003z47y/Projects/Government/ASKE/2019/092219_output/'
-    image_dir_addon = 'diag2graph'
-    output_dir = './Output/'
-    rdf_dir = 'Output/rdf/'
-    triple_dir = '/home/z003z47y/git/DCC/src/text2graph/Output/image/'
+    #Image triples save location
+    triple_dir = config["EXTRACT_IMAGE_TRIPLE_GRAPH_PATH"]
+    #image to graph pipeline output location
+    input_triple_dir = config["IMAGE_TO_GRAPH_OUTPUT_TEXT"]
 
     consolidatedGraph = Graph() 
     consolidatedGraph.parse(ontology,format="n3")
 
     image2graphs = []
 
-    for root, dirs, files in os.walk("/home/z003z47y/Projects/Government/ASKE/2019/112919_output/"):
+    for root, dirs, files in os.walk(input_triple_dir):
         for file in files:
             if file.endswith('.txt'):
                 # print(os.path.join(root, file))
                 image2graphs.append(os.path.join(root, file))
 
     model_dir = config['MODEL_PATH']
-    # model_dir = '/home/z003z47y/git/DCC/src/text2graph/Models'
     # print(model_dir)
 
 
@@ -231,7 +220,7 @@ def run_batch():
     f.close()
 
     for image2graph in image2graphs:
-        # print("Working on file " + image2graph)
+        print("Working on file " + image2graph)
         filesubject = image2graph.split('/')[-3]
 
         # print("Top folder is " + image2graph.split('/')[-3])
@@ -239,17 +228,23 @@ def run_batch():
         lowerlevel = lowerlevel[4:]
         filenameLength = len(filesubject)+1
         lowerlevel = lowerlevel[filenameLength:]
-        # print("Next Folder is " + lowerlevel.split('.')[-2])
-        # print(filesubject)
-        createimage2graph(image2graph,ontology,filesubject,lowerlevel.split('.')[-2], consolidatedGraph, triple_dir, True)
+        # print("image2graph is " + image2graph)
+        # print("filesubject is " + filesubject)
+        # print("Length of filename is " + str(filenameLength))
+        # print("Image2graph split is " + image2graph.split('/')[-1][4:][filenameLength:])
+        # print("Lower Level is " + lowerlevel)
+        # print("Lower Level split is " + lowerlevel.split('.')[-2])
+        # # print(filesubject)
+        # createimage2graph(inputfile, entity_map, ontology, filesubject, lowerlevel, consolidatedGraph, triple_dir, generateEmbTriples):
+        createimage2graph(image2graph,entity_map,ontology,filesubject,lowerlevel.split('.')[-2], consolidatedGraph, triple_dir, True)
 
 
     print("Saving final consolidated rdf file ")
-    destinationfile = destinationfolder + "image2graph_4_12.ttl"
+    destinationfile = destinationfolder + "image2graph.ttl"
     print("Saving final consolidated rdf file : " + destinationfile)
     consolidatedGraph.serialize(destination=destinationfile,format='nt')
 
-    print(len(image2graphs))
+    print("Total of " + str(len(image2graphs)) + " files were converted to image to graphs ( RDF and triples)")
 
 
 if __name__ == '__main__':
