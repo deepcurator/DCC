@@ -21,11 +21,11 @@ Virtuoso is the database used to store the graph data for DCC. Below we provide 
 
 
 ## Download and Import Data
-We provide sthe data file `consolidated.ttl` through the `demo_queries` folder in the corresponding [OSF project](https://osf.io/jdhw8/). After you download this file into your computer, following steps will guide you to import it to the Virtuoso:
+We provide the data file [consolidated_image_text_code.ttl](https://osf.io/b5ygt/) through the `knowledge_graphs` folder in the corresponding [OSF project](https://osf.io/jdhw8/). After you download this file into your computer, following steps will guide you to import it to the Virtuoso:
 - Open http://localhost:8890/conductor in your Web browser. If you do not use your localhost for Virtuoso, or if you use another port, update the address accordingly.
 - Enter account username `dba` and password `dba` to login.
 - Navigate to the window Linked Data → Quad Store Upload
-- Choose the downloaded `consolidated.ttl` file to upload, and specify the Named Graph IRI as `https://github.com/deepcurator/DCC/`. Then click 'Upload".
+- Choose the downloaded `consolidated_image_text_code.ttl` file to upload, and specify the Named Graph IRI as `https://github.com/deepcurator/DCC/`. Then click 'Upload".
 - After seeing the upload completed message, click on the "Graphs -> Graphs" tabs to verify the existence of the uploaded database. You would be seeing the new named graph (`https://github.com/deepcurator/DCC/`) in that list.
 
 Now you can start using the Queries [demo](Queries.ipynb). You will need to update your Virtuoso address in the notebook if you use something other than the default `http://localhost:8890`.
