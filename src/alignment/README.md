@@ -49,11 +49,12 @@ In order to train and evaluate NER and RE models, we need ground truth annotatio
 - a vocabulary of strings mapping to entity types of interest
 - a mapping from pairs of strings to relations of interest
 The first source of such information at our disposal is the set of annotations we produced during Phase 1 on 100 abstracts. 
+This data can be found on OSF: [manually-annotated-abstracts.zip](https://osf.io/wmkcg/)
 We collect all this data with some automated clean-up, and manual review. This results in:
 - 1121 terms mapped to entities 
 - 698 mappings from term pairs to relations 
 This information is collected by a script [collect_brat_vocabulary.py](collect_brat_vocabulary.py). 
-We expand this set with UWa annotation described nextwould
+We expand this set with UWa annotation as described next.
 
 ## UWa Annotations
 
