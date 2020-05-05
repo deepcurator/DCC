@@ -5,17 +5,14 @@ import sys
 
 class OntologyManager:
 
-    def __init__(self):
+    def __init__(self, ont_path='../core/DeepSciKG.nt'):
 
         # This scrapes all the functions and classes from TF Website.
-        self.scraper = TFVocScraper("r1.14")
+        self.scraper = TFVocScraper("r1.15")
 
         # self.g stores the template owl file acquired from Siemens.
         self.g = Graph()
-        # self.g.parse(ontology_file, format="turtle")
-        base_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        self.g.parse(base_dir + '/core/123.owl', format="turtle")
-        # self.g.parse('../core/123.owl', format="turtle")
+        self.g.parse(str(ont_path), format="turtle")
 
         self.dcc_prefix = Namespace('https://github.com/deepcurator/DCC/')
         # Namespace('https://github.com/deepcurator/DCC/')
@@ -44,6 +41,7 @@ class OntologyManager:
         self.has_repository = self.dcc_prefix['hasRepository']
         self.githubrepo = self.dcc_prefix['githubrepo']
         self.has_file = self.dcc_prefix['hasFile']
+        self.part_of_publication = self.dcc_prefix['isPartOfPublication']
         self.part_of = self.dcc_prefix['partOf']
 
         self.type_hash = {}

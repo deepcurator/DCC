@@ -17,7 +17,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
-import regex as re
+#import regex as re
 import pickle
 import numpy as np
 

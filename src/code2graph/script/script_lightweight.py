@@ -208,12 +208,15 @@ def move_output_files(config: LightWeightMethodConfig):
         copy_files(config.input_path, config.dest_path, "*.rdf")
 
 
-def copy_files(data_path, dest_path, filetype, name_index=-3):
+def copy_files(data_path, dest_path, filetype, name_index=2):
     """ Copy files in data_path that matches filetype to dest_path """
     for path in Path(data_path).rglob(filetype):
         path = Path(path)
-        repo_name = str(path).split('/')[name_index]
-        repo_path = Path(dest_path) / repo_name
+        code_dir_path = path
+        for _ in range(name_index):
+            code_dir_path = code_dir_path.parent
+
+        repo_path = Path(dest_path) / code_dir_path.name
         if not repo_path.is_dir():
             repo_path.mkdir(exist_ok=True)
         shutil.copy(path, repo_path)
@@ -228,15 +231,18 @@ def save_metadata(metadata: list, stat_file_path: str):
 def export_data(metadata: list, tasks: list, config: LightWeightMethodConfig):
 
     if config.recursive:
+        config.dest_path.mkdir(exist_ok=True)
+        move_output_files(config)
         database = Database()
         for task in tasks:
             metadata[task['id']][3] = task['success']
             metadata[task['id']][4] = task['err_msg']
             paper = metadata[task['id']]
-            database.update_query(paper[0], paper[3], paper[4])
-        config.dest_path.mkdir(exist_ok=True)
+            try:
+                database.update_query(paper[0], paper[3], paper[4])
+            except Exception as e:
+                continue
         save_metadata(metadata, str(config.dest_path / "stats.csv"))
-        move_output_files(config)
 
 
 def pipeline_the_lightweight_approach(args):
@@ -251,7 +257,7 @@ def pipeline_the_lightweight_approach(args):
     else:
         task = {'code_path': config.input_path, 'meta': fetch_meta_info(config.input_path.parent)}
         tasks.append(task)
-
+    
     for task in tasks:
         preprocess(task['code_path'])
         task['success'], task['err_msg'] = run_lightweight_method(

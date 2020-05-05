@@ -1,263 +1,331 @@
-import tensorflow as tf
 from pathlib import Path
-from glob import glob
-import code, os, timeit
+from tqdm import tqdm
+import pickle
 import numpy as np
+import tensorflow as tf
+
+class Generator:
+
+    def __init__(self, data, batch_size):
+        self.data = data
+        self.batch_size = batch_size
+        
+        self.number_of_batch = len(data) // self.batch_size
+        self.random_ids = np.random.permutation(len(data))
+        
+        self.batch_idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        data = self.data
+        pos_start = self.batch_size * self.batch_idx
+        pos_end   = self.batch_size * (self.batch_idx+1)
+
+        raw_data = np.asarray([data[x][1] for x in self.random_ids[pos_start:pos_end]])
+        raw_tags = np.asarray([int(data[x][0]) for x in self.random_ids[pos_start:pos_end]])
+        
+        self.batch_idx += 1
+        if  self.batch_idx == self.number_of_batch:
+            self.batch_idx = 0
+
+        return raw_data, raw_tags
+
 
 class PathContextReader:
     ''' class for preprocessing the data '''
-    def __init__(self, config):
-        self.config = config
-        self.path = Path('C:\\Users\\louisccc\\Documents\\GitHub\\DCC\\src\\code2graph\\test\\triples_ast_function').resolve()
+    def __init__(self, path):
+        self.bags_train = None
+        self.bags_test  = None
 
-        self.function_paths = glob("%s/**/*.txt" % str(self.path), recursive=True)
-
-
-        self.bags = []
+        self.path = Path(path).resolve()        
 
     def read_path_contexts(self):
-        entities_set = set()
-        paths_set    = set()
-        tags_set     = set()
+        self.read_dictionaries()
 
-        # 1st iteration to build dictionaries
-        for function_path in self.function_paths:
-            
-            filename = os.path.splitext(Path(function_path).name)[0]
-            for tag in filename.split('.'):
-                tags_set.add(tag)
+        self.bags_train = self.read_data(data_path="train.txt")
+        self.bags_test  = self.read_data(data_path="test.txt")
 
-            with open(function_path, 'r') as f:
-                for idx, line in enumerate(f.readlines()):
-                    elements = line.split('\t')
-                    head, path, tail = elements[0].strip(), elements[1].strip(), elements[2].strip()
-                    entities_set.add(head)
-                    entities_set.add(tail)
-                    paths_set.add(path)
-                    
-        self.entities = np.sort(list(entities_set))
-        self.paths    = np.sort(list(paths_set))
-        self.tags     = np.sort(list(tags_set))
+        print("Number of unique of words: " + str(len(self.word_count)))
+        print("Number of unique of paths: " + str(len(self.path_count)))
+        print("Number of unique of targets: " + str(len(self.target_count)))
 
-        self.entity2idx = {v: k for k, v in enumerate(self.entities)}
-        self.idx2entity = {v: k for k, v in self.entity2idx.items()}
-        self.path2idx   = {v: k for k, v in enumerate(self.paths)}
-        self.idx2path   = {v: k for k, v in self.path2idx.items()}
-        self.tag2idx    = {v: k for k, v in enumerate(self.tags)}
-        self.idx2tag    = {v: k for k, v in self.tag2idx.items()}
+        print("Number of training samples: " + str(len(self.bags_train)))
+        print("Number of testing samples: " + str(len(self.bags_test)))
 
-        # 2nd iteration to constracut bags of contextpaths in indices. 
-        for function_path in self.function_paths:
-            function_bag = {} 
-            function_bag['tags'] = []
-            function_bag['path_contexts'] = []
+    def read_dictionaries(self):
+        with open(str(self.path / 'reduced_word_count.pkl'), 'rb') as f:
+            self.word_count = pickle.load(f)
+        with open(str(self.path / 'reduced_word2idx.pkl'), 'rb') as f:
+            self.word2idx = pickle.load(f)
+        with open(str(self.path / 'reduced_idx2word.pkl'), 'rb') as f:
+            self.idx2word = pickle.load(f)
 
-            filename = os.path.splitext(Path(function_path).name)[0]
-            print(filename.split('.'))
-            for tag in filename.split('.'):
-                function_bag['tags'].append(self.tag2idx[tag])
-            
-            with open(function_path, 'r') as f:
-                for idx, line in enumerate(f.readlines()):
-                    elements = line.split('\t')
-                    head, path, tail = elements[0].strip(), elements[1].strip(), elements[2].strip()
-                    head_idx, path_idx, tail_idx = self.entity2idx[head], self.path2idx[path], self.entity2idx[tail]
-                    function_bag['path_contexts'].append((head_idx, path_idx, tail_idx))
+        with open(str(self.path / 'reduced_path_count.pkl'), 'rb') as f:
+            self.path_count = pickle.load(f)
+        with open(str(self.path / 'reduced_path2idx.pkl'), 'rb') as f:
+            self.path2idx = pickle.load(f)
+        with open(str(self.path / 'reduced_idx2path.pkl'), 'rb') as f:
+            self.idx2path = pickle.load(f)
 
-            self.bags.append(function_bag)
+        with open(str(self.path / 'reduced_target_count.pkl'), 'rb') as f:
+            self.target_count = pickle.load(f)
+        with open(str(self.path / 'reduced_target2idx.pkl'), 'rb') as f:
+            self.target2idx = pickle.load(f)
+        with open(str(self.path / 'reduced_idx2target.pkl'), 'rb') as f:
+            self.idx2target = pickle.load(f)
+
+    def read_data(self, data_path="train.txt"):
+        bags=[]
+
+        with open((self.path / data_path), 'r') as file:
+            for function_line in file:
+                splited_function_line = function_line.split(" ")
+                label_ids = splited_function_line[0]
+                triples = splited_function_line[1:]
+                triple_ids = []
+
+                for triple in triples:
+                    splited_triple = triple.split('\t')
+                    if len(splited_triple) != 3: 
+                        assert False, "Weird non-triple data row."
+
+                    e1, p, e2 = int(splited_triple[0]), int(splited_triple[1]), int(splited_triple[2])
+                    triple_ids.append([e1,p,e2])
+
+                bags.append((label_ids, triple_ids))
+
+        return bags
 
 
 class Config:
-    def __init__(self, args):
-        self.path = args.function_path 
+    def __init__(self):
+        # hyperparameters used in tf dataset training. 
+
+        self.epoch = 500
+        self.training_batch_size = 256
+        self.testing_batch_size = 128
+
+        self.dropout_factor = 0.5
+        self.learning_rate = 0.005
+        self.embedding_size = 50
+        self.code_embedding_size = 50
+
+        self.max_contexts = 200
 
 
 class Trainer:
     ''' the trainer for code2vec '''
-    def __init__(self):
-        self.reader = PathContextReader(None)
+    def __init__(self, path):
+        self.config = Config()
+
+        self.reader = PathContextReader(path)
         self.reader.read_path_contexts()
+        self.config.path = path
 
-        self.model = code2vec(None)
+        self.config.num_of_words = len(self.reader.word_count)
+        self.config.num_of_paths = len(self.reader.path_count)
+        self.config.num_of_tags  = len(self.reader.target_count)
 
-    def build_model(self):
+        self.model = code2vec(self.config)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate = self.config.learning_rate)
+    
+    @tf.function
+    def train_step(self, e1, p, e2, tags):
+        with tf.GradientTape() as tape:
+            code_vectors, attention_weights = self.model.forward(e1, p, e2)
+            logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
+            loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(tags, [-1]), logits=logits))
 
-        self.model.def_inputs()
-        self.model.def_parameters()
-        self.model.def_loss()
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
-        self.global_step = tf.Variable(0, name="global_step", trainable=False)
-        optimizer = tf.train.AdamOptimizer()
-        grads = optimizer.compute_gradients(self.model.loss)
-        self.op_train = optimizer.apply_gradients(grads, global_step=self.global_step)
-
-        self.session = tf.Session()
-        self.session.run(tf.global_variables_initializer())
+        return loss
+    
+    @tf.function
+    def test_step(self, e1, p, e2, topk=1):
+        code_vectors, _ = self.model.forward(e1, p, e2, train=False)
+        logits = tf.matmul(code_vectors, self.model.tags_embeddings, transpose_b=True)
+        _, ranks = tf.nn.top_k(logits, k=topk)
+        return ranks
 
     def train_model(self):
 
-        for epoch_idx in range(0, 500):
+        self.train_batch_generator = Generator(self.reader.bags_train, self.config.training_batch_size)
+        
+        for epoch_idx in tqdm(range(self.config.epoch)):
             
             acc_loss = 0
 
-            num_batch = 10 # get the number of batches
-
-            start_time = timeit.default_timer()
-
-            for batch_idx in range(num_batch):
-                # data = self.reader.getinputs(batch_idx)
-                # h = data[0]
-                # p = data[1]
-                # t = data[2]
-                # tags= data[3]
+            for batch_idx in range(self.train_batch_generator.number_of_batch):
                 
-                # feed_dict = {
-                #     self.model.h: h,
-                #     self.model.p: p,
-                #     self.model.t: t,
-                #     self.model.tags: tags
-                # }
+                data, tag = next(self.train_batch_generator)
+
+                e1 = data[:,:,0]
+                p  = data[:,:,1]
+                e2 = data[:,:,2]
+                y  = tag
+
+                loss = self.train_step(e1, p, e2, y)
+
+                acc_loss += loss
+
+            if epoch_idx % 5 == 0:
+                print("Evaluation Set Test:")
+                self.evaluate_model(training_set=False)
+                print("Training Set Test:")
+                self.evaluate_model(training_set=True)
+                self.save_model(epoch_idx)
+                self.export_code_embeddings(epoch_idx)
+
+            print('epoch[%d] ---Acc Train Loss: %.5f' % (epoch_idx, acc_loss))
+
+    def evaluate_model(self, training_set = False):
+        if training_set: 
+            self.test_batch_generator = Generator(self.reader.bags_train, self.config.testing_batch_size)
+        else:
+            self.test_batch_generator = Generator(self.reader.bags_test, self.config.testing_batch_size)
+
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        prediction_rank = 0 
+        prediction_reciprocal_rank = 0
+        nr_predictions = 0
+
+        for batch_idx in range(self.test_batch_generator.number_of_batch):
+
+            data, tag = next(self.test_batch_generator)
+            
+            e1 = data[:,:,0]
+            p  = data[:,:,1]
+            e2 = data[:,:,2]
+            y  = tag
+            
+            ranks = self.test_step(e1, p, e2)
+            
+            ranks_number = tf.where(tf.equal(self.test_step(e1, p, e2, topk=self.config.num_of_tags), tf.cast(tf.expand_dims(y,-1), dtype=tf.int32)))
+
+            for idx, rank_number in enumerate(ranks_number.numpy().tolist()): 
+                prediction_rank += (rank_number[1] + 1)
+                prediction_reciprocal_rank += 1.0 / (rank_number[1] + 1)
+
+            for idx, rank in enumerate(ranks.numpy().tolist()):
+                nr_predictions += 1
                 
-                # _, step, loss = self.sess.run([self.op_train, self.global_step, self.model.loss], feed_dict)
+                original_name = self.reader.idx2target[tag.tolist()[idx]]
+                inferred_names = [self.reader.idx2target[target_idx] for target_idx in rank]
 
-                # acc_loss += loss
-                pass
-                # print('[%.2f sec](%d/%d): -- loss: %.5f' % (timeit.default_timer() - start_time, batch_idx, num_batch, loss), end='\r')
+                original_subtokens = original_name.split('|')
+                
 
-            # print('iter[%d] ---Train Loss: %.5f ---time: %.2f' % (epoch_idx, acc_loss, timeit.default_timer() - start_time))
+                true_positive = 0
+                false_positive = 0
+                false_negative = 0
 
-class code2vec: 
+                for inferred_name in inferred_names:
+                    inferred_subtokens = inferred_name.split('|')
+
+                    true_positive += sum(1 for subtoken in inferred_subtokens if subtoken in original_subtokens)
+                    false_positive += sum(1 for subtoken in inferred_subtokens if subtoken not in original_subtokens)
+                    false_negative += sum(1 for subtoken in original_subtokens if subtoken not in inferred_subtokens)
+
+                # if false_positive > 0:
+                #     print(original_name)
+                #     print(inferred_names)
+
+                true_positives += true_positive
+                false_positives += false_positive
+                false_negatives += false_negative
+
+        precision = true_positives / (true_positives + false_positives)
+        recall = true_positives / (true_positives + false_negatives)
+        f1 = 2 * precision * recall / (precision + recall)
+        prediction_rank /= nr_predictions
+        prediction_reciprocal_rank /= nr_predictions
+
+        print("\nPrecision: {}, Recall: {}, F1: {} Rank: {} Reciprocal_Rank: {}\n".format(precision, recall, f1, prediction_rank, prediction_reciprocal_rank))
+    
+    def export_code_embeddings(self, epoch_idx):
+        save_path = self.config.path / ('epoch_%d' % epoch_idx)
+        save_path.mkdir(parents=True, exist_ok=True)
+
+        with open(str(save_path / "code_labels.tsv"), 'w') as l_export_file:
+            for label in self.reader.idx2target.values():
+                l_export_file.write(label + "\n")
+
+            parameter = self.model.tags_embeddings
+            
+            all_ids = list(range(0, int(parameter.shape[0])))
+            stored_name = parameter.name.split(':')[0]
+
+            if len(parameter.shape) == 2:
+                all_embs = parameter.numpy()
+                with open(str(save_path / ("%s.tsv" % stored_name)), 'w') as v_export_file:
+                    for idx in all_ids:
+                        v_export_file.write("\t".join([str(x) for x in all_embs[idx]]) + "\n")
+
+    def save_model(self, epoch_idx):
+        saved_path = self.config.path / ('epoch_%d' % epoch_idx)
+        saved_path.mkdir(parents=True, exist_ok=True)
+        self.model.save_weights(str(saved_path / 'model.vec'))
+
+    def load_model(self, path):
+        if path.exists():
+            self.model.load_weights(str(path / 'model.vec'))
+
+class code2vec(tf.keras.Model): 
 
     def __init__(self, config):
-        self.embedding_size = 128
-        self.code_embedding_size = 50
+        super(code2vec, self).__init__()
 
-        self.tot_tags = 0
-        self.tot_ents = 0
-        self.tot_paths = 0
+        self.config = config 
 
-        self.dropout_factor = 0.75
-        
-        self.max_contexts = 300
+        self.def_parameters()
 
+    def def_parameters(self):        
+        emb_initializer = tf.initializers.glorot_normal()
+        self.ents_embeddings = tf.Variable(emb_initializer(shape=(self.config.num_of_words, self.config.embedding_size)), name='ents')
+        self.path_embeddings = tf.Variable(emb_initializer(shape=(self.config.num_of_paths, self.config.embedding_size)), name='paths')
+        self.tags_embeddings = tf.Variable(emb_initializer(shape=(self.config.num_of_tags, self.config.code_embedding_size)), name='tags')
+        self.attention_param = tf.Variable(emb_initializer(shape=(self.config.code_embedding_size, 1)), name='attention_param')
+        self.transform_matrix= tf.Variable(emb_initializer(shape=(3*self.config.embedding_size, self.config.code_embedding_size)), name='transform')
 
-    def def_inputs(self):
-        # training placeholders.
-        # the training input will be mini-batch function context paths.
-        self.h = tf.placeholder(tf.int32, [None, self.max_contexts])
-        self.p = tf.placeholder(tf.int32, [None, self.max_contexts])
-        self.t = tf.placeholder(tf.int32, [None, self.max_contexts])
-        self.tags = tf.placeholder(tf.int32, [None])
-
-        # testing placeholders
-        # self.test_h_batch = tf.placeholder(tf.int32, [None])
-        # self.test_p_batch = tf.placeholder(tf.int32, [None])
-        # self.test_t_batch = tf.placeholder(tf.int32, [None])
-
-    def def_parameters(self):
-        
-        self.ents_embeddings = tf.get_variable(name='ents', shape=[self.tot_ents + 1, self.embedding_size], dtype=tf.float32,
-                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-
-        self.path_embeddings = tf.get_variable('paths', shape=[self.tot_paths + 1, self.embedding_size], dtype=tf.float32,
-                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-
-        self.tags_embeddings = tf.get_variable('tags', shape=[self.tot_tags + 1, self.code_embedding_size], dtype=tf.float32,
-                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-
-        self.attention_param = tf.get_variable('attention_param', shape=[self.code_embedding_size, 1], dtype=tf.float32, 
-                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-
-        self.transform_matrix= tf.get_variable('transform', shape=[3*self.embedding_size, self.code_embedding_size], dtype=tf.float32, 
-                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-
-    def def_loss(self):
-        # head_ent_embs is [batch_size, max_contexts, embeddings size]
-        # path_emb is [batch_size, max_contexts, embeddings size]
-        # tail_ent_emb is [batch_size, max_contexts, embeddings size]
-        head_ent_emb = tf.nn.embedding_lookup(params=self.ents_embeddings, ids=self.h)
-        path_emb     = tf.nn.embedding_lookup(params=self.path_embeddings, ids=self.p)
-        tail_ent_emb = tf.nn.embedding_lookup(params=self.ents_embeddings, ids=self.t)
-
-        # tags_emb     = tf.nn.embedding_lookup(params=self.tags_embeddings, id=self.tags)
+    def forward(self, e1, p, e2, train=True):
+        # e1_e is [batch_size, max_contexts, embeddings size]
+        # p_e  is [batch_size, max_contexts, embeddings size]
+        # e2_e is [batch_size, max_contexts, embeddings size]
+        e1_e = tf.nn.embedding_lookup(params=self.ents_embeddings, ids=e1)
+        p_e  = tf.nn.embedding_lookup(params=self.path_embeddings, ids=p)
+        e2_e = tf.nn.embedding_lookup(params=self.ents_embeddings, ids=e2)
 
         # context_emb = [batch_size, max_contexts, 3*embedding_size]        
-        context_emb = tf.concat([head_ent_emb, path_emb, tail_ent_emb], axis=-1) 
+        context_e = tf.concat([e1_e, p_e, e2_e], axis=-1) 
 
         # apply a dropout to context emb. 
-        context_emb = tf.nn.dropout(context_emb, self.dropout_factor)
+        if train:
+            context_e = tf.nn.dropout(context_e, rate=1-self.config.dropout_factor)
 
         # flatten context embeddings => [batch_size*max_contexts, 3*embedding_size]
-        context_emb = tf.reshape(context_emb, [-1, 3*self.embedding_size])
+        context_e = tf.reshape(context_e, [-1, 3*self.config.embedding_size])
 
         # tranform context embeddings -> to [batch_size*max_contexts, code_embedding_size]
-        flat_emb = tf.tanh(tf.matmul(context_emb, self.transform_matrix))
+        flat_emb = tf.tanh(tf.matmul(context_e, self.transform_matrix))
 
         # calculate weights => to [batch_size*max_contexts, 1]
         contexts_weights = tf.matmul(flat_emb, self.attention_param)
 
         # reshapeing context weights => to [batch_size, max_contexts, 1]
-        batched_contexts_weights = tf.reshape(contexts_weights, [-1, self.max_contexts, 1])
+        batched_contexts_weights = tf.reshape(contexts_weights, [-1, self.config.max_contexts, 1])
 
         # calculate softmax for attention weights. 
         attention_weights = tf.nn.softmax(batched_contexts_weights, axis=1)
 
         # reshaping the embeddings => to [batch_size, max_contexts, code_embedding_size]
-        batched_flat_emb = tf.reshape(flat_emb, [-1, self.max_contexts, self.code_embedding_size])
+        batched_flat_emb = tf.reshape(flat_emb, [-1, self.config.max_contexts, self.config.code_embedding_size])
 
         # calculating the code vectors => to [batch_size, code_embedding_size]
         code_vectors = tf.reduce_sum(tf.multiply(batched_flat_emb, attention_weights), axis=1)
 
-        # calculate the loss [batch_size, code embedding] * [code_embedding, tot_tags]
-        logits = tf.matmul(code_vectors, self.tags_embeddings, transpose_b=True)
-
-        self.loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=tf.reshape(self.tags, [-1]),
-                logits=logits))
-
-
-        # 
-        # source_word_embed = tf.nn.embedding_lookup(params=words_vocab, ids=source_input)  # (batch, max_contexts, dim)
-        # path_embed = tf.nn.embedding_lookup(params=paths_vocab, ids=path_input)  # (batch, max_contexts, dim)
-        # target_word_embed = tf.nn.embedding_lookup(params=words_vocab, ids=target_input)  # (batch, max_contexts, dim)
-
-        # context_embed = tf.concat([source_word_embed, path_embed, target_word_embed],
-        #                           axis=-1)  # (batch, max_contexts, dim * 3)
-        # if not is_evaluating:
-        #     context_embed = tf.nn.dropout(context_embed, keep_prob1)
-
-        # flat_embed = tf.reshape(context_embed, [-1, self.config.EMBEDDINGS_SIZE * 3])  # (batch * max_contexts, dim * 3)
-        # transform_param = tf.get_variable('TRANSFORM',
-        #                                   shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
-        #                                   dtype=tf.float32)
-
-        # flat_embed = tf.tanh(tf.matmul(flat_embed, transform_param))  # (batch * max_contexts, dim * 3)
-
-        # contexts_weights = tf.matmul(flat_embed, attention_param)  # (batch * max_contexts, 1)
-        # batched_contexts_weights = tf.reshape(contexts_weights,
-        #                                       [-1, max_contexts, 1])  # (batch, max_contexts, 1)
-        # mask = tf.log(valid_mask)  # (batch, max_contexts)
-        # mask = tf.expand_dims(mask, axis=2)  # (batch, max_contexts, 1)
-        # batched_contexts_weights += mask  # (batch, max_contexts, 1)
-        # attention_weights = tf.nn.softmax(batched_contexts_weights, axis=1)  # (batch, max_contexts, 1)
-
-        # batched_embed = tf.reshape(flat_embed, shape=[-1, max_contexts, self.config.EMBEDDINGS_SIZE * 3])
-        # code_vectors = tf.reduce_sum(tf.multiply(batched_embed, attention_weights),
-        #                                           axis=1)  # (batch, dim * 3)
-
-        # return code_vectors, attention_weights
-
-    def evaluation(self):
-        pass
-
-
-def main():
-
-    trainer = Trainer()
-    trainer.build_model()
-    trainer.train_model()
-
-    code.interact(local=locals())
-    
-if __name__ == "__main__":
-    main()
+        return code_vectors, attention_weights

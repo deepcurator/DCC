@@ -20,7 +20,7 @@ The impact of the Deep Code Curator is that it will dramatically decrease the ti
 The overall architecture of our system is shown in the following figure.
 
 <p align="center">
- <img align="center" src="https://github.com/deepcurator/DCC/blob/master/docs/Picture1.png" alt="generalarchitecture">
+ <img align="center" src="Picture1.png" alt="generalarchitecture">
 </p>
 
 The system consists of two main parts:
@@ -29,15 +29,40 @@ The first part (top part of the figure) shows the details for the proposed curat
 
 In the second component (at the bottom of the overall architecture) we show how the curated knowledge graphs can be used to automatically infer code for papers that are not accompanied by implementation details (source code). First an aligned knowledge graph, without the components associated with the source code is extracted from those papers. Next the corresponding code graph is inferred by using previous related papers that are accompanied with code. More details can be found in the "Reports" folder.
 
+## Organization 
 
-## How to run? 
+The code developed in this projet is stored in the current repository. The structure is:
+- conf: folder containing conf.yaml - configuration file specifying paths to different folders, enabling the scripts to function without hardcoding paths
+- demo: folder containing high-level demos (descibed in the next section)
+- reports: reprets presented to DARPA at project milestones
+- src: folder containing code implementing the actual functionality, including:
+	- alignment: combining human annotations with CSO ontology
+	- code2graph
+	- diagram2graph
+	- embedding: code for graph embeddings and their visualizations. The input data for this can be found in OSF: [https://osf.io/tks79/](https://osf.io/tks79/)
+	- kgconstruction: code for processing and combining outputs of individual modalities 
+	- scrapers: code used to scrape some of Papers With Code 
+	- text2graph
+- dcc.yaml: environment file for working with the project
+- The following folders are not included in the repository, but we recommend users create them to match conf.yaml and for better organization. Their contents can be obtained at project's [OSF repository](https://osf.io/jdhw8/):
+	- Data: 
+	  - A spreadhseet with information on papers we used, as well as pdfs of these papers are at [pwc_edited_plt.zip](https://osf.io/7qt8h/)
+	  - The graph embedding files together with metadata (see [src/embeddings](src/embeddings) for details on their generation): [embedding_results.zip](https://osf.io/cnwfz/)
+	- Models: the trained models and data structures - [Models.zip](https://osf.io/xd7rz/)
+	- Ontology: the ontology structure can be found in [Ontology.zip](https://osf.io/bq5h6/)
+	- Output: 
 
-We provide two Jupyter notebooks to run main functionalities and to analyze results:
+## Demos 
 
-- [The first notebook](demo/run_all_modalities/DCC.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified set of papers and their corresponding source codes, and the generates output RDF graph files.
+We provide several Jupyter notebooks to run main functionalities and to analyze results:
+
+- [The first notebook](demo/run_all_modalities/Paper2Graph.ipynb) allows running all three pipelines (text2graph, image2graph, code2graph) on a specified paper and its corresponding source code, and the generates output RDF graph files for each modality and for the combination.
 
 - [The second notebook](demo/run_queries/Queries.ipynb) allows running SPARQL queries on a RDF dataset generated using hundreds of papers and their corresponding source code repositories.
 
+- [The third notebook](demo/embedding_demo/EmbeddingDemo.ipynb) demonstrates visualizations of graph embeddings for individual modalities and in combination 
+
+There are also demos in the individual modalities: code2graph, diagram2graph, text2graph and in embedding. The README files accompanying these demos also describe the necessary setup.
 
 ## Acknowledgement
 

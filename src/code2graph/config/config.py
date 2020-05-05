@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import os
+import pprint
 
 try:
     from pathlib import Path
@@ -36,6 +36,12 @@ class LightWeightMethodArgParser:
                                  default={5},
                                  help='Types of output: 1 = Call graph, 2 = Call trees, 3 = RDF graph (html format),' 
                                       '4 = TensorFlow sequences, 5 = Extract triples, 6 = RDF graph (turtle format).')
+        self.parser.add_argument('-ont', dest='ontology',
+                                 default='../core/DeepSciKG.nt', type=str, 
+                                 help='Path to ontology manager.')
+        self.parser.add_argument('-pid', dest='paper_id',
+                                 default=None, type=str, 
+                                 help='Paper ID of the input ML paper.')
         self.parser.add_argument('--arg', dest='show_arg',
                                  action='store_true',
                                  help='Show arguments on graph.')
@@ -43,6 +49,10 @@ class LightWeightMethodArgParser:
         self.parser.add_argument('--url', dest='show_url',
                                  action='store_true',
                                  help='Show url on graph.')
+        self.parser.set_defaults(show_url=False)
+        self.parser.add_argument('--sn', dest='simple_name',
+                                 action='store_true',
+                                 help='Remove path and index information from node name.')
         self.parser.set_defaults(show_url=False)
 
     def get_args(self, args):
@@ -58,10 +68,13 @@ class LightWeightMethodConfig:
         self.input_path = Path(arg.input_path).resolve()
         self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
+        self.ontology = Path(arg.ontology).resolve()
+        self.paper_id = arg.paper_id
         self.combined_triples_only = arg.combined_triples_only
         self.output_types = arg.output_types
         self.show_arg = arg.show_arg
         self.show_url = arg.show_url
+        self.simple_name = arg.simple_name
 
 
 class GenerateSummaryArgParser:
@@ -162,3 +175,6 @@ class GraphASTConfig:
         self.recursive = arg.recursive
         self.dest_path = Path(arg.dest_path).resolve()
         self.resolution = arg.resolution
+
+    def dump(self):
+        pprint.pprint(self.__dict__)

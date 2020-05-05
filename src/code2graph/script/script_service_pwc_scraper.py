@@ -42,7 +42,9 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
 
     args = Namespace(input_path=code_path, is_dataset=False, dest_path=".",
                      combined_triples_only=False, recursive=False,
-                     output_types=[1, 3, 5, 6], show_arg=True, show_url=True)
+                     paper_id=None, ontology='../core/DeepSciKG.nt',
+                     output_types=[1, 3, 5, 6], show_arg=True, show_url=True, 
+                     simple_name=False)
     config = LightWeightMethodConfig(args)
 
     success, error_msg = run_lightweight_method(code_path, config, paper)
@@ -51,8 +53,10 @@ def run_lightweight(paper: dict, out_path: Path, out_types: list):
         
     return success, error_msg
 
-def service(scraper: PWCScraper):
+
+def service(config):
     print("Starting Hourly Scraper...")
+    scraper = PWCScraper(config)
     output_path = Path("./output").resolve()
     output_types = ['*.triples', 'call_graph.html', '*.rdf']
     scraper.scrape()
@@ -65,8 +69,10 @@ def service(scraper: PWCScraper):
         except queue.Empty:
             break
 
-def email_metadata(scraper: PWCScraper):
+
+def email_metadata(config):
     print("Sending Daily MetaData Report...")
+    scraper = PWCScraper(config)
     metadata = scraper.database.get_table()
     file_path = Path("../metadata.csv").resolve()
     save_metadata(metadata, file_path)
@@ -74,14 +80,14 @@ def email_metadata(scraper: PWCScraper):
                                 "CSV file with metadata is attached along with this mail.",
                                 (file_path,))
     
+    
 def service_scrape_papers(args):
     config = PWCConfig(PWCConfigArgParser().get_args(args))
     config.tot_paper_to_scrape_per_shot = -1
-    scraper = PWCScraper(config)
 
     scheduler = BlockingScheduler()
-    scheduler.add_job(service, 'interval', args=(scraper,), minutes=5)
-    scheduler.add_job(email_metadata, 'interval', args=(scraper,), days=1)
+    scheduler.add_job(service, 'interval', args=(config,), minutes=5)
+    scheduler.add_job(email_metadata, 'interval', args=(config,), days=1)
 
     scheduler.start()
 

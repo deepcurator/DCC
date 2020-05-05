@@ -1,17 +1,16 @@
 from pathlib import Path
 from zipfile import ZipFile
-from argparse import Namespace
 import shutil
-import glob
 from dateutil import parser
+import traceback, sys
 
-import sys
 sys.path.append('../')
 
-from core.graphast import ASTExplorer
+from core.graphast import Doc2vecDataExtractor, Code2vecDataExtractor
 from config.config import GraphASTArgParser, GraphASTConfig
 
 metas = ['title', 'framework', 'date', 'tags', 'stars', 'code', 'paper']
+
 
 def extract_data(data_path: Path) -> list:
 
@@ -63,8 +62,9 @@ def extract_data(data_path: Path) -> list:
 
     return dataset
 
-def recursive(data_path):
-   
+
+def retrieve_tasks_from_root_dir(data_path):
+    
     dataset = extract_data(data_path)
     tasks = []
 
@@ -72,48 +72,65 @@ def recursive(data_path):
         if repo['framework'] and 'tf' in repo['framework']:
 
             if repo['code_path'] is not None:
-                tasks.append(repo['code_path'])
+                task = {'code_path': repo['code_path'],
+                        'dir_name':  repo['folder_name']}
+                tasks.append(task)
 
     return tasks
 
-def copy_files(data_path, dest_path, filetype, name_index=-3):
-    """ Copy files in data_path that matches filetype to dest_path """
-    for path in Path(data_path).rglob(filetype):
-        path = Path(path)
-        repo_name = str(path).split('/')[name_index]
-        repo_path = Path(dest_path) / repo_name
-        if not repo_path.is_dir():
-            repo_path.mkdir(exist_ok=True)
-        shutil.copy(path, repo_path)
 
-
-def move_output_files(config):
-    config.dest_path.mkdir(exist_ok=True)
-    copy_files(config.input_path, config.dest_path, "functions.txt")
-
-
-def run_graphast_method(code_path, resolution):
+def extract_doc2vec_dataset(code_path, store_path):
+    # for doc2vec methods, generate text-based content for each function.  
     try:
-        explorer = ASTExplorer(str(code_path), resolution)
+        explorer = Doc2vecDataExtractor(str(code_path), store_path)
         explorer.dump_functions_source_code()
+        
     except Exception as e:
-        print(e)
+        traceback.print_exc()
 
 
-def graphast_pipeline(args):
+def extract_code2vec_dataset(code_path, store_path):
+    try:
+        explorer = Code2vecDataExtractor(str(code_path), store_path)
+        explorer.process_all_nodes()
+        explorer.export()
+    except Exception as e:
+        traceback.print_exc()
+
+
+def graphast_pipeline(args, dataset='doc2vec'):
     config = GraphASTConfig(GraphASTArgParser().get_args(args))
+    config.dump() # sanity check for configurations.
+    
+    # To make sure that both paths exist.
+    root_path = config.input_path
+    result_path = config.dest_path 
+    result_path.mkdir(exist_ok=True) 
+     
+    # Task initialization.
     tasks = []
 
     if config.recursive:
-        tasks = recursive(config.input_path)
-
+        tasks = retrieve_tasks_from_root_dir(root_path)
     else:
-        tasks.append(config.input_path)
+        task = {'code_path': root_path, 
+                'dir_name':  root_path.name}
+        tasks.append(task)
 
+    # Run task one-by-one. 
     for task in tasks:
-        run_graphast_method(task, config.resolution)
+        code_path = task['code_path']
+        store_path = result_path / task['dir_name']
+        store_path.mkdir(exist_ok=True) 
+        
+        if dataset == 'doc2vec':
+            extract_doc2vec_dataset (code_path, store_path)
+        else:
+            extract_code2vec_dataset(code_path, store_path)
 
-    move_output_files(config)
 
 if __name__ == "__main__":
-    graphast_pipeline(sys.argv[1:])
+    graphast_pipeline(sys.argv[1:], dataset='doc2vec')
+    graphast_pipeline(sys.argv[1:], dataset='code2vec')
+    # test with "python script_graphast.py -ip ../test/ -r"
+    # test with "python script_graphast.py"
