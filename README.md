@@ -52,7 +52,6 @@ The code developed in this projet is stored in the current repository. The struc
 	- Ontology: the ontology structure can be found in [Ontology.zip](https://osf.io/bq5h6/)
 	- Output: 
 
-
 ## Demos 
 
 We provide several Jupyter notebooks to run main functionalities and to analyze results:
